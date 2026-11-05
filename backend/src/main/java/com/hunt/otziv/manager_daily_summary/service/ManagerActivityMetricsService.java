@@ -97,17 +97,10 @@ public class ManagerActivityMetricsService {
         if (managerId == null || date == null || until == null) {
             return new DailyAndAverage(Metrics.empty(), 0);
         }
-        LocalDate monthStart = date.withDayOfMonth(1);
-        LocalDateTime from = monthStart.atStartOfDay();
-        LocalDateTime selectedDayStart = date.atStartOfDay();
-        LocalDateTime selectedDayEnd = date.plusDays(1).atStartOfDay();
-        LocalDateTime end = until.isBefore(selectedDayStart)
-                ? selectedDayStart
-                : until.isAfter(selectedDayEnd) ? selectedDayEnd : until;
-
-        var site = activityRepository.findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(managerId, from, end);
-        var points = staffMessagePoints(messageRepository.findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(managerId, from, end));
-        return dailyAndAverage(site, points, date, end);
+        // Month-to-date timestamps and types only (covering indexes). The former
+        // read loaded full activity events and message bodies on every snapshot.
+        return dailyAndMonthAverages(List.of(managerId), date, until)
+                .getOrDefault(managerId, new DailyAndAverage(Metrics.empty(), 0));
     }
 
     private DailyAndAverage dailyAndAverage(List<ManagerSiteActivityEvent> events, List<LocalDateTime> points,

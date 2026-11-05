@@ -7,6 +7,7 @@ import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { earlierIsoDateOrNull, recentIsoDates, shiftIsoDate } from '../shared/audit-review-dates';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { CardDeliveryTracker, managerCardDelivery, deliveryOperationMessage, type DeliveryOperation } from '@otziv/client-common/delivery-operations';
@@ -134,6 +135,25 @@ import {
                 </div>
               </header>
 
+              @if (auditReviewBaseDate()) {
+                <div class="audit-dates" role="group" aria-label="Дата отчёта аудита">
+                  <button type="button" aria-label="Предыдущий день" (click)="shiftAuditReviewDate(-1)">
+                    <span class="material-icons-sharp" aria-hidden="true">chevron_left</span>
+                  </button>
+                  <strong>{{ auditReviewSelectedDate() | date: 'dd.MM.yyyy' }}</strong>
+                  <button type="button" aria-label="Следующий день" [disabled]="!canShowLaterAuditReviews()" (click)="shiftAuditReviewDate(1)">
+                    <span class="material-icons-sharp" aria-hidden="true">chevron_right</span>
+                  </button>
+                </div>
+                <div class="audit-recent" aria-label="Последние 7 дней">
+                  @for (day of auditReviewRecentDates(); track day) {
+                    <button type="button" [class.active]="day === auditReviewSelectedDate()" [attr.aria-pressed]="day === auditReviewSelectedDate()" (click)="selectAuditReviewDate(day)">
+                      {{ day | date: 'dd.MM' }}
+                    </button>
+                  }
+                </div>
+              }
+
               @if (auditReviewsLoading()) {
                 <p class="audit-empty">Загружаю прохождение аудита…</p>
               } @else {
@@ -176,7 +196,7 @@ import {
                           <p><b>Прочтение подтверждено:</b> {{ review.readingConfirmedAt | date: 'dd.MM, HH:mm' }}</p>
                         }
                         @if (review.deadlineStartedAt && !review.completedAt) {
-                          <p><b>Трёхчасовой срок начат:</b> {{ review.deadlineStartedAt | date: 'dd.MM, HH:mm' }}</p>
+                          <p><b>Срок прохождения начат:</b> {{ review.deadlineStartedAt | date: 'dd.MM, HH:mm' }}</p>
                         }
                         @if (review.answerQualityReason) {
                           <p><b>Оценка ответов:</b> {{ review.answerQualityReason }}</p>
@@ -253,7 +273,7 @@ import {
                       </div>
                     </details>
                   } @empty {
-                    <p class="audit-empty">Персональные отчёты сегодня ещё не отправлялись.</p>
+                    <p class="audit-empty">{{ auditReviewDate() ? 'За выбранную дату аудитов не было.' : 'Персональные отчёты сегодня ещё не отправлялись.' }}</p>
                   }
                 </div>
               }
@@ -618,6 +638,34 @@ import {
                             <span class="material-icons-sharp">sync</span>
                             Проверить ответ
                           </button>
+                          @if (card.type === 'CLIENT_CHAT_UNANSWERED') {
+                            <button
+                              type="button"
+                              class="muted wide"
+                              (click)="markAnsweredOutsideChat(card)"
+                              [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId"
+                              title="Вы ответили клиенту лично или в другом чате: опишите это в комментарии, владелец проверит"
+                            >
+                              <span class="material-icons-sharp">mark_chat_read</span>
+                              Ответил в другом мессенджере
+                            </button>
+                            <button
+                              type="button"
+                              class="muted wide"
+                              (click)="reportStaleChatInvite(card)"
+                              [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId"
+                              title="Ссылка на чат не открывает группу: получить актуальную ссылку, ничего не меняя и не отправляя"
+                            >
+                              <span class="material-icons-sharp">link_off</span>
+                              Ссылка-приглашение устарела
+                            </button>
+                            @if (staleInviteUrl(card); as inviteUrl) {
+                              <button type="button" class="muted wide" (click)="openLink(inviteUrl)">
+                                <span class="material-icons-sharp">link</span>
+                                Открыть актуальную ссылку
+                              </button>
+                            }
+                          }
                         </div>
                       } @else if (card.contactText) {
                         <button type="button" class="send-message" (click)="sendClientMessage(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId || deliveryBlocked(card)">
@@ -782,6 +830,13 @@ import {
     .audit-panel-actions .audit-send-button { border-color:rgba(237,45,91,.28); color:var(--control-danger-color); background:var(--control-danger-surface); }
     .audit-panel-actions .audit-test-button { border-color:rgba(121,83,190,.34); color:#6b43a8; background:rgba(121,83,190,.09); }
     .audit-panel-actions .material-icons-sharp { font-size:.95rem; }
+    .audit-dates { display:grid; grid-template-columns:2.15rem minmax(0,1fr) 2.15rem; align-items:center; gap:.35rem; text-align:center; font-size:.68rem; }
+    .audit-dates button, .audit-recent button { border:1px solid rgba(108,155,207,.24); border-radius:999px; color:var(--otziv-primary); background:var(--control-surface); }
+    .audit-dates button { display:grid; place-items:center; height:2.15rem; }
+    .audit-dates button:disabled { opacity:.4; }
+    .audit-recent { display:flex; flex-wrap:wrap; gap:.3rem; }
+    .audit-recent button { padding:.2rem .5rem; font-size:.6rem; font-weight:900; }
+    .audit-recent button.active { border-color:var(--otziv-primary); background:var(--control-soft-surface); }
     .audit-review-list { display:grid; gap:.42rem; }
     .audit-review-card { overflow:hidden; border:1px solid rgba(108,155,207,.2); border-radius:.8rem; background:var(--control-surface); }
     .audit-review-card.red { border-color:rgba(237,45,91,.36); }
@@ -937,6 +992,11 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   readonly auditSending = signal(false);
   readonly auditTestStarting = signal(false);
   readonly auditReviewsLoading = signal(false);
+  /** Selected audit report date; null follows the page's summary date. */
+  readonly auditReviewDate = signal<string | null>(null);
+  readonly auditReviewBaseDate = computed(() => this.summary()?.date?.slice(0, 10) ?? null);
+  readonly auditReviewSelectedDate = computed(() => this.auditReviewDate() ?? this.auditReviewBaseDate());
+  readonly auditReviewRecentDates = computed(() => recentIsoDates(this.auditReviewBaseDate()));
   readonly reportDisputeComments = signal<Record<number, string>>({});
   readonly resolvingReportReviewIds = signal<Set<number>>(new Set());
   readonly clock = signal(Date.now());
@@ -1080,13 +1140,28 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     }
   }
 
+  /** Audit remarks of an earlier report date; the page's summary date is the latest one. */
+  selectAuditReviewDate(date: string | null): void {
+    this.auditReviewDate.set(earlierIsoDateOrNull(date, this.auditReviewBaseDate()));
+    void this.loadManagerReportReviews(true);
+  }
+
+  shiftAuditReviewDate(days: number): void {
+    const current = this.auditReviewSelectedDate();
+    if (current) this.selectAuditReviewDate(shiftIsoDate(current, days));
+  }
+
+  canShowLaterAuditReviews(): boolean {
+    return this.auditReviewDate() !== null;
+  }
+
   async loadManagerReportReviews(force = false): Promise<void> {
     if (this.auditReviewsLoading() && !force) {
       return;
     }
     this.auditReviewsLoading.set(true);
     try {
-      const reviews = await this.managerReportsApi.getManagerReportReviews(this.summary()?.date || undefined).toPromise();
+      const reviews = await this.managerReportsApi.getManagerReportReviews(this.auditReviewSelectedDate() || undefined).toPromise();
       this.managerReportReviews.set(reviews ?? []);
     } catch (error) {
       this.managerReportReviews.set([]);
@@ -1659,6 +1734,67 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       actionType: 'ACKNOWLEDGED',
       comment: this.commentText(card) || 'Сообщение клиента не требует ответа.'
     }, 'DeepSeek подтвердил: сообщение не требует ответа.');
+  }
+
+  /** «Ответил в другом мессенджере»: the card comment is the claim the owner checks afterwards. */
+  async markAnsweredOutsideChat(card: ManagerControlConcreteItem): Promise<void> {
+    const id = card.controlEntityId;
+    if (!id || this.mutatingId() === id) {
+      return;
+    }
+    const comment = this.commentText(card).trim();
+    if (comment.length < 10) {
+      this.notice.set('Напишите в комментарии по карточке, где и когда вы ответили клиенту. Владелец проверит этот ответ.');
+      return;
+    }
+    if (!window.confirm('Закрыть карточку: вы ответили клиенту в другом мессенджере?\n\n'
+        + `Комментарий: ${comment}\n\n`
+        + 'Сообщение не будет считаться проигнорированным, а владелец или администратор проверит ваш ответ.')) {
+      return;
+    }
+    await this.runCardMutation(
+      id,
+      () => this.managerControlApi.markManagerControlAnsweredOutsideChat(id, comment).toPromise(),
+      'Ответ вне чата записан. Владелец проверит ваш комментарий.'
+    );
+  }
+
+  readonly staleInviteUrls = signal<Record<number, string>>({});
+
+  staleInviteUrl(card: ManagerControlConcreteItem): string | null {
+    const id = card.controlEntityId;
+    return id ? this.staleInviteUrls()[id] ?? null : null;
+  }
+
+  /** «Ссылка-приглашение устарела»: reads the current invite if possible; changes and sends nothing. */
+  async reportStaleChatInvite(card: ManagerControlConcreteItem): Promise<void> {
+    const id = card.controlEntityId;
+    if (!id || this.mutatingId() === id) {
+      return;
+    }
+    if (!window.confirm('Ссылка на чат компании не открывает группу?\n\n'
+        + 'Система попробует получить актуальную ссылку-приглашение через подключённый аккаунт компании. '
+        + 'Привязка группы и ссылка в компании не меняются, никому ничего не отправляется.')) {
+      return;
+    }
+    this.mutatingId.set(id);
+    this.error.set(null);
+    try {
+      const result = await firstValueFrom(this.managerControlApi.reportManagerControlStaleChatInvite(id));
+      const inviteUrl = result?.inviteUrl;
+      if (inviteUrl) {
+        this.staleInviteUrls.update((urls) => ({ ...urls, [id]: inviteUrl }));
+      }
+      this.notice.set(result?.message || 'Ссылка проверена.');
+      const managerId = this.selectedManagerId();
+      if (managerId) {
+        await this.loadDetails(managerId);
+      }
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось проверить ссылку.'));
+    } finally {
+      this.mutatingId.set(null);
+    }
   }
 
   async verifyReply(card: ManagerControlConcreteItem): Promise<void> {

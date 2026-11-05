@@ -761,7 +761,8 @@ public class ManagerControlProblemExamples {
         String sender = safe(example.senderName()).isBlank() ? "Клиент" : example.senderName();
         String waiting = waitingLabel(example.waitingMinutes());
         LocalDateTime firstObservedAt = LocalDateTime.now().minusMinutes(Math.max(0, example.waitingMinutes()));
-        return new ManagerControlConcreteItemResponse(null, ENTITY_CLIENT_CHAT_UNANSWERED, example.id(), companyTitle, platformLabel(example.platform()) + " · " + safe(example.chatTitle()), waiting, Math.max(0, example.waitingMinutes() / (60L * 24L)), sender + " написал " + waiting + ". Последнее сообщение: " + compact(example.lastMessageText(), 260), example.targetUrl(), null, example.chatUrl(), null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null, null, null, null, null, compact(example.lastMessageText(), 1000), example.specialistName()).withSla(firstObservedAt, null, null, null);
+        return new ManagerControlConcreteItemResponse(null, ENTITY_CLIENT_CHAT_UNANSWERED, example.id(), companyTitle, platformLabel(example.platform()) + " · " + safe(example.chatTitle()), waiting, Math.max(0, example.waitingMinutes() / (60L * 24L)), sender + " написал " + waiting + ". Последнее сообщение: " + compact(example.lastMessageText(), 260)
+                + ". Если сами не можете войти в чат (например, ссылка-приглашение устарела), ответьте из этой карточки на сайте кнопкой «Ответить клиенту сейчас»: сообщение уйдёт в этот чат от подключённого аккаунта компании.", example.targetUrl(), null, example.chatUrl(), null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null, null, null, null, null, compact(example.lastMessageText(), 1000), example.specialistName()).withSla(firstObservedAt, null, null, null);
     }
 
     String platformLabel(com.hunt.otziv.client_chat_control.model.ClientChatPlatform platform) {
@@ -813,8 +814,19 @@ public class ManagerControlProblemExamples {
     ManagerControlConcreteItemResponse suspiciousClientClosureExample(ClientChatUnansweredExample example) {
         String companyTitle = safe(example.companyTitle()).isBlank() ? "Компания не определена" : example.companyTitle();
         String sender = safe(example.senderName()).isBlank() ? "Клиент" : example.senderName();
+        if (ClientChatMessageTrackerService.ANSWERED_OUTSIDE_CHAT.equals(example.resolutionReasonCode())) {
+            // The manager's own claim; only an owner or administrator closes this check.
+            String reason = sender + ": " + compact(example.lastMessageText(), 160) + ". " + OWNER_CHECK_CLAIM_PREFIX
+                    + compact(example.resolutionComment(), 200) + "». Проверяет владелец или администратор: подтвердите ответ у клиента и запишите результат.";
+            return new ManagerControlConcreteItemResponse(null, ENTITY_CLIENT_CHAT_AUDIT, example.id(), companyTitle, platformLabel(example.platform()) + " · ответ вне чата", OWNER_CHECK_STATUS, Math.max(0, example.waitingMinutes() / (60L * 24L)), reason, example.targetUrl(), null, example.chatUrl(), null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null, null, null, null, null, compact(example.lastMessageText(), 1000), example.specialistName());
+        }
         return new ManagerControlConcreteItemResponse(null, ENTITY_CLIENT_CHAT_AUDIT, example.id(), companyTitle, platformLabel(example.platform()) + " · проверьте полноту ответа", "Нужен аудит", Math.max(0, example.waitingMinutes() / (60L * 24L)), sender + ": " + compact(example.lastMessageText(), 300) + ". Укажите в комментарии найденный ответ или выполненное действие.", example.targetUrl(), null, example.chatUrl(), null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null, null, null, null, null, compact(example.lastMessageText(), 1000), example.specialistName());
     }
+
+    /** Status label of an audit card that waits for the owner's check of an answer given outside the chat. */
+    static final String OWNER_CHECK_STATUS = "Проверка владельца";
+
+    static final String OWNER_CHECK_CLAIM_PREFIX = "Менеджер ответил вне чата: «";
 
     String limit(String value, int maxLength) {
         if (value == null) {

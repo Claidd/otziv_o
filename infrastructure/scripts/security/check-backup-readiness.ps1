@@ -107,6 +107,7 @@ $backupBooleanNames = @(
     'BACKUP_DESTINATION_PRIVATE_CONFIRMED',
     'BACKUP_ENCRYPTION_AT_REST_CONFIRMED',
     'BACKUP_S3_OBJECT_LOCK_ENABLED',
+    'BACKUP_KEYCLOAK_ENABLED',
     'BACKUP_MAIL_ENABLED',
     'BACKUP_EMAIL_DELIVERY_CONFIRMED'
 )
@@ -237,6 +238,33 @@ if ($objectLockEnabled -and (Get-Setting 'BACKUP_S3_OBJECT_LOCK_MODE').ToUpperIn
 $evidenceFileName = Get-Setting 'BACKUP_EVIDENCE_FILE_NAME'
 if (-not [string]::IsNullOrWhiteSpace($evidenceFileName) -and $evidenceFileName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
     $missing.Add('BACKUP_EVIDENCE_FILE_NAME (simple file name only)')
+}
+
+# Keycloak accounts, roles and credentials live only in the keycloak-postgres database.
+$keycloakBackupEnabled = Get-Setting 'BACKUP_KEYCLOAK_ENABLED'
+if ([string]::IsNullOrWhiteSpace($keycloakBackupEnabled)) { $keycloakBackupEnabled = 'true' }
+if ($keycloakBackupEnabled -cne 'true') {
+    $missing.Add('BACKUP_KEYCLOAK_ENABLED=true (the Keycloak database must be part of every production backup)')
+} else {
+    $keycloakUserName = 'BACKUP_KEYCLOAK_DB_USER'
+    if ([string]::IsNullOrWhiteSpace((Get-Setting $keycloakUserName))) { $keycloakUserName = 'KEYCLOAK_DB_USER' }
+    $keycloakSecretName = [string]::Concat('BACKUP_KEYCLOAK_DB_', 'PASSWORD')
+    if ([string]::IsNullOrWhiteSpace((Get-Setting $keycloakSecretName))) {
+        $keycloakSecretName = [string]::Concat('KEYCLOAK_DB_', 'PASSWORD')
+    }
+    foreach ($name in @('KEYCLOAK_DB', $keycloakUserName, $keycloakSecretName)) {
+        if ([string]::IsNullOrWhiteSpace((Get-Setting $name))) {
+            $missing.Add("$name (required for the Keycloak database backup)")
+        }
+    }
+    $keycloakEvidenceFileName = Get-Setting 'BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME'
+    if ([string]::IsNullOrWhiteSpace($keycloakEvidenceFileName)) { $keycloakEvidenceFileName = 'keycloak-backup-evidence.jsonl' }
+    $mysqlEvidenceFileName = if ([string]::IsNullOrWhiteSpace($evidenceFileName)) { 'backup-evidence.jsonl' } else { $evidenceFileName }
+    if ($keycloakEvidenceFileName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
+        $missing.Add('BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME (simple file name only)')
+    } elseif ($keycloakEvidenceFileName.Equals($mysqlEvidenceFileName, [StringComparison]::OrdinalIgnoreCase)) {
+        $missing.Add('BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME (must differ from BACKUP_EVIDENCE_FILE_NAME)')
+    }
 }
 $restoreDrillRto = Get-Setting 'BACKUP_RESTORE_DRILL_RTO'
 if (-not [string]::IsNullOrWhiteSpace($restoreDrillRto)) {

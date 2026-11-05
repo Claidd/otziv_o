@@ -147,6 +147,73 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/admin/manager-control/concrete-items/{concreteItemId}/answered-outside-chat" : {
+      "post" : {
+        "operationId" : "ApiManagerControlController_markAnsweredOutsideChat",
+        "x-java-handler" : "com.hunt.otziv.manager_control.controller.ApiManagerControlController#markAnsweredOutsideChat",
+        "requestBody" : {
+          "required" : false,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ManagerControlItemActionRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "concreteItemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManagerControlConcreteItemResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/admin/manager-control/concrete-items/{concreteItemId}/delivery-operations/{operationId}" : {
       "get" : {
         "operationId" : "ApiManagerControlController_deliveryOperation",
@@ -563,6 +630,63 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ManagerControlConcreteItemResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/manager-control/concrete-items/{concreteItemId}/stale-chat-invite" : {
+      "post" : {
+        "operationId" : "ApiManagerControlController_reportStaleChatInvite",
+        "x-java-handler" : "com.hunt.otziv.manager_control.controller.ApiManagerControlController#reportStaleChatInvite",
+        "parameters" : [ {
+          "name" : "concreteItemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManagerControlStaleChatInviteResponseOutput"
                 }
               }
             }
@@ -19985,6 +20109,35 @@
         "required" : [ ],
         "additionalProperties" : true
       },
+      "ManagerControlStaleChatInviteResponseOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.dto.ManagerControlStaleChatInviteResponse",
+        "type" : "object",
+        "properties" : {
+          "inviteUrl" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "item" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/ManagerControlConcreteItemResponseOutput"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "message" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "inviteUrl", "item", "message" ],
+        "additionalProperties" : true
+      },
       "ManagerControlSummaryResponseOutput" : {
         "x-java-type" : "com.hunt.otziv.manager_control.dto.ManagerControlSummaryResponse",
         "type" : "object",
@@ -27130,7 +27283,7 @@
     "sha256" : "8c4021090bdc40d5198ccb45da2bd2c1646c30bfd57a5997f896f9f33d6a2cd7"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/admin/controller/ApiCabinetController.java",
-    "sha256" : "e296a83569e2ab3b20b308adc6ebaee96d3d6581ba942c3ad16d490cc282c460"
+    "sha256" : "dcc533ecc4ad81ed51ceedfee47ed99218270c428f3e34b11689046ad1bc38b4"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/archive/controller/ApiManagerArchiveController.java",
     "sha256" : "f2a1662e876152bf10aa21b8d8feeb786de757bf2f412791f6c7a9f98d1c51c0"
@@ -27436,7 +27589,7 @@
     "sha256" : "796cc452d2006e0d1028523fd004b3d668364553be7e0d6a7acb7278d7c7c62d"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ApiManagerControlController.java",
-    "sha256" : "b897af3b568ba4d229c8e268fb4cf76c31312864352005ea0c0a39cf3498fa23"
+    "sha256" : "c189b0026939e49f97d24a5317b2fa08576512f552822810b58136c81c8fa5a5"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ManagerClientReplyOperationController.java",
     "sha256" : "28f7dfb73d90d3fca83eb5b5d988fe7d0833afb39a152e1f232377a4f73117ba"
@@ -27491,6 +27644,9 @@
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlStageRequest.java",
     "sha256" : "2cbb763352c319a24d58522803427d70d7ec21fa9621e34a6978c9934e997cd3"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlStaleChatInviteResponse.java",
+    "sha256" : "09b83d9b7b81307275e98e945b0d33d0ef7d6054c174937682c42e6160797a99"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlSummaryResponse.java",
     "sha256" : "8564ce6cad6b05b876bc75afa15d41daaab202aa225bed2e9c3e13f8de721a3e"
@@ -27908,6 +28064,7 @@
     "ManagerControlProblemResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlProblemResponse",
     "ManagerControlSectionResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlSectionResponse",
     "ManagerControlStageRequestInput" : "com.hunt.otziv.manager_control.dto.ManagerControlStageRequest",
+    "ManagerControlStaleChatInviteResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlStaleChatInviteResponse",
     "ManagerControlSummaryResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlSummaryResponse",
     "ManagerControlWorkerExplanationStatsResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlWorkerExplanationStatsResponse",
     "ManagerDailySummaryResponseOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerDailySummaryResponse",

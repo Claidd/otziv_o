@@ -13,6 +13,7 @@ import com.hunt.otziv.client_messages.api.UncertainClientMessageDelivery;
 import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
+import com.hunt.otziv.manager_control.dto.ManagerControlStaleChatInviteResponse;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
@@ -39,6 +40,7 @@ import org.springframework.http.HttpStatus;
 import java.security.Principal;
 import com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview;
 import java.time.LocalDateTime;
+import java.util.List;
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -70,6 +72,8 @@ public class ManagerControlItemActions {
 
     static final String ORDER_STATUS_REMINDER = "Напоминание";
 
+    static final String OWNER_CHECK_HANDOFF_COMMENT = "Передано на проверку владельцу: ответ вне чата подтверждает владелец или администратор";
+
     private final ManagerPermissionService managerPermissionService;
 
     private final OrderService orderService;
@@ -91,10 +95,8 @@ public class ManagerControlItemActions {
 
     private final GamificationEventService gamificationEventService;
     private final ManagerControlOrderDeliveryState deliveryState;
-
-    void notifyOwnersAboutDeferredConcreteItem(ManagerDailyControl control, ManagerDailyControlConcreteItem concreteItem, Principal principal) {
-        reminderWorkflow.notifyOwnersAboutDeferredConcreteItem(control, concreteItem, principal);
-    }
+    private final ManagerControlClientConversationWorkflow conversationWorkflow;
+    private final ManagerControlTransactionRunner transactions;
 
     @Transactional
     public void actionItem(Long itemId, ManagerControlItemActionRequest request, Principal principal, Authentication authentication) {
@@ -129,18 +131,55 @@ public class ManagerControlItemActions {
         }
     }
 
-    @Transactional
+    /**
+     * Card actions run in short transactions that hold the card (and, for orders, the order and its
+     * scheduled delivery) locked. Telegram to the specialist and to the owners is never sent while
+     * those locks are held: a specialist request is recorded, sent, and its result is recorded in a
+     * second transaction; owner notices are sent after the action has committed.
+     */
     public ManagerControlConcreteItemResponse actionConcreteItem(Long concreteItemId, ManagerControlItemActionRequest request, Principal principal, Authentication authentication) {
-        return performConcreteAction(concreteItemId, request, principal, authentication, null, false);
+        return actionConcrete(concreteItemId, request, principal, authentication, null, false);
     }
 
-    @Transactional
     public ManagerControlConcreteItemResponse actionConcreteItem(Long concreteItemId, ManagerControlItemActionRequest request,
             Principal principal, Authentication authentication, PreparedNoResponseReview review) {
-        return performConcreteAction(concreteItemId, request, principal, authentication, review, true);
+        return actionConcrete(concreteItemId, request, principal, authentication, review, true);
     }
 
-    private ManagerControlConcreteItemResponse performConcreteAction(Long concreteItemId, ManagerControlItemActionRequest request,
+    /**
+     * «Ссылка-приглашение устарела». The card and its chat are read first, the connected WhatsApp account's
+     * current invite is looked up without any transaction or lock, and the result is recorded on the card,
+     * which stays open. The company's bound group and link are never changed and nothing is sent.
+     */
+    public ManagerControlStaleChatInviteResponse reportStaleChatInvite(Long concreteItemId, Principal principal, Authentication authentication) {
+        var context = conversationWorkflow.staleChatInviteContext(concreteItemId, principal, authentication);
+        String currentInvite = conversationWorkflow.currentInviteLink(context);
+        return conversationWorkflow.recordStaleChatInvite(concreteItemId, context, currentInvite, principal, authentication);
+    }
+
+    record ConcreteActionOutcome(ManagerControlConcreteItemResponse response,
+                                 ManagerControlWorkerTaskWorkflow.WorkerTaskDispatch workerRequest,
+                                 List<ManagerControlReminderWorkflow.OwnerTelegramMessage> ownerMessages) {
+        static ConcreteActionOutcome done(ManagerControlConcreteItemResponse response) {
+            return new ConcreteActionOutcome(response, null, List.of());
+        }
+    }
+
+    private ManagerControlConcreteItemResponse actionConcrete(Long concreteItemId, ManagerControlItemActionRequest request,
+            Principal principal, Authentication authentication, PreparedNoResponseReview review, boolean reviewPrepared) {
+        ConcreteActionOutcome prepared = transactions.required(() ->
+                performConcreteAction(concreteItemId, request, principal, authentication, review, reviewPrepared));
+        ConcreteActionOutcome outcome = prepared;
+        if (prepared.workerRequest() != null) {
+            boolean sent = workerTaskWorkflow.dispatchWorkerTaskRequest(prepared.workerRequest());
+            outcome = transactions.required(() ->
+                    completeWorkerTaskRequest(concreteItemId, prepared.workerRequest(), sent, principal, authentication));
+        }
+        reminderWorkflow.sendOwnerMessages(outcome.ownerMessages());
+        return outcome.response();
+    }
+
+    private ConcreteActionOutcome performConcreteAction(Long concreteItemId, ManagerControlItemActionRequest request,
             Principal principal, Authentication authentication, PreparedNoResponseReview review, boolean reviewPrepared) {
         if (concreteItemId == null || concreteItemId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
@@ -175,6 +214,10 @@ public class ManagerControlItemActions {
         boolean specialistActionConcrete = isSpecialistActionConcrete(concreteItem);
         boolean clientChatUnansweredConcrete = ENTITY_CLIENT_CHAT_UNANSWERED.equals(concreteItem.getEntityType());
         boolean clientChatAuditConcrete = ENTITY_CLIENT_CHAT_AUDIT.equals(concreteItem.getEntityType());
+        if (clientChatUnansweredConcrete || clientChatAuditConcrete) {
+            // Closing or reviewing the message changes the chat itself, which may already belong to another manager.
+            conversationWorkflow.requireOwnMessageSource(concreteItem.getEntityId(), principal, authentication);
+        }
         boolean keepClientChatUnansweredOpen = clientChatUnansweredConcrete && actionType == ManagerDailyControlActionType.DEFERRED;
         if (keepClientChatUnansweredOpen) {
             status = ManagerDailyControlItemStatus.OPEN;
@@ -186,27 +229,83 @@ public class ManagerControlItemActions {
         LocalDateTime now = LocalDateTime.now();
         acceptControlIfCurrentManager(control, principal, "Контроль принят первым действием по карточке");
         concreteItem.setComment(comment);
-        if (specialistActionConcrete && status != ManagerDailyControlItemStatus.RESOLVED && actionType == ManagerDailyControlActionType.ACTION_TAKEN && manualWorkerNotification && !notifyWorkerAboutTaskRequest(concreteItem, control)) {
-            String failureReason = safe(concreteItem.getWorkerNotificationFailureReason());
-            String failureAction = requiresWorkerExplanation(concreteItem) ? "Запрос специалисту не доставлен" : "Напоминание специалисту не доставлено";
-            concreteItem.setComment(failureReason.isBlank() ? failureAction : failureAction + ": " + failureReason);
-            concreteItem.setStatus(ManagerDailyControlItemStatus.OPEN);
-            concreteItem.setActionType(null);
-            concreteItem.setResolvedAt(null);
-            concreteItem.setAutomaticResolution(false);
-            concreteItem.setFollowUpAt(null);
-            concreteItem.setLastManualTouchAt(now);
-            ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
-            control.setLastActivityAt(now);
-            dailyControlRepository.save(control);
-            cardLifecycle.invalidateManagerPerformance();
-            return concretePresenter.concreteItemResponse(savedConcreteItem);
+        if (specialistActionConcrete && status != ManagerDailyControlItemStatus.RESOLVED && actionType == ManagerDailyControlActionType.ACTION_TAKEN && manualWorkerNotification) {
+            accessPolicy.requireOwnOrder(workerTaskLookup.orderIdForTask(concreteItem), authentication);
+            ManagerControlWorkerTaskWorkflow.WorkerTaskDispatch dispatch = workerTaskWorkflow.prepareWorkerTaskRequest(concreteItem);
+            if (dispatch == null) {
+                return ConcreteActionOutcome.done(recordWorkerRequestFailure(concreteItem, control, now));
+            }
+            // The attempt is committed first; the action itself is applied once Telegram has answered.
+            dailyControlConcreteItemRepository.save(concreteItem);
+            return new ConcreteActionOutcome(null, dispatch, List.of());
         }
         if (specialistActionConcrete && status != ManagerDailyControlItemStatus.RESOLVED && actionType == ManagerDailyControlActionType.ACTION_TAKEN && !manualWorkerNotification && requiresWorkerExplanation(concreteItem) && concreteItem.getWorkerExplanationAt() == null && !canOverrideWorkerExplanation(authentication)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сначала запросите пояснение специалиста или зафиксируйте эскалацию с комментарием");
         }
         if (specialistActionConcrete && status == ManagerDailyControlItemStatus.RESOLVED && requiresWorkerExplanation(concreteItem) && concreteItem.getWorkerExplanationAt() == null && !canOverrideWorkerExplanation(authentication)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Закрыть карточку можно после ответа специалиста или администратором/владельцем");
+        }
+        return applyConcreteAction(concreteItem, control, actionType, status, comment, principal, authentication, review, reviewPrepared, now);
+    }
+
+    /**
+     * Second transaction of a specialist request: the card is read again under lock and only the
+     * outcome of this attempt is recorded; a newer request or a card closed meanwhile is left as is.
+     */
+    private ConcreteActionOutcome completeWorkerTaskRequest(Long concreteItemId, ManagerControlWorkerTaskWorkflow.WorkerTaskDispatch dispatch,
+            boolean sent, Principal principal, Authentication authentication) {
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findByIdForUpdate(concreteItemId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        ManagerDailyControl control = concreteItem.getControl();
+        LocalDateTime now = LocalDateTime.now();
+        if (!workerTaskWorkflow.isCurrentWorkerTaskRequest(concreteItem, dispatch)) {
+            return ConcreteActionOutcome.done(concretePresenter.concreteItemResponse(concreteItem));
+        }
+        if (!sent) {
+            concreteItem.setWorkerNotificationFailureReason("Telegram не отправил сообщение");
+            return ConcreteActionOutcome.done(recordWorkerRequestFailure(concreteItem, control, now));
+        }
+        workerTaskWorkflow.recordWorkerTaskRequestSent(concreteItem, dispatch);
+        if (concreteItem.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
+            // The problem was closed while the message was being sent: keep the fact, not the action.
+            return ConcreteActionOutcome.done(concretePresenter.concreteItemResponse(dailyControlConcreteItemRepository.save(concreteItem)));
+        }
+        return applyConcreteAction(concreteItem, control, ManagerDailyControlActionType.ACTION_TAKEN, ManagerDailyControlItemStatus.ACTION_TAKEN,
+                concreteItem.getComment(), principal, authentication, null, false, now);
+    }
+
+    private ManagerControlConcreteItemResponse recordWorkerRequestFailure(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, LocalDateTime now) {
+        String failureReason = safe(concreteItem.getWorkerNotificationFailureReason());
+        String failureAction = requiresWorkerExplanation(concreteItem) ? "Запрос специалисту не доставлен" : "Напоминание специалисту не доставлено";
+        concreteItem.setComment(failureReason.isBlank() ? failureAction : failureAction + ": " + failureReason);
+        concreteItem.setStatus(ManagerDailyControlItemStatus.OPEN);
+        concreteItem.setActionType(null);
+        concreteItem.setResolvedAt(null);
+        concreteItem.setAutomaticResolution(false);
+        concreteItem.setFollowUpAt(null);
+        concreteItem.setLastManualTouchAt(now);
+        ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
+        control.setLastActivityAt(now);
+        dailyControlRepository.save(control);
+        cardLifecycle.invalidateManagerPerformance();
+        return concretePresenter.concreteItemResponse(savedConcreteItem);
+    }
+
+    private ConcreteActionOutcome applyConcreteAction(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control,
+            ManagerDailyControlActionType actionType, ManagerDailyControlItemStatus status, String comment,
+            Principal principal, Authentication authentication, PreparedNoResponseReview review, boolean reviewPrepared, LocalDateTime now) {
+        boolean specialistActionConcrete = isSpecialistActionConcrete(concreteItem);
+        boolean clientChatUnansweredConcrete = ENTITY_CLIENT_CHAT_UNANSWERED.equals(concreteItem.getEntityType());
+        boolean clientChatAuditConcrete = ENTITY_CLIENT_CHAT_AUDIT.equals(concreteItem.getEntityType());
+        // An unanswered chat stays OPEN when deferred, so the previous action marks an already reported deferral.
+        boolean alreadyDeferred = concreteItem.getActionType() == ManagerDailyControlActionType.DEFERRED
+                || concreteItem.getStatus() == ManagerDailyControlItemStatus.DEFERRED;
+        // A manager cannot confirm their own answer given outside the chat: their action only hands the card
+        // to the owner (it stops blocking the day), the message stays on check until an owner or admin confirms it.
+        boolean ownerCheckHandoff = clientChatAuditConcrete && accessPolicy.restrictedToOwnSources(authentication)
+                && conversationWorkflow.ownerCheckPending(concreteItem.getEntityId());
+        if (ownerCheckHandoff) {
+            status = ManagerDailyControlItemStatus.ACTION_TAKEN;
+            actionType = ManagerDailyControlActionType.ACTION_TAKEN;
         }
         cardLifecycle.recordConcreteEpisode(concreteItem, status, false);
         if (actionType == ManagerDailyControlActionType.DEFERRED && concreteItem.getDeferredAt() == null) {
@@ -221,8 +320,12 @@ public class ManagerControlItemActions {
             concreteItem.setLastManualTouchAt(now);
             concreteItem.setFollowUpAt(now.plusDays(MANUAL_FOLLOW_UP_DAYS));
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
-                movedToReminder = movePaymentOrderToReminderAfterManualSend(concreteItem);
+                movedToReminder = movePaymentOrderToReminderAfterManualSend(concreteItem, authentication);
             }
+        } else if (ownerCheckHandoff) {
+            concreteItem.setLastManualTouchAt(now);
+            concreteItem.setFollowUpAt(null);
+            concreteItem.setComment(limit(OWNER_CHECK_HANDOFF_COMMENT + (safe(comment).isBlank() ? "" : ". " + safe(comment)), 1000));
         } else if (clientChatAuditConcrete) {
             concreteItem.setLastManualTouchAt(now);
             concreteItem.setFollowUpAt(null);
@@ -271,10 +374,12 @@ public class ManagerControlItemActions {
         if (status == ManagerDailyControlItemStatus.RESOLVED && !clientChatUnansweredConcrete) {
             recordGamificationControlAction(control, "concrete:" + savedConcreteItem.getId(), savedConcreteItem.getParentItem() == null ? null : savedConcreteItem.getParentItem().getReasonCode(), savedConcreteItem.getCreatedAt(), savedConcreteItem.getResolvedAt(), savedConcreteItem.getTitle());
         }
-        if (actionType == ManagerDailyControlActionType.DEFERRED) {
-            notifyOwnersAboutDeferredConcreteItem(control, savedConcreteItem, principal);
-        }
-        return concretePresenter.concreteItemResponse(savedConcreteItem);
+        // Owners hear about a deferral once; repeating DEFERRED (an unanswered chat stays open) is not a new one.
+        List<ManagerControlReminderWorkflow.OwnerTelegramMessage> ownerMessages =
+                actionType == ManagerDailyControlActionType.DEFERRED && !alreadyDeferred
+                        ? reminderWorkflow.deferredConcreteItemMessages(control, savedConcreteItem, principal)
+                        : List.of();
+        return new ConcreteActionOutcome(concretePresenter.concreteItemResponse(savedConcreteItem), null, ownerMessages);
     }
 
     void recordGamificationControlAction(ManagerDailyControl control, String uniqueKey, String reasonCode, LocalDateTime startedAt, LocalDateTime completedAt, String label) {
@@ -284,7 +389,7 @@ public class ManagerControlItemActions {
         gamificationEventService.recordManagerControlAction(manager, uniqueKey, startedAt, completedAt, target, hard, "reason=" + safe(reasonCode) + ";label=" + safe(label));
     }
 
-    boolean movePaymentOrderToReminderAfterManualSend(ManagerDailyControlConcreteItem concreteItem) {
+    boolean movePaymentOrderToReminderAfterManualSend(ManagerDailyControlConcreteItem concreteItem, Authentication authentication) {
         Long orderId = concreteItem.getEntityId();
         if (orderId == null) {
             return false;
@@ -298,6 +403,8 @@ public class ManagerControlItemActions {
         if (!ORDER_STATUS_TO_PAY.equals(currentStatus)) {
             return false;
         }
+        // The status change belongs to the order's current manager, not to the day the card was raised.
+        accessPolicy.requireOwnOrder(orderId, authentication);
         try {
             boolean changed = orderService.changeStatusForOrder(orderId, ORDER_STATUS_REMINDER);
             if (!changed) {
@@ -353,10 +460,6 @@ public class ManagerControlItemActions {
 
     String specialistProblemLabel(ManagerDailyControlConcreteItem concreteItem) {
         return workerTaskWorkflow.specialistProblemLabel(concreteItem);
-    }
-
-    boolean notifyWorkerAboutTaskRequest(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control) {
-        return workerTaskWorkflow.notifyWorkerAboutTaskRequest(concreteItem, control);
     }
 
     void requireAutomationFailureResolved(ManagerDailyControlConcreteItem concreteItem) {

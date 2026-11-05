@@ -40,6 +40,7 @@ import {
   botBrowserSessionHeartbeatPath
 } from './bot-browser-api-paths';
 import { mobileEnvironment } from './mobile-environment';
+import { backendImageUrl } from './image-urls';
 
 const OPAQUE_REVIEW_CAPABILITY = /^rc1_[A-Za-z0-9_-]{43}$/;
 
@@ -2073,6 +2074,7 @@ export interface AdminUser {
   managerAuditTelegramGroupChatId?: number | null;
   managerAuditTelegramBotInviteUrl?: string;
   imageId?: number | null;
+  imageUrl?: string | null;
   active: boolean;
   createTime?: string;
   lastLoginAt?: string;
@@ -2804,6 +2806,7 @@ export interface CabinetUserStat {
   id: number;
   fio: string;
   imageId: number;
+  imageUrl?: string | null;
   coefficient?: number | null;
   percentNoPay?: number | null;
   avgPublish1Day?: number | null;
@@ -2910,6 +2913,7 @@ export interface TeamMember {
   login: string;
   fio: string;
   imageId: number;
+  imageUrl?: string | null;
   sum1Month?: number | null;
   order1Month?: number | null;
   review1Month?: number | null;
@@ -2971,6 +2975,7 @@ export interface ScoreUser {
   inVigul?: number | null;
   inPublish?: number | null;
   imageId?: number | null;
+  imageUrl?: string | null;
   userId?: number | null;
   order1Month?: number | null;
   review1Month?: number | null;
@@ -4339,8 +4344,8 @@ export class ApiService {
     request: UpdateManualPaymentTaskRequest
   ): Observable<ManualPaymentTaskResponse> { return this.manualPaymentTasksApi.updateAdminManualPaymentTask(taskId, request); }
 
-  imageUrl(imageId = 1): string {
-    return `${mobileEnvironment.backendBaseUrl}/images/${imageId}`;
+  imageUrl(imageId = 1, signedPath?: string | null): string {
+    return backendImageUrl(mobileEnvironment.backendBaseUrl, imageId, signedPath);
   }
 
   private cabinetDateParams(date?: string, forceRefresh?: boolean): HttpParams {

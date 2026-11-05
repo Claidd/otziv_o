@@ -83,11 +83,23 @@ public class ManagerReportReviewTelegramService {
     private final ManagerReportReviewTaskContextService taskContextService;
     private final ManagerReportReviewCommitmentService commitmentService;
     private final ManagerReportReviewRolloutPolicy rolloutPolicy;
+    /** Field-injected so the constructor and its tests stay unchanged. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.c_companies.api.CompanyTelegramGroups companyTelegramGroups;
     private final ManagerReportReviewEvidenceSnapshotService evidenceSnapshots =
             new ManagerReportReviewEvidenceSnapshotService(new com.fasterxml.jackson.databind.ObjectMapper());
 
     public boolean enabled() {
         return appSettingService.getBoolean("manager.report-review.enabled", true);
+    }
+
+    public static boolean isReviewCallback(String callbackData) {
+        return callbackData != null && callbackData.startsWith(CALLBACK_PREFIX);
+    }
+
+    /** Cheap, non-locking check whether a group can receive audit answers at all. */
+    public boolean hasOpenAuditInChat(long chatId) {
+        return sessionRepository.existsByRecipientChatIdAndCompletedAtIsNull(chatId);
     }
 
     public boolean enabledFor(Manager manager) {
@@ -484,6 +496,10 @@ public class ManagerReportReviewTelegramService {
                 )
                 .orElse(null);
         if (review == null) return false;
+        boolean replyToPrompt = review.getReplyPromptMessageId() != null
+                && review.getReplyPromptMessageId().equals(replyToMessageId);
+        // An unfinished (possibly days old) audit must not swallow the bot menu in a private chat.
+        if (!replyToPrompt && !isGroupChat(chatId) && isMenuCommand(messageText)) return false;
         if (review.getStatus() == ManagerReportReviewStatus.READING) {
             telegramService.sendMessageWithInlineKeyboard(
                     review.getRecipientChatId(),
@@ -494,15 +510,16 @@ public class ManagerReportReviewTelegramService {
             );
             return true;
         }
-        if ((review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING || isGroupChat(chatId))
-                && (review.getReplyPromptMessageId() == null
-                || !review.getReplyPromptMessageId().equals(replyToMessageId))) {
+        // Plans and dispute texts, like answers, count only as a reply to the current prompt:
+        // a stray message to an abandoned dispute used to reach the owners as a dispute.
+        if (!replyToPrompt) {
             telegramService.sendMessageWithInlineKeyboard(
                     review.getRecipientChatId(),
                     "Чтобы ответ засчитался именно этому менеджеру и текущему шагу, "
                             + "используйте кнопку <b>«Ответить»</b> или ответьте на последнее сообщение бота.",
                     "HTML",
                     review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING
+                            || review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING
                             ? answerKeyboard(review.getId(), false)
                             : review.getStatus() == ManagerReportReviewStatus.DISPUTE_PENDING
                                     ? disputeKeyboard(review.getId())
@@ -532,6 +549,11 @@ public class ManagerReportReviewTelegramService {
         Manager manager = managerRepository.findByUserId(actor.getId()).orElse(null);
         if (manager == null) {
             return Optional.of("Привязать группу может только менеджер, для которого формируется аудит.");
+        }
+        // The audit shows the manager's internal report; a client company's chat must never receive it.
+        if (companyTelegramGroups != null && companyTelegramGroups.isCompanyGroup(chatId)) {
+            return Optional.of("Это группа компании-клиента. Для аудита создайте отдельную служебную группу "
+                    + "с ботом и отправьте команду там.");
         }
         Manager occupied = managerRepository.findByAuditTelegramGroupChatId(chatId).orElse(null);
         if (occupied != null && !occupied.getId().equals(manager.getId())) {
@@ -604,7 +626,8 @@ public class ManagerReportReviewTelegramService {
             event(review, "DEADLINE_STARTED", actor.getId(), actorRole(review), "telegram",
                     review.isTestMode()
                             ? "Тестовый таймер прохождения запущен без ограничений доступа"
-                            : "Трёхчасовой срок начат при открытии отчёта");
+                            : ManagerReportReviewDeadline.deadlineLabel(appSettingService.getInt(
+                                    ManagerReportReviewDeadline.DEADLINE_KEY, ManagerReportReviewDeadline.DEFAULT_DEADLINE_MINUTES)) + " начат при открытии отчёта");
         }
         review.setStatus(ManagerReportReviewStatus.READING);
         sessionRepository.save(review);
@@ -615,7 +638,9 @@ public class ManagerReportReviewTelegramService {
             telegramService.sendMessage(
                     review.getRecipientChatId(),
                     "👀 <b>" + escape(review.getManagerName()) + " начал(а) изучение отчёта.</b>\n"
-                            + "С этого момента идёт трёхчасовой срок на прохождение проверки.",
+                            + "С этого момента идёт срок на прохождение проверки: "
+                                    + ManagerReportReviewDeadline.duration(ManagerReportReviewDeadline.deadlineMinutes(appSettingService.getInt(
+                ManagerReportReviewDeadline.DEADLINE_KEY, ManagerReportReviewDeadline.DEFAULT_DEADLINE_MINUTES))) + ".",
                     "HTML"
             );
         }
@@ -677,7 +702,7 @@ public class ManagerReportReviewTelegramService {
         if (questions.isEmpty()) {
             if (questionsPendingAi(review)) {
                 sendAiUnavailable(review);
-                return "DeepSeek временно недоступен. Проверка сохранена, трёхчасовой срок приостановлен";
+                return "DeepSeek временно недоступен. Проверка сохранена, срок прохождения приостановлен";
             }
             completeReview(review, actor, "Проблемы для проверки отсутствуют");
             return "Отчёт принят";
@@ -1984,26 +2009,25 @@ public class ManagerReportReviewTelegramService {
             var goals = workerProgressService.missedPreviousDayGoals(review.managerId(), workerGoalReportDate(question,review.getSummaryDate()));
             if (goals != null && !goals.isEmpty()) {
                 StringBuilder goalFacts = new StringBuilder("\nСЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n");
+                boolean planKnown = false;
                 for (var goal : goals) {
                     if (!question.question().contains(goal.workerName())) continue;
-                    for (var field : java.util.Map.of("worker_name", clean(goal.workerName()),
-                            "goal_date", goal.date().toString(), "completed", String.valueOf(goal.completed()),
-                            "total", String.valueOf(goal.total())).entrySet()) {
-                        try {
-                            goalFacts.append(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
-                                    java.util.Map.of("id", "worker-goal:" + goal.workerId() + ":" + goal.date() + ":" + field.getKey(),
-                                            "source", "worker_daily_goal", "field", field.getKey(), "value", field.getValue(),
-                                            "observedAt", java.time.Instant.now().toString()))).append('\n');
-                        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
-                            throw new IllegalStateException("Cannot encode worker goal evidence", invalid);
-                        }
+                    goalFacts.append(workerGoalFacts(goal));
+                    if (goal.unfinishedTasks().isEmpty()) {
+                        goalFacts.append(clean(taskContextService.workerGoalTaskEvidence(goal.workerId(),review.managerId(),goal.date()))).append('\n');
+                    } else {
+                        planKnown = true;
                     }
-                    goalFacts.append(clean(taskContextService.workerGoalTaskEvidence(goal.workerId(),review.managerId(),goal.date()))).append('\n');
                     goalFacts.append(followingWorkerGoalFacts(goal,
                             java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Irkutsk")).toLocalDate(), java.util.Set.of()));
                 }
-                goalFacts.append("Время поступления отдельных задач и причина недобора здесь не установлены. ")
-                        .append("Менеджер может предложить проверку; утверждение о позднем поступлении требует журнала задач.\n");
+                goalFacts.append(planKnown
+                        ? "Состав недобора взят из плана дня специалиста: worker_daily_goal_plan — незакрытые на конец дня "
+                                + "обязательные задачи (единицы одного заказа и раздела — одна задача) и время, с которого задача была в работе. "
+                                + "Работа после контрольного времени и задачи без доступного аккаунта в цель не входят. "
+                                + "Причина недобора здесь не установлена; рассказ менеджера о ней — объяснение с его слов.\n"
+                        : "Время поступления отдельных задач и причина недобора здесь не установлены. "
+                                + "Менеджер может предложить проверку; утверждение о позднем поступлении требует журнала задач.\n");
                 fresh += goalFacts;
             }
         }
@@ -2030,6 +2054,43 @@ public class ManagerReportReviewTelegramService {
         return facts.isEmpty()?"":"ДОПОЛНЕНИЕ ПРИ ПОВТОРНОЙ СВЕРКЕ: итоги закрытых дней до отправки ответа. "
                 +"Получены сейчас; не являются доказательством разговора или погашения прежнего недобора.\n"
                 +facts;
+    }
+
+    /** Goal counters keep their historical ids; the day plan adds the unfinished tasks. */
+    private String workerGoalFacts(ManagerWorkerDailyProgressService.MissedWorkerGoal goal) {
+        String prefix = "worker-goal:" + goal.workerId() + ":" + goal.date() + ":";
+        java.util.Map<String, String> fields = new java.util.LinkedHashMap<>();
+        fields.put("worker_name", clean(goal.workerName()));
+        fields.put("goal_date", goal.date().toString());
+        fields.put("completed", String.valueOf(goal.completed()));
+        fields.put("total", String.valueOf(goal.total()));
+        if (goal.blockedUnits() > 0) fields.put("account_blocked_units_excluded", String.valueOf(goal.blockedUnits()));
+        if (goal.lastReached100At() != null) fields.put("last_reached_100_at", goal.lastReached100At().toString());
+        StringBuilder facts = new StringBuilder();
+        fields.forEach((field, value) -> facts.append(goalFact(prefix + field, "worker_daily_goal", field, value)));
+        int number = 0;
+        for (var task : goal.unfinishedTasks()) {
+            String taskPrefix = "worker-goal-plan:" + goal.workerId() + ":" + goal.date() + ":" + (++number) + ":";
+            java.util.Map<String, String> taskFields = new java.util.LinkedHashMap<>();
+            taskFields.put("unfinished_task", WorkerGoalRemarkText.task(task, goal.date()));
+            taskFields.put("section", clean(task.section()));
+            if (task.orderId() != null) taskFields.put("order_id", String.valueOf(task.orderId()));
+            taskFields.put("units", String.valueOf(task.units()));
+            if (task.availableAt() != null) taskFields.put("in_work_since", task.availableAt().toString());
+            taskFields.forEach((field, value) -> facts.append(
+                    goalFact(taskPrefix + field, "worker_daily_goal_plan", field, value)));
+        }
+        return facts.toString();
+    }
+
+    private String goalFact(String id, String source, String field, String value) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(java.util.Map.of(
+                    "id", id, "source", source, "field", field, "value", value,
+                    "observedAt", java.time.Instant.now().toString())) + "\n";
+        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+            throw new IllegalStateException("Cannot encode worker goal evidence", invalid);
+        }
     }
 
     private String followingWorkerGoalFacts(ManagerWorkerDailyProgressService.MissedWorkerGoal goal,
@@ -2065,7 +2126,7 @@ public class ManagerReportReviewTelegramService {
                             + "Это техническая остановка проверки; ответ не оценён как неправильный. "
                         : "⏸ <b>Для проверки нужны дополнительные данные</b>\n\n")
                         + (preparingQuestions ? "Ваш прогресс сохранён. " : "Ваш ответ и прогресс сохранены. ")
-                        + "Трёхчасовой срок приостановлен, доступ не будет ограничен. "
+                        + "Срок прохождения приостановлен, доступ не будет ограничен. "
                         + (awaitingContext
                             ? escape(missingAnswerContextReason(review)) + "\n\n"
                                 + "Добавьте уточнение ответом на последний вопрос аудита. Если он недоступен, нажмите «Ответить заново». "
@@ -2108,6 +2169,8 @@ public class ManagerReportReviewTelegramService {
         LinkedHashMap<String, ManagerDailyControlConcreteItem> distinct = new LinkedHashMap<>();
         for (ManagerDailyControlConcreteItem item : candidates) {
             if (taskContextService.resolvedSatisfactorily(item.getId())) continue;
+            // Only the manager's own deferral of a problem that is still on the board is a remark.
+            if (!taskContextService.deferralAttributable(item, reportDate)) continue;
             distinct.putIfAbsent(item.getEntityKey() == null ? "id:" + item.getId() : item.getEntityKey(), item);
         }
         return List.copyOf(distinct.values());
@@ -2161,13 +2224,12 @@ public class ManagerReportReviewTelegramService {
         if (missed == null || missed.isEmpty()) {
             return List.of();
         }
+        // Facts, not wording: only work the specialist could and had to finish is counted,
+        // and the units of one order form one task (see ManagerWorkerDailyProgressService).
         return missed.stream().map(goal -> new ManagerReportReviewQualityService.ReviewQuestion(
-                "Специалист " + goal.workerName() + " за " + goal.date().format(DATE)
-                        + " выполнил " + goal.completed() + " из " + goal.total()
-                        + " задач и не достиг дневной цели. Какие задачи остались невыполненными, "
-                        + "что помешало и как вы поможете специалисту закрыть этот долг?",
-                List.of("специалист " + goal.workerName() + " и недобор "
-                                + (goal.total() - goal.completed()) + " задач",
+                WorkerGoalRemarkText.question(goal),
+                List.of("специалист " + goal.workerName() + " и недобор: "
+                                + WorkerGoalRemarkText.shortfall(goal),
                         "конкретные невыполненные задачи или проверяемая причина недобора",
                         "конкретное действие менеджера и способ проверить результат")
         )).toList();
@@ -2371,6 +2433,11 @@ public class ManagerReportReviewTelegramService {
 
     private String deliverySource(Long chatId) {
         return isGroupChat(chatId) ? "telegram-group" : "telegram-private";
+    }
+
+    private boolean isMenuCommand(String messageText) {
+        String value = clean(messageText);
+        return value.startsWith("/") || value.matches("[0-9]{1,2}");
     }
 
     private boolean isAuditGroupCommand(String messageText) {

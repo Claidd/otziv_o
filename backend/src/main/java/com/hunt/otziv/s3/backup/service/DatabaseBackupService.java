@@ -9,6 +9,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -34,6 +35,7 @@ import java.util.Base64;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -93,12 +95,18 @@ public class DatabaseBackupService {
     private static final Pattern SAFE_RUN_REQUEST_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}");
     private static final String RUN_ID_PATTERN = "\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2}-\\d{3}_[0-9a-f]{32}";
     private static final Pattern OWNED_PLAINTEXT_TEMP_FILE = Pattern.compile(
-            "^backup_" + RUN_ID_PATTERN + "\\.sql(?:\\.gz)?$"
+            "^(?:backup|keycloak)_" + RUN_ID_PATTERN + "\\.sql(?:\\.gz)?$"
     );
     private static final Pattern OWNED_ENCRYPTED_TEMP_FILE = Pattern.compile(
-            "^(?:backup_" + RUN_ID_PATTERN + "\\.sql\\.gz\\.enc(?:\\.part\\d+)?"
-                    + "|\\.verify_" + RUN_ID_PATTERN + "\\.sql\\.gz\\.enc)$"
+            "^(?:(?:backup|keycloak)_" + RUN_ID_PATTERN + "\\.sql\\.gz\\.enc(?:\\.part\\d+)?"
+                    + "|\\.verify_(?:keycloak_)?" + RUN_ID_PATTERN + "\\.sql\\.gz\\.enc)$"
     );
+    static final String DATABASE_MYSQL = "mysql";
+    static final String DATABASE_KEYCLOAK = "keycloak";
+    static final String POSTGRES_DUMP_COMPLETE_MARKER = "-- PostgreSQL database dump complete";
+    /** A dump of the wrong or an empty database must never be recorded as a Keycloak backup. */
+    static final List<String> REQUIRED_KEYCLOAK_TABLES = List.of("realm", "user_entity", "credential");
+    private static final Duration FUTURE_EVIDENCE_TOLERANCE = Duration.ofMinutes(5);
     private static final String BACKUP_FORMAT = "otzivdb2-chunked-aes-256-gcm";
     private static final String CLIENT_SIDE_ENCRYPTION = "OTZIVDB2_AES_256_GCM";
     private static final String NO_SERVER_SIDE_ENCRYPTION_REPORTED = "NONE_REPORTED";
@@ -138,47 +146,107 @@ public class DatabaseBackupService {
     }
 
     public void runDailyBackup() throws Exception {
-        runBackup("scheduled", null);
+        runBackup("scheduled", null, null);
     }
 
-    public void runCatchUpBackup() throws Exception {
-        runBackup("catch-up", null);
+    /**
+     * Backs up only the databases whose latest verified evidence predates the missed occurrence,
+     * so a partial earlier failure never uploads a second immutable copy of the other database.
+     */
+    public void runCatchUpBackup(Instant scheduledAt) throws Exception {
+        if (scheduledAt == null) {
+            throw new IllegalArgumentException("scheduledAt is required for a catch-up backup");
+        }
+        runBackup("catch-up", null, scheduledAt);
     }
 
     public void runManualBackup(String requestId) throws Exception {
-        runBackup("manual", requireRunRequestId(requestId));
+        runBackup("manual", requireRunRequestId(requestId), null);
     }
 
-    private void runBackup(String trigger, String requestId) throws Exception {
+    private void runBackup(String trigger, String requestId, Instant catchUpScheduledAt) throws Exception {
         BackupRunConfiguration configuration = validateAndPrepareConfiguration();
         try {
             try (LocalBackupRunLock ignored = acquireLocalBackupRunLock(configuration.workDir())) {
-                cleanupStaleTemporaryFiles(configuration.workDir(), configuration.evidenceFile());
-                runBackupWithLocalLock(configuration, trigger, requestId);
+                cleanupStaleTemporaryFiles(configuration.workDir(), configuration.evidenceFiles());
+                Exception failure = null;
+                // Each database is attempted independently: a Keycloak failure must not cost the
+                // MySQL backup of the same run and vice versa. Any failure still fails the run.
+                for (BackupTarget target : configuration.targets()) {
+                    if (isAlreadyVerified(target, requestId, catchUpScheduledAt)) {
+                        log.info(
+                                "Database backup skipped because verified evidence already covers it: database={}, trigger={}",
+                                target.database(),
+                                trigger
+                        );
+                        continue;
+                    }
+                    try {
+                        runBackupWithLocalLock(configuration, target, trigger, requestId);
+                    } catch (Exception exception) {
+                        IllegalStateException targetFailure = new IllegalStateException(
+                                "Database backup failed: database=" + target.database(),
+                                exception
+                        );
+                        if (failure == null) {
+                            failure = targetFailure;
+                        } else {
+                            failure.addSuppressed(targetFailure);
+                        }
+                        if (Thread.currentThread().isInterrupted()) {
+                            break;
+                        }
+                    }
+                }
+                if (failure != null) {
+                    throw failure;
+                }
             }
         } finally {
             Arrays.fill(configuration.encryptionKey(), (byte) 0);
         }
     }
 
+    private boolean isAlreadyVerified(BackupTarget target, String requestId, Instant catchUpScheduledAt)
+            throws IOException {
+        if (requestId == null && catchUpScheduledAt == null) {
+            return false;
+        }
+        BackupEvidenceSummary evidence = readTargetEvidenceSummary(target.database());
+        if (requestId != null) {
+            return evidence.containsManualRequest(requestId);
+        }
+        Optional<Instant> latest = evidence.latestVerifiedAt();
+        if (latest.isPresent() && latest.get().isAfter(Instant.now().plus(FUTURE_EVIDENCE_TOLERANCE))) {
+            log.error("Ignoring future-dated backup evidence: database={}", target.database());
+            return false;
+        }
+        return latest.isPresent() && !latest.get().isBefore(catchUpScheduledAt);
+    }
+
     private void runBackupWithLocalLock(
             BackupRunConfiguration configuration,
+            BackupTarget target,
             String trigger,
             String requestId
     ) throws Exception {
         Instant startedAt = Instant.now();
         String timestamp = LocalDateTime.now().format(TS);
         String runId = timestamp + "_" + UUID.randomUUID().toString().replace("-", "");
-        Path sqlFile = configuration.workDir().resolve("backup_" + runId + ".sql");
-        Path gzFile = configuration.workDir().resolve("backup_" + runId + ".sql.gz");
-        Path encryptedFile = configuration.workDir().resolve("backup_" + runId + ".sql.gz.enc");
+        Path sqlFile = configuration.workDir().resolve(target.filePrefix() + runId + ".sql");
+        Path gzFile = configuration.workDir().resolve(target.filePrefix() + runId + ".sql.gz");
+        Path encryptedFile = configuration.workDir().resolve(target.filePrefix() + runId + ".sql.gz.enc");
         List<Path> parts = new ArrayList<>();
         BackupMailDeliveryResult mailDelivery = BackupMailDeliveryResult.disabled();
         Exception mailFailure = null;
         Exception runFailure = null;
 
         try {
-            dumpViaTcp(sqlFile, configuration);
+            if (DATABASE_KEYCLOAK.equals(target.database())) {
+                dumpKeycloakViaTcp(sqlFile, configuration);
+            } else {
+                dumpViaTcp(sqlFile, configuration);
+            }
             gzip(sqlFile, gzFile);
             encryptAesGcm(gzFile, encryptedFile, configuration.encryptionKey());
 
@@ -188,12 +256,13 @@ public class DatabaseBackupService {
 
             VerifiedBackup verifiedBackup = uploadAndVerify(
                     encryptedFile,
+                    target,
                     runId,
                     configuration,
                     startedAt
             );
             writeRemoteVerificationEvidence(
-                    configuration.evidenceFile(),
+                    target.evidenceFile(),
                     verifiedBackup,
                     trigger,
                     requestId,
@@ -204,7 +273,7 @@ public class DatabaseBackupService {
                 try {
                     parts = splitFile(encryptedFile, configuration.partSizeBytes());
                     mailDelivery = BackupMailDeliveryResult.failed(parts.size());
-                    sendEncryptedPartsByEmail(parts, timestamp);
+                    sendEncryptedPartsByEmail(parts, timestamp, target.database());
                     mailDelivery = BackupMailDeliveryResult.succeeded(parts.size());
                 } catch (Exception exception) {
                     mailFailure = exception;
@@ -218,7 +287,7 @@ public class DatabaseBackupService {
             deleteRequired(encryptedFile);
             BackupCleanupResult cleanup = new BackupCleanupResult(true, true, true, true, true);
             recordVerifiedBackupAndReportMailFailure(
-                    configuration.evidenceFile(),
+                    target.evidenceFile(),
                     verifiedBackup,
                     cleanup,
                     trigger,
@@ -227,7 +296,8 @@ public class DatabaseBackupService {
                     mailFailure
             );
             log.info(
-                    "Database backup completed, independently verified, and temporary files removed: objectId={}, sha256={}",
+                    "Database backup completed, independently verified, and temporary files removed: database={}, objectId={}, sha256={}",
+                    target.database(),
                     runId,
                     fingerprint(verifiedBackup.sha256())
             );
@@ -305,11 +375,17 @@ public class DatabaseBackupService {
         if (!evidenceFile.getParent().equals(realWorkDir)) {
             throw new IllegalStateException("backup.evidence-file-name must remain inside backup.work-dir");
         }
-        if (Files.exists(evidenceFile) && (!Files.isRegularFile(evidenceFile) || Files.isSymbolicLink(evidenceFile))) {
-            throw new IllegalStateException("backup evidence path must be a regular, non-symbolic file");
-        }
-        if (Files.exists(evidenceFile) && !Files.isWritable(evidenceFile)) {
-            throw new IllegalStateException("backup evidence file must be writable");
+        requireUsableEvidenceFile(evidenceFile);
+        List<BackupTarget> targets = new ArrayList<>();
+        targets.add(new BackupTarget(DATABASE_MYSQL, "backup_", ".verify_", evidenceFile));
+        if (isKeycloakBackupEnabled()) {
+            String keycloakEvidenceFileName = validateKeycloakConfiguration(evidenceFileName);
+            Path keycloakEvidenceFile = realWorkDir.resolve(keycloakEvidenceFileName).normalize();
+            if (!keycloakEvidenceFile.getParent().equals(realWorkDir)) {
+                throw new IllegalStateException("backup.keycloak.evidence-file-name must remain inside backup.work-dir");
+            }
+            requireUsableEvidenceFile(keycloakEvidenceFile);
+            targets.add(new BackupTarget(DATABASE_KEYCLOAK, "keycloak_", ".verify_keycloak_", keycloakEvidenceFile));
         }
 
         long partSizeBytes = Math.multiplyExact((long) backupProps.getPartSizeMb(), 1024L * 1024L);
@@ -321,8 +397,52 @@ public class DatabaseBackupService {
                 uploadTimeout,
                 partSizeBytes,
                 backupProps.getMaxStderrBytes(),
-                evidenceFile
+                evidenceFile,
+                List.copyOf(targets)
         );
+    }
+
+    private static void requireUsableEvidenceFile(Path evidenceFile) {
+        if (Files.exists(evidenceFile) && (!Files.isRegularFile(evidenceFile) || Files.isSymbolicLink(evidenceFile))) {
+            throw new IllegalStateException("backup evidence path must be a regular, non-symbolic file");
+        }
+        if (Files.exists(evidenceFile) && !Files.isWritable(evidenceFile)) {
+            throw new IllegalStateException("backup evidence file must be writable");
+        }
+    }
+
+    private boolean isKeycloakBackupEnabled() {
+        return backupProps.getKeycloak() != null && backupProps.getKeycloak().isEnabled();
+    }
+
+    /** Databases with their own evidence file, as backed up by every scheduled run. */
+    List<String> evidenceDatabases() {
+        return isKeycloakBackupEnabled() ? List.of(DATABASE_MYSQL, DATABASE_KEYCLOAK) : List.of(DATABASE_MYSQL);
+    }
+
+    private String validateKeycloakConfiguration(String mysqlEvidenceFileName) {
+        BackupProperties.Keycloak keycloak = backupProps.getKeycloak();
+        requireNonBlank(keycloak.getDb(), "backup.keycloak.db");
+        requireNonBlank(keycloak.getUser(), "backup.keycloak.user");
+        requireNonBlank(keycloak.getPassword(), "backup.keycloak.password");
+        requireNonBlank(keycloak.getHost(), "backup.keycloak.host");
+        requireNonBlank(keycloak.getDumpBinary(), "backup.keycloak.dump-binary");
+        if (keycloak.getPort() < 1 || keycloak.getPort() > 65_535) {
+            throw new IllegalStateException("backup.keycloak.port must be between 1 and 65535");
+        }
+        String evidenceFileName = requireNonBlank(
+                keycloak.getEvidenceFileName(),
+                "backup.keycloak.evidence-file-name"
+        );
+        if (!SAFE_EVIDENCE_FILE.matcher(evidenceFileName).matches()) {
+            throw new IllegalStateException("backup.keycloak.evidence-file-name must be a simple file name");
+        }
+        if (evidenceFileName.equalsIgnoreCase(mysqlEvidenceFileName)) {
+            throw new IllegalStateException(
+                    "backup.keycloak.evidence-file-name must differ from backup.evidence-file-name"
+            );
+        }
+        return evidenceFileName;
     }
 
     private void validateMailConfiguration() {
@@ -357,20 +477,101 @@ public class DatabaseBackupService {
                 mysql.getDb()
         );
 
+        log.info("Starting database dump: host={}, port={}, database={}", host, mysql.getPort(), mysql.getDb());
+        runDumpProcess("mysqldump", command, Map.of("MYSQL_PWD", password), password, outSql, configuration);
+    }
+
+    private void dumpKeycloakViaTcp(Path outSql, BackupRunConfiguration configuration) throws Exception {
+        BackupProperties.Keycloak keycloak = backupProps.getKeycloak();
+        String password = keycloak.getPassword();
+        Map<String, String> environment = new LinkedHashMap<>();
+        environment.put("PGPASSWORD", password);
+        environment.put("PGCONNECT_TIMEOUT", "30");
+
+        log.info(
+                "Starting Keycloak database dump: host={}, port={}, database={}",
+                keycloak.getHost().trim(),
+                keycloak.getPort(),
+                keycloak.getDb().trim()
+        );
+        runDumpProcess("pg_dump", buildKeycloakDumpCommand(keycloak), environment, password, outSql, configuration);
+        verifyPostgresDump(outSql, REQUIRED_KEYCLOAK_TABLES);
+    }
+
+    /**
+     * Plain SQL keeps the existing gzip/OTZIVDB2 pipeline and restores with psql. Ownership and
+     * grants are omitted so the dump restores into a fresh database under any Keycloak DB user.
+     */
+    static List<String> buildKeycloakDumpCommand(BackupProperties.Keycloak keycloak) {
+        return List.of(
+                keycloak.getDumpBinary().trim(),
+                "--host=" + keycloak.getHost().trim(),
+                "--port=" + keycloak.getPort(),
+                "--username=" + keycloak.getUser().trim(),
+                "--dbname=" + keycloak.getDb().trim(),
+                "--format=plain",
+                "--encoding=UTF8",
+                "--no-owner",
+                "--no-privileges",
+                "--no-password",
+                "--lock-wait-timeout=60000"
+        );
+    }
+
+    /**
+     * pg_dump writes the completion marker only after the last object; a truncated stream or a
+     * dump of another database must fail before anything is encrypted or uploaded.
+     */
+    static void verifyPostgresDump(Path sqlFile, List<String> requiredTables) throws IOException {
+        Set<String> missingTables = new LinkedHashSet<>(requiredTables);
+        boolean completedAtEnd = false;
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(Files.newInputStream(sqlFile), StandardCharsets.UTF_8)
+        )) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!missingTables.isEmpty() && line.startsWith("CREATE TABLE public.")) {
+                    int nameEnd = line.indexOf(' ', "CREATE TABLE public.".length());
+                    if (nameEnd > 0) {
+                        missingTables.remove(line.substring("CREATE TABLE public.".length(), nameEnd));
+                    }
+                }
+                if (POSTGRES_DUMP_COMPLETE_MARKER.equals(line)) {
+                    completedAtEnd = true;
+                } else if (!line.isBlank() && !"--".equals(line) && !line.startsWith("\\unrestrict ")) {
+                    completedAtEnd = false;
+                }
+            }
+        }
+        if (!completedAtEnd) {
+            throw new IllegalStateException("pg_dump output does not end with its completion marker");
+        }
+        if (!missingTables.isEmpty()) {
+            throw new IllegalStateException("Keycloak dump is missing required tables: " + missingTables);
+        }
+    }
+
+    private void runDumpProcess(
+            String tool,
+            List<String> command,
+            Map<String, String> secretEnvironment,
+            String secret,
+            Path outSql,
+            BackupRunConfiguration configuration
+    ) throws Exception {
         createEmptyPrivateFile(outSql);
         ProcessBuilder processBuilder = new ProcessBuilder(command)
                 .redirectOutput(outSql.toFile());
-        processBuilder.environment().put("MYSQL_PWD", password);
+        processBuilder.environment().putAll(secretEnvironment);
 
-        log.info("Starting database dump: host={}, port={}, database={}", host, mysql.getPort(), mysql.getDb());
         Process process = processBuilder.start();
-        processBuilder.environment().remove("MYSQL_PWD");
+        secretEnvironment.keySet().forEach(processBuilder.environment()::remove);
 
         BoundedOutputStream stderr = new BoundedOutputStream(configuration.maxStderrBytes());
         AtomicReference<IOException> stderrReadFailure = new AtomicReference<>();
         Thread stderrThread = Thread.ofPlatform()
                 .daemon(true)
-                .name("mysqldump-stderr")
+                .name(tool + "-stderr")
                 .start(() -> {
                     try (InputStream input = process.getErrorStream()) {
                         input.transferTo(stderr);
@@ -385,29 +586,29 @@ public class DatabaseBackupService {
         } catch (InterruptedException interrupted) {
             terminateProcess(process);
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("mysqldump was interrupted", interrupted);
+            throw new IllegalStateException(tool + " was interrupted", interrupted);
         }
 
         if (!finished) {
             terminateProcess(process);
         }
-        joinReader(stderrThread, process);
+        joinReader(stderrThread, process, tool);
 
-        String safeStderr = redact(stderr.asUtf8(), password);
+        String safeStderr = redact(stderr.asUtf8(), secret);
         if (!safeStderr.isBlank()) {
-            log.warn("mysqldump stderr{}: {}", stderr.wasTruncated() ? " (truncated)" : "", safeStderr);
+            log.warn("{} stderr{}: {}", tool, stderr.wasTruncated() ? " (truncated)" : "", safeStderr);
         }
         if (stderrReadFailure.get() != null && finished) {
-            throw new IllegalStateException("Could not read mysqldump stderr", stderrReadFailure.get());
+            throw new IllegalStateException("Could not read " + tool + " stderr", stderrReadFailure.get());
         }
         if (!finished) {
-            throw new IllegalStateException("mysqldump timed out after " + configuration.dumpTimeout());
+            throw new IllegalStateException(tool + " timed out after " + configuration.dumpTimeout());
         }
 
         int exitCode = process.exitValue();
         long size = Files.size(outSql);
         if (exitCode != 0 || size == 0) {
-            throw new IllegalStateException("mysqldump failed, exitCode=" + exitCode + ", sqlSize=" + size);
+            throw new IllegalStateException(tool + " failed, exitCode=" + exitCode + ", sqlSize=" + size);
         }
     }
 
@@ -424,7 +625,7 @@ public class DatabaseBackupService {
         }
     }
 
-    private void joinReader(Thread reader, Process process) throws InterruptedException {
+    private void joinReader(Thread reader, Process process, String tool) throws InterruptedException {
         reader.join(5_000);
         if (reader.isAlive()) {
             try {
@@ -436,7 +637,7 @@ public class DatabaseBackupService {
         }
         if (reader.isAlive()) {
             reader.interrupt();
-            throw new IllegalStateException("mysqldump stderr reader did not terminate");
+            throw new IllegalStateException(tool + " stderr reader did not terminate");
         }
     }
 
@@ -656,12 +857,14 @@ public class DatabaseBackupService {
 
     VerifiedBackup uploadAndVerify(
             Path file,
+            BackupTarget target,
             String runId,
             BackupRunConfiguration configuration,
             Instant startedAt
     ) throws IOException {
         String bucket = backupS3Props.getBucket().trim();
-        String key = "backup/" + backupS3Props.getProjectId().trim() + "/backup_" + runId + ".sql.gz.enc";
+        // MySQL keeps its historical key; Keycloak objects sit beside it with their own prefix.
+        String key = "backup/" + backupS3Props.getProjectId().trim() + "/" + target.filePrefix() + runId + ".sql.gz.enc";
         long expectedBytes = Files.size(file);
         String expectedSha256 = sha256(file);
         Instant retentionUntil = backupS3Props.isObjectLockEnabled()
@@ -673,6 +876,7 @@ public class DatabaseBackupService {
 
         Map<String, String> metadata = new LinkedHashMap<>();
         metadata.put("backup-format", BACKUP_FORMAT);
+        metadata.put("database", target.database());
         metadata.put("content-encoding-before-encryption", "gzip");
         metadata.put("sha256", expectedSha256);
         metadata.put("retention-mode", objectLockMode == null ? "none" : objectLockMode.toString());
@@ -728,7 +932,7 @@ public class DatabaseBackupService {
             verifyObjectRetention(retention, objectLockMode, retentionUntil);
         }
 
-        Path downloaded = configuration.workDir().resolve(".verify_" + runId + ".sql.gz.enc");
+        Path downloaded = configuration.workDir().resolve(target.verificationPrefix() + runId + ".sql.gz.enc");
         Exception verificationFailure = null;
         try {
             backupS3Client.getObject(
@@ -761,6 +965,7 @@ public class DatabaseBackupService {
 
         Instant verifiedAt = Instant.now();
         return new VerifiedBackup(
+                target.database(),
                 verifiedAt,
                 bucket,
                 key,
@@ -880,11 +1085,32 @@ public class DatabaseBackupService {
         }
     }
 
+    /**
+     * Combined view used for catch-up and run-once decisions: a run counts as verified only when
+     * every enabled database has verified evidence, so a missing Keycloak backup is caught up.
+     */
     public BackupEvidenceSummary readEvidenceSummary() throws IOException {
+        List<BackupEvidenceSummary> summaries = new ArrayList<>();
+        summaries.add(readTargetEvidenceSummary(DATABASE_MYSQL));
+        if (isKeycloakBackupEnabled()) {
+            summaries.add(readTargetEvidenceSummary(DATABASE_KEYCLOAK));
+        }
+        return BackupEvidenceSummary.combine(summaries);
+    }
+
+    BackupEvidenceSummary readTargetEvidenceSummary(String database) throws IOException {
         String configuredWorkDir = requireNonBlank(backupProps.getWorkDir(), "backup.work-dir");
-        String evidenceFileName = requireNonBlank(backupProps.getEvidenceFileName(), "backup.evidence-file-name");
+        String propertyName = DATABASE_KEYCLOAK.equals(database)
+                ? "backup.keycloak.evidence-file-name"
+                : "backup.evidence-file-name";
+        String evidenceFileName = requireNonBlank(
+                DATABASE_KEYCLOAK.equals(database)
+                        ? backupProps.getKeycloak().getEvidenceFileName()
+                        : backupProps.getEvidenceFileName(),
+                propertyName
+        );
         if (!SAFE_EVIDENCE_FILE.matcher(evidenceFileName).matches()) {
-            throw new IllegalStateException("backup.evidence-file-name must be a simple file name");
+            throw new IllegalStateException(propertyName + " must be a simple file name");
         }
 
         Path workDir = Paths.get(configuredWorkDir).toAbsolutePath().normalize();
@@ -897,7 +1123,7 @@ public class DatabaseBackupService {
         }
         Path evidenceFile = realWorkDir.resolve(evidenceFileName).normalize();
         if (!evidenceFile.getParent().equals(realWorkDir)) {
-            throw new IllegalStateException("backup.evidence-file-name must remain inside backup.work-dir");
+            throw new IllegalStateException(propertyName + " must remain inside backup.work-dir");
         }
         if (!Files.exists(evidenceFile)) {
             return BackupEvidenceSummary.empty();
@@ -917,7 +1143,7 @@ public class DatabaseBackupService {
                 }
                 try {
                     JsonNode record = objectMapper.readTree(line);
-                    if (!isVerifiedEvidence(record)) {
+                    if (!isVerifiedEvidence(record, database)) {
                         ignoredRecords++;
                         continue;
                     }
@@ -937,7 +1163,7 @@ public class DatabaseBackupService {
             }
         }
         if (ignoredRecords > 0) {
-            log.warn("Ignored {} invalid database backup evidence record(s)", ignoredRecords);
+            log.warn("Ignored {} invalid backup evidence record(s): database={}", ignoredRecords, database);
         }
         return new BackupEvidenceSummary(
                 Optional.ofNullable(latestVerifiedAt),
@@ -945,11 +1171,17 @@ public class DatabaseBackupService {
         );
     }
 
-    private static boolean isVerifiedEvidence(JsonNode record) {
+    private static boolean isVerifiedEvidence(JsonNode record, String expectedDatabase) {
         if (record == null
                 || !BACKUP_EVIDENCE_SCHEMA.equals(record.path("schema").asText())
                 || !BACKUP_FORMAT.equals(record.path("format").asText())
                 || record.path("timestampUtc").asText("").isBlank()) {
+            return false;
+        }
+        // Records written before the field existed are MySQL receipts; nothing else may count.
+        String recordedDatabase = record.path("database").asText("");
+        String database = recordedDatabase.isEmpty() ? DATABASE_MYSQL : recordedDatabase;
+        if (!database.equals(expectedDatabase)) {
             return false;
         }
         JsonNode verification = record.path("verification");
@@ -1101,6 +1333,7 @@ public class DatabaseBackupService {
         if (requestId != null) {
             evidence.put("requestId", requestId);
         }
+        evidence.put("database", backup.database());
         evidence.put("bucket", backup.bucket());
         evidence.put("objectKey", backup.key());
         if (backup.versionId() != null) {
@@ -1249,13 +1482,15 @@ public class DatabaseBackupService {
         }
     }
 
-    private void sendEncryptedPartsByEmail(List<Path> parts, String timestamp) {
+    private void sendEncryptedPartsByEmail(List<Path> parts, String timestamp, String database) {
         BackupProperties.Mail mail = backupProps.getMail();
+        String databaseLabel = DATABASE_MYSQL.equals(database) ? "" : " [" + database + "]";
         for (int index = 0; index < parts.size(); index++) {
             Path part = parts.get(index);
-            String subject = mail.getSubject() + " [" + timestamp + "] encrypted part "
+            String subject = mail.getSubject() + databaseLabel + " [" + timestamp + "] encrypted part "
                     + (index + 1) + "/" + parts.size();
             String body = mail.getBody() + "\n"
+                    + "Database: " + database + "\n"
                     + "Backup timestamp: " + timestamp + "\n"
                     + "Encrypted format: OTZIVDB2 (chunked AES-256-GCM after gzip)\n"
                     + "Part: " + (index + 1) + "/" + parts.size();
@@ -1388,12 +1623,13 @@ public class DatabaseBackupService {
         }
     }
 
-    static int cleanupStaleTemporaryFiles(Path realWorkDir, Path evidenceFile) throws IOException {
+    static int cleanupStaleTemporaryFiles(Path realWorkDir, Path... evidenceFiles) throws IOException {
+        Set<Path> protectedFiles = Set.of(evidenceFiles);
         int cleaned = 0;
         try (var candidates = Files.newDirectoryStream(realWorkDir)) {
             for (Path candidate : candidates) {
                 Path normalized = candidate.toAbsolutePath().normalize();
-                if (!normalized.getParent().equals(realWorkDir) || normalized.equals(evidenceFile)) {
+                if (!normalized.getParent().equals(realWorkDir) || protectedFiles.contains(normalized)) {
                     continue;
                 }
                 String fileName = normalized.getFileName().toString();
@@ -1533,11 +1769,25 @@ public class DatabaseBackupService {
             Duration uploadTimeout,
             long partSizeBytes,
             int maxStderrBytes,
+            Path evidenceFile,
+            List<BackupTarget> targets
+    ) {
+        Path[] evidenceFiles() {
+            return targets.stream().map(BackupTarget::evidenceFile).toArray(Path[]::new);
+        }
+    }
+
+    /** One database in a backup run: dump source, temporary/object name prefix and evidence journal. */
+    record BackupTarget(
+            String database,
+            String filePrefix,
+            String verificationPrefix,
             Path evidenceFile
     ) {
     }
 
     record VerifiedBackup(
+            String database,
             Instant verifiedAt,
             String bucket,
             String key,
@@ -1634,6 +1884,32 @@ public class DatabaseBackupService {
     ) {
         static BackupEvidenceSummary empty() {
             return new BackupEvidenceSummary(Optional.empty(), Set.of());
+        }
+
+        /** Oldest of the latest per-database receipts; a request is done only when all databases have it. */
+        static BackupEvidenceSummary combine(List<BackupEvidenceSummary> summaries) {
+            Optional<Instant> oldestLatest = Optional.empty();
+            Set<String> commonManualRequests = null;
+            for (BackupEvidenceSummary summary : summaries) {
+                if (summary.latestVerifiedAt().isEmpty()) {
+                    oldestLatest = Optional.empty();
+                    commonManualRequests = Set.of();
+                    break;
+                }
+                Instant latest = summary.latestVerifiedAt().get();
+                if (oldestLatest.isEmpty() || latest.isBefore(oldestLatest.get())) {
+                    oldestLatest = Optional.of(latest);
+                }
+                if (commonManualRequests == null) {
+                    commonManualRequests = new HashSet<>(summary.completedManualRequestIds());
+                } else {
+                    commonManualRequests.retainAll(summary.completedManualRequestIds());
+                }
+            }
+            return new BackupEvidenceSummary(
+                    oldestLatest,
+                    commonManualRequests == null ? Set.of() : Set.copyOf(commonManualRequests)
+            );
         }
 
         public boolean containsManualRequest(String requestId) {

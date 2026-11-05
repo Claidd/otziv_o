@@ -192,6 +192,22 @@ try {
     Assert-True -Condition $failed -Message 'Enabled backups were accepted without catch-up.'
     Assert-True -Condition (Test-Path -LiteralPath $disabledCatchUpPath) -Message 'Rejected catch-up input was deleted.'
 
+    $withoutKeycloakPath = Join-Path $testRoot 'enabled-without-keycloak.json'
+    Write-JsonFile -Path $withoutKeycloakPath -Value ([ordered]@{
+        BACKUP_ENABLED = 'true'
+        BACKUP_KEYCLOAK_ENABLED = 'false'
+    })
+    $failed = $false
+    try { & $importer -ConfigJsonPath $withoutKeycloakPath -Confirm:$false 2>$null | Out-Null } catch { $failed = $true }
+    Assert-True -Condition $failed -Message 'Enabled backups were accepted without the Keycloak database.'
+    Assert-True -Condition (Test-Path -LiteralPath $withoutKeycloakPath) -Message 'Rejected Keycloak input was deleted.'
+
+    $unsafeKeycloakEvidencePath = Join-Path $testRoot 'unsafe-keycloak-evidence.json'
+    Write-JsonFile -Path $unsafeKeycloakEvidencePath -Value ([ordered]@{ BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME = '../keycloak.jsonl' })
+    $failed = $false
+    try { & $importer -ConfigJsonPath $unsafeKeycloakEvidencePath -Confirm:$false 2>$null | Out-Null } catch { $failed = $true }
+    Assert-True -Condition $failed -Message 'An unsafe Keycloak evidence file name was accepted.'
+
     $shortCatchUpPath = Join-Path $testRoot 'short-catch-up.json'
     Write-JsonFile -Path $shortCatchUpPath -Value ([ordered]@{ BACKUP_SCHEDULE_CATCH_UP_WINDOW = 'PT24H' })
     $failed = $false

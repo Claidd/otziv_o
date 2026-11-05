@@ -78,6 +78,24 @@ class BackupSchedulerTest {
     }
 
     @Test
+    void failedScheduledRunsAreCountedForTheBackupAlert() throws Exception {
+        var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        scheduler.setMeterRegistry(registry);
+        assertThat(registry.get(BackupScheduler.FAILURE_METRIC).tag("trigger", "daily").counter().count()).isZero();
+        assertThat(registry.get(BackupScheduler.FAILURE_METRIC).tag("trigger", "catch_up").counter().count()).isZero();
+        Lease lease = new Lease("database-backup.daily", "owner", 3L);
+        when(schedulerLeaseService.tryAcquire("database-backup.daily", Duration.ofHours(1)))
+                .thenReturn(Optional.of(lease));
+        org.mockito.Mockito.doThrow(new IllegalStateException("failed"))
+                .when(backupService).runDailyBackup();
+
+        scheduler.daily();
+
+        assertThat(registry.get(BackupScheduler.FAILURE_METRIC).tag("trigger", "daily").counter().count()).isEqualTo(1.0);
+        assertThat(registry.get(BackupScheduler.FAILURE_METRIC).tag("trigger", "catch_up").counter().count()).isZero();
+    }
+
+    @Test
     void registersConfiguredDailyScheduleAndRequiredCatchUpByDefault() {
         ScheduledTaskRegistrar registrar = new ScheduledTaskRegistrar();
 
@@ -214,6 +232,27 @@ class BackupSchedulerTest {
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("must be between");
         }
+    }
+
+    @Test
+    void catchUpPassesTheMissedOccurrenceSoAlreadyVerifiedDatabasesAreSkipped() throws Exception {
+        properties.getSchedule().setCron("0 0 7 * * *");
+        properties.getSchedule().setZone("UTC");
+        scheduler.validateConfiguration();
+        Instant now = Instant.parse("2026-11-05T09:00:00Z");
+        Instant missedOccurrence = Instant.parse("2026-11-05T07:00:00Z");
+        Lease lease = new Lease("database-backup.daily", "owner", 4L);
+        // MySQL verified today, Keycloak never: the combined summary reports no complete backup.
+        when(backupService.readEvidenceSummary()).thenReturn(
+                new DatabaseBackupService.BackupEvidenceSummary(Optional.empty(), java.util.Set.of())
+        );
+        when(schedulerLeaseService.tryAcquire("database-backup.daily", Duration.ofHours(1)))
+                .thenReturn(Optional.of(lease));
+
+        scheduler.catchUpAt(now);
+
+        verify(backupService).runCatchUpBackup(missedOccurrence);
+        verify(schedulerLeaseService).release(lease);
     }
 
     @Test

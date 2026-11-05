@@ -84,6 +84,22 @@ class TelegramServiceUpdateHandlingTest {
     }
 
     @Test
+    void oneFailingUpdateDoesNotDropTheRestOfTheBatch() {
+        CapturingTelegramService service = service();
+        var tracker = mock(com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService.class);
+        ReflectionTestUtils.setField(service, "clientChatMessageTrackerService", tracker);
+        when(telegramGroupLinkService.handleGroupStartCommand(anyLong(), anyString()))
+                .thenThrow(new IllegalStateException("database is busy"))
+                .thenReturn(Optional.empty());
+
+        service.onUpdatesReceived(List.of(
+                textUpdate(-100123L, "supergroup", "Первое сообщение"),
+                textUpdate(-100124L, "supergroup", "Второе сообщение")));
+
+        verify(tracker).track(argThat(command -> command.chatId().equals("-100124")));
+    }
+
+    @Test
     void groupTextMessageDoesNotStartUserLoginFlow() {
         CapturingTelegramService service = service();
         when(telegramGroupLinkService.handleGroupStartCommand(anyLong(), anyString()))

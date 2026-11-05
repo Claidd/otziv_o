@@ -279,9 +279,24 @@ public class CampaignStore {
 
     @Transactional
     public void releaseWithoutSend(Claim claim) {
+        releaseWithoutSend(claim, null);
+    }
+
+    /**
+     * Nothing was sent: return the recipient and the daily quota unit reserved by {@link #claim}. With
+     * {@code retryAt} (UTC) a running campaign retries at that slot instead of after its own interval.
+     */
+    @Transactional
+    public void releaseWithoutSend(Claim claim, LocalDateTime retryAt) {
         var c = lock(claim.campaign().id());
-        jdbc.update("UPDATE client_offer_recipient SET state=?,claimed_at=NULL WHERE id=? AND state='SENDING'",
+        int released = jdbc.update("UPDATE client_offer_recipient SET state=?,claimed_at=NULL WHERE id=? AND state='SENDING'",
                 "CANCELLED".equals(c.state()) ? "SKIPPED" : "PENDING",claim.recipient().id());
+        if (released == 0) return;
+        if (c.budgetDay() != null && c.budgetUsed() > 0)
+            jdbc.update("UPDATE client_offer_campaign SET budget_used=budget_used-1 WHERE id=? AND budget_day=? AND budget_used>0",
+                    c.id(),c.budgetDay());
+        if (retryAt != null && "RUNNING".equals(c.state()))
+            jdbc.update("UPDATE client_offer_campaign SET next_at=? WHERE id=?",CampaignSchedule.allowed(retryAt,c.settings()),c.id());
     }
     private long countState(String id, String state) {
         return Objects.requireNonNull(jdbc.queryForObject("SELECT COUNT(*) FROM client_offer_recipient WHERE campaign_id=? AND state=?",Long.class,id,state));

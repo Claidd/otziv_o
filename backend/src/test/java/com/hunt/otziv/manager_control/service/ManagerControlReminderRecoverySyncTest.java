@@ -69,15 +69,31 @@ class ManagerControlReminderRecoverySyncTest {
         }
     }
 
-    @Test void restartRestoresSynchronizationFromTheCommittedJournalWithoutAnInMemoryEvent() {
+    @Test void restartRestoresTodayFromTheCommittedJournalButLeavesTheFinishedPreviousDayAlone() {
         try (var context = new AnnotationConfigApplicationContext(Fixture.class)) {
             var source = context.getBean(com.hunt.otziv.client_messages.api.PeriodicReminderRestart.class);
-            when(source.reminderRecoveryGeneration()).thenReturn(32L);
+            when(source.reminderRecoveryGeneration()).thenReturn(64L);
             var sync = context.getBean(ManagerControlReminderRecoverySync.class);
             var board = context.getBean(ManagerControlBoardWorkflow.class);
-            var date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
-            sync.synchronize(); sync.synchronize();
-            verify(board).synchronizeDailySnapshot(date); verify(board).synchronizeDailySnapshot(date.minusDays(1));
+            var now = java.time.LocalDateTime.of(2026, 11, 5, 12, 0);
+            // First pass after a backend start: the journal count differs from the in-memory zero.
+            sync.synchronize(now); sync.synchronize(now.plusSeconds(15));
+            verify(board).synchronizeDailySnapshot(now.toLocalDate());
+            verify(board, never()).synchronizeDailySnapshot(now.toLocalDate().minusDays(1));
+            verifyNoMoreInteractions(board);
+        }
+    }
+
+    @Test void restartInsideTheClosingWindowAlsoRefreshesThePreviousDay() {
+        try (var context = new AnnotationConfigApplicationContext(Fixture.class)) {
+            var source = context.getBean(com.hunt.otziv.client_messages.api.PeriodicReminderRestart.class);
+            when(source.reminderRecoveryGeneration()).thenReturn(64L);
+            var sync = context.getBean(ManagerControlReminderRecoverySync.class);
+            var board = context.getBean(ManagerControlBoardWorkflow.class);
+            var now = java.time.LocalDateTime.of(2026, 11, 5, 3, 30);
+            sync.synchronize(now);
+            verify(board).synchronizeDailySnapshot(now.toLocalDate());
+            verify(board).synchronizeDailySnapshot(now.toLocalDate().minusDays(1));
             verifyNoMoreInteractions(board);
         }
     }

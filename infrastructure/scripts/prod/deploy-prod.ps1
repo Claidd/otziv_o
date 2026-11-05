@@ -1104,6 +1104,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\whatsapp_deploy_state.py",
     "infrastructure\scripts\prod\image_layer_capacity.py",
     "infrastructure\scripts\prod\selective_rollout.py",
+    "infrastructure\scripts\prod\credential_encryption_audit.py",
     "infrastructure\scripts\prod\register-max-webhook.sh",
     "infrastructure\scripts\prod\init-letsencrypt.sh",
     "infrastructure\scripts\prod\renew-letsencrypt.sh",

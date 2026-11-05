@@ -199,7 +199,22 @@ class ManagerSummaryFormatterTest {
         ManagerFormattedReport report = formatter.formatPersonal(row("Вика", "CALCULATED"));
 
         assertTrue(report.html().contains("Невыполненные дневные цели за 12.07.2026"));
-        assertTrue(report.richHtml().contains("Мария С.: выполнено <b>4 из 8</b>, осталось 4"));
+        assertTrue(report.richHtml().contains("Мария С.: выполнено <b>4 из 8</b> ед. работы, осталось 4."));
+    }
+
+    @Test
+    void personalAuditNamesUnfinishedOrdersAndExcludedBlockedWork() {
+        LocalDate reportDate = LocalDate.of(2026, 7, 13);
+        LocalDate goalDate = reportDate.minusDays(1);
+        when(workerProgressService.missedPreviousDayGoals(1L, reportDate)).thenReturn(List.of(
+                new ManagerWorkerDailyProgressService.MissedWorkerGoal(13L, "Виктория Ц.", goalDate, 57, 62, 1,
+                        List.of(new ManagerWorkerDayPlanReader.UnfinishedTask("NEW", 28264L, 5, goalDate.atTime(21, 53))),
+                        null)));
+
+        String report = formatter.formatPersonal(row("Вика", "CALCULATED")).richHtml();
+
+        assertTrue(report.contains("Не выполнена 1 задача — заказ №28264: 5 текстов к написанию, в работе с 21:53."));
+        assertTrue(report.contains("Задачи без доступного аккаунта (1) в недобор не включены."));
     }
 
     @Test

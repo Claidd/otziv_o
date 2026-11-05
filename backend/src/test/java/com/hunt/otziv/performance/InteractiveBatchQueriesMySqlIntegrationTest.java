@@ -59,6 +59,132 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
     @Autowired com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository messagePoints;
     static final LocalDate FROM = LocalDate.of(2026, 8, 1), TO = FROM.plusMonths(1);
 
+    @Autowired com.hunt.otziv.z_zp.repository.ZpRepository rewards;
+
+    /** PERF-22: one marker join selects exactly the rewards whose ledger marker is missing or stale. */
+    @Test void rewardRepairSelectsMissingOrStaleMarkersOnly() {
+        LocalDateTime changed = FROM.atTime(10, 0), now = LocalDateTime.now();
+        long base = 9_200_000L;
+        java.util.function.BiConsumer<Long, String> reward = (id, role) -> jdbc.update("""
+                INSERT INTO zp(zp_id,zp_fio,zp_user,zp_profession,zp_order,zp_amount,zp_date,zp_updated_at,zp_active,zp_contractor_role)
+                VALUES(?,?,1,1,0,1,?,?,b'0',?)""", id, "repair-" + id, FROM, changed, role);
+        java.util.function.Consumer<Object[]> marker = values -> jdbc.update(
+                "INSERT INTO contractor_reward_sync_markers(source_zp_id,source_active,source_updated_at) VALUES(?,?,?)", values);
+        reward.accept(base + 1, "SPECIALIST");                                  // no marker
+        reward.accept(base + 2, "SPECIALIST"); marker.accept(new Object[]{base + 2, false, changed});            // in sync
+        reward.accept(base + 3, "MANAGER");    marker.accept(new Object[]{base + 3, true, changed});             // active differs
+        reward.accept(base + 4, "SPECIALIST"); marker.accept(new Object[]{base + 4, false, null});               // never stamped
+        reward.accept(base + 5, "SPECIALIST"); marker.accept(new Object[]{base + 5, false, changed.minusSeconds(1)}); // older
+        reward.accept(base + 6, "SPECIALIST"); marker.accept(new Object[]{base + 6, false, changed.plusSeconds(1)});  // newer
+        reward.accept(base + 7, null);                                           // not a contractor reward
+        reward.accept(base + 8, "SPECIALIST");
+        jdbc.update("INSERT INTO contractor_reward_repair_claims(source_zp_id,lease_until) VALUES(?,?)", base + 8, now.plusMinutes(5));
+        reward.accept(base + 9, "SPECIALIST");
+        jdbc.update("INSERT INTO contractor_reward_repair_claims(source_zp_id,lease_until,next_retry_at) VALUES(?,?,?)",
+                base + 9, now.minusMinutes(5), now.minusMinutes(1));
+        reward.accept(base + 10, "SPECIALIST");
+        jdbc.update("INSERT INTO contractor_reward_repair_claims(source_zp_id,next_retry_at) VALUES(?,?)", base + 10, now.plusMinutes(5));
+        em.flush(); em.clear();
+
+        var selected = rewards.findContractorRewardsNeedingGlobalRepair(now, org.springframework.data.domain.PageRequest.of(0, 10_000))
+                .stream().map(com.hunt.otziv.z_zp.model.Zp::getId).filter(id -> id > base).toList();
+
+        assertThat(selected).containsExactly(base + 1, base + 3, base + 4, base + 5, base + 9);
+        assertThat(rewards.findContractorRewardsNeedingGlobalRepair(now, org.springframework.data.domain.PageRequest.of(0, 10_000))
+                .stream().map(com.hunt.otziv.z_zp.model.Zp::getId).distinct().count())
+                .as("one row per reward").isEqualTo(rewards.findContractorRewardsNeedingGlobalRepair(now,
+                        org.springframework.data.domain.PageRequest.of(0, 10_000)).size());
+    }
+
+    @Autowired com.hunt.otziv.archive.repository.ManagerArchiveRepository archive;
+
+    /** PERF-23: the archive page carries the total of the same search pass; a page past the end falls back to the count. */
+    @Test void archiveSearchPageCarriesTheSameTotalAsTheCount() {
+        Long archived = jdbc.query("SELECT order_status_id FROM order_statuses WHERE order_status_title='Архив'",
+                (rs, row) -> rs.getLong(1)).stream().findFirst().orElseGet(() -> {
+                    jdbc.update("INSERT INTO order_statuses(order_status_title) VALUES('Архив')");
+                    return jdbc.queryForObject("SELECT order_status_id FROM order_statuses WHERE order_status_title='Архив'", Long.class);
+                });
+        long base = 9_100_000L;
+        for (int i = 0; i < 3; i++) {
+            jdbc.update("""
+                    INSERT INTO archive_orders(order_id,order_status,company_title_snapshot,archived_at,order_changed)
+                    VALUES(?,?,?,?,?)""", base + i, archived, "Перфпоиск кафе " + i,
+                    FROM.atStartOfDay().plusHours(i), FROM.plusDays(i));
+        }
+        jdbc.update("INSERT INTO archive_orders(order_id,order_status,company_title_snapshot,archived_at,order_changed) VALUES(?,?,?,?,?)",
+                base + 10, archived, "Другая компания", FROM.atStartOfDay(), FROM);
+        jdbc.update("INSERT INTO archive_order_details(order_detail_id,order_detail_order) VALUES(UUID_TO_BIN(UUID()),?)", base + 10);
+        jdbc.update("""
+                INSERT INTO archive_reviews(review_id,review_order_details,review_text)
+                SELECT ?, order_detail_id, 'Большое спасибо, перфпоиск отзыв' FROM archive_order_details WHERE order_detail_order=?""",
+                base, base + 10);
+        var scope = com.hunt.otziv.archive.dto.ArchiveAccessScope.all();
+
+        var first = archive.findOrdersPage(scope, "all", "перфпоиск", 0, 2, "desc");
+        var second = archive.findOrdersPage(scope, "all", "перфпоиск", 1, 2, "desc");
+        var pastEnd = archive.findOrdersPage(scope, "all", "перфпоиск", 5, 2, "desc");
+
+        assertThat(first.total()).isEqualTo(4).isEqualTo(archive.countOrders(scope, "all", "перфпоиск"));
+        assertThat(first.items()).extracting(com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem::id)
+                .containsExactly(base + 2, base + 1);
+        assertThat(second.total()).isEqualTo(4);
+        assertThat(second.items()).extracting(com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem::id)
+                .containsExactly(base + 10, base);
+        assertThat(pastEnd.items()).isEmpty();
+        assertThat(pastEnd.total()).isEqualTo(4);
+        assertThat(archive.findOrdersPage(scope, "all", "нет-такого-перфпоиска", 0, 2, "desc").total()).isZero();
+        assertThat(archive.findOrdersPage(scope, "all", "", 0, 5, "desc").total())
+                .isEqualTo(archive.countOrders(scope, "all", ""));
+    }
+
+    /** PERF-19: reply statistics read only chats replied by the manager's staff that day, with their full lookback history. */
+    @Test void replyHistoryKeepsWholeLookbackOfChatsRepliedThatDayOnly() {
+        var manager = managers.findAll().getFirst();
+        var dayFrom = FROM.atStartOfDay();
+        var dayTo = dayFrom.plusDays(1);
+        var from = dayFrom.minusDays(90);
+        var whatsapp = com.hunt.otziv.client_chat_control.model.ClientChatPlatform.WHATSAPP;
+        var telegram = com.hunt.otziv.client_chat_control.model.ClientChatPlatform.TELEGRAM;
+        var client = com.hunt.otziv.client_chat_control.model.ClientChatSenderRole.CLIENT;
+        var staff = com.hunt.otziv.client_chat_control.model.ClientChatSenderRole.STAFF;
+        java.util.function.Function<Object[], com.hunt.otziv.client_chat_control.model.ClientChatMessage> message = values -> {
+            var row = new com.hunt.otziv.client_chat_control.model.ClientChatMessage();
+            row.setPlatform((com.hunt.otziv.client_chat_control.model.ClientChatPlatform) values[0]);
+            row.setChatId((String) values[1]);
+            row.setSenderRole((com.hunt.otziv.client_chat_control.model.ClientChatSenderRole) values[2]);
+            row.setMessageAt((LocalDateTime) values[3]);
+            row.setManager((Boolean) values[4] ? manager : null);
+            row.setDirection(com.hunt.otziv.client_chat_control.model.ClientChatDirection.values()[0]);
+            row.setExternalMessageId("reply-history-" + values[1] + "-" + values[3] + "-" + values[2]);
+            row.setMessageText("text");
+            em.persist(row);
+            return row;
+        };
+        var expected = List.of(
+                message.apply(new Object[]{whatsapp, "chat-a", client, from, true}),
+                message.apply(new Object[]{whatsapp, "chat-a", client, dayFrom.minusDays(5), true}),
+                message.apply(new Object[]{whatsapp, "chat-a", staff, dayFrom.plusHours(1), true}),
+                message.apply(new Object[]{whatsapp, "chat-a", client, dayTo, true}));
+        message.apply(new Object[]{whatsapp, "chat-a", client, from.minusNanos(1000), true});  // before lookback
+        message.apply(new Object[]{whatsapp, "chat-a", client, dayTo.plusNanos(1000), true});  // after the day
+        message.apply(new Object[]{whatsapp, "chat-a", client, dayFrom.plusHours(2), false});  // another manager
+        message.apply(new Object[]{telegram, "chat-a", client, dayFrom.plusHours(1), true});   // same id, other platform
+        message.apply(new Object[]{telegram, "chat-a", staff, dayFrom.minusNanos(1000), true}); // replied the day before
+        message.apply(new Object[]{whatsapp, "chat-b", client, dayFrom.plusHours(3), true});
+        message.apply(new Object[]{whatsapp, "chat-b", staff, dayTo, true});                    // reply after the day
+        message.apply(new Object[]{whatsapp, "chat-c", client, dayFrom.plusHours(4), true});
+        message.apply(new Object[]{whatsapp, "chat-c", staff, dayFrom.plusHours(5), false});    // replied by someone else
+        em.flush(); em.clear();
+
+        var history = messagePoints.findManagerHistoryOfChatsRepliedBetween(manager.getId(), dayFrom, dayTo, from, dayTo);
+
+        assertThat(history.stream().map(com.hunt.otziv.client_chat_control.model.ClientChatMessage::getId).toList())
+                .containsExactlyElementsOf(expected.stream().map(com.hunt.otziv.client_chat_control.model.ClientChatMessage::getId).toList());
+        assertThat(messagePoints.findManagerHistoryOfChatsRepliedBetween(manager.getId(), dayTo, dayTo.plusDays(1), from, dayTo.plusDays(1)))
+                .extracting(com.hunt.otziv.client_chat_control.model.ClientChatMessage::getChatId).containsOnly("chat-b");
+    }
+
     @Test void constructorActivityProjectionsKeepActorScopeAndTimestampEdges() {
         var manager = managers.findAll().getFirst();
         var from = FROM.atStartOfDay();

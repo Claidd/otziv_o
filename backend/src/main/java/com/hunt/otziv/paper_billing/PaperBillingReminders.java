@@ -53,9 +53,9 @@ public class PaperBillingReminders {
             // Same rules as every automatic client message: master switch, pause, reminder toggle,
             // business windows, shared daily limit and interval. Postpone, never drop.
             String platform=String.valueOf(row.get("group_id")).split(":",2)[0];
-            var admission=dispatchBudget.reserveOnPlatform(
+            var admission=dispatchBudget.reserveForSender(
                     com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER,
-                    "PAPER_INVOICE",((Number)row.get("target_id")).longValue(),platform);
+                    "PAPER_INVOICE",((Number)row.get("target_id")).longValue(),platform,(String)row.get("client_id"));
             if(!admission.allowed()) {
                 release(id,token,admission.nextAttemptAt()==null?java.time.LocalDateTime.now().plusMinutes(5):admission.nextAttemptAt(),admission.reason());
                 return;

@@ -45,6 +45,60 @@ class MaxGroupLinkServiceTest {
     }
 
     @Test
+    void groupCommandBindsAGroupTheBotAlreadyServesForAnotherBranch() {
+        ReflectionTestUtils.setField(service, "botUsername", "id380124742639_bot");
+        Company company = new Company();
+        company.setId(235L);
+        company.setTitle("Кристалл, банкетный зал");
+        company.setUrlChat("https://max.ru/join/6CnIZCfuUU3_other");
+        company.setMaxLinkUserId(203090551L);
+        when(companyRepository.findById(235L)).thenReturn(Optional.of(company));
+        String inviteUrl = service.buildInviteUrl(235L, company.getUrlChat(), null);
+        String payload = inviteUrl.substring(inviteUrl.indexOf("start=") + "start=".length());
+
+        Optional<String> response = service.handleGroupStartCommand(-74761808437879L, 203090551L, payload);
+
+        assertTrue(response.orElse("").contains("Кристалл, банкетный зал"));
+        assertEquals(-74761808437879L, company.getMaxGroupChatId());
+        assertEquals(null, company.getMaxLinkUserId());
+        verify(companyRepository).save(company);
+
+        Optional<String> reused = service.handleGroupStartCommand(-74761808437879L, 203090551L, payload);
+        assertTrue(reused.orElse("").contains("устарела или уже использована"));
+    }
+
+    @Test
+    void groupCommandAfterTheLinkWasOpenedUsesThatFreshStartOfTheSameUser() {
+        ReflectionTestUtils.setField(service, "botUsername", "id380124742639_bot");
+        Company company = new Company();
+        company.setId(235L);
+        company.setTitle("Кристалл, банкетный зал");
+        company.setUrlChat("https://max.ru/join/6CnIZCfuUU3_other");
+        when(companyRepository.findById(235L)).thenReturn(Optional.of(company));
+        String inviteUrl = service.buildInviteUrl(235L, company.getUrlChat(), null);
+        String payload = inviteUrl.substring(inviteUrl.indexOf("start=") + "start=".length());
+        service.handleBotStarted(203090551L, payload);
+        when(companyRepository.findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(203090551L))
+                .thenReturn(Optional.of(company));
+
+        Optional<String> response = service.handleGroupStartCommand(-74761808437879L, 203090551L, payload);
+
+        assertTrue(response.orElse("").contains("привязана"));
+        assertEquals(-74761808437879L, company.getMaxGroupChatId());
+    }
+
+    @Test
+    void spentCommandFromAnotherUserIsNotBound() {
+        when(companyRepository.findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(999L)).thenReturn(Optional.empty());
+
+        Optional<String> response = service.handleGroupStartCommand(-74761808437879L, 999L,
+                "cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+
+        assertTrue(response.orElse("").contains("устарела или уже использована"));
+        verify(companyRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void linksBotAddedEventByMaxWebGroupUrl() {
         Company company = new Company();
         company.setId(1160L);

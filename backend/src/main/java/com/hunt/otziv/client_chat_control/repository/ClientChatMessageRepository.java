@@ -32,6 +32,37 @@ public interface ClientChatMessageRepository extends JpaRepository<ClientChatMes
             LocalDateTime to
     );
 
+    /**
+     * The manager's messages in [from, to] (inclusive, as the derived query above),
+     * limited to chats where the manager's staff replied in [dayFrom, dayTo).
+     * Reply statistics of a day only depend on those chats; the day's replied
+     * chats are found first and their history is read through the chat index.
+     */
+    @Query(value = """
+        SELECT message.*
+        FROM (
+            SELECT DISTINCT reply.platform, reply.chat_id
+            FROM client_chat_messages reply
+            WHERE reply.manager_id = :managerId
+              AND reply.sender_role = 'STAFF'
+              AND reply.message_at >= :dayFrom
+              AND reply.message_at < :dayTo
+        ) replied
+        JOIN client_chat_messages message
+          ON message.platform = replied.platform
+         AND message.chat_id = replied.chat_id
+        WHERE message.manager_id = :managerId
+          AND message.message_at BETWEEN :from AND :to
+        ORDER BY message.message_at ASC, message.id ASC
+        """, nativeQuery = true)
+    List<ClientChatMessage> findManagerHistoryOfChatsRepliedBetween(
+            @Param("managerId") Long managerId,
+            @Param("dayFrom") LocalDateTime dayFrom,
+            @Param("dayTo") LocalDateTime dayTo,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
     @Query("""
         SELECT message
         FROM ClientChatMessage message

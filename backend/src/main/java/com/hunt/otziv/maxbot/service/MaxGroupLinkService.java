@@ -139,6 +139,47 @@ public class MaxGroupLinkService {
         return Optional.of("Привязка MAX начата для компании \"" + title + "\". Добавьте этого MAX-бота в группу администратором, чтобы я получил событие добавления и сохранил chatId автоматически.");
     }
 
+    /**
+     * The one-time company command sent inside the group binds that very group. This is the only
+     * way to bind a group the bot already belongs to, e.g. one MAX group shared by two branches,
+     * because MAX sends "bot added" only once per group.
+     */
+    public Optional<String> handleGroupStartCommand(Long chatId, Long userId, String payload) {
+        if (chatId == null || !hasText(payload) || !payload.startsWith(PAYLOAD_PREFIX)) {
+            return Optional.empty();
+        }
+        Long companyId = tokenStore.consume(
+                payload.substring(PAYLOAD_PREFIX.length()),
+                COMPANY_SCOPE,
+                linkSecret
+        ).orElse(null);
+        if (companyId == null && userId != null) {
+            // The link and the command share one token: a manager who first opened the bot link
+            // has already spent it, and the bot remembered that start for this user. Use it.
+            companyId = companyRepository.findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(userId)
+                    .filter(this::isPendingLinkFresh)
+                    .map(Company::getId)
+                    .orElse(null);
+        }
+        if (companyId == null) {
+            log.warn("MAX group command rejected: invalid or used token chatId={} userId={}", chatId, userId);
+            return Optional.of("Команда привязки устарела или уже использована. Нажмите «Починить» в карточке ещё раз и в течение 15 минут отправьте новую команду в группе.");
+        }
+        Company company = companyRepository.findById(companyId).orElse(null);
+        if (company == null) {
+            return Optional.of("Не удалось привязать MAX-группу: компания не найдена.");
+        }
+        company.setMaxGroupChatId(chatId);
+        company.setMaxLinkUserId(null);
+        company.setMaxLinkRequestedAt(null);
+        companyRepository.save(company);
+        syncSharedMaxChatId(company.getId(), chatId);
+        String title = companyTitle(company);
+        log.info("MAX group chatId={} linked to company id={} title='{}' by group command userId={}",
+                chatId, company.getId(), title, userId);
+        return Optional.of("Готово: MAX-группа привязана к компании \"" + title + "\".");
+    }
+
     public Optional<String> handleBotAdded(Long chatId, Long userId) {
         if (chatId == null) {
             return Optional.empty();

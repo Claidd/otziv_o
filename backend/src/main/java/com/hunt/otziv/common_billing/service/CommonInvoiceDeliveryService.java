@@ -273,7 +273,9 @@ public class CommonInvoiceDeliveryService {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
-        refreshInvoiceAmounts(invoice, items);
+        // Read after the locks, in one batch: the row locks are held for a few
+        // queries instead of two queries per order.
+        settlementService.refreshInvoiceAmounts(List.of(invoice), Map.of(invoice.getId(), items));
         return invoiceDetails(invoice, items);
     }
 

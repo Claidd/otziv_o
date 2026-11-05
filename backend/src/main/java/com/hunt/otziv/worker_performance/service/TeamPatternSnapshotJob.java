@@ -51,10 +51,12 @@ public class TeamPatternSnapshotJob {
                     leases.holdForTransaction(lease, Duration.ofMinutes(2));
                     long after = leases.projectionCursor(lease, date);
                     var selected = subjects.stream().filter(subject -> subject.workerId() > after).limit(25).toList();
+                    // Only the open month is kept warm. A closed month is no longer rebuilt
+                    // every 30 s: snapshots are served only while younger than a minute, and
+                    // a view of a past month uses the same canonical calculation directly.
                     analysis.rebuildSnapshots(selected, month);
-                    analysis.rebuildSnapshots(selected, month.minusMonths(1));
                     long next = selected.size() < 25 ? 0 : selected.getLast().workerId();
-                    if (next == 0) snapshots.cleanup(month.minusMonths(1));
+                    if (next == 0) snapshots.cleanup(month);
                     leases.advanceProjectionCursor(lease, date, next);
                     return next;
                 });

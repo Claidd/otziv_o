@@ -30,10 +30,43 @@ public class ManagerReportReviewTaskContextService {
             "CLIENT_CHAT_AUDIT"
     );
 
+    /**
+     * Closure reason of a client-chat item the manager answered in another messenger.
+     * The owner checks it; it is not a manager failure for the audit.
+     */
+    static final String ANSWERED_OUTSIDE_CHAT = "ANSWERED_OUTSIDE_CHAT";
+
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final ClientChatUnansweredItemRepository unansweredRepository;
     private final ManagerProblemDiagnosticsService diagnosticsService;
     private final com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics invoiceDiagnostics;
+    private final ManagerAuditDeferralFacts deferralFacts;
+    private final ManagerCommunicationDailyReportSectionService conversationExchange;
+
+    static boolean answeredOutsideChat(ClientChatUnansweredItem item) {
+        return item != null && item.getStatus() != ClientChatUnansweredStatus.OPEN
+                && (ANSWERED_OUTSIDE_CHAT.equals(clean(item.getResolutionReasonCode()).toUpperCase(Locale.ROOT))
+                    || ANSWERED_OUTSIDE_CHAT.equals(clean(item.getCloseReason()).toUpperCase(Locale.ROOT)));
+    }
+
+    /**
+     * A deferred card is the manager's remark only when the manager deferred it and the
+     * problem is still on the manager's board. An old copy whose problem left the board, or
+     * a deferral made by someone else, is not asked about.
+     */
+    @Transactional(readOnly = true)
+    public boolean deferralAttributable(ManagerDailyControlConcreteItem item, LocalDate reportDate) {
+        if (item == null || item.getControl() == null || item.getControl().managerId() == null || reportDate == null) {
+            return false;
+        }
+        Long parentItemId = item.getParentItem() == null ? null : item.getParentItem().getId();
+        // Common invoices are not re-created daily; their current eligibility is decided by the
+        // live common-invoice rule in resolvedSatisfactorily. Other problems are re-created daily.
+        boolean invoice = clean(item.getEntityType()).startsWith("COMMON_INVOICE");
+        return deferralFacts.deferredByControlManager(parentItemId, item.getTitle())
+                && (invoice || deferralFacts.stillOnBoard(item.getControl().managerId(), item.getEntityKey(),
+                        reportDate));
+    }
 
     /** Older conversational questions had no daily-control card. Bind only one exact,
      * manager-owned case from the report day, using both company and quoted message. */
@@ -68,11 +101,23 @@ public class ManagerReportReviewTaskContextService {
         for (Long id : ids.stream().filter(java.util.Objects::nonNull).filter(value -> value > 0).distinct().toList()) {
             var item = id == null || managerId == null ? null : unansweredRepository.findById(id)
                     .filter(row -> managerId.equals(row.managerId())).orElse(null);
-            java.util.Map<String,String> fields = item == null ? java.util.Map.of("availability", "unavailable")
-                    : java.util.Map.of("client_message", java.util.Objects.requireNonNullElse(item.getLastMessageText(), ""),
-                            "manager_reply", java.util.Objects.requireNonNullElse(item.getResolutionReplyText(), ""),
-                            "client_message_at", String.valueOf(item.getLastClientMessageAt()),
-                            "reply_recorded_at", String.valueOf(item.getClosedAt()));
+            java.util.Map<String,String> fields = new java.util.LinkedHashMap<>();
+            if (item == null) {
+                fields.put("availability", "unavailable");
+            } else {
+                fields.put("client_message", java.util.Objects.requireNonNullElse(item.getLastMessageText(), ""));
+                fields.put("manager_reply", java.util.Objects.requireNonNullElse(item.getResolutionReplyText(), ""));
+                fields.put("client_message_at", String.valueOf(item.getLastClientMessageAt()));
+                fields.put("reply_recorded_at", String.valueOf(item.getClosedAt()));
+                if (answeredOutsideChat(item)) fields.put("answered_outside_chat",
+                        "Менеджер ответил клиенту в другом мессенджере; ответ проверяет владелец");
+                // One reply can cover several client messages, an earlier reply can already answer
+                // the question, and a reply can continue in the next message: show the whole exchange.
+                int position = 0;
+                for (var message : conversationExchange.exchange(item)) {
+                    fields.put("exchange_" + (++position), message.describe());
+                }
+            }
             for (var field : fields.entrySet()) {
                 try {
                     result.append(json.writeValueAsString(java.util.Map.of("id", "chat-case:" + id + ":" + field.getKey(),
@@ -124,13 +169,26 @@ public class ManagerReportReviewTaskContextService {
             result.append("- sourceTaskId=").append(item.getId())
                     .append("; currentStatus=").append(item.getStatus())
                     .append("; title=").append(clean(item.getTitle()));
-            clientChatItem(item).ifPresent(chat -> result
-                    .append("; clientMessage=").append(clean(chat.getLastMessageText()))
-                    .append("; managerReply=").append(clean(chat.getResolutionReplyText()))
-                    .append("; resolutionType=").append(chat.getResolutionType())
-                    .append("; replyQuality=").append(chat.getReplyQuality())
-                    .append("; replyQualityReason=").append(clean(chat.getReplyQualityReason()))
-                    .append("; auditRequired=").append(chat.isAuditRequired()));
+            clientChatItem(item).ifPresent(chat -> {
+                boolean outside = answeredOutsideChat(chat);
+                result.append("; clientMessage=").append(clean(chat.getLastMessageText()))
+                        .append("; managerReply=").append(clean(chat.getResolutionReplyText()))
+                        .append("; resolutionType=").append(chat.getResolutionType())
+                        .append("; replyQuality=").append(outside ? "NOT_APPLICABLE" : chat.getReplyQuality())
+                        .append("; replyQualityReason=").append(outside
+                                ? "ответ дан в другом мессенджере; проверяет владелец, это не ошибка менеджера"
+                                : clean(chat.getReplyQualityReason()))
+                        .append("; auditRequired=").append(!outside && chat.isAuditRequired());
+                String exchange = conversationExchange.exchange(chat).stream()
+                        .map(ManagerCommunicationDailyReportSectionService.ExchangeMessage::describe)
+                        .map(line -> line.length() <= 220 ? line : line.substring(0, 219) + "…")
+                        .collect(java.util.stream.Collectors.joining(" | "));
+                if (!exchange.isBlank()) {
+                    result.append("; exchange=").append(exchange)
+                            .append("; exchangeNote=оценка ответа по одной паре сообщений неполна: ")
+                            .append("учитывай всю серию клиента и все ответы сотрудников в exchange");
+                }
+            });
             result.append('\n');
         }
         ids.stream().filter(id -> !found.contains(id)).forEach(id -> result
@@ -164,6 +222,10 @@ public class ManagerReportReviewTaskContextService {
         if (clean(source.getEntityType()).startsWith("COMMON_INVOICE")) {
             return invoiceDiagnostics.resolvedForAudit(source.getEntityId());
         }
+        // The manager answered in another messenger; the owner checks that separately.
+        if (clientChatItem(source).filter(ManagerReportReviewTaskContextService::answeredOutsideChat).isPresent()) {
+            return true;
+        }
         if (source.getStatus() != ManagerDailyControlItemStatus.RESOLVED) {
             boolean resolvedLater = source.getDeferredAt() != null
                     && source.getControl() != null
@@ -181,7 +243,8 @@ public class ManagerReportReviewTaskContextService {
             return diagnosticsService.resolutionState(source.getId()) == ManagerProblemDiagnosticsService.ResolutionState.RESOLVED;
         }
         return chatSource
-                .map(item -> item.getStatus() != ClientChatUnansweredStatus.OPEN
+                .map(item -> answeredOutsideChat(item)
+                        || item.getStatus() != ClientChatUnansweredStatus.OPEN
                         && !item.isAuditRequired()
                         && item.getReplyQuality() != ClientChatReplyQuality.PARTIAL
                         && item.getReplyQuality() != ClientChatReplyQuality.SUSPICIOUS)
@@ -213,7 +276,7 @@ public class ManagerReportReviewTaskContextService {
         return ids;
     }
 
-    private String clean(String value) {
+    private static String clean(String value) {
         if (value == null) return "";
         String cleaned = value.replaceAll("\\s+", " ").trim();
         return cleaned.length() <= 1000 ? cleaned : cleaned.substring(0, 999) + "…";

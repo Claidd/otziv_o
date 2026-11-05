@@ -1397,3 +1397,191 @@ dd {
     background: var(--otziv-surface-gradient-neutral);
   }
 }
+
+/* Final result of a closed day and the owner action "Засчитать день". */
+.day-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem 0.55rem;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.85rem;
+  padding: 0.55rem 0.65rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-surface-gradient-neutral);
+}
+
+.day-result > .material-icons-sharp {
+  font-size: 1.15rem;
+  color: var(--otziv-info);
+}
+
+.day-result.reached {
+  border-color: var(--otziv-surface-border-green);
+  background: var(--otziv-surface-gradient-green);
+}
+
+.day-result.reached > .material-icons-sharp,
+.day-result.excused > .material-icons-sharp {
+  color: var(--otziv-success);
+}
+
+.day-result.excused {
+  border-color: var(--otziv-surface-border-green);
+  border-style: dashed;
+  background: var(--otziv-surface-gradient-green);
+}
+
+.day-result.missed {
+  border-color: var(--otziv-surface-border-yellow);
+  background: var(--otziv-surface-gradient-yellow);
+}
+
+.day-result-text {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.day-result-text strong {
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.day-result-text small {
+  color: var(--otziv-info);
+  font-size: 0.65rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.day-result-reason {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.day-result-action {
+  grid-column: 1 / -1;
+  min-height: 2rem;
+  border: 1px solid color-mix(in srgb, var(--otziv-primary) 42%, transparent);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  color: var(--otziv-white);
+  background: var(--otziv-primary);
+  font-size: 0.7rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.day-result-action.secondary {
+  color: var(--otziv-primary);
+  background: var(--otziv-white);
+}
+
+.day-result-action:focus-visible,
+.day-excuse-actions button:focus-visible,
+.day-excuse-reason textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--otziv-primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.day-excuse-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.day-excuse-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1001;
+  display: grid;
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  gap: 0.75rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: var(--otziv-card-radius);
+  padding: 1.15rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: var(--otziv-shadow);
+}
+
+.day-excuse-dialog h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.day-excuse-subject,
+.day-excuse-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.day-excuse-hint {
+  color: var(--otziv-info);
+}
+
+.day-excuse-reason {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.day-excuse-reason textarea {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.65rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-muted-surface);
+  font: inherit;
+  font-weight: 500;
+}
+
+.day-excuse-error {
+  margin: 0;
+  color: var(--otziv-danger);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.day-excuse-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.day-excuse-actions button {
+  min-height: 2.25rem;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 999px;
+  padding: 0.35rem 1rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.day-excuse-actions button.primary {
+  border-color: var(--otziv-primary);
+  color: var(--otziv-white);
+  background: var(--otziv-primary);
+}
+
+.day-excuse-actions button:disabled,
+.day-result-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

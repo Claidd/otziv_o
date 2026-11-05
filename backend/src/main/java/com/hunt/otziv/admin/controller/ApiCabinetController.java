@@ -31,6 +31,8 @@ import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.p_products.worker_access.dto.WorkerNetworkViolationStatsResponse;
 import com.hunt.otziv.p_products.worker_access.service.WorkerNetworkViolationService;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.hunt.otziv.u_users.api.UserImageLinks;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -1102,6 +1104,11 @@ public class ApiCabinetController {
             List<ContractorPaymentAdminSummaryResponse> contractorPayments,
             Map<String, List<ScoreUserResponse>> groups
     ) {
+        /** Signed default avatar for cards the client builds itself (saved contractor balances). */
+        @JsonProperty(value = "defaultImageUrl", access = JsonProperty.Access.READ_ONLY)
+        public String defaultImageUrl() {
+            return UserImageLinks.pathForOrDefault(null);
+        }
     }
 
     private record CachedScoreResponse(
@@ -1135,6 +1142,12 @@ public class ApiCabinetController {
             Long percentInWork,
             ManagerPerformanceScoreResponse managerPerformance
     ) {
+        /** Short-lived signed link to the photo, relative to the backend base URL. */
+        @JsonProperty(value = "imageUrl", access = JsonProperty.Access.READ_ONLY)
+        public String imageUrl() {
+            return UserImageLinks.pathForOrDefault(imageId);
+        }
+
         static ScoreUserResponse from(
                 UserData user,
                 boolean financeVisible,

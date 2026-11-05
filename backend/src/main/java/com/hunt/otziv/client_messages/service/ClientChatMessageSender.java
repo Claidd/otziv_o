@@ -117,6 +117,49 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
         return progressPreferences.isCompanyEnabled(companyId);
     }
 
+    /** Mirrors the checks {@link #sendWithOperationId} makes before any provider call for a new operation. */
+    @Override public com.hunt.otziv.client_messages.api.ClientMessageDelivery.Route route(
+            com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target, String clientId, String groupId) {
+        if (target == null) {
+            return unavailableRoute(null, "company_missing", "Компания заказа не найдена.");
+        }
+        ChatPlatform platform = activeChatPlatform(companySnapshot(target));
+        return switch (platform) {
+            case WHATSAPP -> !hasText(groupId)
+                    ? unavailableRoute(platform, "whatsapp_group_missing",
+                        "WhatsApp-группа компании не привязана: у компании нет идентификатора группы. "
+                                + "Проверьте чат в карточке компании и повторите отправку.")
+                    : !hasText(clientId)
+                        ? unavailableRoute(platform, "whatsapp_client_missing",
+                            "У менеджера не подключён WhatsApp-аккаунт для отправки. "
+                                    + "Подключите аккаунт и повторите отправку.")
+                        : availableRoute(platform);
+            case TELEGRAM -> target.telegramChatId() == null
+                    ? unavailableRoute(platform, "telegram_group_missing",
+                        "Telegram-группа компании не привязана к боту. "
+                                + "Привяжите группу в карточке компании и повторите отправку.")
+                    : availableRoute(platform);
+            case MAX -> target.maxChatId() == null
+                    ? unavailableRoute(platform, "max_group_missing",
+                        "MAX-группа компании не привязана к боту. "
+                                + "Привяжите группу командой привязки в самой группе и повторите отправку.")
+                    : availableRoute(platform);
+            case UNKNOWN -> unavailableRoute(null, "chat_platform_unknown",
+                    "Ссылка на чат компании не указана или не распознана. "
+                            + "Укажите чат WhatsApp, Telegram или MAX в карточке компании.");
+        };
+    }
+
+    private static com.hunt.otziv.client_messages.api.ClientMessageDelivery.Route availableRoute(ChatPlatform platform) {
+        return new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Route(platform.name(), null, null);
+    }
+
+    private static com.hunt.otziv.client_messages.api.ClientMessageDelivery.Route unavailableRoute(
+            ChatPlatform platform, String code, String message) {
+        return new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Route(
+                platform == null ? null : platform.name(), code, message);
+    }
+
     @Override public ClientMessageSendResult deliverWithOperationId(com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target,
             String clientId,String groupId,String message,TelegramTransferCopyButton copy,String operationId) {
         return sendWithOperationId(companySnapshot(target),clientId,groupId,message,copy,operationId);
@@ -236,6 +279,17 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
             String clientId, String groupId, String message, TelegramTransferCopyButton copyButton, String operationId) {
         Long destination = platform == ChatPlatform.TELEGRAM ? company.getTelegramGroupChatId() : company.getMaxGroupChatId();
         try {
+            if (destination == null) {
+                // Same order as the fence: a recorded outcome wins over the current routing. Without one
+                // the company has no bound chat, which is an explicit routing failure, not a broken envelope.
+                var previous = operationFence.lookup(operationId);
+                if (previous.isPresent() && !"FAILED_KNOWN".equals(previous.get().state())) {
+                    return ClientMessageOperationFence.result(previous.get());
+                }
+                return platform == ChatPlatform.TELEGRAM
+                        ? missingActiveChannel("telegram_group_missing", "Telegram-группа компании не привязана к боту")
+                        : missingActiveChannel("max_group_missing", "MAX-группа компании не привязана к боту");
+            }
             String envelope = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(new String[]{
                     message, copyButton == null ? null : copyButton.text(), copyButton == null ? null : copyButton.copyText()});
             return operationFence.execute(operationId, platform.name(), destination == null ? null : destination.toString(), envelope, () -> {

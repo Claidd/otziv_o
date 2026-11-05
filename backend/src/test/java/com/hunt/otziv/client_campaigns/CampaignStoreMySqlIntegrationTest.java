@@ -155,6 +155,27 @@ class CampaignStoreMySqlIntegrationTest {
         assertThat(store.claim(id,now.plusDays(1)).recipient().companyId()).isEqualTo(2);
         assertThat(store.get(id).budgetUsed()).isEqualTo(1);
     }
+    @Test void heldAdmissionReturnsRecipientQuotaAndRetriesAtTheFreeSlotWithoutDuplicates() {
+        company(1,1,1001); company(2,1,1002);
+        var id = draft(settings(1)); store.start(id,now);
+        var held = store.claim(id,now);
+        assertThat(store.get(id).budgetUsed()).isEqualTo(1);
+
+        store.releaseWithoutSend(held,now.plusSeconds(150));
+
+        assertThat(store.get(id).budgetUsed()).isZero();
+        assertThat(store.get(id).nextAt()).isEqualTo(now.plusSeconds(150));
+        assertThat(store.counts(id).pending()).isEqualTo(2);
+        assertThat(store.claim(id,now.plusSeconds(149))).isNull();
+        var retried = store.claim(id,now.plusSeconds(150));
+        assertThat(retried.recipient().id()).isEqualTo(held.recipient().id());
+        sent(retried,now.plusSeconds(151));
+        // A second release of an already finished recipient changes nothing.
+        store.releaseWithoutSend(retried,now.plusSeconds(160));
+        assertThat(store.counts(id).sent()).isEqualTo(1);
+        assertThat(store.get(id).budgetUsed()).isEqualTo(1);
+        assertThat(store.claim(id,now.plusMinutes(20))).isNull(); // daily limit 1 still holds
+    }
     @Test void pausesAndTerminalCancellationPreserveSentRecipients() {
         company(1,1,1001); company(2,1,1002);
         var id = draft(settings(10)); store.start(id,now); sent(store.claim(id,now),now);

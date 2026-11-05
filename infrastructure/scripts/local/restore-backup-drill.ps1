@@ -31,6 +31,32 @@ param(
         "companies",
         "orders",
         "reviews"
+    ),
+
+    # Keycloak (PostgreSQL) dump of the same backup run: keycloak_*.sql.gz.enc. Production drills
+    # must pass it; without it the Keycloak part is reported as NOT_RUN.
+    [string]$KeycloakDumpPath = "",
+
+    # Same pinned PostgreSQL 17.11 image as the production keycloak-postgres service.
+    [ValidateNotNullOrEmpty()]
+    [string]$PostgresImage = "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+
+    [ValidatePattern("^[a-z_][a-z0-9_]{0,62}$")]
+    [string]$KeycloakDatabaseName = "keycloak_restore_drill",
+
+    [ValidatePattern("^[A-Za-z0-9_.-]{1,64}$")]
+    [string]$KeycloakRealm = "otziv",
+
+    [ValidateRange(0, 100000000)]
+    [long]$MinimumKeycloakUsers = 1,
+
+    [string[]]$RequiredKeycloakTables = @(
+        "realm",
+        "user_entity",
+        "credential",
+        "keycloak_role",
+        "user_role_mapping",
+        "migration_model"
     )
 )
 
@@ -469,6 +495,86 @@ function Get-IntegerQueryResult {
     return $parsed
 }
 
+function Wait-DrillPostgres {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][int]$TimeoutSeconds
+    )
+
+    # The image entrypoint first runs a temporary socket-only server for initialization; only
+    # PostgreSQL as PID 1 is the final server that the restore may use.
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($watch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        $state = Invoke-Docker -Arguments @(
+            "container", "inspect", "--format", "{{.State.Status}}", $ContainerName
+        ) -Operation "Inspect drill PostgreSQL state"
+        if ($state -in @("dead", "exited")) {
+            $logs = Invoke-Docker -Arguments @("logs", "--tail", "50", $ContainerName) `
+                -Operation "Read failed drill PostgreSQL logs"
+            throw "Drill PostgreSQL stopped during initialization. Last logs: $logs"
+        }
+
+        & docker exec $ContainerName sh -c `
+            'test "$(cat /proc/1/comm)" = postgres && pg_isready -q -U "$POSTGRES_USER" -d "$POSTGRES_DB"' `
+            *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $watch.Stop()
+            return $watch.Elapsed.TotalSeconds
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    $watch.Stop()
+    throw "Drill PostgreSQL did not become ready within $TimeoutSeconds seconds."
+}
+
+function Invoke-PostgresQuery {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$Sql
+    )
+
+    $command = 'psql -X -q -A -t -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"'
+    return Invoke-Docker -Arguments @(
+        "exec", $ContainerName, "sh", "-c", $command, "restore-drill", $Sql
+    ) -Operation "Run Keycloak drill integrity query"
+}
+
+function Get-PostgresIntegerResult {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$Sql,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $value = (Invoke-PostgresQuery -ContainerName $ContainerName -Sql $Sql).Trim()
+    [long]$parsed = 0
+    if (-not [long]::TryParse($value, [ref]$parsed)) {
+        throw "$Description returned a non-integer value '$value'."
+    }
+    return $parsed
+}
+
+function Resolve-DrillBackupFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    $file = Get-Item -LiteralPath $resolved
+    if ($file -isnot [System.IO.FileInfo] -or $file.Name -notmatch "(?i)\.sql\.gz(?:\.enc)?$") {
+        throw "$Description must point to a local .sql.gz or OTZIVDB2 .sql.gz.enc file."
+    }
+    if ($file.Length -le 0) {
+        throw "$Description is empty: $resolved"
+    }
+    if ($resolved -match "^\\\\") {
+        throw "UNC paths are not allowed. Copy the backup to a local disk before the drill."
+    }
+    return $file
+}
+
 function Format-Seconds {
     param([Nullable[double]]$Value)
 
@@ -505,6 +611,27 @@ if ($resolvedDump -match "^\\\\") {
     throw "UNC paths are not allowed. Copy the backup to a local disk before the drill."
 }
 
+if ($PostgresImage -notmatch "^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$") {
+    throw "PostgresImage contains unsupported characters."
+}
+foreach ($table in $RequiredKeycloakTables) {
+    if ($table -notmatch "^[a-z_][a-z0-9_]{0,62}$") {
+        throw "Required Keycloak table name '$table' contains unsupported characters."
+    }
+}
+$keycloakRequested = -not [string]::IsNullOrWhiteSpace($KeycloakDumpPath)
+$keycloakFile = $null
+$resolvedKeycloakDump = "NOT_PROVIDED"
+$keycloakSha256 = "NOT_PROVIDED"
+if ($keycloakRequested) {
+    $keycloakFile = Resolve-DrillBackupFile -Path $KeycloakDumpPath -Description "KeycloakDumpPath"
+    $resolvedKeycloakDump = $keycloakFile.FullName
+    if ($resolvedKeycloakDump -eq $resolvedDump) {
+        throw "KeycloakDumpPath must differ from the MySQL DumpPath."
+    }
+    $keycloakSha256 = (Get-FileHash -LiteralPath $resolvedKeycloakDump -Algorithm SHA256).Hash
+}
+
 $backupSha256 = (Get-FileHash -LiteralPath $resolvedDump -Algorithm SHA256).Hash
 $isEncryptedBackup = $dumpFile.Name -match "(?i)\.enc$"
 $restoreInputPath = $resolvedDump
@@ -530,6 +657,30 @@ $tableCount = $null
 $createdDefiners = $null
 $flywayAppliedCount = $null
 $flywayLatestVersion = "NOT_CHECKED"
+
+$keycloakContainerName = "otziv-r0-$DrillId-postgres"
+$keycloakVolumeName = "otziv-r0-$DrillId-pgdata"
+$keycloakSuperuserSecret = New-RandomHex
+$keycloakContainerCreated = $false
+$keycloakVolumeCreated = $false
+$keycloakDecryptedPath = $null
+$keycloakResult = if ($keycloakRequested) { "FAIL" } else { "NOT_RUN" }
+$keycloakFormat = "NOT_PROVIDED"
+if ($keycloakRequested) {
+    $keycloakFormat = if ($keycloakFile.Name -match "(?i)\.enc$") { "ENCRYPTED_PENDING_VALIDATION" } else { "LEGACY_PLAIN_GZIP" }
+}
+$keycloakUncompressedBytes = $null
+$keycloakPrepareSeconds = $null
+$keycloakReadySeconds = $null
+$keycloakRestoreSeconds = $null
+$keycloakValidationSeconds = $null
+$keycloakRtoSeconds = $null
+$keycloakTableCount = $null
+$keycloakRealmCount = $null
+$keycloakUserCount = $null
+$keycloakUsersWithPasswordCredential = $null
+$keycloakCredentialCount = $null
+$keycloakSchemaVersion = "NOT_CHECKED"
 $totalWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 try {
@@ -551,9 +702,43 @@ try {
         -Path $restoreInputPath `
         -MaximumUncompressedBytes $MaxUncompressedBytes
 
+    # Both envelopes are authenticated before any Docker resource exists.
+    $keycloakRestoreInputPath = $null
+    if ($keycloakRequested) {
+        $keycloakPrepareWatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $keycloakRestoreInputPath = $resolvedKeycloakDump
+        if ($keycloakFormat -eq "ENCRYPTED_PENDING_VALIDATION") {
+            Write-Host "Authenticating and decrypting the Keycloak OTZIVDB2 backup..."
+            $keycloakDecryptedPath = New-SensitiveTemporaryPath
+            $keycloakEnvelope = ConvertFrom-OtzivDb2Envelope `
+                -InputPath $resolvedKeycloakDump `
+                -OutputPath $keycloakDecryptedPath `
+                -EncodedKey $EncryptionKeyBase64 `
+                -MaximumPlaintextBytes $MaxDecryptedBytes
+            $keycloakFormat = $keycloakEnvelope.Format
+            $keycloakRestoreInputPath = $keycloakDecryptedPath
+        }
+        Write-Host "Validating the Keycloak gzip archive..."
+        $keycloakUncompressedBytes = Test-GzipArchive `
+            -Path $keycloakRestoreInputPath `
+            -MaximumUncompressedBytes $MaxUncompressedBytes
+        $keycloakPrepareWatch.Stop()
+        $keycloakPrepareSeconds = $keycloakPrepareWatch.Elapsed.TotalSeconds
+    }
+
     Assert-LocalDockerEndpoint
     Invoke-Docker -Arguments @("image", "inspect", $MysqlImage) `
         -Operation "Inspect local MySQL image (the drill never pulls images)" | Out-Null
+    if ($keycloakRequested) {
+        Invoke-Docker -Arguments @("image", "inspect", $PostgresImage) `
+            -Operation "Inspect local PostgreSQL image (the drill never pulls images)" | Out-Null
+        if (Test-ContainerExists -Name $keycloakContainerName) {
+            throw "Container collision: '$keycloakContainerName' already exists. Nothing was changed."
+        }
+        if (Test-VolumeExists -Name $keycloakVolumeName) {
+            throw "Volume collision: '$keycloakVolumeName' already exists. Nothing was changed."
+        }
+    }
 
     if (Test-ContainerExists -Name $containerName) {
         throw "Container collision: '$containerName' already exists. Nothing was changed."
@@ -705,6 +890,104 @@ try {
 
     $validationWatch.Stop()
     $validationSeconds = $validationWatch.Elapsed.TotalSeconds
+
+    if ($keycloakRequested) {
+        Write-Host "Creating isolated Keycloak PostgreSQL volume: $keycloakVolumeName"
+        Invoke-Docker -Arguments @(
+            "volume", "create",
+            "--label", "$ownerLabel=$DrillId",
+            "--label", "$kindLabel=postgres-data",
+            $keycloakVolumeName
+        ) -Operation "Create isolated Keycloak drill volume" | Out-Null
+        $keycloakVolumeCreated = $true
+        if ((Get-VolumeOwner -Name $keycloakVolumeName) -ne $DrillId) {
+            throw "Keycloak volume ownership verification failed; refusing to continue."
+        }
+
+        Write-Host "Creating isolated Keycloak PostgreSQL container: $keycloakContainerName"
+        Invoke-Docker -Arguments @(
+            "create", "--pull=never",
+            "--name", $keycloakContainerName,
+            "--network", "none",
+            "--label", "$ownerLabel=$DrillId",
+            "--label", "$kindLabel=postgres",
+            "--mount", "type=volume,src=$keycloakVolumeName,dst=/var/lib/postgresql/data",
+            "--env", "POSTGRES_USER=keycloak_restore",
+            "--env", "POSTGRES_PASSWORD=$keycloakSuperuserSecret",
+            "--env", "POSTGRES_DB=$KeycloakDatabaseName",
+            $PostgresImage
+        ) -Operation "Create isolated Keycloak drill PostgreSQL" | Out-Null
+        $keycloakContainerCreated = $true
+        if ((Get-ContainerOwner -Name $keycloakContainerName) -ne $DrillId) {
+            throw "Keycloak container ownership verification failed; refusing to continue."
+        }
+
+        Invoke-Docker -Arguments @("start", $keycloakContainerName) `
+            -Operation "Start Keycloak drill PostgreSQL" | Out-Null
+        $keycloakReadySeconds = Wait-DrillPostgres -ContainerName $keycloakContainerName `
+            -TimeoutSeconds $StartupTimeoutSeconds
+
+        Invoke-Docker -Arguments @("cp", $keycloakRestoreInputPath, "${keycloakContainerName}:/tmp/keycloak.sql.gz") `
+            -Operation "Copy local Keycloak backup into drill container" | Out-Null
+
+        Write-Host "Restoring the Keycloak backup into isolated PostgreSQL..."
+        $keycloakRestoreWatch = [System.Diagnostics.Stopwatch]::StartNew()
+        # One transaction: any failing statement leaves no partially restored schema behind.
+        $keycloakRestoreCommand = 'set -euo pipefail; gzip -t /tmp/keycloak.sql.gz; gzip -dc /tmp/keycloak.sql.gz | psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null'
+        Invoke-Docker -Arguments @("exec", $keycloakContainerName, "bash", "-c", $keycloakRestoreCommand) `
+            -Operation "Restore Keycloak backup" | Out-Null
+        $keycloakRestoreWatch.Stop()
+        $keycloakRestoreSeconds = $keycloakRestoreWatch.Elapsed.TotalSeconds
+
+        Write-Host "Running Keycloak schema, realm and account checks..."
+        $keycloakValidationWatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $keycloakTablesText = Invoke-PostgresQuery -ContainerName $keycloakContainerName `
+            -Sql "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+        $keycloakTables = @($keycloakTablesText -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        $keycloakTableCount = $keycloakTables.Count
+        $missingKeycloakTables = @($RequiredKeycloakTables | Where-Object { $keycloakTables -notcontains $_ })
+        if ($missingKeycloakTables.Count -gt 0) {
+            throw "Required Keycloak tables are missing: $($missingKeycloakTables -join ', ')."
+        }
+        $keycloakRealmCount = Get-PostgresIntegerResult -ContainerName $keycloakContainerName `
+            -Sql "SELECT COUNT(*) FROM realm" -Description "Keycloak realm count"
+        $realmPresent = Get-PostgresIntegerResult -ContainerName $keycloakContainerName `
+            -Sql "SELECT COUNT(*) FROM realm WHERE name = '$KeycloakRealm'" -Description "Keycloak realm lookup"
+        if ($realmPresent -ne 1) {
+            throw "Restored Keycloak database does not contain exactly one realm '$KeycloakRealm'."
+        }
+        $keycloakUserCount = Get-PostgresIntegerResult -ContainerName $keycloakContainerName `
+            -Sql ("SELECT COUNT(*) FROM user_entity u JOIN realm r ON r.id = u.realm_id " +
+                "WHERE r.name = '$KeycloakRealm' AND u.service_account_client_link IS NULL") `
+            -Description "Keycloak realm user count"
+        if ($keycloakUserCount -lt $MinimumKeycloakUsers) {
+            throw "Restored realm '$KeycloakRealm' has $keycloakUserCount user(s); at least $MinimumKeycloakUsers required."
+        }
+        $keycloakUsersWithPasswordCredential = Get-PostgresIntegerResult -ContainerName $keycloakContainerName `
+            -Sql ("SELECT COUNT(DISTINCT c.user_id) FROM credential c JOIN user_entity u ON u.id = c.user_id " +
+                "JOIN realm r ON r.id = u.realm_id WHERE r.name = '$KeycloakRealm' AND c.type = 'password'") `
+            -Description "Keycloak users with password credentials"
+        $keycloakCredentialCount = Get-PostgresIntegerResult -ContainerName $keycloakContainerName `
+            -Sql "SELECT COUNT(*) FROM credential" -Description "Keycloak credential count"
+        $orphanCredentials = Get-PostgresIntegerResult -ContainerName $keycloakContainerName `
+            -Sql "SELECT COUNT(*) FROM credential c LEFT JOIN user_entity u ON u.id = c.user_id WHERE u.id IS NULL" `
+            -Description "Keycloak orphan credential count"
+        if ($orphanCredentials -ne 0) {
+            throw "Restored Keycloak database has $orphanCredentials credential(s) without a user."
+        }
+        $keycloakSchemaVersion = (Invoke-PostgresQuery -ContainerName $keycloakContainerName `
+            -Sql "SELECT version FROM migration_model ORDER BY update_time DESC, version DESC LIMIT 1").Trim()
+        if ([string]::IsNullOrWhiteSpace($keycloakSchemaVersion)) {
+            throw "Restored Keycloak database records no migration_model version."
+        }
+        $keycloakValidationWatch.Stop()
+        $keycloakValidationSeconds = $keycloakValidationWatch.Elapsed.TotalSeconds
+        $keycloakRtoSeconds = $keycloakPrepareSeconds + $keycloakReadySeconds + $keycloakRestoreSeconds + $keycloakValidationSeconds
+        $keycloakResult = "PASS"
+    } else {
+        Write-Warning "No -KeycloakDumpPath: the Keycloak database was not restored. A production drill must include it."
+    }
+
     $totalWatch.Stop()
     $rtoSeconds = $totalWatch.Elapsed.TotalSeconds
     $result = "PASS"
@@ -744,6 +1027,36 @@ try {
         }
     }
 
+    if ($keycloakContainerCreated) {
+        try {
+            if (Test-ContainerExists -Name $keycloakContainerName) {
+                $actualOwner = Get-ContainerOwner -Name $keycloakContainerName
+                if ($actualOwner -ne $DrillId) {
+                    throw "Refusing to remove '$keycloakContainerName': ownership label mismatch."
+                }
+                Invoke-Docker -Arguments @("container", "rm", "--force", $keycloakContainerName) `
+                    -Operation "Remove exact Keycloak drill container" | Out-Null
+            }
+        } catch {
+            $cleanupErrors.Add($_.Exception.Message)
+        }
+    }
+
+    if ($keycloakVolumeCreated) {
+        try {
+            if (Test-VolumeExists -Name $keycloakVolumeName) {
+                $actualOwner = Get-VolumeOwner -Name $keycloakVolumeName
+                if ($actualOwner -ne $DrillId) {
+                    throw "Refusing to remove '$keycloakVolumeName': ownership label mismatch."
+                }
+                Invoke-Docker -Arguments @("volume", "rm", $keycloakVolumeName) `
+                    -Operation "Remove exact Keycloak drill volume" | Out-Null
+            }
+        } catch {
+            $cleanupErrors.Add($_.Exception.Message)
+        }
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($decryptedTemporaryPath)) {
         try {
             Remove-SensitiveTemporaryFile -Path $decryptedTemporaryPath
@@ -752,9 +1065,21 @@ try {
         }
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($keycloakDecryptedPath)) {
+        try {
+            Remove-SensitiveTemporaryFile -Path $keycloakDecryptedPath
+        } catch {
+            $cleanupErrors.Add($_.Exception.Message)
+        }
+    }
+    $keycloakSuperuserSecret = $null
+
     if ($cleanupErrors.Count -gt 0) {
         $cleanupResult = "FAIL"
         $result = "FAIL"
+        if ($keycloakRequested) {
+            $keycloakResult = "FAIL"
+        }
     }
 
     $errorText = if ($null -eq $failureRecord) {
@@ -784,6 +1109,25 @@ try {
     Write-Host "DEFINER_ACCOUNTS_RECREATED=$(if ($null -eq $createdDefiners) { 'NOT_CHECKED' } elseif ($createdDefiners.Count -eq 0) { 'NONE' } else { $createdDefiners -join ',' })"
     Write-Host "FLYWAY_APPLIED_COUNT=$(if ($null -eq $flywayAppliedCount) { 'NOT_CHECKED' } else { $flywayAppliedCount })"
     Write-Host "FLYWAY_LATEST_VERSION=$flywayLatestVersion"
+    Write-Host "KEYCLOAK_RESTORE_RESULT=$keycloakResult"
+    Write-Host "KEYCLOAK_BACKUP_PATH=$resolvedKeycloakDump"
+    Write-Host "KEYCLOAK_BACKUP_FORMAT=$keycloakFormat"
+    Write-Host "KEYCLOAK_BACKUP_SHA256=$keycloakSha256"
+    Write-Host "KEYCLOAK_BACKUP_SOURCE_BYTES=$(if ($null -eq $keycloakFile) { 'NOT_PROVIDED' } else { $keycloakFile.Length })"
+    Write-Host "KEYCLOAK_BACKUP_UNCOMPRESSED_BYTES=$(if ($null -eq $keycloakUncompressedBytes) { 'NOT_CHECKED' } else { $keycloakUncompressedBytes })"
+    Write-Host "POSTGRES_IMAGE=$PostgresImage"
+    Write-Host "KEYCLOAK_PREPARE_SECONDS=$(Format-Seconds -Value $keycloakPrepareSeconds)"
+    Write-Host "KEYCLOAK_POSTGRES_READY_SECONDS=$(Format-Seconds -Value $keycloakReadySeconds)"
+    Write-Host "KEYCLOAK_RESTORE_SECONDS=$(Format-Seconds -Value $keycloakRestoreSeconds)"
+    Write-Host "KEYCLOAK_VALIDATION_SECONDS=$(Format-Seconds -Value $keycloakValidationSeconds)"
+    Write-Host "KEYCLOAK_RTO_SECONDS=$(Format-Seconds -Value $keycloakRtoSeconds)"
+    Write-Host "KEYCLOAK_TABLE_COUNT=$(if ($null -eq $keycloakTableCount) { 'NOT_CHECKED' } else { $keycloakTableCount })"
+    Write-Host "KEYCLOAK_REALM_COUNT=$(if ($null -eq $keycloakRealmCount) { 'NOT_CHECKED' } else { $keycloakRealmCount })"
+    Write-Host "KEYCLOAK_REALM=$KeycloakRealm"
+    Write-Host "KEYCLOAK_USER_COUNT=$(if ($null -eq $keycloakUserCount) { 'NOT_CHECKED' } else { $keycloakUserCount })"
+    Write-Host "KEYCLOAK_USERS_WITH_PASSWORD_CREDENTIAL=$(if ($null -eq $keycloakUsersWithPasswordCredential) { 'NOT_CHECKED' } else { $keycloakUsersWithPasswordCredential })"
+    Write-Host "KEYCLOAK_CREDENTIAL_COUNT=$(if ($null -eq $keycloakCredentialCount) { 'NOT_CHECKED' } else { $keycloakCredentialCount })"
+    Write-Host "KEYCLOAK_SCHEMA_VERSION=$keycloakSchemaVersion"
     Write-Host "CLEANUP_RESULT=$cleanupResult"
     Write-Host "ERROR=$errorText"
 }

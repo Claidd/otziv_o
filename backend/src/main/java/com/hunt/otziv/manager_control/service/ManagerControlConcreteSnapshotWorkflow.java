@@ -45,12 +45,15 @@ public class ManagerControlConcreteSnapshotWorkflow {
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
     private final ManagerControlOrderDeliveryState deliveryState;
 
+    /**
+     * The read view also corrects cards (stale ones close, an active unanswered chat reopens), so
+     * both paths read the cards with row locks in id order. Otherwise a detail page could write back
+     * an older copy over a concurrent action and revive a card that was just closed.
+     */
     List<ManagerControlItemDetailResponse> detailItems(Manager manager, List<ManagerDailyControlItem> items,
             LocalDate today, boolean syncConcrete) {
         if (items.isEmpty()) return List.of();
-        List<ManagerDailyControlConcreteItem> stored = syncConcrete
-                ? dailyControlConcreteItemRepository.findByParentItemInForUpdate(items)
-                : dailyControlConcreteItemRepository.findByParentItemIn(items);
+        List<ManagerDailyControlConcreteItem> stored = dailyControlConcreteItemRepository.findByParentItemInForUpdate(items);
         Map<Long, List<ManagerDailyControlConcreteItem>> byParent = stored.stream()
                 .collect(Collectors.groupingBy(row -> row.getParentItem().getId()));
         return items.stream().map(item -> detailItem(manager, item, today, syncConcrete,
@@ -58,8 +61,7 @@ public class ManagerControlConcreteSnapshotWorkflow {
     }
 
     ManagerControlItemDetailResponse detailItem(Manager manager, ManagerDailyControlItem item, LocalDate today, boolean syncConcrete) {
-        var stored = syncConcrete ? dailyControlConcreteItemRepository.findByParentItemForUpdate(item)
-                : dailyControlConcreteItemRepository.findByParentItem(item);
+        var stored = dailyControlConcreteItemRepository.findByParentItemForUpdate(item);
         return detailItem(manager, item, today, syncConcrete, stored);
     }
 
@@ -351,7 +353,11 @@ public class ManagerControlConcreteSnapshotWorkflow {
             return false;
         }
         LocalDateTime resolvedAt = concreteItem.getResolvedAt();
-        if (resolvedAt == null || !resolvedAt.toLocalDate().isBefore(LocalDate.now())) {
+        // Compare with the card's own control day: a card closed during the previous day is part of
+        // that day's result and must not be reopened while the day is refreshed in its closing window.
+        LocalDate controlDate = concreteItem.getControl() == null || concreteItem.getControl().getControlDate() == null
+                ? LocalDate.now() : concreteItem.getControl().getControlDate();
+        if (resolvedAt == null || !resolvedAt.toLocalDate().isBefore(controlDate)) {
             return false;
         }
         reopenConcreteItem(concreteItem);
@@ -376,6 +382,15 @@ public class ManagerControlConcreteSnapshotWorkflow {
     }
 
     void reopenConcreteItem(ManagerDailyControlConcreteItem concreteItem) {
+        reopenConcreteItem(concreteItem, false);
+    }
+
+    /**
+     * A due follow-up continues the same episode: a specialist request still waiting for its
+     * explanation stays recorded, so repeat reminders continue and a late reply is accepted.
+     * Any other reopening starts a new episode and clears the previous request.
+     */
+    void reopenConcreteItem(ManagerDailyControlConcreteItem concreteItem, boolean keepPendingWorkerRequest) {
         concreteItem.setStatus(ManagerDailyControlItemStatus.OPEN);
         concreteItem.setActionType(null);
         concreteItem.setComment(null);
@@ -383,7 +398,16 @@ public class ManagerControlConcreteSnapshotWorkflow {
         concreteItem.setAutomaticResolution(false);
         concreteItem.setFollowUpAt(null);
         concreteItem.setLastManualTouchAt(null);
-        clearWorkerTelegramState(concreteItem);
+        if (!keepPendingWorkerRequest) {
+            clearWorkerTelegramState(concreteItem);
+        }
+    }
+
+    static boolean hasPendingWorkerExplanation(ManagerDailyControlConcreteItem item) {
+        return item != null
+                && item.getWorkerExplanationRequestedAt() != null
+                && item.getWorkerNotificationSentAt() != null
+                && item.getWorkerExplanationAt() == null;
     }
 
     String concreteEntityKey(ManagerControlConcreteItemResponse example) {
@@ -403,7 +427,7 @@ public class ManagerControlConcreteSnapshotWorkflow {
         if (item == null || item.getFollowUpAt() == null || item.getFollowUpAt().isAfter(LocalDateTime.now()) || item.getStatus() == ManagerDailyControlItemStatus.OPEN || item.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
             return false;
         }
-        reopenConcreteItem(item);
+        reopenConcreteItem(item, hasPendingWorkerExplanation(item));
         return true;
     }
 

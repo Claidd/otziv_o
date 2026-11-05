@@ -39,3 +39,14 @@ scrape_configs:
   - job_name: alloy
     static_configs:
       - targets: ["alloy:12345"]
+
+  # Состояние контейнеров (перезапуски, healthcheck) из отдельного metrics-порта docker-observer.
+  - job_name: containers
+    static_configs:
+      - targets: ["docker-observer:9323"]
+
+  # Память и диск хоста: экспортёр prometheus.exporter.unix внутри Alloy.
+  - job_name: host
+    metrics_path: /api/v0/component/prometheus.exporter.unix.host/metrics
+    static_configs:
+      - targets: ["alloy:12345"]

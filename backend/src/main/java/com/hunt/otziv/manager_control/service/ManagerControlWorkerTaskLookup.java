@@ -15,6 +15,7 @@ import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /** Resolves the existing specialist task types for reports and notification workflows.
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class ManagerControlWorkerTaskLookup {
     static final String ENTITY_PUBLISH_REVIEW = "PUBLISH_REVIEW";
     static final String ENTITY_NAGUL_REVIEW = "NAGUL_REVIEW";
@@ -92,7 +94,10 @@ public class ManagerControlWorkerTaskLookup {
                 }
                 default -> null;
             };
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException unavailable) {
+            // Callers treat a missing value as "not found"; keep the cause visible in the log.
+            log.warn("Control card order lookup failed: cardId={}, type={}, entityId={}", concreteItem.getId(),
+                    concreteItem.getEntityType(), concreteItem.getEntityId(), unavailable);
             return null;
         }
     }
@@ -141,7 +146,10 @@ public class ManagerControlWorkerTaskLookup {
                 }
                 default -> null;
             };
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException unavailable) {
+            // Callers treat a missing value as "not found"; keep the cause visible in the log.
+            log.warn("Control card specialist lookup failed: cardId={}, type={}, entityId={}", concreteItem.getId(),
+                    concreteItem.getEntityType(), concreteItem.getEntityId(), unavailable);
             return null;
         }
     }
@@ -177,7 +185,10 @@ public class ManagerControlWorkerTaskLookup {
                 }
                 default -> null;
             };
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException unavailable) {
+            // Callers treat a missing value as "not found"; keep the cause visible in the log.
+            log.warn("Control card order id lookup failed: cardId={}, type={}, entityId={}", concreteItem.getId(),
+                    concreteItem.getEntityType(), concreteItem.getEntityId(), unavailable);
             return null;
         }
     }

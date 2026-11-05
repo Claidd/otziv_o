@@ -844,6 +844,83 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
+    void autoresponderWaitsForACampaignSendOnTheSameWhatsAppAccountWithoutSending() {
+        LocalDateTime now = LocalDateTime.of(2026, 5, 30, 10, 0);
+        InMemorySenderDispatchLedger ledger = new InMemorySenderDispatchLedger();
+        ledger.record("WHATSAPP:client-16", "CAMPAIGN", "SENT", now.minusSeconds(30));
+        ReflectionTestUtils.setField(service, "senderAccountPacing", new SenderAccountPacing(ledger));
+        ScheduledClientMessageState state = clientTextReminderFixture();
+        org.mockito.Mockito.lenient().when(appSettingService.getInt(anyString(), org.mockito.ArgumentMatchers.anyInt())).thenAnswer(i -> i.getArgument(1));
+
+        runDeliveryScenario("sendClientTextReminder", state, snapshotCompanies.get(26L), now);
+
+        verify(messageSender, org.mockito.Mockito.never()).sendWithOperationId(any(), any(), any(), any(), any(), any());
+        assertEquals("rate_limited", state.getLastErrorCode());
+        assertEquals(now.plusSeconds(150), state.getNextAttemptAt());
+        assertNull(state.getDeliveryEnvelope());
+        assertEquals(1, ledger.count("WHATSAPP:client-16", "AUTORESPONDER", "WAITING"));
+        assertEquals(0, ledger.count("WHATSAPP:client-16", "AUTORESPONDER", "SENT"));
+    }
+
+    @Test
+    void campaignOnAnotherWhatsAppAccountDoesNotHoldTheAutoresponder() {
+        LocalDateTime now = LocalDateTime.of(2026, 5, 30, 10, 0);
+        InMemorySenderDispatchLedger ledger = new InMemorySenderDispatchLedger();
+        ledger.record("WHATSAPP:other-client", "CAMPAIGN", "SENT", now.minusSeconds(30));
+        ReflectionTestUtils.setField(service, "senderAccountPacing", new SenderAccountPacing(ledger));
+        ScheduledClientMessageState state = clientTextReminderFixture();
+        Company company = snapshotCompanies.get(26L);
+        org.mockito.Mockito.lenient().when(appSettingService.getInt(anyString(), org.mockito.ArgumentMatchers.anyInt())).thenAnswer(i -> i.getArgument(1));
+        when(messageSender.sendWithOperationId(eq(company), eq("client-16"), eq("group-16"), anyString(), org.mockito.ArgumentMatchers.isNull(), anyString()))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        runDeliveryScenario("sendClientTextReminder", state, company, now);
+
+        verify(messageSender).sendWithOperationId(eq(company), eq("client-16"), eq("group-16"), anyString(), org.mockito.ArgumentMatchers.isNull(), anyString());
+        assertEquals(1, ledger.count("WHATSAPP:client-16", "AUTORESPONDER", "SENT"));
+    }
+
+    private ScheduledClientMessageState clientTextReminderFixture() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(79L)
+                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("client-text:16:2026-05-20T10:00")
+                .companyId(26L)
+                .orderId(16L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Company company = new Company();
+        company.setId(26L);
+        company.setGroupId("group-16");
+        company.setUrlChat("https://chat.whatsapp.com/fixture16");
+        Manager manager = new Manager();
+        manager.setClientId("client-16");
+        Order order = new Order();
+        order.setId(16L);
+        order.setCompany(company);
+        order.setManager(manager);
+        order.setStatus(OrderStatus.builder().title("Новый").build());
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(LocalDateTime.of(2026, 5, 20, 10, 0));
+        order.setSum(BigDecimal.valueOf(1300));
+        snapshotCompanies.put(26L, company);
+        when(orderRepository.findByIdForMutation(16L)).thenReturn(java.util.Optional.of(order));
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES,
+                ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_STATUSES
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_STATUSES);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_TEXT,
+                ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_TEXT
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_TEXT);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
+        return state;
+    }
+
+    @Test
     void synchronizingClientWaitingCreatesCurrentCycleAndClosesPreviousCycle() {
         LocalDateTime waitingChangedAt = LocalDateTime.of(2026, 7, 24, 20, 37, 52);
         ScheduledClientMessageState staleState = ScheduledClientMessageState.builder()

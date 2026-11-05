@@ -139,6 +139,57 @@ class ManagerClientMessageWorkerTest {
         verify(queue, never()).claim();
     }
 
+    /** Card 9245: a company without a bound chat used to be retried five times with the same frozen snapshot. */
+    @Test void missingChatFailsAtOnceAndReleasesTheCardWithoutIdenticalRetries() {
+        var claim = claim("QUEUED", 0);
+        var result = ClientMessageSendResult.failed("max_group_missing", "MAX-группа компании не привязана к боту");
+        when(control.dispatchQueued(command)).thenReturn(result);
+        worker.drain();
+        verify(control).completeQueued(claim, command, result, auth, "FAILED", "max_group_missing", 0);
+        verify(queue, never()).finish(any(), eq("RETRYABLE"), any(), anyInt());
+        verify(control, times(1)).dispatchQueued(command);
+    }
+
+    @Test void manualDispatchIsJournaledForTheSenderAccountBeforeTheProviderCall() {
+        var journal = mock(com.hunt.otziv.client_messages.api.ManualDispatchJournal.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(worker, "journal", journal);
+        var sender = new com.hunt.otziv.client_messages.api.ManualDispatchJournal.Sender("WHATSAPP", "lika");
+        when(control.dispatchSender(command)).thenReturn(sender);
+        var claim = claim("QUEUED", 0);
+        var result = ClientMessageSendResult.sent("WhatsApp", "provider-id");
+        when(control.dispatchQueued(command)).thenReturn(result);
+        worker.drain();
+        var order = inOrder(control, journal);
+        order.verify(control).validateQueued(command, auth);
+        order.verify(journal).recordManualDispatch(sender);
+        order.verify(control).dispatchQueued(command);
+        verify(control).completeQueued(claim, command, result, auth, "SENT", null, 0);
+    }
+
+    @Test void journalFailureNeverDelaysOrStopsTheManualMessage() {
+        var journal = mock(com.hunt.otziv.client_messages.api.ManualDispatchJournal.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(worker, "journal", journal);
+        when(control.dispatchSender(command)).thenReturn(new com.hunt.otziv.client_messages.api.ManualDispatchJournal.Sender("MAX", null));
+        doThrow(new IllegalStateException("db down")).when(journal).recordManualDispatch(any());
+        var claim = claim("QUEUED", 0);
+        var result = ClientMessageSendResult.sent("MAX", "provider-id");
+        when(control.dispatchQueued(command)).thenReturn(result);
+        worker.drain();
+        verify(control).completeQueued(claim, command, result, auth, "SENT", null, 0);
+    }
+
+    @Test void noProviderCallMeansNoJournalEntry() {
+        var journal = mock(com.hunt.otziv.client_messages.api.ManualDispatchJournal.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(worker, "journal", journal);
+        claim("QUEUED", 0);
+        doThrow(new IllegalStateException("source changed")).when(control).validateQueued(command, auth);
+        worker.drain();
+        claim("SENDING", 1);
+        when(delivery.recordedOutcome("op")).thenReturn(ClientMessageSendResult.sent("WhatsApp", "provider-id"));
+        worker.drain();
+        verifyNoInteractions(journal);
+    }
+
     @Test void receiptOnlyAdmissionErrorCannotRearmTheUnknownOperation() {
         var claim = claim("UNKNOWN", 1);
         when(delivery.recoverRecordedOutcomeFromChat(eq("op"), any()))

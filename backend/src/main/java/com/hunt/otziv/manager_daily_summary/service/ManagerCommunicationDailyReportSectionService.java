@@ -71,6 +71,9 @@ public class ManagerCommunicationDailyReportSectionService {
             Для каждого случая изучай conversationContext целиком, а не только пару
             clientMessage → managerReply. Учитывай реплики до спорного сообщения и реакцию клиента
             после ответа. Последовательное уточнение или предложение альтернативы не является ошибкой.
+            managerReply — только первое сообщение сотрудника после клиента; ответ может быть дан
+            раньше или продолжаться в otherStaffRepliesAfterClientMessage, а один ответ может
+            закрывать несколько сообщений клиента подряд.
             В conversationContext senderRole=STAFF означает внутреннего сотрудника, но не обязательно
             проверяемого менеджера. Если replyAuthorAttribution не равен VERIFIED_MANAGER или
             PROBABLE_MANAGER, не приписывай эту реплику проверяемому менеджеру и не снижай ему оценку.
@@ -402,6 +405,11 @@ public class ManagerCommunicationDailyReportSectionService {
         result.put("closedWithoutRecordedReply", closedWithoutRecordedReply(item, replyEvidence));
         result.put("contentAvailableForAssessment", contentAvailable);
         result.put("resolutionType", item.getResolutionType() == null ? "" : item.getResolutionType().name());
+        if (ManagerReportReviewTaskContextService.answeredOutsideChat(item)) {
+            result.put("answeredOutsideChat", true);
+            result.put("answeredOutsideChatNote",
+                    "Менеджер ответил в другом мессенджере; проверку проводит владелец. Это не нарушение менеджера.");
+        }
         result.put("manualOrAdministrativeClosure", manualClosure(item));
         result.put("replyQuality", !contentAvailable || confirmedReplyTextUnavailable(item, replyEvidence)
                 ? "NOT_VERIFIABLE"
@@ -412,11 +420,37 @@ public class ManagerCommunicationDailyReportSectionService {
                         ? "Текст ранее отправленного ответа не был сохранён"
                         : shortText(item.getReplyQualityReason(), 300));
         result.put("closedAt", item.getClosedAt() == null ? "" : item.getClosedAt().toString());
+        // The matched reply is only the first staff message; the answer may continue in the next one.
+        result.put("otherStaffRepliesAfterClientMessage", otherStaffReplies(
+                item, reply, conversationEvidence.getOrDefault(item.getId(), List.of())));
         result.put("conversationContext", conversationFacts(
                 item,
                 conversationEvidence.getOrDefault(item.getId(), List.of())
         ));
         return result;
+    }
+
+    private List<String> otherStaffReplies(
+            ClientChatUnansweredItem item,
+            ClientChatMessage matchedReply,
+            List<ClientChatMessage> context
+    ) {
+        if (item.getLastClientMessageAt() == null || context == null) {
+            return List.of();
+        }
+        LocalDateTime from = item.getLastClientMessageAt();
+        LocalDateTime to = from.plusMinutes(30);
+        return context.stream()
+                .filter(message -> message.getSenderRole() == ClientChatSenderRole.STAFF)
+                .filter(message -> message.getMessageAt() != null && message.getMessageAt().isAfter(from)
+                        && !message.getMessageAt().isAfter(to))
+                .filter(message -> matchedReply == null || (matchedReply.getId() != null
+                        ? !matchedReply.getId().equals(message.getId())
+                        : !java.util.Objects.equals(matchedReply.getMessageText(), message.getMessageText())))
+                .filter(message -> hasText(message.getMessageText()))
+                .limit(3)
+                .map(message -> message.getMessageAt().toLocalTime().withNano(0) + " " + shortText(message.getMessageText(), 300))
+                .toList();
     }
 
     private Map<String, Object> clientMessageSeriesFacts(
@@ -530,6 +564,8 @@ public class ManagerCommunicationDailyReportSectionService {
         return items.stream()
                 .filter(item -> between(item.getClosedAt(), dayFrom, dayTo)
                         || item.isAuditRequired())
+                // An answer in another messenger is checked by the owner, not flagged as an example.
+                .filter(item -> !ManagerReportReviewTaskContextService.answeredOutsideChat(item))
                 .filter(item -> (!attachmentOnly(item.getLastMessageText())
                         && (poorReply(item) || item.isAuditRequired()))
                         || closedWithoutRecordedReply(item, replyEvidence)
@@ -548,6 +584,7 @@ public class ManagerCommunicationDailyReportSectionService {
 
     private boolean poorReply(ClientChatUnansweredItem item) {
         return item != null
+                && !ManagerReportReviewTaskContextService.answeredOutsideChat(item)
                 && !attachmentOnly(item.getLastMessageText())
                 && (item.getReplyQuality() == ClientChatReplyQuality.PARTIAL
                 || item.getReplyQuality() == ClientChatReplyQuality.SUSPICIOUS);
@@ -624,6 +661,71 @@ public class ManagerCommunicationDailyReportSectionService {
             result.put(item.getId(), contextWindow(item, messages));
         }
         return result;
+    }
+
+    /**
+     * The exchange around one unanswered-message case: the client's messages since the
+     * previous staff message (with that message) and the following replies. One reply can
+     * cover several client messages, an earlier reply can already answer the question and a
+     * reply can continue in the next message, so a single client/reply pair is not enough.
+     */
+    public List<ExchangeMessage> exchange(ClientChatUnansweredItem item) {
+        if (item == null || item.getPlatform() == null || !hasText(item.getChatId())
+                || item.getLastClientMessageAt() == null) {
+            return List.of();
+        }
+        LocalDateTime anchor = item.getLastClientMessageAt();
+        LocalDateTime until = item.getClosedAt() == null || item.getClosedAt().isBefore(anchor)
+                ? anchor.plusHours(2)
+                : item.getClosedAt().plusMinutes(30);
+        List<ClientChatMessage> messages = messageRepository
+                .findByPlatformAndChatIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
+                        item.getPlatform(), item.getChatId(), anchor.minusHours(12), until);
+        if (messages == null || messages.isEmpty()) {
+            return List.of();
+        }
+        int anchorIndex = anchorIndex(item, messages);
+        int from = anchorIndex;
+        int clientMessages = 0;
+        while (from > 0) {
+            ClientChatMessage previous = messages.get(from - 1);
+            from--;
+            if (previous.getSenderRole() == ClientChatSenderRole.STAFF || ++clientMessages >= 6) {
+                break;
+            }
+        }
+        int to = Math.min(messages.size(), anchorIndex + 9);
+        return messages.subList(from, to).stream()
+                .map(message -> new ExchangeMessage(
+                        message.getMessageAt(),
+                        message.getSenderRole() == ClientChatSenderRole.STAFF ? "сотрудник" : "клиент",
+                        shortText(message.getSenderName(), 80),
+                        shortText(message.getMessageText(), 400)))
+                .toList();
+    }
+
+    private int anchorIndex(ClientChatUnansweredItem item, List<ClientChatMessage> messages) {
+        Long anchorId = item.getLastClientMessage() == null ? null : item.getLastClientMessage().getId();
+        int anchorIndex = 0;
+        for (int index = 0; index < messages.size(); index++) {
+            ClientChatMessage message = messages.get(index);
+            if (anchorId != null && anchorId.equals(message.getId())) {
+                return index;
+            }
+            if (message.getMessageAt() != null && !message.getMessageAt().isAfter(item.getLastClientMessageAt())) {
+                anchorIndex = index;
+            }
+        }
+        return anchorIndex;
+    }
+
+    /** One recorded chat message; it proves only that the text was written, not its claims. */
+    public record ExchangeMessage(LocalDateTime at, String role, String sender, String text) {
+        public String describe() {
+            String who = sender == null || sender.isBlank() ? role : role + " " + sender;
+            String body = text == null ? "" : text.replaceAll("\\s+", " ").trim();
+            return "[" + (at == null ? "время неизвестно" : at.toString().replace('T', ' ')) + " " + who + "] " + body;
+        }
     }
 
     private List<ClientChatMessage> contextWindow(
@@ -789,7 +891,8 @@ public class ManagerCommunicationDailyReportSectionService {
             ClientChatUnansweredItem item,
             Map<Long, ClientChatMessage> replyEvidence
     ) {
-        if (item == null || hasConfirmedReply(item, replyEvidence)) {
+        if (item == null || hasConfirmedReply(item, replyEvidence)
+                || ManagerReportReviewTaskContextService.answeredOutsideChat(item)) {
             return false;
         }
         return item.getStatus() == ClientChatUnansweredStatus.ANSWERED

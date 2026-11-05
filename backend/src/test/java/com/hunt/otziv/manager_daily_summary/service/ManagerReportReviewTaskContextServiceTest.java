@@ -26,6 +26,8 @@ class ManagerReportReviewTaskContextServiceTest {
     private ManagerReportReviewTaskContextService service;
     private com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService diagnostics;
     private com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics invoices;
+    private ManagerAuditDeferralFacts deferralFacts;
+    private ManagerCommunicationDailyReportSectionService exchange;
 
     @BeforeEach
     void setUp() {
@@ -33,7 +35,10 @@ class ManagerReportReviewTaskContextServiceTest {
         unansweredRepository = mock(ClientChatUnansweredItemRepository.class);
         diagnostics = mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class);
         invoices = mock(com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics.class);
-        service = new ManagerReportReviewTaskContextService(concreteRepository, unansweredRepository, diagnostics, invoices);
+        deferralFacts = mock(ManagerAuditDeferralFacts.class);
+        exchange = mock(ManagerCommunicationDailyReportSectionService.class);
+        service = new ManagerReportReviewTaskContextService(concreteRepository, unansweredRepository, diagnostics, invoices,
+                deferralFacts, exchange);
     }
 
     @Test
@@ -231,6 +236,81 @@ class ManagerReportReviewTaskContextServiceTest {
         assertThat(service.conversationEvidence(List.of(6704L),9L))
                 .contains("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:", "availability", "unavailable")
                 .doesNotContain("Private foreign");
+    }
+
+    @Test
+    void answerInAnotherMessengerIsNotAManagerFailureWhileTheOwnerChecksIt() {
+        ManagerDailyControlConcreteItem source = source(3545L, ManagerDailyControlItemStatus.OPEN);
+        ClientChatUnansweredItem chat = answered(ClientChatReplyQuality.PARTIAL, true, "Напишите в Макс", "");
+        chat.setResolutionReasonCode("ANSWERED_OUTSIDE_CHAT");
+        when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));
+        when(concreteRepository.findAllById(java.util.Set.of(3545L))).thenReturn(List.of(source));
+        when(unansweredRepository.findById(1387L)).thenReturn(Optional.of(chat));
+
+        assertThat(service.resolvedSatisfactorily(3545L)).isTrue();
+        assertThat(service.refresh("sourceTaskId=3545", 9L))
+                .contains("replyQuality=NOT_APPLICABLE", "auditRequired=false", "другом мессенджере");
+
+        chat.setResolutionReasonCode(null);
+        assertThat(service.resolvedSatisfactorily(3545L)).isFalse();
+        chat.setResolutionReasonCode("ANSWERED_OUTSIDE_CHAT");
+        chat.setStatus(ClientChatUnansweredStatus.OPEN);
+        assertThat(service.resolvedSatisfactorily(3545L)).isFalse();
+    }
+
+    @Test
+    void checkerSeesTheWholeExchangeNotOnlyTheLastClientMessage() {
+        var manager = new com.hunt.otziv.u_users.model.Manager(); manager.setId(9L);
+        var chat = answered(ClientChatReplyQuality.PARTIAL, true, "Как им написать или позвонить?",
+                "Вы можете обновить через свой личный кабинет в 2гис");
+        chat.setId(6704L); chat.setManager(manager);
+        when(unansweredRepository.findById(6704L)).thenReturn(Optional.of(chat));
+        var at = LocalDateTime.of(2026, 9, 23, 12, 0);
+        when(exchange.exchange(chat)).thenReturn(List.of(
+                new ManagerCommunicationDailyReportSectionService.ExchangeMessage(at, "клиент", "Баргузин", "Не нашла их адрес"),
+                new ManagerCommunicationDailyReportSectionService.ExchangeMessage(at.plusMinutes(1), "клиент", "Баргузин", "Как им написать или позвонить?"),
+                new ManagerCommunicationDailyReportSectionService.ExchangeMessage(at.plusMinutes(5), "сотрудник", "Анжелика",
+                        "Телефон поддержки 2ГИС 8 (800) 200-36-00")));
+
+        assertThat(service.conversationEvidence(List.of(6704L), 9L))
+                .contains("chat-case:6704:exchange_1", "Не нашла их адрес", "chat-case:6704:exchange_3",
+                        "Телефон поддержки 2ГИС", "recorded_chat_message");
+    }
+
+    @Test
+    void deferredCardIsTheManagersRemarkOnlyWhenTheManagerDeferredALiveProblem() {
+        var item = source(4201L, ManagerDailyControlItemStatus.DEFERRED);
+        item.setEntityType("ORDER");
+        item.setEntityKey("ORDER:21052");
+        item.setTitle("Пункт приема цветного и черного металла");
+        var parent = new com.hunt.otziv.manager_control.model.ManagerDailyControlItem(); parent.setId(731L);
+        item.setParentItem(parent);
+        var reportDate = java.time.LocalDate.of(2026, 10, 21);
+        when(deferralFacts.deferredByControlManager(731L, item.getTitle())).thenReturn(true);
+        when(deferralFacts.stillOnBoard(9L, "ORDER:21052", reportDate)).thenReturn(false);
+
+        assertThat(service.deferralAttributable(item, reportDate)).isFalse();
+
+        when(deferralFacts.stillOnBoard(9L, "ORDER:21052", reportDate)).thenReturn(true);
+        assertThat(service.deferralAttributable(item, reportDate)).isTrue();
+
+        when(deferralFacts.deferredByControlManager(731L, item.getTitle())).thenReturn(false);
+        assertThat(service.deferralAttributable(item, reportDate)).isFalse();
+    }
+
+    @Test
+    void commonInvoiceDeferralUsesTheLiveInvoiceRuleInsteadOfTheDailyBoard() {
+        var item = source(7682L, ManagerDailyControlItemStatus.DEFERRED);
+        item.setEntityType("COMMON_INVOICE");
+        item.setEntityKey("COMMON_INVOICE:252");
+        var parent = new com.hunt.otziv.manager_control.model.ManagerDailyControlItem(); parent.setId(800L);
+        item.setParentItem(parent);
+        when(deferralFacts.deferredByControlManager(800L, item.getTitle())).thenReturn(true);
+
+        assertThat(service.deferralAttributable(item, java.time.LocalDate.of(2026, 10, 23))).isTrue();
+        org.mockito.Mockito.verify(deferralFacts, org.mockito.Mockito.never())
+                .stillOnBoard(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
     }
 
     private ManagerDailyControlConcreteItem source(

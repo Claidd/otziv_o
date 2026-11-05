@@ -505,6 +505,14 @@ public class CommonBillingService {
         return invoiceArchiveWorkflow.restoreLiveArchivedInvoice(invoiceId, principal);
     }
 
+    public boolean archivedCycleRevivedByOrders(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        return invoiceArchiveWorkflow.archivedCycleRevivedByOrders(invoice, items);
+    }
+
+    public CommonInvoiceDetailsResponse reopenArchivedCycleRevivedByOrders(Long invoiceId) {
+        return invoiceArchiveWorkflow.reopenArchivedCycleRevivedByOrders(invoiceId);
+    }
+
     public CommonInvoiceDetailsResponse markBan(Long invoiceId, Principal principal) {
         return invoiceArchiveWorkflow.markBan(invoiceId, principal);
     }

@@ -8,6 +8,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -17,6 +18,12 @@ import uuid
 
 MYSQL_CLIENT = ('MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --protocol=socket '
                 '-uroot --batch --skip-column-names')
+# Images that every deploy delivers again: CI images from the private release
+# registry (any loopback port) and the project's hardened infrastructure images.
+RELEASE_REPOSITORY = re.compile(r'127\.0\.0\.1:[1-9][0-9]{0,4}/otziv-prepared/ci-[a-z][a-z0-9-]*'
+                                r'|ghcr\.io/claidd/otziv-security')
+DIGEST = re.compile(r'sha256:[a-f0-9]{64}')
+REFERENCE_FILE_LIMIT = 1024 * 1024
 
 
 def log(message):
@@ -124,8 +131,56 @@ def purge_mysql(container, pressure_hours):
     log(f'MySQL: expired closed binary logs purged; retained at least {keep} seconds')
 
 
-def remove_unreferenced_images():
-    """Keep all tagged, digest-addressable and container-owned rollback images."""
+def created_at(value):
+    # Docker reports nanoseconds; Python 3.10 on the host parses microseconds only.
+    match = re.fullmatch(r'(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)', value)
+    if not match:
+        raise ValueError('Unexpected Docker image creation time')
+    zone = '+00:00' if match[3] == 'Z' else match[3]
+    return dt.datetime.fromisoformat(match[1] + '.' + (match[2] or '')[:6].ljust(6, '0') + zone)
+
+
+def rollback_digests(root):
+    """Digests named by the live deployment and by every retained rollback point.
+
+    Deploy keeps the newest three .deploy-backups entries; each stores the Compose
+    file and env of the release it replaced, so those images remain available.
+    """
+    live = root / 'docker-compose.yaml'
+    if live.is_symlink() or not live.is_file() or not DIGEST.search(live.read_text(errors='replace')):
+        raise RuntimeError('Live Compose image digests are unavailable; release images preserved')
+    files = [live, root / '.env']
+    backups = root / '.deploy-backups'
+    if backups.is_symlink() or not backups.is_dir():
+        # Without a rollback point the previous release cannot be identified.
+        raise RuntimeError('Deploy rollback points are unavailable; release images preserved')
+    def unreadable(error):
+        raise error
+    for directory, _, names in os.walk(backups, onerror=unreadable):
+        files.extend(Path(directory) / name for name in sorted(names))
+    digests = set()
+    for path in files:
+        # Large files are database dumps; Compose, env and rollout plans are small.
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > REFERENCE_FILE_LIMIT:
+            continue
+        digests.update(DIGEST.findall(path.read_text(errors='replace')))
+    return digests
+
+
+def superseded_release(item, protected):
+    digests = item.get('RepoDigests') or []
+    return bool(digests and not item.get('RepoTags')
+                and all(RELEASE_REPOSITORY.fullmatch(reference.split('@', 1)[0]) for reference in digests)
+                and item['Id'] not in protected
+                and not any(reference.split('@', 1)[1] in protected for reference in digests))
+
+
+def remove_unreferenced_images(root):
+    """Keep tagged, running and rollback images; drop superseded release images.
+
+    A release image survives while any container uses it, the live deployment names
+    it, or a retained rollback point names it. Other images with digests are kept.
+    """
     ids = command(['docker', 'image', 'ls', '-a', '-q', '--no-trunc']).split()
     if not ids:
         return
@@ -134,11 +189,21 @@ def remove_unreferenced_images():
     used = set()
     if container_ids:
         used = {item['Image'] for item in json.loads(command(['docker', 'container', 'inspect', *container_ids]))}
+    protected = rollback_digests(root)
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7)
     for item in images:
-        if item.get('RepoTags') or item.get('RepoDigests') or item['Id'] in used:
+        if item['Id'] in used:
             continue
-        created = dt.datetime.fromisoformat(item['Created'].replace('Z', '+00:00'))
+        if superseded_release(item, protected):
+            # Each name is removed without force; removing the last one deletes the
+            # image, and Docker refuses if a container started using it meanwhile.
+            for reference in item['RepoDigests']:
+                command(['docker', 'image', 'rm', reference])
+            log(f'Docker: removed superseded release image {item["Id"]}')
+            continue
+        if item.get('RepoTags') or item.get('RepoDigests'):
+            continue
+        created = created_at(item['Created'])
         if created < cutoff:
             # No force: Docker refuses if a container started using it meanwhile.
             command(['docker', 'image', 'rm', item['Id']])
@@ -162,7 +227,7 @@ def clean(args, before):
         ('package download cache', lambda: command(['apt-get', 'clean'])),
         ('archived system journal', lambda: command(['journalctl', '--vacuum-time=7d', '--vacuum-size=256M'])),
         ('old Docker build cache', prune_build_cache),
-        ('unreferenced Docker images', remove_unreferenced_images),
+        ('unreferenced Docker images', lambda: remove_unreferenced_images(args.root)),
         ('expired MySQL binary logs', lambda: purge_mysql(args.mysql_container, args.mysql_pressure_hours)),
     ]
     errors = []
@@ -209,7 +274,8 @@ def main(argv=None):
     if not args.apply:
         log(json.dumps({'mode': 'dry-run', 'usage': before, 'triggerPercent': args.trigger_percent,
                         'targetPercent': args.target_percent, 'mysqlPressureHours': args.mysql_pressure_hours,
-                        'preserved': ['database tables', 'volumes', 'containers', 'tagged/digest images',
+                        'preserved': ['database tables', 'volumes', 'containers', 'tagged images',
+                                      'running images', 'images of the live and retained rollback releases',
                                       'backups', 'user uploads', 'WhatsApp sessions']}))
         return 0
     if os.geteuid() != 0:

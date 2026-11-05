@@ -39,7 +39,7 @@ public class ManagerProblemDiagnosisStore {
             // snapshot on a tie rather than letting a late older read roll current facts backwards.
             LocalDateTime observedAt = evidence.observedAt().truncatedTo(ChronoUnit.MICROS);
             String json = json(evidence.facts());
-            String hash = hash(json);
+            String hash = hash(withoutElapsedWaiting(json));
             jdbc.update("""
                     INSERT INTO manager_problem_cases(case_key,manager_id,source_task_id,current_version,episode,closed,created_at,updated_at)
                     VALUES(?,?,?,0,1,FALSE,?,?) ON DUPLICATE KEY UPDATE case_key=VALUES(case_key)
@@ -114,9 +114,13 @@ public class ManagerProblemDiagnosisStore {
         });
     }
 
+    /** The latest board day per manager is joined once instead of being re-aggregated for every case. */
     private List<Map<String, Object>> candidates(LocalDateTime now, boolean current, long afterManagerId) {
         return jdbc.queryForList("""
                     SELECT c.case_id,c.current_version AS evidence_version FROM manager_problem_cases c
+                    LEFT JOIN (SELECT manager_id, MAX(control_date) AS control_date
+                               FROM manager_daily_controls GROUP BY manager_id) latest
+                      ON latest.manager_id=c.manager_id
                     WHERE c.closed=FALSE
                       AND NOT EXISTS (SELECT 1 FROM manager_daily_control_concrete_items resolved_source
                                       WHERE resolved_source.control_entity_id=c.source_task_id AND resolved_source.item_status='RESOLVED')
@@ -128,8 +132,7 @@ public class ManagerProblemDiagnosisStore {
                             JOIN manager_daily_controls d ON d.daily_control_id=i.control_id
                             WHERE i.control_entity_id=c.source_task_id AND d.manager_id=c.manager_id
                               AND i.item_status='OPEN' AND c.closed=FALSE
-                              AND d.control_date=(SELECT MAX(latest.control_date) FROM manager_daily_controls latest
-                                                  WHERE latest.manager_id=c.manager_id)))=?
+                              AND d.control_date=latest.control_date))=?
                     ORDER BY CASE WHEN ? THEN CASE WHEN c.manager_id>? THEN 0 ELSE 1 END ELSE 0 END,
                              CASE WHEN ? THEN c.manager_id ELSE 0 END,
                              (SELECT current_job.next_attempt_at FROM manager_problem_evidence_versions current_job
@@ -178,6 +181,19 @@ public class ManagerProblemDiagnosisStore {
         try { return mapper.writeValueAsString(value); }
         catch (Exception e) { throw new IllegalStateException("Cannot serialize diagnostic evidence", e); }
     }
+    /**
+     * Card texts such as "Клиент написал 2 ч. 15 мин. без ответа" change on every board refresh while
+     * the facts stay the same. The change check ignores that counter, so no new evidence version (and
+     * no new diagnosis) is queued for it; the stored snapshot keeps its observation time, and the
+     * prompt already treats such relative times as historical.
+     */
+    static String withoutElapsedWaiting(String json) {
+        return ELAPSED_WAITING.matcher(json).replaceAll("без ответа");
+    }
+
+    private static final java.util.regex.Pattern ELAPSED_WAITING = java.util.regex.Pattern.compile(
+            "(?:\\d+\\s*(?:дн|ч|мин)\\.\\s*)+без ответа");
+
     static String hash(String value) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch (Exception e) { throw new IllegalStateException(e); }

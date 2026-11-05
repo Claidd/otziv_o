@@ -70,6 +70,8 @@ import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholde
 @RequiredArgsConstructor
 public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService {
 
+    /** Business audit action for a moved planned date (who, old date, new date, when). */
+    public static final String ACTION_TASK_DATE_CHANGED = "review_recovery_task_date_changed";
     private static final String STATUS_TO_PUBLISH = "Публикация";
     private static final String STATUS_PUBLIC = "Опубликовано";
     private static final String STATUS_TO_PAY = "Выставлен счет";
@@ -275,11 +277,14 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         if (recoveryAnswer != null) {
             task.setRecoveryAnswer(recoveryAnswer.trim());
         }
+        LocalDate previousScheduledDate = task.getScheduledDate();
         if (scheduledDate != null) {
             task.setScheduledDate(scheduledDate);
         }
 
-        return taskRepository.save(task);
+        ReviewRecoveryTask savedTask = taskRepository.save(task);
+        auditScheduledDateChanged(task, previousScheduledDate, authentication);
+        return savedTask;
     }
 
     @Override
@@ -1366,6 +1371,44 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 null,
                 oldActive,
                 newActive,
+                details
+        );
+    }
+
+    /**
+     * A moved planned date changes whose working day the task counts in, so record who moved it,
+     * from which date to which, with the same business audit trail as other task edits.
+     */
+    private void auditScheduledDateChanged(ReviewRecoveryTask task, LocalDate previousDate, Authentication authentication) {
+        if (task == null || task.getId() == null || Objects.equals(previousDate, task.getScheduledDate())) {
+            return;
+        }
+        String details = "Плановая дата задачи восстановления изменена"
+                + (task.getWorker() == null || task.getWorker().getId() == null
+                ? ""
+                : "; специалист #" + task.getWorker().getId());
+        if (authentication != null) {
+            businessAuditService.recordSafely(
+                    authentication,
+                    ACTION_TASK_DATE_CHANGED,
+                    "review_recovery_task",
+                    task.getId(),
+                    orderId(task),
+                    reviewId(task),
+                    previousDate,
+                    task.getScheduledDate(),
+                    details
+            );
+            return;
+        }
+        businessAuditService.recordSafely(
+                ACTION_TASK_DATE_CHANGED,
+                "review_recovery_task",
+                task.getId(),
+                orderId(task),
+                reviewId(task),
+                previousDate,
+                task.getScheduledDate(),
                 details
         );
     }

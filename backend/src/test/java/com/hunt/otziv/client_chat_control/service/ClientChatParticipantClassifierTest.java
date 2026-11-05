@@ -6,7 +6,9 @@ import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +34,7 @@ class ClientChatParticipantClassifierTest {
     private ClientChatIdentityService identityService;
 
     private ClientChatParticipantClassifier classifier;
+    private long nextUserId = 1;
 
     @BeforeEach
     void setUp() {
@@ -247,6 +250,88 @@ class ClientChatParticipantClassifierTest {
         assertEquals(ClientChatSenderRole.STAFF, role);
     }
 
+    @Test
+    void maxClientSharingTheSpecialistsFirstNameStaysClient() {
+        // Розмарин / Кристалл, 05.11: the client «Татьяна» was taken for the specialist «Татьяна У.».
+        User manager = user("Анжелика Б.", "lika", "+79834636568");
+        User specialist = user("Татьяна У.", "tatu", "+79130184696");
+        Company company = companyWithManagerAndWorker(manager, specialist);
+
+        assertEquals(ClientChatSenderRole.CLIENT, classifier.classify(ClientChatPlatform.MAX,
+                ClientChatDirection.INCOMING, "-74761808437879", "182858506", "Татьяна", company));
+        assertEquals(ClientChatSenderRole.STAFF, classifier.classify(ClientChatPlatform.MAX,
+                ClientChatDirection.INCOMING, "-74761808437879", "203090551", "Анжелика", company));
+        assertEquals(ClientChatSenderRole.STAFF, classifier.classify(ClientChatPlatform.MAX,
+                ClientChatDirection.INCOMING, "-74761808437879", "777", "Татьяна У.", company));
+    }
+
+    @Test
+    void specialistIsStillRecognisedByLinkedIds() {
+        User specialist = user("Татьяна У.", "tatu", "+79130184696");
+        specialist.setTelegramChatId(588605220L);
+        Company company = companyWithManagerAndWorker(user("Анжелика Б.", "lika", ""), specialist);
+        when(userRepository.findByTelegramChatId(588605220L)).thenReturn(Optional.of(specialist));
+        when(userRepository.findAllActiveUsersWithPhoneNumbers()).thenReturn(List.of(specialist));
+        when(identityService.knownRole(ClientChatPlatform.MAX, "-74761808437879", "113046981", "Татьяна"))
+                .thenReturn(Optional.of(ClientChatSenderRole.STAFF));
+
+        assertEquals(ClientChatSenderRole.STAFF, classifier.classify(ClientChatPlatform.TELEGRAM,
+                ClientChatDirection.INCOMING, "-5009169601", "588605220", "@Tanya84uskova", company));
+        assertEquals(ClientChatSenderRole.STAFF, classifier.classify(ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING, "1@g.us", "79130184696@c.us", "Татьяна", company));
+        assertEquals(ClientChatSenderRole.STAFF, classifier.classify(ClientChatPlatform.MAX,
+                ClientChatDirection.INCOMING, "-74761808437879", "113046981", "Татьяна", company));
+        assertEquals(ClientChatSenderRole.CLIENT, classifier.classify(ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING, "1@g.us", "79503371223@c.us", "Татьяна", company));
+    }
+
+    @Test
+    void ownerFirstNameOrOneWordLoginDoesNotMakeAClientStaff() {
+        User owner = user("Иван Хант", "hunt", "89016668881");
+        User admin = user("Админ", "alex", "89086431055");
+        when(userRepository.findAllActiveManagerControlStaff()).thenReturn(List.of(owner, admin));
+        Company company = companyWithManager(user("Вика Ц.", "vika", ""));
+
+        assertEquals(ClientChatSenderRole.CLIENT, classifier.classify(ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING, "1@g.us", "79043834632@c.us", "Иван", company));
+        assertEquals(ClientChatSenderRole.CLIENT, classifier.classify(ClientChatPlatform.TELEGRAM,
+                ClientChatDirection.INCOMING, "-100", "1972144268", "Alex Frontmen", company));
+        assertEquals(ClientChatSenderRole.STAFF, classifier.classify(ClientChatPlatform.MAX,
+                ClientChatDirection.INCOMING, "-7", "1", "Иван Хант", company));
+        assertEquals(ClientChatSenderRole.STAFF, classifier.classify(ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING, "1@g.us", "79086431055@c.us", "Alex", company));
+    }
+
+    @Test
+    void clientCabinetAccountPhoneDoesNotMakeTheClientStaff() {
+        User client = user("Иванов Иван Иванович", "client", "+79138743220");
+        client.setRoles(List.of(role("ROLE_CLIENT")));
+        User specialist = user("Наталья С.", "nata", "+79526260913");
+        specialist.setRoles(List.of(role("ROLE_WORKER")));
+        when(userRepository.findAllActiveUsersWithPhoneNumbers()).thenReturn(List.of(client, specialist));
+        Company company = companyWithManager(user("Анжелика Б.", "lika", ""));
+
+        assertEquals(ClientChatSenderRole.CLIENT, classifier.classify(ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING, "1@g.us", "79138743220@c.us", "Олег", company));
+        assertEquals(Optional.empty(), classifier.resolveStaffUser(ClientChatPlatform.WHATSAPP,
+                "1@g.us", "79138743220@c.us", "Олег", company));
+        assertEquals(ClientChatSenderRole.STAFF, classifier.classify(ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING, "1@g.us", "79526260913@c.us", "Наталья ❤️", company));
+    }
+
+    private Company companyWithManagerAndWorker(User managerUser, User workerUser) {
+        Company company = companyWithManager(managerUser);
+        company.setUser(managerUser);
+        company.setWorkers(new java.util.HashSet<>(List.of(Worker.builder().user(workerUser).build())));
+        return company;
+    }
+
+    private static Role role(String name) {
+        Role role = new Role();
+        role.setName(name);
+        return role;
+    }
+
     private Company companyWithManager(User managerUser) {
         Manager manager = new Manager();
         manager.setUser(managerUser);
@@ -258,6 +343,7 @@ class ClientChatParticipantClassifierTest {
 
     private User user(String fio, String username, String phone) {
         User user = new User();
+        user.setId(nextUserId++);
         user.setActive(true);
         user.setFio(fio);
         user.setUsername(username);

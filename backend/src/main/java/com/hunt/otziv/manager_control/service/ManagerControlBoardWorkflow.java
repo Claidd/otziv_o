@@ -28,15 +28,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -73,6 +76,7 @@ public class ManagerControlBoardWorkflow {
     private final ManagerPerformanceService managerPerformanceService;
     private final ManagerControlReadSnapshots readSnapshots;
     private final com.hunt.otziv.u_users.api.CabinetCacheScope cacheScope;
+    private final ManagerControlTransactionRunner transactions;
 
     //ok
     @Transactional(readOnly = true)
@@ -80,28 +84,76 @@ public class ManagerControlBoardWorkflow {
         return today(principal, authentication, false);
     }
 
-    @Transactional
+    /**
+     * One short transaction per visible manager, like the periodic pass: card locks are held only
+     * for that manager and one failing manager no longer rolls back the others. The request fails
+     * only when no manager could be synchronized.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ManagerControlSummaryResponse syncToday(Principal principal, Authentication authentication) {
         reconcileClientMessagesForControl();
         cardLifecycle.invalidateManagerPerformance();
         LocalDate today = LocalDate.now();
-        List<Manager> visible = accessPolicy.visibleManagers(principal, authentication);
-        for (Manager manager : visible) {
-            managerControl(manager, today, null, true, false);
-            syncManagerActionConcreteItems(manager, today);
+        List<Long> visible = transactions.required(() -> accessPolicy.visibleManagers(principal, authentication).stream()
+                .map(Manager::getId).filter(Objects::nonNull).toList());
+        List<RuntimeException> failures = synchronizeManagers(visible, today);
+        if (!visible.isEmpty() && failures.size() == visible.size()) {
+            throw failures.getFirst();
         }
-        readSnapshots.invalidate(visible.stream().map(Manager::getId).toList());
-        return today(principal, authentication, false);
+        return transactions.required(() -> today(principal, authentication, false));
     }
 
-    @Transactional
+    /**
+     * Synchronizes every manager in its own transaction. A past date is refreshed only for an open
+     * control inside its closing window (see {@link ManagerControlDailySnapshotWorkflow#mayPersistControlDay});
+     * closed or older days are skipped. A failure is reported after all managers so the caller can retry.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void synchronizeDailySnapshot(LocalDate date) {
         LocalDate snapshotDate = date == null ? LocalDate.now() : date;
-        reconcileClientMessagesForControl();
-        for (Manager manager : managerRepository.findAllWithUserAndImage()) {
-            managerControl(manager, snapshotDate, null, true, false);
-            syncManagerActionConcreteItems(manager, snapshotDate);
+        if (snapshotDate.isBefore(LocalDate.now())
+                && !ManagerControlDayLifecycle.isPreviousDayClosingWindow(snapshotDate, LocalDateTime.now())) {
+            return;
         }
+        reconcileClientMessagesForControl();
+        List<Long> managerIds = transactions.required(() -> managerRepository.findAllWithUserAndImage().stream()
+                .map(Manager::getId).filter(Objects::nonNull).toList());
+        List<RuntimeException> failures = synchronizeManagers(managerIds, snapshotDate);
+        if (!failures.isEmpty()) {
+            IllegalStateException failure = new IllegalStateException("Manager control synchronization failed for "
+                    + failures.size() + " of " + managerIds.size() + " managers, date=" + snapshotDate, failures.getFirst());
+            failures.stream().skip(1).forEach(failure::addSuppressed);
+            throw failure;
+        }
+    }
+
+    private List<RuntimeException> synchronizeManagers(List<Long> managerIds, LocalDate date) {
+        List<RuntimeException> failures = new ArrayList<>();
+        for (Long managerId : managerIds) {
+            try {
+                transactions.required(() -> {
+                    synchronizeManager(managerId, date);
+                    return null;
+                });
+            } catch (RuntimeException failure) {
+                failures.add(failure);
+                log.warn("Manager control synchronization failed: managerId={}, date={}", managerId, date, failure);
+            }
+        }
+        return failures;
+    }
+
+    private void synchronizeManager(Long managerId, LocalDate date) {
+        Manager manager = managerRepository.findByIdWithUser(managerId)
+                .map(found -> managerRepository.findAllManagersWorkers(List.of(found)))
+                .flatMap(found -> found.stream().findFirst())
+                .orElse(null);
+        if (manager == null || !dailySnapshot.mayPersistControlDay(manager, date, LocalDateTime.now())) {
+            return;
+        }
+        managerControl(manager, date, null, true, false);
+        syncManagerActionConcreteItems(manager, date);
+        readSnapshots.invalidate(List.of(managerId));
     }
 
     ManagerControlSummaryResponse today(Principal principal, Authentication authentication, boolean persist) {

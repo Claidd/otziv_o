@@ -100,9 +100,9 @@ public class ManagerProblemDiagnosisWorker {
             scanCursor = background.isEmpty() ? 0 : background.getLast();
             java.util.stream.Stream.concat(current.stream(), background.stream()).distinct().forEach(id -> {
                 try { diagnostics.refresh(id); }
-                catch (RuntimeException e) { log.warn("Problem snapshot scan deferred sourceTaskId={} reason={}", id, e.getClass().getSimpleName()); }
+                catch (RuntimeException e) { log.warn("Problem snapshot scan deferred sourceTaskId={} reason={}", id, e.getClass().getSimpleName(), e); }
             });
-        } catch (RuntimeException e) { log.warn("Problem scan unavailable: {}", e.getClass().getSimpleName()); }
+        } catch (RuntimeException e) { log.warn("Problem scan unavailable: {}", e.getClass().getSimpleName(), e); }
     }
 
     @Scheduled(fixedDelayString = "${manager-control.diagnostics.worker-delay-ms:15000}", initialDelayString = "${manager-control.diagnostics.initial-delay-ms:45000}", scheduler = "managerProblemDiagnosisScheduler")
@@ -113,7 +113,7 @@ public class ManagerProblemDiagnosisWorker {
         ManagerProblemDiagnosisStore.Stored job;
         boolean currentSlot = claimedSlots % 5 != 4;
         try { job = store.claim(currentSlot, lastCurrentManagerId); }
-        catch (RuntimeException e) { log.warn("Problem diagnosis queue unavailable: {}", e.getClass().getSimpleName()); return; }
+        catch (RuntimeException e) { log.warn("Problem diagnosis queue unavailable: {}", e.getClass().getSimpleName(), e); return; }
         if (job == null) return;
         claimedSlots = (claimedSlots + 1) % 5;
         // A historical manager must not reset current-board rotation every fifth slot.

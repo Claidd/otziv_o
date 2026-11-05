@@ -11,6 +11,8 @@ public class BackupProperties {
 
     private boolean enabled = false;
     private Mysql mysql = new Mysql();
+    /** Keycloak accounts, roles and credentials live in their own PostgreSQL database. */
+    private Keycloak keycloak = new Keycloak();
     private String workDir = "/docker/backup";
     private int partSizeMb = 16;
     /**
@@ -63,6 +65,21 @@ public class BackupProperties {
         private String db;
         private String user;
         private String password;
+    }
+
+    @Data
+    public static class Keycloak {
+        /** Every enabled backup run also protects the Keycloak database unless explicitly disabled. */
+        private boolean enabled = true;
+        private String host = "keycloak-postgres";
+        private int port = 5432;
+        /** Must be at least the server major version: pg_dump refuses newer servers. */
+        private String dumpBinary = "/usr/lib/postgresql/17/bin/pg_dump";
+        private String db;
+        private String user;
+        private String password;
+        /** Separate journal: MySQL evidence readers keep seeing only MySQL objects. */
+        private String evidenceFileName = "keycloak-backup-evidence.jsonl";
     }
 
     @Data

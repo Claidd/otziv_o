@@ -15,6 +15,7 @@ import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRep
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
+import com.hunt.otziv.client_messages.api.ManualDispatchJournal;
 import com.hunt.otziv.u_users.api.DeferredUserAuthority;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
@@ -97,6 +98,12 @@ public class ManagerControlClientReplyWorkflow {
         Source source = reply.source();
         return sender.deliverToPlatformWithOperationId(source.platform().name(), source.company().target(),
                 source.clientId(), source.chatId(), reply.message(), reply.operation().token());
+    }
+
+    /** The account the queued reply sends from: the client's chat platform with the manager's account. */
+    ManualDispatchJournal.Sender dispatchSender(ManagerClientMessageQueue.Command command) {
+        Source source = queuedSnapshot(command).source();
+        return source.platform() == null ? null : new ManualDispatchJournal.Sender(source.platform().name(), source.clientId());
     }
 
     void completeQueued(ManagerClientMessageQueue.Claim claim, ManagerClientMessageQueue.Command command,

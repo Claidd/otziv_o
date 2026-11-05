@@ -212,6 +212,8 @@ public class ManagerControlDailySnapshotWorkflow {
         long criticalCount = overdueOrders + openRisks + requiresAttention + (onlySystemReconciliation ? 0 : automationFailureCount) + commonInvoiceActionCount + paymentIntegrityIssueCount + publicationDateIssueCount + chatBindingIssueCount + telegramChatIssueCount + unansweredClientMessages + suspiciousClientClosures + workerActionCount;
         long warningCount = leadActionCount;
         long workloadCount = orderAttention + workerWorkloadCount + leadsInWork + (onlySystemReconciliation ? automationFailureCount : 0);
+        // A closed or past day is history: it is read, never created, reopened or rescored.
+        persist = persist && mayPersistControlDay(manager, today, LocalDateTime.now());
         DailyControlSyncResult controlSync = persist ? syncDailyControl(manager, today, problems, sections, overdueStatuses) : readDailyControl(manager, today);
         problems = problems.stream().map(problem -> decorate(problem, controlSync.itemsByKey().get(problemKey(problem.code())))).toList();
         sections = sections.stream().map(section -> decorate(section, controlSync.itemsByKey().get(workerSectionKey(section.code())))).toList();
@@ -241,6 +243,22 @@ public class ManagerControlDailySnapshotWorkflow {
 
     List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats(ManagerDailyControl control) {
         return workerExplanationQueries.workerExplanationStats(control);
+    }
+
+    /**
+     * Today's control may always be synchronized. The previous day only while its closing window
+     * (until 05:00) lasts and its control exists and is still open; it is never created afterwards.
+     */
+    boolean mayPersistControlDay(Manager manager, LocalDate date, LocalDateTime now) {
+        if (date == null || now == null || !date.isBefore(now.toLocalDate())) {
+            return true;
+        }
+        if (!ManagerControlDayLifecycle.isPreviousDayClosingWindow(date, now)) {
+            return false;
+        }
+        return dailyControlRepository.findByControlDateAndManager(date, manager)
+                .map(control -> ManagerControlDayLifecycle.isControlDayCurrent(control, now))
+                .orElse(false);
     }
 
     DailyControlSyncResult syncDailyControl(Manager manager, LocalDate today, List<ManagerControlProblemResponse> problems, List<ManagerControlSectionResponse> sections, List<ManagerControlOverdueStatusResponse> overdueStatuses) {
@@ -315,7 +333,9 @@ public class ManagerControlDailySnapshotWorkflow {
                 currentItems.add(item);
             }
         }
-        boolean reopened = reopenClosedControlIfNeeded(control, currentItems);
+        // Only today's control reopens for new problems; a closed past day keeps its result.
+        boolean reopened = control.getControlDate() != null && control.getControlDate().isBefore(LocalDate.now())
+                ? false : reopenClosedControlIfNeeded(control, currentItems);
         ManagerDailyControlStatus nextStatus = cardLifecycle.recalculateControlStatus(currentItems);
         if (control.getStatus() != nextStatus) {
             control.setStatus(nextStatus);

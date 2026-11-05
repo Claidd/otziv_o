@@ -1970,8 +1970,13 @@ public class StaffDailyProgressService {
                            FROM reviews monthly_review
                            WHERE monthly_review.review_worker = d.worker_id
                              AND monthly_review.review_publish = 1
-                             AND COALESCE(monthly_review.review_published_marked_at, TIMESTAMP(monthly_review.review_changed)) >= :monthStart
-                             AND COALESCE(monthly_review.review_published_marked_at, TIMESTAMP(monthly_review.review_changed)) < :nextMonth
+                             AND ((monthly_review.review_published_marked_at >= :monthStart
+                                   AND monthly_review.review_published_marked_at < :nextMonth)
+                               OR (monthly_review.review_published_marked_at IS NULL
+                                   AND TIMESTAMP(monthly_review.review_changed) >= :monthStart
+                                   AND TIMESTAMP(monthly_review.review_changed) < :nextMonth
+                                   AND monthly_review.review_changed >= DATE(:monthStart)
+                                   AND monthly_review.review_changed < DATE(:nextMonth) + INTERVAL 1 DAY))
                        ) END,
                        SUM(d.bad_completed_count),
                        SUM(d.recovery_completed_count),
@@ -1995,24 +2000,20 @@ public class StaffDailyProgressService {
                        SUM(d.activity_events),
                        CASE WHEN :closed THEN SUM(d.bot_change_count) ELSE (
                            SELECT COUNT(*)
-                           FROM worker_activity_events monthly_change
-                           WHERE monthly_change.worker_user_id = (
-                               SELECT monthly_worker.user_id
-                               FROM workers monthly_worker
-                               WHERE monthly_worker.worker_id = d.worker_id
-                           )
+                           FROM workers monthly_worker
+                           JOIN worker_activity_events monthly_change
+                             ON monthly_change.worker_user_id = monthly_worker.user_id
+                           WHERE monthly_worker.worker_id = d.worker_id
                              AND monthly_change.created_at >= :monthStart
                              AND monthly_change.created_at < :nextMonth
                              AND monthly_change.action IN ('REVIEW_BOT_CHANGE', 'BAD_TASK_BOT_CHANGE', 'RECOVERY_TASK_BOT_CHANGE')
                        ) END,
                        CASE WHEN :closed THEN SUM(d.bot_block_count) ELSE (
                            SELECT COUNT(*)
-                           FROM worker_activity_events monthly_block
-                           WHERE monthly_block.worker_user_id = (
-                               SELECT monthly_worker.user_id
-                               FROM workers monthly_worker
-                               WHERE monthly_worker.worker_id = d.worker_id
-                           )
+                           FROM workers monthly_worker
+                           JOIN worker_activity_events monthly_block
+                             ON monthly_block.worker_user_id = monthly_worker.user_id
+                           WHERE monthly_worker.worker_id = d.worker_id
                              AND monthly_block.created_at >= :monthStart
                              AND monthly_block.created_at < :nextMonth
                              AND monthly_block.action = 'REVIEW_BOT_DEACTIVATE'

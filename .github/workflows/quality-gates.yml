@@ -95,6 +95,8 @@ on:
           - c43-keycloak
           - c44-grafana
           - c45-keycloak
+          - c48-keycloak
+          - c48-alloy
   pull_request:
   push:
     branches: [main]
@@ -355,8 +357,8 @@ jobs:
           node infrastructure/scripts/security/verify-remediation-registry.mjs
       - name: Verify scenario comparison invariants
         run: node --test infrastructure/scripts/performance/compare-scenarios.test.mjs
-      - name: Verify sparse-traffic dashboard queries with Prometheus
-        run: node --test infrastructure/grafana/dashboard-queries.test.mjs
+      - name: Verify sparse-traffic dashboard queries and Telegram alert rules with Prometheus
+        run: node --test infrastructure/grafana/dashboard-queries.test.mjs infrastructure/grafana/alert-rules.test.mjs
       - name: Validate opt-in monitoring overlay and required source configuration
         run: node infrastructure/monitoring/validate-compose.mjs
       - name: Verify Docker observer boundary
@@ -1457,6 +1459,7 @@ jobs:
               test -s /app/app.jar
               java -XshowSettings:properties -version 2>&1 | grep "java.specification.version = 25"
               mysql --version
+              /usr/lib/postgresql/17/bin/pg_dump --version | grep -F "(PostgreSQL) 17."
               test -s /etc/ssl/certs/ca-certificates.crt
               for alias in russian-trusted-root-ca russian-trusted-sub-ca russian-trusted-sub-ca-2024; do
                 keytool -list -alias "$alias" -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit >/dev/null

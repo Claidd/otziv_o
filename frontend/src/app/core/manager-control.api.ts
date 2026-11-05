@@ -25,6 +25,13 @@ export interface ManagerControlClientReplySuggestion {
   reasonCode: string;
 }
 
+/** «Ссылка-приглашение устарела»: the card stays open; inviteUrl is the current invite or null. */
+export interface ManagerControlStaleChatInviteResult {
+  item: ManagerControlConcreteItem;
+  message: string;
+  inviteUrl: string | null;
+}
+
 export interface ManagerControlClientMessageReconciliation {
   requestedChats: number;
   receivedMessages: number;
@@ -626,6 +633,20 @@ export class ManagerControlApi {
     return this.http.post<ManagerControlConcreteItem>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/mark-staff-message`,
       { actionType: 'RESOLVED', comment: comment ?? null, manualWorkerNotification: null }
+    );
+  }
+
+  markClientMessageAnsweredOutsideChat(concreteItemId: number, comment: string): Observable<ManagerControlConcreteItem> {
+    return this.http.post<ManagerControlConcreteItem>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/answered-outside-chat`,
+      { actionType: null, comment, manualWorkerNotification: null }
+    );
+  }
+
+  reportStaleChatInvite(concreteItemId: number): Observable<ManagerControlStaleChatInviteResult> {
+    return this.http.post<ManagerControlStaleChatInviteResult>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/stale-chat-invite`,
+      {}
     );
   }
 

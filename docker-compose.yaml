@@ -9,6 +9,9 @@ x-default-logging: &default-logging
 networks:
   docker_observer_net:
     internal: true
+  # Prometheus reads container state from the observer's metrics-only listener.
+  observer_metrics_net:
+    internal: true
   internal_net:
     driver: bridge
   external_review_net:
@@ -47,6 +50,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - docker_observer_net
+      - observer_metrics_net
 
   mysql:
     # A different running DB image is blocked by the ordinary deployment guard.
@@ -150,7 +154,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e}
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:2e935efdb594ee4a3f0bc8343b1e6a76def33d70a4981cbd730ce5942ff47009}
     oom_score_adj: -300
     restart: unless-stopped
     logging: *default-logging
@@ -249,6 +253,9 @@ services:
       OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW:-PT15M}
       OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS:-10000}
       OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS: ${OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS:-}
+      OTZIV_IMAGE_URL_SIGNING_SECRET: ${OTZIV_IMAGE_URL_SIGNING_SECRET:-}
+      OTZIV_IMAGE_URL_TTL: ${OTZIV_IMAGE_URL_TTL:-PT1H}
+      OTZIV_IMAGE_UNSIGNED_ACCESS_ENABLED: ${OTZIV_IMAGE_UNSIGNED_ACCESS_ENABLED:-true}
       OTZIV_SECURITY_SESSION_REVOCATION_MODE: ${OTZIV_SECURITY_SESSION_REVOCATION_MODE:-off}
       OTZIV_SECURITY_SESSION_REVOCATION_DISPATCH_ENABLED: ${OTZIV_SECURITY_SESSION_REVOCATION_DISPATCH_ENABLED:-false}
       OTZIV_SECURITY_SESSION_REVOCATION_CUTOVER_CONFIRMED: ${OTZIV_SECURITY_SESSION_REVOCATION_CUTOVER_CONFIRMED:-false}
@@ -439,7 +446,7 @@ services:
       TELEGRAM_PROXY_HOST: ${TELEGRAM_PROXY_HOST:-}
       TELEGRAM_PROXY_PORT: ${TELEGRAM_PROXY_PORT:-8888}
       TELEGRAM_PROXY_TYPE: ${TELEGRAM_PROXY_TYPE:-HTTP}
-      TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-794146111,828987226}
+      TELEGRAM_ADMIN_CHAT_IDS: &telegram-admin-chat-ids ${TELEGRAM_ADMIN_CHAT_IDS:-794146111,828987226}
       WHATSAPP_PROXY_ENABLED: ${WHATSAPP_PROXY_ENABLED:-false}
       WHATSAPP_PROXY_HOST: ${WHATSAPP_PROXY_HOST:-}
       WHATSAPP_PROXY_PORT: ${WHATSAPP_PROXY_PORT:-8888}
@@ -593,6 +600,16 @@ services:
       BACKUP_MYSQL_HOST: ${BACKUP_MYSQL_HOST:-mysql}
       BACKUP_MYSQL_PORT: ${BACKUP_MYSQL_PORT:-3306}
       BACKUP_MYSQL_DUMP_BINARY: ${BACKUP_MYSQL_DUMP_BINARY:-mysqldump}
+      # Keycloak database dump: reuses KEYCLOAK_DB* unless a dedicated read-only role is
+      # configured through BACKUP_KEYCLOAK_DB_USER and BACKUP_KEYCLOAK_DB_PASSWORD.
+      BACKUP_KEYCLOAK_ENABLED: ${BACKUP_KEYCLOAK_ENABLED:-true}
+      BACKUP_KEYCLOAK_HOST: ${BACKUP_KEYCLOAK_HOST:-keycloak-postgres}
+      BACKUP_KEYCLOAK_PORT: ${BACKUP_KEYCLOAK_PORT:-5432}
+      BACKUP_KEYCLOAK_DUMP_BINARY: ${BACKUP_KEYCLOAK_DUMP_BINARY:-/usr/lib/postgresql/17/bin/pg_dump}
+      BACKUP_KEYCLOAK_DB: ${BACKUP_KEYCLOAK_DB:-${KEYCLOAK_DB:-}}
+      BACKUP_KEYCLOAK_DB_USER: ${BACKUP_KEYCLOAK_DB_USER:-${KEYCLOAK_DB_USER:-}}
+      BACKUP_KEYCLOAK_DB_PASSWORD: ${BACKUP_KEYCLOAK_DB_PASSWORD:-${KEYCLOAK_DB_PASSWORD:-}}
+      BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME: ${BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME:-keycloak-backup-evidence.jsonl}
       BACKUP_PART_SIZE_MB: ${BACKUP_PART_SIZE_MB:-16}
       BACKUP_DUMP_TIMEOUT: ${BACKUP_DUMP_TIMEOUT:-PT15M}
       BACKUP_UPLOAD_TIMEOUT: ${BACKUP_UPLOAD_TIMEOUT:-PT10M}
@@ -964,6 +981,7 @@ services:
         condition: service_healthy
     networks:
       - internal_net
+      - observer_metrics_net
 
   loki:
     image: ghcr.io/claidd/otziv-security@sha256:87d426476ddadecd314b8c7e0064df618c84b6461be52d05c830be9095e3c14e
@@ -1011,7 +1029,7 @@ services:
       - internal_net
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:27905df1862decf6e9c2543cb476e70e83d68351f7a5bb17194a6a094764db32
+    image: ghcr.io/claidd/otziv-security@sha256:6010376795977db1a66670feab760e710f70a330f16aa8b2c088367f7ef5861d
     oom_score_adj: 500
     container_name: alloy
     restart: unless-stopped
@@ -1045,6 +1063,8 @@ services:
 
   grafana:
     image: ghcr.io/claidd/otziv-security@sha256:07233e89f1964d967e516a7b97856011a502213194a27c941fc5cf5d052208fa
+    # Builds the Telegram contact point for the alert rules, then runs the image entrypoint.
+    entrypoint: ["/bin/sh", "/etc/otziv/grafana-alerting-entrypoint.sh"]
     oom_score_adj: 400
     restart: unless-stopped
     logging: *default-logging
@@ -1063,10 +1083,18 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SECURITY_COOKIE_SECURE: "true"
       GF_SECURITY_COOKIE_SAMESITE: "strict"
+      # Alerts go to the admin chats through the application bot and its proxy (INF-3).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ADMIN_CHAT_IDS: *telegram-admin-chat-ids
+      TELEGRAM_PROXY_ENABLED: ${TELEGRAM_PROXY_ENABLED:-false}
+      TELEGRAM_PROXY_HOST: ${TELEGRAM_PROXY_HOST:-}
+      TELEGRAM_PROXY_PORT: ${TELEGRAM_PROXY_PORT:-8888}
+      TELEGRAM_PROXY_TYPE: ${TELEGRAM_PROXY_TYPE:-HTTP}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./infrastructure/grafana/alerting-entrypoint.sh:/etc/otziv/grafana-alerting-entrypoint.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health"]
       interval: 30s

@@ -7,7 +7,6 @@ import static com.hunt.otziv.manager_control.service.ManagerControlDailySnapshot
 import static com.hunt.otziv.manager_control.service.ManagerControlDayLifecycle.*;
 import static com.hunt.otziv.manager_control.service.ManagerControlConcreteSnapshotWorkflow.*;
 import static com.hunt.otziv.manager_control.service.ManagerControlProblemExamples.*;
-import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -23,9 +22,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -84,13 +85,25 @@ public class ManagerControlWorkerTaskWorkflow {
         concreteSnapshot.clearWorkerTelegramState(concreteItem);
     }
 
-    boolean notifyWorkerAboutTaskRequest(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control) {
+    /** A prepared specialist request: everything needed to send it after the card transaction commits. */
+    record WorkerTaskDispatch(Long cardId, Long workerUserId, long chatId, String text,
+                              List<List<InlineKeyboardButton>> keyboard, LocalDateTime attemptedAt) {
+    }
+
+    /**
+     * Records the attempt (and the specialist's personal reminder) on the locked card in the
+     * caller's transaction. Telegram is not called here: the caller sends {@link #dispatchWorkerTaskRequest}
+     * after commit, so no card/order lock is held during network I/O and a rollback cannot leave a
+     * sent message behind. Returns null when the request cannot be delivered; the reason is on the card.
+     */
+    WorkerTaskDispatch prepareWorkerTaskRequest(ManagerDailyControlConcreteItem concreteItem) {
         User workerUser = workerUserForTask(concreteItem);
         if (workerUser == null || workerUser.getId() == null || concreteItem.getId() == null) {
             concreteItem.setWorkerNotificationFailureReason("Специалист карточки не найден");
-            return false;
+            return null;
         }
-        LocalDateTime now = LocalDateTime.now();
+        // DATETIME(6): the attempt is compared again after the send, so keep exactly what is stored.
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
         concreteItem.setWorkerNotificationAttemptedAt(now);
         concreteItem.setWorkerNotificationUserId(workerUser.getId());
         concreteItem.setWorkerNotificationSentAt(null);
@@ -115,18 +128,37 @@ public class ManagerControlWorkerTaskWorkflow {
         }
         if (workerUser.getWorkerTelegramGroupChatId() == null) {
             concreteItem.setWorkerNotificationFailureReason("Telegram-группа специалиста не привязана");
+            return null;
+        }
+        return new WorkerTaskDispatch(concreteItem.getId(), workerUser.getId(), workerUser.getWorkerTelegramGroupChatId(), text,
+                explanationRequired ? List.of(List.of(workerTaskTelegramButton(concreteItem))) : List.of(), now);
+    }
+
+    /** Sends a prepared request; must be called without a transaction or row locks. */
+    boolean dispatchWorkerTaskRequest(WorkerTaskDispatch dispatch) {
+        try {
+            return notificationMediaDeliveryService.send(NotificationMediaEventCatalog.WORKER_TASK_FIRST.code(), dispatch.chatId(),
+                    dispatch.workerUserId(), dispatch.text(), null, dispatch.keyboard());
+        } catch (RuntimeException failure) {
+            log.warn("Worker task request was not sent: cardId={}, workerUserId={}", dispatch.cardId(), dispatch.workerUserId(), failure);
             return false;
         }
-        boolean sent = notificationMediaDeliveryService.send(NotificationMediaEventCatalog.WORKER_TASK_FIRST.code(), workerUser.getWorkerTelegramGroupChatId(), workerUser.getId(), text, null, explanationRequired ? List.of(List.of(workerTaskTelegramButton(concreteItem))) : List.of());
-        if (sent) {
-            concreteItem.setWorkerNotificationSentAt(now);
-            if (isWorkerRiskConcrete(concreteItem)) {
-                markRiskExplanationRequested(concreteItem, now);
-            }
-            return true;
-        } else {
-            concreteItem.setWorkerNotificationFailureReason("Telegram не отправил сообщение");
-            return false;
+    }
+
+    /** The card still carries this attempt: no newer request or reset replaced it while it was sent. */
+    boolean isCurrentWorkerTaskRequest(ManagerDailyControlConcreteItem concreteItem, WorkerTaskDispatch dispatch) {
+        return concreteItem != null && dispatch != null
+                && Objects.equals(concreteItem.getWorkerNotificationAttemptedAt(), dispatch.attemptedAt())
+                && Objects.equals(concreteItem.getWorkerNotificationUserId(), dispatch.workerUserId())
+                && concreteItem.getWorkerNotificationSentAt() == null;
+    }
+
+    /** Records a delivered request on the card re-read under lock after the send. */
+    void recordWorkerTaskRequestSent(ManagerDailyControlConcreteItem concreteItem, WorkerTaskDispatch dispatch) {
+        concreteItem.setWorkerNotificationSentAt(dispatch.attemptedAt());
+        concreteItem.setWorkerNotificationFailureReason(null);
+        if (isWorkerRiskConcrete(concreteItem)) {
+            markRiskExplanationRequested(concreteItem, dispatch.attemptedAt());
         }
     }
 

@@ -1,11 +1,13 @@
 package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
+import com.hunt.otziv.client_messages.api.ManualDispatchJournal;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.config.settings.api.OutboundMessagePolicy;
 import com.hunt.otziv.u_users.api.DeferredUserAuthority;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +29,9 @@ public class ManagerClientMessageWorker {
     private final OutboundMessagePolicy policy;
     private final ManagerControlTransactionRunner transactions;
     private final ManagerControlObsoleteContactSettlement obsoleteContacts;
+    /** Field-injected so existing constructors and tests stay unchanged; always present in the application. */
+    @Autowired(required = false)
+    private ManualDispatchJournal journal;
 
     @Scheduled(fixedDelay = 5000, scheduler = "managerClientMessageScheduler")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -73,6 +78,7 @@ public class ManagerClientMessageWorker {
                 } catch (RuntimeException unavailable) { finish(claim, "FAILED", "context_changed", 0); }
                 return;
             }
+            recordManualDispatch(claim, command);
             try {
                 result = "CONTROL".equals(command.kind()) ? control.dispatchQueued(command) : reply.dispatchQueued(command);
             } catch (RuntimeException uncertain) { holdUnknown(claim, command, "sender_exception"); return; }
@@ -102,8 +108,10 @@ public class ManagerClientMessageWorker {
             return;
         }
         boolean knownUnsent = claim.mayDispatch() && ClientMessageDelivery.isKnownUnsent(result);
+        // A frozen command without a chat (or with a refused payload) cannot succeed on retry: fail it now.
+        boolean permanent = knownUnsent && ClientMessageDelivery.isPermanentlyUnsent(result);
         int attempts = claim.attempts() + (claim.mayDispatch() ? 1 : 0);
-        String state = confirmed ? "SENT" : knownUnsent ? (attempts >= 5 ? "FAILED" : "RETRYABLE") : "UNKNOWN";
+        String state = confirmed ? "SENT" : knownUnsent ? (permanent || attempts >= 5 ? "FAILED" : "RETRYABLE") : "UNKNOWN";
         String code = confirmed ? null : result == null ? "unconfirmed_result" : result.errorCode();
         int delay = "UNKNOWN".equals(state) ? 300 : "RETRYABLE".equals(state) ? Math.min(300, 15 << Math.min(attempts, 4)) : 0;
         if ("UNKNOWN".equals(state)) { holdUnknown(claim, command, code); return; }
@@ -126,6 +134,22 @@ public class ManagerClientMessageWorker {
             } catch (RuntimeException unavailable) { finish(claim, heldState, "finalization_required", 300); }
             log.warn("Manager command needs business reconciliation: operationId={}", claim.operationId());
         } finally { SecurityContextHolder.setContext(previousContext); }
+    }
+
+    /**
+     * The operator's message joins the sending account's interval journal right before the provider
+     * call, so background lanes keep their gap after it. It is never delayed by the journal, and a
+     * journal failure does not stop the send.
+     */
+    private void recordManualDispatch(ManagerClientMessageQueue.Claim claim, ManagerClientMessageQueue.Command command) {
+        if (journal == null) return;
+        try {
+            var sender = "CONTROL".equals(command.kind()) ? control.dispatchSender(command) : reply.dispatchSender(command);
+            if (sender != null) journal.recordManualDispatch(sender);
+        } catch (RuntimeException unavailable) {
+            log.warn("Manual message not recorded in the sender interval journal: operationId={}, error={}",
+                    claim.operationId(), unavailable.toString());
+        }
     }
 
     private void finish(ManagerClientMessageQueue.Claim claim, String state, String code, int delay) {

@@ -26,6 +26,7 @@ public class ManagerWorkerDailyProgressService {
     private final ManagerRepository managerRepository;
     private final StaffDailyProgressService progressService;
     private final FinalWorkerDayResults achievementService;
+    private final ManagerWorkerDayPlanReader dayPlanReader;
 
     /*
      * Historical progress reads reconcile the finalized workload projection
@@ -120,19 +121,40 @@ public class ManagerWorkerDailyProgressService {
                 .filter(worker -> worker.getId() != null)
                 .sorted(java.util.Comparator.comparing(this::workerName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
+        LocalDate goalDate = reportDate.minusDays(1);
         Map<Long, FinalWorkerDayResults.WorkerDayResult> results = achievementService.workerDayResults(
-                workers.stream().map(Worker::getId).toList(), reportDate.minusDays(1));
-        return workers.stream()
+                workers.stream().map(Worker::getId).toList(), goalDate);
+        List<Worker> missed = workers.stream()
                 .filter(worker -> {
                     FinalWorkerDayResults.WorkerDayResult result = results.get(worker.getId());
                     return result != null && result.eligibleCount() > 0 && !result.reached100();
                 })
-                .map(worker -> {
-                    FinalWorkerDayResults.WorkerDayResult result = results.get(worker.getId());
-                    return new MissedWorkerGoal(worker.getId(), workerName(worker), reportDate.minusDays(1),
-                            result.completedCount(), result.eligibleCount());
-                })
                 .toList();
+        if (missed.isEmpty()) return List.of();
+        Map<Long, ManagerWorkerDayPlanReader.DayPlan> plans =
+                dayPlanReader.plans(missed.stream().map(Worker::getId).toList(), goalDate);
+        return missed.stream()
+                .map(worker -> missedGoal(worker, results.get(worker.getId()),
+                        plans == null ? null : plans.get(worker.getId()), goalDate))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /**
+     * The end-of-day result already excludes late work. Its final snapshot still counts
+     * work blocked by an unavailable account; the specialist could not do that work, so
+     * it is not a remark. When nothing else is left, the day is not a missed goal.
+     */
+    private MissedWorkerGoal missedGoal(Worker worker, FinalWorkerDayResults.WorkerDayResult result,
+                                        ManagerWorkerDayPlanReader.DayPlan plan, LocalDate goalDate) {
+        boolean sameSnapshot = plan != null && plan.finalized() && plan.eligibleUnits() == result.eligibleCount();
+        long blocked = sameSnapshot ? Math.min(plan.externalBlockedUnits(), result.eligibleCount()) : 0;
+        long required = Math.max(0, result.eligibleCount() - blocked);
+        if (result.completedCount() >= required) return null;
+        return new MissedWorkerGoal(worker.getId(), workerName(worker), goalDate,
+                result.completedCount(), required, blocked,
+                plan == null ? List.of() : plan.unfinished(),
+                sameSnapshot ? plan.lastReached100At() : null);
     }
 
     record FollowingWorkerGoal(LocalDate date, long completed, long total, boolean reached100) { }
@@ -222,12 +244,34 @@ public class ManagerWorkerDailyProgressService {
     ) {
     }
 
+    /**
+     * @param total units the specialist could and had to finish: the finalized goal without
+     *              late work and without work blocked by an unavailable account
+     * @param blockedUnits units excluded because the account was unavailable
+     * @param unfinishedTasks unfinished mandatory work of the goal day; units of one order
+     *                        and section are one task. Empty when the day plan is unknown.
+     * @param lastReached100At when the specialist last had the whole required load closed
+     */
     public record MissedWorkerGoal(
             Long workerId,
             String workerName,
             LocalDate date,
             long completed,
-            long total
+            long total,
+            long blockedUnits,
+            List<ManagerWorkerDayPlanReader.UnfinishedTask> unfinishedTasks,
+            java.time.LocalDateTime lastReached100At
     ) {
+        public MissedWorkerGoal {
+            unfinishedTasks = unfinishedTasks == null ? List.of() : List.copyOf(unfinishedTasks);
+        }
+
+        public MissedWorkerGoal(Long workerId, String workerName, LocalDate date, long completed, long total) {
+            this(workerId, workerName, date, completed, total, 0, List.of(), null);
+        }
+
+        public long remaining() {
+            return Math.max(0, total - completed);
+        }
     }
 }

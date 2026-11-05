@@ -303,6 +303,7 @@ class ManagerReportReviewSessionConcurrencyMySqlIntegrationTest {
         when(settings.getBoolean("manager.report-review.enabled", true)).thenReturn(true);
         when(settings.getInt("manager.report-review.reminder-one-minutes", 60)).thenReturn(60);
         when(settings.getInt("manager.report-review.reminder-three-minutes", 180)).thenReturn(180);
+        when(settings.getBoolean("manager.report-review.restriction-enabled", true)).thenReturn(true);
         var quality = mock(ManagerReportReviewQualityService.class); when(quality.aiAvailable()).thenReturn(true);
         return new ManagerReportReviewReminderJob(sessions, events, mock(TelegramService.class), delivery,
                 settings, access, quality, availability, mock(ManagerReportReviewRolloutPolicy.class), transactions);

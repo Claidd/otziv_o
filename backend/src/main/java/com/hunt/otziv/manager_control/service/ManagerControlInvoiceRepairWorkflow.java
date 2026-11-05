@@ -31,6 +31,11 @@ public class ManagerControlInvoiceRepairWorkflow {
     private final CommonBillingService commonBillingService;
     private final ManagerControlInvoiceDiagnostics invoiceDiagnostics;
 
+    /** Whether the invoice is currently attributed to this manager, as on the manager's control board. */
+    boolean isAssignedTo(Long invoiceId, Long managerId) {
+        return invoiceDiagnostics.isInvoiceAssignedTo(invoiceId, managerId);
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Outcome repair(Long invoiceId) {
         CommonInvoice invoice = commonInvoiceRepository.findByIdWithAccount(invoiceId)
@@ -290,6 +295,14 @@ public class ManagerControlInvoiceRepairWorkflow {
             return new Outcome(
                     "Старый хвост WhatsApp groupId скрыт из контроля",
                     "Закрыта устаревшая ошибка WhatsApp groupId общего счета"
+            );
+        }
+        if (invoiceDiagnostics.commonInvoiceArchivedCycleRevived(invoice)) {
+            // The archive workflow re-checks every money/delivery guard under the invoice lock.
+            commonBillingService.reopenArchivedCycleRevivedByOrders(invoiceId);
+            return new Outcome(
+                    "Общий счёт возвращён в сбор: его заказы уже вернули из архива, оплат и отправок по счёту не было",
+                    "Архивный общий счёт возвращён в сбор после восстановления его заказов"
             );
         }
         if (invoiceDiagnostics.commonInvoiceTechnicalTailRepairable(invoice)) {

@@ -702,8 +702,8 @@ export class HomeComponent {
     return Boolean(action.routerLink || action.href);
   }
 
-  imageUrl(imageId?: number | null): string {
-    return this.cabinetApi.imageUrl(imageId);
+  imageUrl(imageId?: number | null, signedPath?: string | null): string {
+    return this.cabinetApi.imageUrl(imageId, signedPath);
   }
 
   profileImageUrl(): string | null {
@@ -711,8 +711,12 @@ export class HomeComponent {
       return null;
     }
 
-    const imageId = this.cabinet()?.workerZp?.imageId || this.cabinet()?.user?.image;
-    return imageId ? this.imageUrl(imageId) : null;
+    const workerZp = this.cabinet()?.workerZp;
+    if (workerZp?.imageId) {
+      return this.imageUrl(workerZp.imageId, workerZp.imageUrl);
+    }
+    const user = this.cabinet()?.user;
+    return user?.image ? this.imageUrl(user.image, user.imageUrl) : null;
   }
 
   loadManualPaymentSettings(forceRefresh = false): void {

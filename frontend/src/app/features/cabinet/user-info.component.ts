@@ -136,7 +136,7 @@ export class UserInfoComponent implements OnDestroy {
   }
 
   imageUrl(stat?: UserStat | null): string {
-    return this.cabinetApi.imageUrl(stat?.imageId);
+    return this.cabinetApi.imageUrl(stat?.imageId, stat?.imageUrl);
   }
 
   dailyChartFrom(map?: string | null): CabinetBarChart {

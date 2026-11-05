@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-apt-c48-acceptance-v1",
+  "result": "PASS",
+  "component": "keycloak",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:2e935efdb594ee4a3f0bc8343b1e6a76def33d70a4981cbd730ce5942ff47009",
+  "imageConfigId": "sha256:09efb3a918669b335b30966deeea3027591e03c2e048e653c0cb7cad8a8ba773",
+  "parentReference": "ghcr.io/claidd/otziv-security@sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
+  "parentConfigId": "sha256:ba4b2b070f6b58a0f74725860b143e722372a556002e28079654ce2be44048b3",
+  "advisory": "CVE-2026-109518",
+  "commit": "5d35c198898be7001769cf6ead6a0f3c2342cd07",
+  "run": "42065294809",
+  "attempt": "1",
+  "packages": [
+    {
+      "name": "libapt-pkg6.0",
+      "version": "2.4.15ubuntu0.1",
+      "sha256": "3a6fbab029e15ca7b8da642c17ec110995a6e3a0bc40eaa08e239cfc94d6c426"
+    },
+    {
+      "name": "apt",
+      "version": "2.4.15ubuntu0.1",
+      "sha256": "2d4db9a3017c5364e50af5bc2f0c76828b52933b682eff4728f1211e081c6736"
+    }
+  ],
+  "files": {
+    "infrastructure/runtime-security/proofs/c48-keycloak/inspection/inspection.json": "895c5e25349446f4ad573eaf9bc8d23f5195895682077f4005eccb92eb5ab5de",
+    "infrastructure/runtime-security/proofs/c48-keycloak/inspection/runtime.json.gz": "4517a25000d3fc8e4f98b8d4bdc2404f5112012da8b4d5afc33ed7ecf85e3342",
+    "infrastructure/runtime-security/proofs/c48-keycloak/executed-inspection.py.txt": "32497685fa6db01f6051c10895a0680fde7e9a0e0756616a3cc81ee7466c98f3",
+    "infrastructure/runtime-security/proofs/c48-keycloak/executed-runtime-inventory.py.txt": "4969ebbd33456ba2fa10e377d2ff6877dca7651334c33536ca03362f83af1e1d",
+    "infrastructure/runtime-security/proofs/c48-keycloak/rehearsal/capture.json": "9d8b6df1e95bc6be8c29d420fd45de496158649d34b997262a2ce4ddc338c839",
+    "infrastructure/runtime-security/proofs/c48-keycloak/rehearsal/replay.json": "2260828e9f92994eeb556be029ad2bc9a7e6d5b82667bfaeebe19b5d73f2851f",
+    "infrastructure/runtime-security/proofs/c48-keycloak/executed-rehearsal.py.txt": "87248fdaea013123995d3c5e737afc8d3cc0d2bb1c57da416a78877bb16a8f39",
+    "infrastructure/runtime-security/proofs/c48-keycloak/rehearsal/capture-window.json": "40921f4ebee3c658c54bbe76d9f8af137007dd91e7ca3a7c861b06e42a4c0f68",
+    "infrastructure/runtime-security/proofs/c48-keycloak/executed-capture-window.py.txt": "d1c1550949a7a1e3c6f7c9faab87263d07876bdb8ac61c90acf1875e268184fa"
+  }
+}

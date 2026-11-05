@@ -35,11 +35,11 @@ public class PeriodicReminderRecoveryJob {
                     var next = repair.recoverDeferredAutomatically(candidate.stateId(), candidate.managerId());
                     if (next.isPresent()) log.info("Periodic reminder future queue restored: stateId={}, next={}", candidate.stateId(), next.get());
                 } catch (RuntimeException held) {
-                    log.warn("Periodic reminder future recovery held: stateId={}, errorType={}", candidate.stateId(), held.getClass().getSimpleName());
+                    log.warn("Periodic reminder future recovery held: stateId={}, error={}", candidate.stateId(), held.toString(), held);
                 }
             }
         } catch (RuntimeException unavailable) {
-            log.warn("Periodic reminder recovery scan unavailable: errorType={}", unavailable.getClass().getSimpleName());
+            log.warn("Periodic reminder recovery scan unavailable: error={}", unavailable.toString(), unavailable);
         } finally { leases.release(lease); }
     }
 }

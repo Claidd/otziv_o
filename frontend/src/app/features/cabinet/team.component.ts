@@ -13,6 +13,7 @@ import {
   WorkerNetworkViolationStats
 } from '../../core/cabinet.api';
 import { DailyWorkProgress } from '../../core/daily-progress';
+import { WorkerDayResult, WorkerDayResultsApi } from '../../core/worker-day-results.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
@@ -60,6 +61,15 @@ type TeamSection = {
   icon: string;
 };
 
+type DayExcuseMode = 'excuse' | 'revoke';
+
+type DayExcuseDialog = {
+  mode: DayExcuseMode;
+  workerId: number;
+  workerName: string;
+  day: WorkerDayResult;
+};
+
 @Component({
   selector: 'app-team',
   imports: [AdminLayoutComponent, DailyProgressStripComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
@@ -78,6 +88,13 @@ export class TeamComponent implements OnDestroy {
   readonly workerSortKey = signal<WorkerSortKey>(this.readWorkerSort().key);
   readonly workerSortDirection = signal<WorkerSortDirection>(this.readWorkerSort().direction);
   readonly workerSortOptions = WORKER_SORT_OPTIONS;
+  /** Final day results (with the owner "Засчитать день" state) of the selected closed day. */
+  readonly dayResults = signal<ReadonlyMap<number, WorkerDayResult>>(new Map());
+  readonly dayExcuseDialog = signal<DayExcuseDialog | null>(null);
+  readonly dayExcuseReason = signal('');
+  readonly dayExcuseSaving = signal(false);
+  readonly dayExcuseError = signal<string | null>(null);
+  private dayResultsRequest = 0;
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly sections: TeamSection[] = [
@@ -87,7 +104,10 @@ export class TeamComponent implements OnDestroy {
     { key: 'operator', title: 'Операторы', icon: 'support_agent' }
   ];
 
-  constructor(private readonly cabinetApi: CabinetApi) {
+  constructor(
+    private readonly cabinetApi: CabinetApi,
+    private readonly workerDayResultsApi: WorkerDayResultsApi
+  ) {
     // Team metrics are operational data; do not reuse the three-hour cabinet cache on page entry.
     this.load(true);
     this.scheduleMidnightRefresh();
@@ -105,6 +125,7 @@ export class TeamComponent implements OnDestroy {
       next: (response) => {
         this.team.set(response);
         this.loading.set(false);
+        this.loadDayResults();
       },
       error: (error) => {
         this.error.set(apiErrorDetail(error, 'Обновите данные через пару минут или обратитесь к администратору.'));
@@ -232,6 +253,115 @@ export class TeamComponent implements OnDestroy {
 
   memberProgress(member: TeamMember): DailyWorkProgress | null | undefined {
     return memberProgressForMode(member, this.progressMode());
+  }
+
+  /** Owners and admins see the final result of a closed day and may count it. */
+  canSeeDayResults(): boolean {
+    const role = this.team()?.role;
+    return (role === 'OWNER' || role === 'ADMIN') && this.selectedDate() < this.todayIso();
+  }
+
+  dayResult(member: TeamMember): WorkerDayResult | null {
+    if (this.progressMode() !== 'day' || !this.canSeeDayResults()) {
+      return null;
+    }
+    const day = this.dayResults().get(member.id);
+    return day && day.date === this.selectedDate() ? day : null;
+  }
+
+  dayResultTitle(day: WorkerDayResult): string {
+    if (day.excused) {
+      return 'День засчитан владельцем';
+    }
+    return day.reached100 ? 'Итог дня: 100%' : 'Итог дня: цель не выполнена';
+  }
+
+  dayResultSummary(day: WorkerDayResult): string {
+    const streak = Math.max(0, day.streakDays || 0);
+    return `${this.formatNumber(day.completedCount)} из ${this.formatNumber(day.eligibleCount)}`
+      + ` · серия ${streak} ${this.dayWord(streak)} на 100%`;
+  }
+
+  openDayExcuse(member: TeamMember, day: WorkerDayResult, mode: DayExcuseMode): void {
+    this.dayExcuseReason.set('');
+    this.dayExcuseError.set(null);
+    this.dayExcuseDialog.set({
+      mode,
+      workerId: member.id,
+      workerName: member.fio || member.login,
+      day
+    });
+  }
+
+  closeDayExcuse(): void {
+    if (this.dayExcuseSaving()) {
+      return;
+    }
+    this.dayExcuseDialog.set(null);
+    this.dayExcuseError.set(null);
+  }
+
+  confirmDayExcuse(): void {
+    const dialog = this.dayExcuseDialog();
+    const reason = this.dayExcuseReason().trim();
+    if (!dialog || this.dayExcuseSaving()) {
+      return;
+    }
+    if (!reason) {
+      this.dayExcuseError.set('Укажите причину — она попадёт в журнал действий.');
+      return;
+    }
+    this.dayExcuseSaving.set(true);
+    this.dayExcuseError.set(null);
+    const request = dialog.mode === 'excuse'
+      ? this.workerDayResultsApi.excuse(dialog.workerId, dialog.day.date, reason)
+      : this.workerDayResultsApi.revoke(dialog.workerId, dialog.day.date, reason);
+    request.subscribe({
+      next: (result) => {
+        this.dayResults.update((current) => new Map(current).set(dialog.workerId, result.day));
+        this.dayExcuseSaving.set(false);
+        this.dayExcuseDialog.set(null);
+        // The day's progress strip and the month totals read the corrected snapshot.
+        this.cabinetApi.clearTeamCache();
+        this.load(true);
+      },
+      error: (error) => {
+        this.dayExcuseSaving.set(false);
+        this.dayExcuseError.set(apiErrorDetail(error, 'Не удалось сохранить решение. Попробуйте ещё раз.'));
+      }
+    });
+  }
+
+  private loadDayResults(): void {
+    const request = ++this.dayResultsRequest;
+    if (!this.canSeeDayResults()) {
+      this.dayResults.set(new Map());
+      return;
+    }
+    const date = this.selectedDate();
+    this.workerDayResultsApi.getDayResults(date).subscribe({
+      next: (response) => {
+        if (request !== this.dayResultsRequest) {
+          return;
+        }
+        this.dayResults.set(new Map((response.workers ?? []).map((day) => [day.workerId, day])));
+      },
+      error: () => {
+        if (request === this.dayResultsRequest) {
+          // Final results are supplementary; the team view stays usable without them.
+          this.dayResults.set(new Map());
+        }
+      }
+    });
+  }
+
+  private dayWord(days: number): string {
+    const mod100 = days % 100;
+    const mod10 = days % 10;
+    if (mod100 >= 11 && mod100 <= 14) return 'дней';
+    if (mod10 === 1) return 'день';
+    if (mod10 >= 2 && mod10 <= 4) return 'дня';
+    return 'дней';
   }
 
   statRows(role: TeamRole, member: TeamMember): StatRow[] {
@@ -635,8 +765,8 @@ export class TeamComponent implements OnDestroy {
     return activeWork ? `${base} · активно ${activeWork}` : base;
   }
 
-  imageUrl(imageId?: number | null): string {
-    return this.cabinetApi.imageUrl(imageId);
+  imageUrl(imageId?: number | null, signedPath?: string | null): string {
+    return this.cabinetApi.imageUrl(imageId, signedPath);
   }
 
   editUrl(userId: number): string {

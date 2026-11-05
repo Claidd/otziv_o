@@ -253,6 +253,7 @@ class ManagerReportReviewTelegramServiceTest {
                 eq(manager.getId()), any(LocalDateTime.class), any(LocalDateTime.class),
                 eq(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.RESOLVED)))
                 .thenReturn(List.of(deferred));
+        when(taskContextService.deferralAttributable(deferred, summary.date())).thenReturn(true);
         when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
                 .thenReturn(Optional.empty());
         when(qualityService.questionsJson(any())).thenReturn("[{}]");
@@ -270,6 +271,35 @@ class ManagerReportReviewTelegramServiceTest {
                 review.getIssueCount() == 1
                         && review.getReportSnapshot().contains("Отложенные более суток")
                         && review.getQuestionsContext().contains("sourceTaskId=175")));
+    }
+
+    @Test
+    void deferredCardIsNotAskedWhenTheManagerDidNotDeferALiveProblem() {
+        ManagerDailySummaryResponse summary = summary(0);
+        when(formatter.formatPersonal(summary)).thenReturn(new ManagerFormattedReport(
+                "Отчёт без замечаний", "<h2>Отчёт без замечаний</h2>"));
+        var deferred = new com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem();
+        deferred.setId(4201L);
+        deferred.setEntityKey("ORDER:21052");
+        deferred.setTitle("Пункт приема цветного и черного металла");
+        deferred.setDeferredAt(LocalDateTime.now().minusDays(75));
+        deferred.setStatus(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.DEFERRED);
+        when(concreteItemRepository.findOverdueDeferredForAudit(
+                eq(manager.getId()), any(LocalDateTime.class), any(LocalDateTime.class),
+                eq(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.RESOLVED)))
+                .thenReturn(List.of(deferred));
+        when(taskContextService.deferralAttributable(deferred, summary.date())).thenReturn(false);
+        when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
+                .thenReturn(Optional.empty());
+        when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), any())).thenReturn(Optional.of(503));
+
+        assertThat(service.deliver(manager, summary)).isTrue();
+
+        verify(sessionRepository, atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(review ->
+                review.getIssueCount() == 0
+                        && !review.getReportSnapshot().contains("Отложенные более суток")
+                        && review.isAutoCompleted()));
     }
 
     @Test
@@ -1134,5 +1164,59 @@ class ManagerReportReviewTelegramServiceTest {
         when(summary.managerName()).thenReturn("Менеджер");
         when(summary.problemCount()).thenReturn(problems);
         return summary;
+    }
+
+    @Test
+    void strayTextToAnAbandonedDisputeIsNotSentToOwners() {
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(41L);
+        review.setManagerUserId(17L);
+        review.setRecipientChatId(700L);
+        review.setStatus(ManagerReportReviewStatus.DISPUTE_PENDING);
+        review.setReplyPromptMessageId(555);
+        when(sessionRepository.findFirstByManagerUserIdAndRecipientChatIdAndStatusInOrderByCreatedAtDesc(
+                eq(17L), eq(700L), any()
+        )).thenReturn(Optional.of(review));
+
+        assertThat(service.handleTextMessage(700L, user,
+                "Через неделю пишу боту совсем про другое дело", null)).isTrue();
+
+        verify(issueService, never()).submitDispute(any(), any());
+        verify(ownerNotificationService, never()).notifyDispute(any(), any());
+        verify(telegramService).sendMessageWithInlineKeyboard(
+                eq(700L), org.mockito.ArgumentMatchers.contains("«Ответить»"), eq("HTML"), any());
+    }
+
+    @Test
+    void menuCommandPassesAnUnfinishedAuditInPrivateChat() {
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(41L);
+        review.setManagerUserId(17L);
+        review.setRecipientChatId(700L);
+        review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        review.setReplyPromptMessageId(555);
+        when(sessionRepository.findFirstByManagerUserIdAndRecipientChatIdAndStatusInOrderByCreatedAtDesc(
+                eq(17L), eq(700L), any()
+        )).thenReturn(Optional.of(review));
+
+        assertThat(service.handleTextMessage(700L, user, "1", null)).isFalse();
+
+        verify(telegramService, never()).sendMessageWithInlineKeyboard(
+                org.mockito.ArgumentMatchers.anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void clientCompanyGroupCannotBecomeTheAuditGroup() {
+        var groups = mock(com.hunt.otziv.c_companies.api.CompanyTelegramGroups.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "companyTelegramGroups", groups);
+        when(groups.isCompanyGroup(-100777L)).thenReturn(true);
+        when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
+        when(managerRepository.findByUserId(17L)).thenReturn(Optional.of(manager));
+
+        assertThat(service.handleGroupCommand(-100777L, 700L, "/auditgroup"))
+                .hasValueSatisfying(answer -> assertThat(answer).contains("группа компании-клиента"));
+
+        verify(managerRepository, never()).save(any());
+        assertThat(manager.getAuditTelegramGroupChatId()).isNull();
     }
 }

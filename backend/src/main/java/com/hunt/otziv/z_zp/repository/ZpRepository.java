@@ -113,9 +113,15 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
                                           @Param("updatedSince") LocalDateTime updatedSince,
                                           @Param("maxZpId") long maxZpId);
 
+    /**
+     * Rewards whose ledger marker is missing or stale. The marker is unique per
+     * source row, so one outer join replaces the former NOT EXISTS + EXISTS pair
+     * (two marker lookups per reward on every one-minute repair pass).
+     */
     @Query("""
         SELECT z
         FROM Zp z
+        LEFT JOIN ContractorRewardSyncMarker marker ON marker.sourceZpId = z.id
         WHERE z.contractorRole IS NOT NULL
           AND NOT EXISTS (
               SELECT repair.sourceZpId
@@ -127,21 +133,10 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
                 )
           )
           AND (
-              NOT EXISTS (
-                  SELECT marker.id
-                  FROM ContractorRewardSyncMarker marker
-                  WHERE marker.sourceZpId = z.id
-              )
-              OR EXISTS (
-                  SELECT marker.id
-                  FROM ContractorRewardSyncMarker marker
-                  WHERE marker.sourceZpId = z.id
-                    AND (
-                        marker.sourceActive <> z.active
-                        OR marker.sourceUpdatedAt IS NULL
-                        OR (z.updatedAt IS NOT NULL AND marker.sourceUpdatedAt < z.updatedAt)
-                    )
-              )
+              marker.id IS NULL
+              OR marker.sourceActive <> z.active
+              OR marker.sourceUpdatedAt IS NULL
+              OR (z.updatedAt IS NOT NULL AND marker.sourceUpdatedAt < z.updatedAt)
           )
         ORDER BY z.id
     """)

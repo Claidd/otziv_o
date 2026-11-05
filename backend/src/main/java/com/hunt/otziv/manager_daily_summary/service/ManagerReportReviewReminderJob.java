@@ -52,57 +52,82 @@ public class ManagerReportReviewReminderJob {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void remind() {
         if (!appSettingService.getBoolean("manager.report-review.enabled", true)) return;
-        int firstMinutes = boundedMinutes("manager.report-review.reminder-one-minutes", 60);
-        int thirdMinutes = Math.max(
-                firstMinutes + 10,
-                boundedMinutes("manager.report-review.reminder-three-minutes", 180)
-        );
+        int firstMinutes = ManagerReportReviewDeadline.firstReminderMinutes(appSettingService.getInt(
+                ManagerReportReviewDeadline.FIRST_REMINDER_KEY, ManagerReportReviewDeadline.DEFAULT_FIRST_REMINDER_MINUTES));
+        int deadlineMinutes = ManagerReportReviewDeadline.deadlineMinutes(appSettingService.getInt(
+                ManagerReportReviewDeadline.DEADLINE_KEY, ManagerReportReviewDeadline.DEFAULT_DEADLINE_MINUTES));
+        boolean restrictionEnabled = appSettingService.getBoolean(ManagerReportReviewDeadline.RESTRICTION_KEY, true);
         LocalDateTime now = LocalDateTime.now();
         // Do not carry a managed session/answers snapshot across another audit transaction.
-        List<Long> pending = repository.findPendingIdsForReminder(PENDING, now.minusMinutes(firstMinutes));
+        List<Long> pending = repository.findPendingIdsForReminder(
+                PENDING, now.minusMinutes(Math.min(firstMinutes, deadlineMinutes)));
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         for (Long reviewId : pending) {
-            transaction.executeWithoutResult(ignored -> remindOne(reviewId, firstMinutes, thirdMinutes));
+            try {
+                transaction.executeWithoutResult(ignored ->
+                        remindOne(reviewId, firstMinutes, deadlineMinutes, restrictionEnabled));
+            } catch (RuntimeException failure) {
+                // One broken session must not stop reminders and restrictions for the others.
+                log.warn("Manager audit reminder failed reviewId={} errorType={} message={}",
+                        reviewId, failure.getClass().getSimpleName(), failure.getMessage(), failure);
+            }
         }
     }
 
-    private void remindOne(Long reviewId, int firstMinutes, int thirdMinutes) {
+    private void remindOne(Long reviewId, int firstMinutes, int deadlineMinutes, boolean restrictionEnabled) {
             ManagerReportReviewSession review = repository.findForUpdateById(reviewId).orElse(null);
             if (review == null || review.isTestMode() || review.getCompletedAt() != null
                     || !PENDING.contains(review.getStatus())) return;
             LocalDateTime now = LocalDateTime.now();
             if (rolloutPolicy.isShadowFor(review)) return;
             if (review.getDeadlineStartedAt() == null || review.getRecipientChatId() == null) return;
+            boolean aiAvailable = qualityService.aiAvailable();
             if (review.getAiUnavailableStartedAt() != null) {
-                return;
+                // Before reading is confirmed nothing waits for the provider; a pause taken then is
+                // only released here. Later pauses belong to saved answers and are resumed by recovery.
+                if (!aiAvailable || !readingPhase(review)
+                        || !aiAvailabilityService.resume(review, now, "reminder-job")) return;
             }
-            if (!qualityService.aiAvailable()) {
-                aiAvailabilityService.pause(
-                        review,
-                        now,
-                        "reminder-job",
-                        "DeepSeek недоступен при проверке срока"
-                );
+            if (!aiAvailable) {
+                // Only answer and plan checks need the provider; reading or writing a dispute does not.
+                if (review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING
+                        || review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING) {
+                    aiAvailabilityService.pause(
+                            review,
+                            now,
+                            "reminder-job",
+                            "DeepSeek недоступен при проверке срока"
+                    );
+                }
+                // The access policy does not restrict while the provider is down, so neither do reminders.
                 return;
             }
             long ageMinutes = Duration.between(review.getDeadlineStartedAt(), now).toMinutes();
-            if (ageMinutes >= thirdMinutes) {
-                if (repository.restrictIfDue(reviewId, now, now.minusMinutes(thirdMinutes)) == 1) {
+            if (ageMinutes >= deadlineMinutes) {
+                if (restrictionEnabled
+                        && repository.restrictIfDue(reviewId, now, now.minusMinutes(deadlineMinutes)) == 1) {
                     event(review, "RESTRICTION_APPLIED",
-                            "Разбор не завершён за " + thirdMinutes + " мин.");
+                            "Разбор не завершён за " + deadlineMinutes + " мин.");
                     accessPolicy.invalidate(review.getManagerUserId());
                 }
-                if (review.getReminderThreeSentAt() == null && send(review, true)) {
-                    repository.markReminderSentIfDue(reviewId, now, now.minusMinutes(thirdMinutes), true);
+                if (review.getReminderThreeSentAt() == null && send(review, true, deadlineMinutes, restrictionEnabled)) {
+                    repository.markReminderSentIfDue(reviewId, now, now.minusMinutes(deadlineMinutes), true);
                 }
             } else if (ageMinutes >= firstMinutes && review.getReminderOneSentAt() == null) {
-                if (send(review, false)) {
+                if (send(review, false, deadlineMinutes, restrictionEnabled)) {
                     repository.markReminderSentIfDue(reviewId, now, now.minusMinutes(firstMinutes), false);
                 }
             }
     }
 
-    private boolean send(ManagerReportReviewSession review, boolean repeated) {
+    private boolean readingPhase(ManagerReportReviewSession review) {
+        return review.getReadingConfirmedAt() == null
+                && (review.getStatus() == ManagerReportReviewStatus.DELIVERED
+                || review.getStatus() == ManagerReportReviewStatus.READING);
+    }
+
+    private boolean send(ManagerReportReviewSession review, boolean repeated, int deadlineMinutes,
+                         boolean restrictionEnabled) {
         String progress = switch (review.getStatus()) {
             case QUESTION_PENDING -> "Вы остановились на вопросах по конкретным замечаниям.";
             case PLAN_PENDING -> "Осталось зафиксировать конкретный план на следующую смену.";
@@ -110,25 +135,28 @@ public class ManagerReportReviewReminderJob {
             case DISPUTE_PENDING -> "Вы начали оспаривать отчёт, но не описали конкретную неточность.";
             default -> "Отчёт доставлен, но разбор ещё не начат.";
         };
+        String duration = ManagerReportReviewDeadline.duration(deadlineMinutes);
+        String title = !repeated
+                ? "🔔 <b>Напоминание</b>"
+                : restrictionEnabled
+                        ? "🔒 <b>Разбор не завершён за " + duration + "</b>"
+                        : "⏰ <b>Разбор не завершён за " + duration + "</b>";
+        String tail = !repeated
+                ? "\n\nВладельцу видны статус, время чтения и ответы."
+                : restrictionEnabled
+                        ? "\n\nДо завершения разбора доступен только личный кабинет. "
+                        + "После правильных ответов остальные разделы откроются автоматически."
+                        : "\n\nСрок прохождения истёк. Владельцу видны статус, время чтения и ответы.";
         return notificationMediaDeliveryService.send(
                 repeated
                         ? NotificationMediaEventCatalog.MANAGER_REPORT_OVERDUE.code()
                         : NotificationMediaEventCatalog.MANAGER_REPORT_REMINDER.code(),
                 review.getRecipientChatId(),
                 review.getManagerUserId(),
-                (repeated ? "🔒 <b>Разбор не завершён за 3 часа</b>" : "🔔 <b>Напоминание</b>")
-                        + "\n\n" + progress
-                        + (repeated
-                        ? "\n\nДо завершения разбора доступен только личный кабинет. "
-                        + "После правильных ответов остальные разделы откроются автоматически."
-                        : "\n\nВладельцу видны статус, время чтения и ответы."),
+                title + "\n\n" + progress + tail,
                 "HTML",
                 ManagerReportReviewTelegramService.continueKeyboard(review.getId())
         );
-    }
-
-    private int boundedMinutes(String key, int fallback) {
-        return Math.max(10, Math.min(1440, appSettingService.getInt(key, fallback)));
     }
 
     private void event(ManagerReportReviewSession review, String type, String payload) {

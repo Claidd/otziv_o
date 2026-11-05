@@ -105,6 +105,10 @@ export function isDeliveryReconciliationCard(example: ManagerControlConcreteItem
   return /state_transaction_outcome_uncertain|manual_delivery_handoff_pending|message_send_(?:in_progress|stale|unknown)|«проверить отправку»|ручная проверка продолжается|исход (?:автоматической |предыдущей )?отправки (?:этого заказа )?(?:ещё )?не подтвержд|результат предыдущей отправки клиенту не подтвержд|результат отправки сообщения по сч[её]ту не подтвержд/i.test(reason);
 }
 
+/** Server markers of an audit card that waits for the owner's check of an answer given outside the chat. */
+const CLIENT_CHAT_OWNER_CHECK_STATUS = 'Проверка владельца';
+const CLIENT_CHAT_OWNER_CLAIM_PREFIX = 'Менеджер ответил вне чата: «';
+
 export function shouldHideClientChatUnansweredAfterAction(
   example: Pick<ManagerControlConcreteItem, 'itemStatus'>
 ): boolean {
@@ -118,6 +122,24 @@ export function isTelegramBindingAutomationIssue(
   return example.type === 'AUTOMATION_FAILURE'
     && (reason.includes('telegram_group_missing') || reason.includes('для telegram-группы не задан chatid')
       || reason.includes('группа telegram не привязана к компании'));
+}
+
+/** MAX: the bot link `https://max.ru/<bot>?start=<payload>` becomes the in-group command `/start <payload>`. */
+export function maxGroupLinkCommand(inviteUrl: string): string {
+  try {
+    const url = new URL(inviteUrl);
+    const host = url.hostname.toLowerCase();
+    if (host !== 'max.ru' && !host.endsWith('.max.ru')) {
+      return '';
+    }
+    const payload = (url.searchParams.get('start') ?? '').trim();
+    if (!payload || !/^[A-Za-z0-9_-]+$/.test(payload)) {
+      return '';
+    }
+    return `/start ${payload}`;
+  } catch {
+    return '';
+  }
 }
 
 export function telegramGroupLinkCommand(inviteUrl: string): string {
@@ -293,6 +315,9 @@ export class ManagerControlComponent implements OnInit {
   readonly reportReviewTestStarting = signal(false);
   readonly managerReportReviews = signal<ManagerReportReview[]>([]);
   readonly managerReportReviewsLoading = signal(false);
+  /** Selected audit report date; null shows the latest date that has audit reports. */
+  readonly reportReviewDate = signal<string | null>(null);
+  readonly reportReviewLatestDate = signal<string | null>(null);
   readonly reportDisputeComments = signal<Record<number, string>>({});
   readonly resolvingReportReviewIds = signal<Set<number>>(new Set());
   readonly chatLinkEditor = signal<ManagerControlConcreteItem | null>(null);
@@ -538,9 +563,14 @@ export class ManagerControlComponent implements OnInit {
   loadManagerReportReviews(): void {
     if (this.managerReportReviewsLoading()) return;
     this.managerReportReviewsLoading.set(true);
-    this.api.managerReportReviews().subscribe({
+    const selectedDate = this.reportReviewDate();
+    this.api.managerReportReviews(selectedDate ?? undefined).subscribe({
       next: (reviews) => {
         this.managerReportReviews.set(reviews);
+        if (!selectedDate) {
+          const latest = reviews[0]?.summaryDate?.slice(0, 10) ?? null;
+          if (latest) this.reportReviewLatestDate.set(latest);
+        }
         this.managerReportReviewsLoading.set(false);
       },
       error: () => {
@@ -548,6 +578,41 @@ export class ManagerControlComponent implements OnInit {
         this.managerReportReviewsLoading.set(false);
       }
     });
+  }
+
+  /** Audit remarks of an earlier report date; null returns to the latest date. */
+  selectReportReviewDate(date: string | null): void {
+    const value = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+    const latest = this.reportReviewLatestDate();
+    this.reportReviewDate.set(value && latest && value >= latest ? null : value);
+    this.loadManagerReportReviews();
+  }
+
+  shiftReportReviewDate(days: number): void {
+    const current = this.reportReviewDate() ?? this.reportReviewLatestDate();
+    if (!current) return;
+    this.selectReportReviewDate(this.shiftIsoDate(current, days));
+  }
+
+  canShowLaterReportReviews(): boolean {
+    return this.reportReviewDate() !== null;
+  }
+
+  /** The latest report date and the six days before it. */
+  reportReviewRecentDates(): string[] {
+    const latest = this.reportReviewLatestDate();
+    if (!latest) return [];
+    return Array.from({ length: 7 }, (_, index) => this.shiftIsoDate(latest, -index));
+  }
+
+  isSelectedReportReviewDate(date: string): boolean {
+    return (this.reportReviewDate() ?? this.reportReviewLatestDate()) === date;
+  }
+
+  private shiftIsoDate(date: string, days: number): string {
+    const [year, month, day] = date.split('-').map(Number);
+    const shifted = new Date(Date.UTC(year, month - 1, day + days));
+    return shifted.toISOString().slice(0, 10);
   }
 
   reportReviewStatus(review: ManagerReportReview): string {
@@ -615,7 +680,7 @@ export class ManagerControlComponent implements OnInit {
       case 'STARTED': return 'Разбор начат';
       case 'READING_STARTED': return 'Отчёт открыт для изучения';
       case 'READING_CONFIRMED': return 'Прочтение подтверждено';
-      case 'DEADLINE_STARTED': return 'Начат трёхчасовой срок';
+      case 'DEADLINE_STARTED': return 'Начат срок прохождения';
       case 'ANSWER_ACCEPTED': return 'Ответ принят';
       case 'ANSWER_REJECTED': return 'Запрошено уточнение';
       case 'ANSWER_EVIDENCE_SNAPSHOT': return 'Данные, использованные при проверке ответа';
@@ -1929,13 +1994,26 @@ export class ManagerControlComponent implements OnInit {
     }
 
     if (max && url) {
+      const command = maxGroupLinkCommand(url);
       this.toast.info(
         title,
-        'Откройте MAX-бота, запустите его и добавьте администратором в нужную группу. Затем нажмите «Привязать MAX» ещё раз.',
-        {
-          label: 'Открыть привязку',
-          callback: () => window.open(url, '_blank', 'noopener,noreferrer')
-        }
+        'Если бота ещё нет в группе — откройте привязку, запустите бота и добавьте его администратором. Если бот уже в группе (одна группа на несколько филиалов) — отправьте в ней одноразовую команду. Затем нажмите «Починить» ещё раз.',
+        [
+          {
+            label: 'Открыть привязку',
+            callback: () => window.open(url, '_blank', 'noopener,noreferrer')
+          },
+          ...(command ? [{
+            label: 'Скопировать команду',
+            callback: () => {
+              void copyTextToClipboard(command).then((copied) => {
+                if (copied) {
+                  this.toast.success('Команда скопирована', 'Отправьте её в нужной MAX-группе. Команда одноразовая: если открыли ссылку, нажмите «Починить» ещё раз.');
+                }
+              });
+            }
+          }] : [])
+        ]
       );
       return;
     }
@@ -2031,6 +2109,88 @@ export class ManagerControlComponent implements OnInit {
     const comment = itemId ? this.detailConcreteComment(itemId).trim() : '';
     this.markConcreteItem(example, 'DEFERRED', {
       comment: comment || 'Нужно продолжить обработку сообщения клиента'
+    });
+  }
+
+  /** «Ответил в другом мессенджере»: the card comment is the claim the owner checks afterwards. */
+  markUnansweredAnsweredOutsideChat(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (!itemId || this.isConcreteUpdating(itemId)) {
+      return;
+    }
+    const comment = this.detailConcreteComment(itemId).trim();
+    if (comment.length < 10) {
+      this.toast.warning(
+        'Нужен комментарий',
+        'Напишите в комментарии по карточке, где и когда вы ответили клиенту. Владелец проверит этот ответ.'
+      );
+      return;
+    }
+    if (!window.confirm(
+      'Закрыть карточку: вы ответили клиенту в другом мессенджере?\n\n'
+      + `Комментарий: ${comment}\n\n`
+      + 'Сообщение не будет считаться проигнорированным, а владелец или администратор проверит ваш ответ.'
+    )) {
+      return;
+    }
+    this.setConcreteUpdating(itemId, true);
+    this.api.markClientMessageAnsweredOutsideChat(itemId, comment).subscribe({
+      next: (updated) => {
+        this.setConcreteUpdating(itemId, false);
+        const merged = this.patchDetailConcreteItem(example, updated);
+        this.toast.success('Ответ вне чата записан', 'Карточка закрыта, владелец проверит ваш комментарий');
+        if (this.shouldHideConcreteItemAfterAction(merged)) {
+          this.removeConcreteItemFromDetail(merged);
+        }
+        this.load({ silent: true });
+      },
+      error: (err) => {
+        this.setConcreteUpdating(itemId, false);
+        this.toast.error('Не удалось записать ответ', apiErrorMessage(err, 'Повторите действие'));
+      }
+    });
+  }
+
+  readonly staleChatInviteResults = signal<Record<number, { message: string; inviteUrl: string | null }>>({});
+
+  staleChatInviteResult(example: ManagerControlConcreteItem): { message: string; inviteUrl: string | null } | null {
+    return example.controlEntityId ? this.staleChatInviteResults()[example.controlEntityId] ?? null : null;
+  }
+
+  /** «Ссылка-приглашение устарела»: reads the current invite if possible; changes and sends nothing. */
+  reportStaleChatInvite(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (!itemId || this.isConcreteUpdating(itemId)) {
+      return;
+    }
+    if (!window.confirm(
+      'Ссылка на чат компании не открывает группу?\n\n'
+      + 'Система попробует получить актуальную ссылку-приглашение через подключённый аккаунт компании. '
+      + 'Привязка группы и ссылка в компании не меняются, никому ничего не отправляется.'
+    )) {
+      return;
+    }
+    this.setConcreteUpdating(itemId, true);
+    this.api.reportStaleChatInvite(itemId).subscribe({
+      next: (result) => {
+        this.setConcreteUpdating(itemId, false);
+        if (result.item) {
+          this.patchDetailConcreteItem(example, result.item);
+        }
+        this.staleChatInviteResults.update((results) => ({
+          ...results,
+          [itemId]: { message: result.message, inviteUrl: result.inviteUrl ?? null }
+        }));
+        if (result.inviteUrl) {
+          this.toast.info('Найдена актуальная ссылка', 'Откройте её в карточке, чтобы войти в группу и ответить клиенту');
+        } else {
+          this.toast.info('Актуальная ссылка не получена', 'Ответьте клиенту из карточки кнопкой «Ответить клиенту сейчас»');
+        }
+      },
+      error: (err) => {
+        this.setConcreteUpdating(itemId, false);
+        this.toast.error('Не удалось проверить ссылку', apiErrorMessage(err, 'Повторите действие'));
+      }
     });
   }
 
@@ -2392,6 +2552,9 @@ export class ManagerControlComponent implements OnInit {
     if (example.type === 'COMMON_INVOICE' && actionType === 'ACTION_TAKEN') {
       return 'Проверить текущее состояние счёта и закрыть карточку, если проблема устранена';
     }
+    if (actionType === 'ACTION_TAKEN' && this.isOwnerCheckHandoff(example)) {
+      return 'Передать владельцу: ответ вне чата подтверждает владелец или администратор';
+    }
     if (example.type === 'CLIENT_CHAT_AUDIT' && actionType === 'ACTION_TAKEN') {
       return 'Укажите в комментарии найденный ответ или выполненное действие';
     }
@@ -2431,11 +2594,32 @@ export class ManagerControlComponent implements OnInit {
       .trim() || 'Текст сообщения не найден. Откройте переписку для проверки.';
   }
 
+  /** Audit card of a manager's answer outside the chat: only an owner or administrator confirms it. */
+  isClientChatOwnerCheck(example: ManagerControlConcreteItem): boolean {
+    return example.type === 'CLIENT_CHAT_AUDIT' && example.status === CLIENT_CHAT_OWNER_CHECK_STATUS;
+  }
+
+  clientAuditOwnerClaim(example: ManagerControlConcreteItem): string {
+    const reason = example.reason ?? '';
+    const start = reason.indexOf(CLIENT_CHAT_OWNER_CLAIM_PREFIX);
+    if (start < 0) {
+      return '';
+    }
+    const from = start + CLIENT_CHAT_OWNER_CLAIM_PREFIX.length;
+    const end = reason.indexOf('»', from);
+    return (end < 0 ? reason.slice(from) : reason.slice(from, end)).trim();
+  }
+
+  /** A manager hands their own claim over to the owner; the owner records the check result. */
+  isOwnerCheckHandoff(example: ManagerControlConcreteItem): boolean {
+    return this.isClientChatOwnerCheck(example) && !this.canManageDailySummary();
+  }
+
   private requiresClientAuditComment(
     example: ManagerControlConcreteItem,
     actionType: ManagerControlActionType
   ): boolean {
-    if (example.type !== 'CLIENT_CHAT_AUDIT' || actionType !== 'ACTION_TAKEN') {
+    if (example.type !== 'CLIENT_CHAT_AUDIT' || actionType !== 'ACTION_TAKEN' || this.isOwnerCheckHandoff(example)) {
       return false;
     }
     const itemId = example.controlEntityId;

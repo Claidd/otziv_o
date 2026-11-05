@@ -125,13 +125,15 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
               AND item.workerNotificationSentAt IS NOT NULL
               AND item.workerNotificationSentAt <= :cutoff
               AND item.workerExplanationAt IS NULL
-              AND item.status = :status
+              AND item.status <> :resolved
+              AND item.control.controlDate = :controlDate
               AND (item.workerReminderSentAt IS NULL OR item.workerReminderSentAt <= :cutoff)
             ORDER BY item.workerNotificationSentAt ASC
             """)
     List<ManagerDailyControlConcreteItem> findPendingWorkerExplanationReminders(
             @Param("cutoff") LocalDateTime cutoff,
-            @Param("status") ManagerDailyControlItemStatus status,
+            @Param("resolved") ManagerDailyControlItemStatus resolved,
+            @Param("controlDate") LocalDate controlDate,
             Pageable pageable
     );
 }

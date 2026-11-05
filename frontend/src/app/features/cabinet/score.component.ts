@@ -143,12 +143,14 @@ export class ScoreComponent {
 
   private savedContractorUsers(): ScoreUser[] {
     const users = new Map<number, ScoreUser>();
+    const defaultImageUrl = this.score()?.defaultImageUrl ?? null;
     for (const payment of this.savedContractorPayments()) {
       if (!users.has(payment.userId)) {
         users.set(payment.userId, {
           fio: payment.fio || `Профиль #${payment.profileId}`,
           role: 'Сохранённый финансовый профиль',
-          userId: payment.userId
+          userId: payment.userId,
+          imageUrl: defaultImageUrl
         });
       }
     }
@@ -386,8 +388,8 @@ export class ScoreComponent {
     ].filter(Boolean) as Array<{ label: string; value: string }>;
   }
 
-  imageUrl(imageId?: number | null): string {
-    return this.cabinetApi.imageUrl(imageId);
+  imageUrl(imageId?: number | null, signedPath?: string | null): string {
+    return this.cabinetApi.imageUrl(imageId, signedPath);
   }
 
   userTrack(user: ScoreUser): string {

@@ -171,6 +171,39 @@ class ReviewSilenceArchiveTest {
         verifyNoInteractions(archiveNotifications);
     }
 
+    @Test void campaignsArchiveNoticesAndRemindersShareTheSendingAccountInterval() {
+        var ledger=new InMemorySenderDispatchLedger();
+        ReflectionTestUtils.setField(service,"senderAccountPacing",new SenderAccountPacing(ledger));
+        LocalDateTime local=LocalDateTime.of(2026,11,3,11,0);
+        LocalDateTime storage=messageTime.toStorageTime(local);
+        doReturn(local).when(messageTime).nowIrkutsk();
+        doReturn(storage).when(messageTime).nowStorage();
+        var offer=com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.OFFER_CAMPAIGN;
+        var reminder=com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER;
+        var whatsapp=new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(20L,"fixture","https://chat.whatsapp.com/x",null,null);
+
+        assertThat(service.reserveForSender(offer,"OFFER_CAMPAIGN",1,"WHATSAPP","fixture-client").allowed()).isTrue();
+        var second=service.reserveForSender(offer,"OFFER_CAMPAIGN",2,"WHATSAPP","fixture-client");
+        assertThat(second.allowed()).isFalse();
+        assertThat(second.code()).isEqualTo("rate_limited");
+        assertThat(second.nextAttemptAt()).isEqualTo(storage.plusSeconds(ScheduledClientMessageService.DEFAULT_WHATSAPP_GAP_SECONDS));
+        // The archive notice and the invoice reminder of the same account wait; another account is free.
+        assertThat(service.archiveNoticeNextSlot(30,whatsapp,"fixture-client")).isAfter(storage.plusSeconds(1));
+        assertThat(service.archiveNoticeNextSlot(30,whatsapp,"other-client")).isBeforeOrEqualTo(storage.plusSeconds(1));
+        assertThat(service.reserveForSender(reminder,"COMMON_INVOICE",3,whatsapp,"fixture-client").code())
+                .isEqualTo("rate_limited");
+        assertThat(ledger.count("WHATSAPP:fixture-client","CAMPAIGN","SENT")).isEqualTo(1);
+        assertThat(ledger.count("WHATSAPP:other-client","AUTORESPONDER","SENT")).isEqualTo(1);
+
+        // Pause and the master switch stop campaigns before any account slot is taken.
+        int rows=ledger.rows.size();
+        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED,true)).thenReturn(false);
+        assertThat(service.reserveForSender(offer,"OFFER_CAMPAIGN",4,"TELEGRAM",null).code()).isEqualTo("automation_paused");
+        assertThat(ledger.rows).hasSize(rows);
+        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED,true)).thenReturn(true);
+        assertThat(service.reserveForSender(offer,"OFFER_CAMPAIGN",4,"TELEGRAM",null).allowed()).isTrue();
+    }
+
     @Test void clientTextSilenceWaitsTheClientTextIntervalAfterTheSeventhReminder() throws Exception {
         waitForClientTexts();
         when(appSettingService.getInt(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS,2)).thenReturn(3);

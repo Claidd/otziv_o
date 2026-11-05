@@ -51,6 +51,24 @@ class ManagerArchiveRepositoryTest {
     }
 
     @Test
+    void pageCarriesWindowTotalAndOnlyAnEmptyLaterPageRunsTheSeparateCount() {
+        when(jdbc.query(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class))).thenReturn(List.of());
+        when(jdbc.queryForObject(anyString(), any(MapSqlParameterSource.class), org.mockito.ArgumentMatchers.eq(Long.class)))
+                .thenReturn(7L);
+        ManagerArchiveRepository repository = new ManagerArchiveRepository(jdbc, credentialCipher);
+
+        assertEquals(0, repository.findOrdersPage(ArchiveAccessScope.all(), "all", "кафе", 0, 10, "desc").total());
+        org.mockito.Mockito.verify(jdbc, org.mockito.Mockito.never())
+                .queryForObject(anyString(), any(MapSqlParameterSource.class), org.mockito.ArgumentMatchers.eq(Long.class));
+        assertEquals(7, repository.findOrdersPage(ArchiveAccessScope.all(), "all", "кафе", 3, 10, "desc").total());
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbc, org.mockito.Mockito.times(2)).query(sqlCaptor.capture(), any(MapSqlParameterSource.class), any(RowMapper.class));
+        assertTrue(sqlCaptor.getValue().contains("COUNT(*) OVER () AS total_count"));
+        assertEquals(2, countOccurrences(sqlCaptor.getValue(), "page.total_count AS total_count"));
+    }
+
+    @Test
     void findReviewRecoverySourceDecryptsPasswordReadThroughJdbc() throws SQLException {
         when(resultSet.getString(anyString())).thenAnswer(invocation ->
                 "bot_password".equals(invocation.getArgument(0)) ? "enc:v1:primary:ciphertext" : null

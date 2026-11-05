@@ -90,10 +90,42 @@ try {
     $base[$backupAccessName] = [guid]::NewGuid().ToString('N')
     $base[$backupSecretName] = [guid]::NewGuid().ToString('N')
     $base[$primaryAccessName] = [guid]::NewGuid().ToString('N')
+    $keycloakDbSecretName = [string]::Concat('KEYCLOAK_DB_', 'PASSWORD')
+    $keycloakBackupSecretName = [string]::Concat('BACKUP_KEYCLOAK_DB_', 'PASSWORD')
+    $base['KEYCLOAK_DB'] = 'keycloak'
+    $base['KEYCLOAK_DB_USER'] = 'keycloak'
+    $base[$keycloakDbSecretName] = [guid]::NewGuid().ToString('N')
 
     Write-TestEnv -Base $base -Overrides ([ordered]@{})
     $validOutput = (& $readiness -EnvFile $envPath *>&1 | Out-String)
     Assert-True -Condition $validOutput.Contains('Backup readiness contract passed') -Message 'Valid backup readiness settings did not pass.'
+
+    Assert-ReadinessFails -Base $base -Overrides ([ordered]@{
+        BACKUP_KEYCLOAK_ENABLED = 'false'
+    }) -Message 'Production backups were accepted without the Keycloak database.'
+    Assert-ReadinessFails -Base $base -Overrides ([ordered]@{
+        BACKUP_KEYCLOAK_ENABLED = 'yes'
+    }) -Message 'A non-literal BACKUP_KEYCLOAK_ENABLED boolean was accepted.'
+    Assert-ReadinessFails -Base $base -Overrides ([ordered]@{
+        KEYCLOAK_DB = ''
+    }) -Message 'The Keycloak backup was accepted without its database name.'
+    $missingKeycloakSecret = [ordered]@{}
+    $missingKeycloakSecret[$keycloakDbSecretName] = ''
+    Assert-ReadinessFails -Base $base -Overrides $missingKeycloakSecret `
+        -Message 'The Keycloak backup was accepted without a database credential.'
+    $readOnlyRole = [ordered]@{ BACKUP_KEYCLOAK_DB_USER = 'otziv_backup' }
+    $readOnlyRole[$keycloakDbSecretName] = ''
+    $readOnlyRole[$keycloakBackupSecretName] = [guid]::NewGuid().ToString('N')
+    Write-TestEnv -Base $base -Overrides $readOnlyRole
+    $readOnlyOutput = (& $readiness -EnvFile $envPath *>&1 | Out-String)
+    Assert-True -Condition $readOnlyOutput.Contains('Backup readiness contract passed') `
+        -Message 'A dedicated read-only Keycloak backup role was not accepted.'
+    Assert-ReadinessFails -Base $base -Overrides ([ordered]@{
+        BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME = 'backup-evidence.jsonl'
+    }) -Message 'Keycloak evidence sharing the MySQL journal was accepted.'
+    Assert-ReadinessFails -Base $base -Overrides ([ordered]@{
+        BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME = '../keycloak.jsonl'
+    }) -Message 'A Keycloak evidence path outside the work directory was accepted.'
 
     Assert-ReadinessFails -Base $base -Overrides ([ordered]@{
         BACKUP_ENCRYPTION_KEY_BASE64 = $credentialKey.TrimEnd('=')

@@ -563,6 +563,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 
     Optional<Company> findByTelegramGroupChatId(Long telegramGroupChatId);
 
+    boolean existsByTelegramGroupChatId(Long telegramGroupChatId);
+
     List<Company> findAllByTelegramGroupChatIdOrderById(Long telegramGroupChatId);
 
     @Query("""

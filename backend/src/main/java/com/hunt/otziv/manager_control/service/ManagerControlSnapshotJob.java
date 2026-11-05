@@ -68,7 +68,7 @@ public class ManagerControlSnapshotJob {
             }
         } catch(RuntimeException failure) {
             metrics.counter("otziv.projection.refresh","projection","manager-control","result","error").increment();
-            org.slf4j.LoggerFactory.getLogger(getClass()).warn("Manager snapshot refresh failed ({})",failure.getClass().getSimpleName());
+            org.slf4j.LoggerFactory.getLogger(getClass()).warn("Manager snapshot refresh failed: {}",failure.toString(),failure);
         } finally { leases.release(lease); }
     }
 }

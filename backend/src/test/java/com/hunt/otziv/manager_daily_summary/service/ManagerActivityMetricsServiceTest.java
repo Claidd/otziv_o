@@ -115,25 +115,18 @@ class ManagerActivityMetricsServiceTest {
         LocalDate date = LocalDate.of(2026, 7, 3);
         LocalDateTime until = date.atTime(12, 0);
         LocalDateTime monthStart = date.withDayOfMonth(1).atStartOfDay();
-        when(activityRepository.findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(
-                managerId,
-                monthStart,
-                until
-        )).thenReturn(List.of(
-                activity(date.withDayOfMonth(1).atTime(9, 0), "HEARTBEAT"),
-                activity(date.withDayOfMonth(1).atTime(9, 1), "HEARTBEAT"),
-                activity(date.atTime(11, 0), "HEARTBEAT"),
-                activity(date.atTime(11, 1), "HEARTBEAT")
+        // Unordered projections (timestamps/types only): the result must not depend on row order.
+        when(activityRepository.pointsForManagers(List.of(managerId), monthStart, until)).thenReturn(List.of(
+                point(managerId, date.atTime(11, 1), "HEARTBEAT"),
+                point(managerId, date.withDayOfMonth(1).atTime(9, 0), "HEARTBEAT"),
+                point(managerId, date.atTime(11, 0), "HEARTBEAT"),
+                point(managerId, date.withDayOfMonth(1).atTime(9, 1), "HEARTBEAT")
         ));
-        when(messageRepository.findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
-                managerId,
-                monthStart,
-                until
-        )).thenReturn(List.of(
-                message(date.withDayOfMonth(1).atTime(9, 0, 30)),
-                message(date.minusDays(1).atTime(10, 0)),
-                message(date.minusDays(1).atTime(10, 5)),
-                message(date.atTime(11, 10))
+        when(messageRepository.staffPointsForManagers(List.of(managerId), monthStart, until)).thenReturn(List.of(
+                messagePoint(managerId, date.atTime(11, 10)),
+                messagePoint(managerId, date.withDayOfMonth(1).atTime(9, 0, 30)),
+                messagePoint(managerId, date.minusDays(1).atTime(10, 5)),
+                messagePoint(managerId, date.minusDays(1).atTime(10, 0))
         ));
 
         ManagerActivityMetricsService.DailyAndAverage result =
@@ -143,6 +136,11 @@ class ManagerActivityMetricsServiceTest {
         assertEquals(60, result.daily().messengerOutsideSiteSeconds());
         assertEquals(180, result.daily().confirmedSeconds());
         assertEquals(140, result.averageDailyConfirmedSeconds());
+        // PERF-9: no full entities (message bodies) are loaded for the month-to-date metric.
+        org.mockito.Mockito.verify(activityRepository, org.mockito.Mockito.never())
+                .findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(messageRepository, org.mockito.Mockito.never())
+                .findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test

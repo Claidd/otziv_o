@@ -91,3 +91,6 @@ com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold
 com.hunt.otziv.common.web.CanonicalRequestPath
 # Identity-owned one-time deep-link binding of a staff Telegram chat (replaces binding by typed login).
 com.hunt.otziv.u_users.api.StaffTelegramLinks
+# Signed /images/{id} links for cabinet and admin user lists. Owner u_users; callers admin DTOs and
+# ApiCabinetController; no authorization or transaction of its own (pure link signing).
+com.hunt.otziv.u_users.api.UserImageLinks

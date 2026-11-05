@@ -383,6 +383,35 @@ class PublicationClientUpdatesMySqlIntegrationTest {
         assertThat(finalizations).hasValue(1);
     }
 
+    @Test void waitingInvoiceIsAskedOncePerOrderAndLessOftenAsTheWaitGrows() {
+        publish(71);publish(72);List<Long> events=allIds();worker.completeOrder(events.getFirst());
+        jdbc.update("INSERT INTO order_publication_client_updates(order_id,publication_occurrence,delivery_state,completion_done) VALUES(8,'other-order','SKIPPED',TRUE)");
+        long other=number("SELECT MAX(id) FROM order_publication_client_updates");
+        assertThat(outbox.dueBilling(20)).containsExactly(events.getLast(),other);
+        when(billing.finalizePublishedInvoiceForOrder(7)).thenReturn(false);
+        worker.completeBilling(events.getLast());
+        verify(billing,times(1)).finalizePublishedInvoiceForOrder(7);
+        assertThat(outbox.dueBilling(20)).containsExactly(other);
+        assertThat(events).allSatisfy(id -> assertThat(retryIn(id)).isBetween(58L,60L));
+        assertThat(number("SELECT COUNT(*) FROM order_publication_client_updates WHERE billing_done=TRUE")).isZero();
+        for (long[] wait:new long[][]{{30,900},{180,3600},{60*24*30,3600}}) {
+            jdbc.update("UPDATE order_publication_client_updates SET created_at=TIMESTAMPADD(MINUTE,?,CURRENT_TIMESTAMP(6)),billing_next_attempt_at=CURRENT_TIMESTAMP(6) WHERE order_id=7",-wait[0]);
+            worker.completeBilling(events.getLast());
+            assertThat(events).allSatisfy(id -> assertThat(retryIn(id)).isBetween(wait[1]-2,wait[1]));
+        }
+        assertThat(retryIn(other)).isNotPositive();
+        // A publication committed after the representative was chosen keeps its own billing pass.
+        jdbc.update("INSERT INTO order_publication_client_updates(order_id,publication_occurrence,delivery_state,completion_done) VALUES(7,'later','SKIPPED',TRUE)");
+        long later=number("SELECT MAX(id) FROM order_publication_client_updates");
+        when(billing.finalizePublishedInvoiceForOrder(7)).thenReturn(true);
+        worker.completeBilling(events.getLast());
+        assertThat(jdbc.queryForList("SELECT id FROM order_publication_client_updates WHERE order_id=7 AND billing_done=FALSE",Long.class)).containsExactly(later);
+        assertThat(outbox.dueBilling(20)).containsExactly(other,later);
+        worker.completeBilling(later);worker.completeBilling(other);
+        assertThat(number("SELECT COUNT(*) FROM order_publication_client_updates WHERE billing_done=FALSE")).isZero();
+        verify(billing,times(1)).finalizePublishedInvoiceForOrder(8);
+    }
+
     @Test void publicationStartIntentRollsBackWithBusinessChangeAndNeverSchedulesCompletionOrBilling() {
         jdbc.update("UPDATE orders SET status='На проверке'");
         tx.executeWithoutResult(status -> {
@@ -469,6 +498,7 @@ class PublicationClientUpdatesMySqlIntegrationTest {
     private String state(long id){return jdbc.queryForObject("SELECT delivery_state FROM order_publication_client_updates WHERE id=?",String.class,id);}
     private String operation(long id){return jdbc.queryForObject("SELECT operation_id FROM order_publication_client_updates WHERE id=?",String.class,id);}
     private void due(long id){jdbc.update("UPDATE order_publication_client_updates SET next_attempt_at=CURRENT_TIMESTAMP(6) WHERE id=?",id);}
+    private long retryIn(long id){return jdbc.queryForObject("SELECT TIMESTAMPDIFF(SECOND,CURRENT_TIMESTAMP(6),billing_next_attempt_at) FROM order_publication_client_updates WHERE id=?",Long.class,id);}
     private int number(String sql){return jdbc.queryForObject(sql,Integer.class);}
     private String text(String sql){return jdbc.queryForObject(sql,String.class);}
     private OrderPublicationOutboxWorker worker(OrderPublicationOutbox store,ClientMessageDelivery delivery,OrderStatusNotificationService service){return new OrderPublicationOutboxWorker(store,orders,checker,service,delivery,settings,billing,manager);}

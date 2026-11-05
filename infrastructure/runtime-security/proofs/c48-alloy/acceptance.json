@@ -1,0 +1,31 @@
+{
+  "schema": "otziv-apt-c48-acceptance-v1",
+  "result": "PASS",
+  "component": "alloy",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:6010376795977db1a66670feab760e710f70a330f16aa8b2c088367f7ef5861d",
+  "imageConfigId": "sha256:9431312d326aad43a0cced01c4c337822c1ee038ad11a9ff8f8f0048ce78c353",
+  "parentReference": "ghcr.io/claidd/otziv-security@sha256:27905df1862decf6e9c2543cb476e70e83d68351f7a5bb17194a6a094764db32",
+  "parentConfigId": "sha256:a40087d44026f83768b1d6c6a94005478bbc357c56e0943ef8b63ac4ba486aa5",
+  "advisory": "CVE-2026-109518",
+  "commit": "5d35c198898be7001769cf6ead6a0f3c2342cd07",
+  "run": "42065301547",
+  "attempt": "1",
+  "packages": [
+    {
+      "name": "libapt-pkg6.0t64",
+      "version": "2.8.4ubuntu0.1",
+      "sha256": "a50f3e68a793f90b05f44a4b5f2f59f3ec7687e39b5d8bbd1da44c84671fa3d6"
+    },
+    {
+      "name": "apt",
+      "version": "2.8.4ubuntu0.1",
+      "sha256": "ad2ea7f107f250ba88b0bfdba31812a341e3247589647aa2b03b9dc4e8abf8ed"
+    }
+  ],
+  "files": {
+    "infrastructure/runtime-security/proofs/c48-alloy/inspection/inspection.json": "38fbddca8e2aa961b0bffaf76f7dc613afdb283a7517f03cf9b1d8b0deab0a69",
+    "infrastructure/runtime-security/proofs/c48-alloy/inspection/runtime.json.gz": "0929d9c4b90a2c196e194e386978512451fc3f3912b24a062becbbb0e44f29f1",
+    "infrastructure/runtime-security/proofs/c48-alloy/executed-inspection.py.txt": "32497685fa6db01f6051c10895a0680fde7e9a0e0756616a3cc81ee7466c98f3",
+    "infrastructure/runtime-security/proofs/c48-alloy/executed-runtime-inventory.py.txt": "4969ebbd33456ba2fa10e377d2ff6877dca7651334c33536ca03362f83af1e1d"
+  }
+}

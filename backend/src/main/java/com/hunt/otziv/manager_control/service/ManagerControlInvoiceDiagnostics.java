@@ -46,6 +46,9 @@ public class ManagerControlInvoiceDiagnostics {
     private final CommonInvoicePublicationBlockerService commonInvoicePublicationBlockerService;
     private final PaymentLinkRepository paymentLinkRepository;
     private final AppSettingService appSettingService;
+    /** Field-injected so the constructor and its tests stay unchanged. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.common_billing.api.ArchivedCommonInvoiceRevival archivedInvoiceRevival;
 
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
     private static final Pattern HISTORICAL_REVIEW_ID = Pattern.compile(
@@ -75,6 +78,33 @@ public class ManagerControlInvoiceDiagnostics {
             CommonInvoiceStatus.REMINDER,
             CommonInvoiceStatus.PARTIALLY_PAID
     );
+
+    /**
+     * Same attribution as the manager's invoice list: billing account, invoice company or any
+     * order of the invoice. A missing invoice is left to the caller's not-found handling.
+     */
+    boolean isInvoiceAssignedTo(Long invoiceId, Long managerId) {
+        if (invoiceId == null || managerId == null) {
+            return false;
+        }
+        CommonInvoice invoice = commonInvoiceRepository.findByIdWithAccount(invoiceId).orElse(null);
+        if (invoice == null) {
+            return true;
+        }
+        var account = invoice.getAccount();
+        if (account != null) {
+            if (account.getManager() != null && managerId.equals(account.getManager().getId())) {
+                return true;
+            }
+            var company = account.getInvoiceCompany();
+            if (company != null && company.getManager() != null && managerId.equals(company.getManager().getId())) {
+                return true;
+            }
+        }
+        return commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId).stream()
+                .map(CommonInvoiceOrder::getOrder)
+                .anyMatch(order -> order != null && order.getManager() != null && managerId.equals(order.getManager().getId()));
+    }
 
     String specialistName(Long invoiceId) {
         if (invoiceId == null) {
@@ -358,7 +388,12 @@ public class ManagerControlInvoiceDiagnostics {
                         long hours = item.getPublicationBlockerSince() == null
                                 ? 0
                                 : Math.max(0, Duration.between(item.getPublicationBlockerSince(), LocalDateTime.now()).toHours());
-                        return "#" + orderId + " «" + orderStatusTitle(order) + "» (" + hours + " ч.)";
+                        String inStatusSince = order == null || order.getStatusChangedAt() == null
+                                ? ""
+                                : ", в статусе с " + order.getStatusChangedAt().format(
+                                        java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"));
+                        return "#" + orderId + " «" + orderStatusTitle(order) + "» (держит сбор "
+                                + hours + " ч." + inStatusSince + ")";
                     })
                     .collect(Collectors.joining(", "));
             long publicationOrLater = (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
@@ -366,7 +401,8 @@ public class ManagerControlInvoiceDiagnostics {
                     .filter(commonInvoicePublicationBlockerService::isPublicationOrLater)
                     .count();
             return "Почему в замечаниях: в общем счете уже есть " + publicationOrLater
-                    + " заказ(а) в «Публикации» или выше, но допубликационные позиции блокируют сбор более 48 часов. "
+                    + " заказ(а) в «Публикации» или выше, но допубликационные позиции держат сбор счёта более 48 часов "
+                    + "(отсчёт идёт с выхода первого заказа в «Публикацию», смена статуса внутри проверки его не сбрасывает). "
                     + "Блокеры: " + blockers
                     + ". Проверьте доставку напоминаний и состояние заказов. Состав счета автоматически не меняется.";
         }
@@ -488,6 +524,16 @@ public class ManagerControlInvoiceDiagnostics {
                     + (solution.isBlank() ? "проверьте заказы общего счета" : solution)
                     + ". После исправления нажмите «Починить», чтобы безопасно повторить одобрение.";
         }
+        if (error.startsWith("payable_change_requires_supplement")) {
+            if (commonInvoiceArchivedCycleRevived(invoice)) {
+                return "Общий счёт был закрыт в архив, а его заказы позже вернули в работу без восстановления счёта; "
+                        + "после правки отзывов счёт ушёл на ручную проверку. Оплат, отправок и платёжных ссылок по нему нет. "
+                        + "Нажмите «Починить», чтобы вернуть счёт в сбор: заказы и сообщения клиенту не изменятся.";
+            }
+            return "Сумма заказа изменилась после того, как счёт уже был зафиксирован (отправлен, оплачивается или закрыт). "
+                    + "Нужна сверка с администратором: доплата отдельным счётом или исправление состава. "
+                    + "Автоматически счёт не меняется.";
+        }
         if (commonInvoiceTechnicalTailRepairable(invoice)) {
             return "У общего счета остался технический хвост. Рекомендация: нажмите «Починить», чтобы скрыть старую карточку из контроля.";
         }
@@ -573,6 +619,12 @@ public class ManagerControlInvoiceDiagnostics {
                 .filter(Objects::nonNull)
                 .findFirst()
                 .orElse(null);
+    }
+
+    boolean commonInvoiceArchivedCycleRevived(CommonInvoice invoice) {
+        return archivedInvoiceRevival != null && invoice != null && invoice.getId() != null
+                && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && archivedInvoiceRevival.revivable(invoice.getId());
     }
 
     boolean commonInvoiceTechnicalTailRepairable(CommonInvoice invoice) {

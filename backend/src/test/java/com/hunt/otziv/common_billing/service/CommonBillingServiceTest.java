@@ -7796,6 +7796,90 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void recreatedReviewsWithTheSameSumDoNotFlagADeliveredInvoice() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        invoice.setSentAt(LocalDateTime.of(2026, 8, 7, 10, 0));
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+
+        assertTrue(service.refreshLinkedOrderAmount(101L));
+
+        assertEquals(CommonInvoiceStatus.INVOICED, invoice.getStatus());
+        assertNull(invoice.getLastError());
+    }
+
+    @Test
+    void reviewEditOnRestoredOrdersLeavesTheArchivedCycleAlone() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.ARCHIVED);
+        invoice.setCloseReason("MANUAL_ARCHIVE");
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+
+        assertTrue(service.refreshLinkedOrderAmount(101L));
+
+        assertEquals(CommonInvoiceStatus.ARCHIVED, invoice.getStatus());
+        assertNull(invoice.getPreviousStatus());
+        verify(invoiceRepository, never()).save(invoice);
+    }
+
+    @Test
+    void secondPayableChangeKeepsTheFirstAttentionReason() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setPreviousStatus("INVOICED");
+        invoice.setSentAt(LocalDateTime.of(2026, 8, 7, 10, 0));
+        invoice.setLastError("payable_change_requires_supplement: source_invoice=10;order=101;previous=INVOICED");
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1500));
+
+        assertTrue(service.refreshLinkedOrderAmount(101L));
+
+        assertEquals("INVOICED", invoice.getPreviousStatus());
+        assertTrue(invoice.getLastError().endsWith("previous=INVOICED"));
+    }
+
+    @Test
+    void archivedCycleRevivedByItsOrdersIsReturnableOnlyWithoutMoneyOrDeliveryEvidence() {
+        CommonInvoiceArchiveWorkflow archive = (CommonInvoiceArchiveWorkflow)
+                ReflectionTestUtils.getField(service, "invoiceArchiveWorkflow");
+        ReflectionTestUtils.setField(archive, "paymentRefRepository", paymentRefRepository);
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setPreviousStatus("NEEDS_ATTENTION");
+        invoice.setLastError("payable_change_requires_supplement: source_invoice=10;order=101;previous=ARCHIVED");
+        invoice.setCloseReason("MANUAL_ARCHIVE");
+        invoice.setClosedAt(LocalDateTime.of(2026, 9, 1, 23, 30));
+        Order order = order(101L);
+        order.setStatus(status("На проверке"));
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setReady(false);
+        when(paymentRefRepository.existsByInvoice_Id(invoice.getId())).thenReturn(false);
+
+        assertTrue(service.archivedCycleRevivedByOrders(invoice, List.of(item)));
+
+        invoice.setSentAt(LocalDateTime.of(2026, 9, 1, 10, 0));
+        assertFalse(service.archivedCycleRevivedByOrders(invoice, List.of(item)));
+        invoice.setSentAt(null);
+        invoice.setPaidKopecks(1);
+        assertFalse(service.archivedCycleRevivedByOrders(invoice, List.of(item)));
+        invoice.setPaidKopecks(0);
+        order.setStatus(status("Архив"));
+        assertFalse(service.archivedCycleRevivedByOrders(invoice, List.of(item)));
+        order.setStatus(status("На проверке"));
+        when(paymentRefRepository.existsByInvoice_Id(invoice.getId())).thenReturn(true);
+        assertFalse(service.archivedCycleRevivedByOrders(invoice, List.of(item)));
+        invoice.setCloseReason(null);
+        assertFalse(service.archivedCycleRevivedByOrders(invoice, List.of(item)));
+    }
+
+    @Test
     void unpaidCommonInvoiceAllowsTaskCompletionButRequiresSupplement() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);

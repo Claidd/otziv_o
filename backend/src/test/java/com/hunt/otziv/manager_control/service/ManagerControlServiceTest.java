@@ -288,11 +288,11 @@ class ManagerControlServiceTest {
     var dayLifecycle = new ManagerControlDayLifecycle(problemExamples, accessPolicy, cardLifecycle, qualityQueries, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository);
     var dailySnapshot = new ManagerControlDailySnapshotWorkflow(dayLifecycle, problemExamples, cardLifecycle, slaPolicy, workerTaskLookup, workerExplanationQueries, orderAutomationDiagnostics, orderService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewService, reviewRepository, orderRepository, companyRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository, managerActionBalanceService, managerOperationalMetricsService, leadsRepository);
     dailySnapshotWorkflow = dailySnapshot;
-    var boardWorkflow = new ManagerControlBoardWorkflow(dailySnapshot, dayLifecycle, concreteSnapshot, problemExamples, accessPolicy, cardLifecycle, workerExplanationQueries, qualityQueries, managerRepository, managerPermissionService, scheduledClientMessageService, dailyControlRepository, dailyControlItemRepository, managerPerformanceService, org.mockito.Mockito.mock(ManagerControlReadSnapshots.class), org.mockito.Mockito.mock(com.hunt.otziv.u_users.api.CabinetCacheScope.class));
+    var boardWorkflow = new ManagerControlBoardWorkflow(dailySnapshot, dayLifecycle, concreteSnapshot, problemExamples, accessPolicy, cardLifecycle, workerExplanationQueries, qualityQueries, managerRepository, managerPermissionService, scheduledClientMessageService, dailyControlRepository, dailyControlItemRepository, managerPerformanceService, org.mockito.Mockito.mock(ManagerControlReadSnapshots.class), org.mockito.Mockito.mock(com.hunt.otziv.u_users.api.CabinetCacheScope.class), managerControlTransactionRunner);
     var dayActions = new ManagerControlDayActions(boardWorkflow, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, dailyControlRepository, dailyControlItemRepository);
-    var reminderWorkflow = new ManagerControlReminderWorkflow(dailySnapshot, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, clientMessageText, managerRepository, userRepository, personalReminderService, telegramService, dailyControlRepository, dailyControlItemRepository);
+    var reminderWorkflow = new ManagerControlReminderWorkflow(dailySnapshot, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, clientMessageText, managerRepository, userRepository, personalReminderService, telegramService, dailyControlRepository, dailyControlItemRepository, mock(org.springframework.transaction.PlatformTransactionManager.class));
     var workerTaskWorkflow = new ManagerControlWorkerTaskWorkflow(concreteSnapshot, problemExamples, workerTaskLookup, personalReminderService, notificationMediaDeliveryService, riskIncidentRepository);
-    var itemActions = new ManagerControlItemActions(workerTaskWorkflow, reminderWorkflow, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, slaPolicy, concretePresenter, workerTaskLookup, managerPermissionService, orderService, clientChatMessageTrackerService, orderRepository, invoiceDiagnostics, managerAutomationFailureService, scheduledClientMessageService, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository, gamificationEventService, mock(ManagerControlOrderDeliveryState.class));
+    var itemActions = new ManagerControlItemActions(workerTaskWorkflow, reminderWorkflow, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, slaPolicy, concretePresenter, workerTaskLookup, managerPermissionService, orderService, clientChatMessageTrackerService, orderRepository, invoiceDiagnostics, managerAutomationFailureService, scheduledClientMessageService, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository, gamificationEventService, mock(ManagerControlOrderDeliveryState.class), clientConversationWorkflow, managerControlTransactionRunner);
     var repairOutcome = new ManagerControlRepairOutcome(problemExamples, accessPolicy, cardLifecycle, concretePresenter, dailyControlRepository, dailyControlConcreteItemRepository, mock(ManagerControlOrderDeliveryState.class));
     var chatRepairWorkflow = new ManagerControlChatRepairWorkflow(repairOutcome, problemExamples, orderAutomationDiagnostics, telegramService, scheduledClientMessageStateRepository, orderRepository, companyRepository, whatsAppGroupLinkSyncService, sharedChatLinkSyncService, telegramGroupLinkService, maxGroupLinkService);
     var automationRepairWorkflow = new ManagerControlAutomationRepairWorkflow(chatRepairWorkflow, repairOutcome, problemExamples, orderAutomationDiagnostics, scheduledClientMessageService, scheduledClientMessageStateRepository, clientChatMessageReconciliationService, managerAutomationFailureService, new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(scheduledClientMessageStateRepository, mock(org.springframework.jdbc.core.JdbcTemplate.class)), mock(ManagerControlManualDeliveryRepair.class), mock(ManagerControlReminderRestart.class));
@@ -667,6 +667,201 @@ class ManagerControlServiceTest {
         assertFalse(message.contains("Менеджер:"));
         assertFalse(message.contains("CLIENT_TEXT_REMINDER"));
         assertFalse(message.contains("Повторный контроль"));
+    }
+
+    @Test
+    void specialistRequestIsSentBetweenTwoShortTransactionsNotWhileTheCardIsLocked() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "BAD_REVIEW_TASK");
+        stubSuccessfulConcreteAction(concrete, parent);
+        BadReviewTask task = new BadReviewTask();
+        Worker worker = new Worker();
+        User workerUser = new User();
+        workerUser.setId(501L);
+        workerUser.setWorkerTelegramGroupChatId(-100123L);
+        worker.setUser(workerUser);
+        task.setWorker(worker);
+        when(badReviewTaskService.getTask(concrete.getEntityId())).thenReturn(task);
+        java.util.concurrent.atomic.AtomicInteger openTransactions = new java.util.concurrent.atomic.AtomicInteger();
+        org.mockito.Mockito.doAnswer(call -> {
+            openTransactions.incrementAndGet();
+            try {
+                return ((java.util.function.Supplier<?>) call.getArgument(0)).get();
+            } finally {
+                openTransactions.decrementAndGet();
+            }
+        }).when(managerControlTransactionRunner).required(any());
+        java.util.List<String> statusAtSend = new java.util.ArrayList<>();
+        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(501L), any(), any(), any())).thenAnswer(call -> {
+            assertEquals(0, openTransactions.get(), "Telegram must not be called inside the card transaction");
+            statusAtSend.add(concrete.getStatus().name());
+            return true;
+        });
+
+        ManagerControlConcreteItemResponse response = service.actionConcreteItem(
+                concrete.getId(),
+                new ManagerControlItemActionRequest("ACTION_TAKEN", null, true),
+                principal(),
+                adminAuth()
+        );
+
+        // The attempt is committed first (card still open), the result in a second transaction.
+        assertEquals(List.of("OPEN"), statusAtSend);
+        verify(managerControlTransactionRunner, times(2)).required(any());
+        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, concrete.getStatus());
+        assertEquals(concrete.getWorkerNotificationAttemptedAt(), concrete.getWorkerNotificationSentAt());
+        assertEquals("ACTION_TAKEN", response.itemStatus());
+    }
+
+    @Test
+    void deferringAnUnansweredChatAgainDoesNotRebroadcastToOwners() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setStatus(ManagerDailyControlItemStatus.DEFERRED);
+        parent.setActionType(ManagerDailyControlActionType.DEFERRED);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "CLIENT_CHAT_UNANSWERED");
+        concrete.setEntityId(103L);
+        stubSuccessfulConcreteAction(concrete, parent);
+        User owner = new User();
+        owner.setId(5L);
+        owner.setTelegramChatId(500L);
+        when(userRepository.findAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
+        when(userRepository.findAllOwners("ROLE_ADMIN")).thenReturn(List.of());
+
+        service.actionConcreteItem(concrete.getId(),
+                new ManagerControlItemActionRequest("DEFERRED", "Клиент ответит завтра", null), principal(), adminAuth());
+        service.actionConcreteItem(concrete.getId(),
+                new ManagerControlItemActionRequest("DEFERRED", "Клиент ответит завтра", null), principal(), adminAuth());
+
+        assertEquals(ManagerDailyControlItemStatus.OPEN, concrete.getStatus());
+        verify(telegramService, times(1)).sendMessage(eq(500L), org.mockito.ArgumentMatchers.startsWith("Карточка контроля отложена"));
+    }
+
+    @Test
+    void managerCannotMoveAnOrderOfAnotherManagerToReminderThroughAnOldCard() throws Exception {
+        Authentication auth = staleManagerAuthentication();
+        ManagerDailyControl control = control();
+        control.setManager(staleManager());
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(77L);
+        concrete.setStatusLabel("Выставлен счет");
+        Order order = new Order();
+        order.setId(77L);
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        lenient().when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findById(77L)).thenReturn(Optional.of(order));
+        when(managerAccessService.canAccessOrder(77L, auth)).thenReturn(false);
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class, () -> service.actionConcreteItem(
+                concrete.getId(), new ManagerControlItemActionRequest("ACTION_TAKEN", "Сообщение отправлено", null),
+                () -> "manager", auth));
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, failure.getStatusCode());
+        assertTrue(failure.getReason().contains("другим менеджером"));
+        verify(orderService, never()).changeStatusForOrder(anyLong(), anyString());
+    }
+
+    @Test
+    void managerCannotCloseAMessageOfAChatHandedToAnotherManager() {
+        Authentication auth = staleManagerAuthentication();
+        ManagerDailyControl control = control();
+        control.setManager(staleManager());
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "CLIENT_CHAT_UNANSWERED");
+        concrete.setEntityId(104L);
+        Company company = new Company();
+        company.setId(9L);
+        ClientChatUnansweredItem message = new ClientChatUnansweredItem();
+        message.setId(104L);
+        message.setCompany(company);
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(clientChatUnansweredItemRepository.findById(104L)).thenReturn(Optional.of(message));
+        when(managerAccessService.canAccessCompany(9L, auth)).thenReturn(false);
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class, () -> service.actionConcreteItem(
+                concrete.getId(), new ManagerControlItemActionRequest("ACTION_TAKEN", "Ответил", null),
+                () -> "manager", auth));
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, failure.getStatusCode());
+        verify(clientChatMessageTrackerService, never()).markFromManagerControl(any(), any(), any(), any());
+        assertEquals(ManagerDailyControlItemStatus.OPEN, concrete.getStatus());
+    }
+
+    @Test
+    void managerCannotRepairAnInvoiceThatNoLongerBelongsToThem() {
+        Authentication auth = staleManagerAuthentication();
+        ManagerDailyControl control = control();
+        control.setManager(staleManager());
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
+        concrete.setEntityId(905L);
+        Manager currentOwner = new Manager();
+        currentOwner.setId(99L);
+        CommonBillingAccount account = new CommonBillingAccount();
+        account.setManager(currentOwner);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(905L);
+        invoice.setAccount(account);
+        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(commonInvoiceRepository.findByIdWithAccount(905L)).thenReturn(Optional.of(invoice));
+        when(commonInvoiceOrderRepository.findByInvoiceIdWithOrders(905L)).thenReturn(List.of());
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.repairConcreteItem(concrete.getId(), () -> "manager", auth));
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, failure.getStatusCode());
+        verifyNoInteractions(commonBillingService);
+    }
+
+    @Test
+    void closedPreviousDayIsReadButNeverReopenedOrRescored() {
+        Manager manager = Manager.builder().id(7L).user(User.builder().id(13L).username("manager").active(true).build()).build();
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        ManagerDailyControl closed = new ManagerDailyControl();
+        closed.setId(55L);
+        closed.setManager(manager);
+        closed.setControlDate(yesterday);
+        closed.setStatus(ManagerDailyControlStatus.GREEN);
+        closed.setClosedAt(yesterday.atTime(21, 0));
+        closed.setFinalCheckedAt(yesterday.atTime(21, 0));
+        closed.setQualityScore(91);
+        when(dailyControlRepository.findByControlDateAndManager(yesterday, manager)).thenReturn(Optional.of(closed));
+        when(clientChatMessageTrackerService.countDue(manager)).thenReturn(3L);
+
+        var response = dailySnapshotWorkflow.managerControl(manager, yesterday, null, true, false);
+
+        assertEquals(55L, response.dailyControlId());
+        assertNotNull(closed.getClosedAt());
+        assertNotNull(closed.getFinalCheckedAt());
+        assertEquals(91, closed.getQualityScore());
+        verify(dailyControlRepository, never()).findByIdForUpdate(any());
+        verify(dailyControlRepository, never()).save(any());
+        verify(dailyControlItemRepository, never()).save(any());
+        verify(dailyControlEventRepository, never()).save(any());
+    }
+
+    private Manager staleManager() {
+        Manager manager = new Manager();
+        manager.setId(11L);
+        return manager;
+    }
+
+    /** A pure manager whose own manager row is the control's manager (id 11). */
+    private Authentication staleManagerAuthentication() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("manager", "n/a",
+                List.of(new SimpleGrantedAuthority("ROLE_MANAGER")));
+        User user = new User();
+        user.setId(2L);
+        user.setUsername("manager");
+        lenient().when(managerPermissionService.hasRole(auth, "ADMIN")).thenReturn(false);
+        lenient().when(managerPermissionService.hasRole(auth, "OWNER")).thenReturn(false);
+        lenient().when(managerPermissionService.hasRole(auth, "MANAGER")).thenReturn(true);
+        lenient().when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        lenient().when(managerRepository.findByUserId(2L)).thenReturn(Optional.of(staleManager()));
+        return auth;
     }
 
     @Test

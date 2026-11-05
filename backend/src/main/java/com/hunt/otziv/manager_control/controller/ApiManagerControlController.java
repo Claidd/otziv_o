@@ -10,6 +10,7 @@ import com.hunt.otziv.manager_control.dto.ManagerControlClientReplySuggestionRes
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlManagerDetailResponse;
+import com.hunt.otziv.manager_control.dto.ManagerControlStaleChatInviteResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlStageRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlSummaryResponse;
 import com.hunt.otziv.manager_control.service.ManagerControlService;
@@ -212,6 +213,35 @@ public class ApiManagerControlController {
                         principal,
                         authentication
                 )
+        );
+    }
+
+    /** «Ответил в другом мессенджере»: closes the card; the comment is required and is checked by the owner. */
+    @PostMapping("/concrete-items/{concreteItemId}/answered-outside-chat")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerControlConcreteItemResponse markAnsweredOutsideChat(
+            @PathVariable Long concreteItemId,
+            @RequestBody(required = false) ManagerControlItemActionRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.concrete-item-answered-outside-chat",
+                () -> managerControlService.markAnsweredOutsideChat(concreteItemId, request, principal, authentication)
+        );
+    }
+
+    /** «Ссылка-приглашение устарела»: reads the current invite if possible; changes and sends nothing. */
+    @PostMapping("/concrete-items/{concreteItemId}/stale-chat-invite")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerControlStaleChatInviteResponse reportStaleChatInvite(
+            @PathVariable Long concreteItemId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.concrete-item-stale-chat-invite",
+                () -> managerControlService.reportStaleChatInvite(concreteItemId, principal, authentication)
         );
     }
 

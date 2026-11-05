@@ -29,4 +29,20 @@ public interface BackgroundDispatchBudget {
 
     /** Same admission when the caller knows only the destination platform: WHATSAPP, TELEGRAM or MAX. */
     Admission reserveOnPlatform(Purpose purpose, String sourceKind, long sourceId, String platform);
+
+    /**
+     * Same admission plus the interval of the sending account (the WhatsApp client id; the single
+     * Telegram or MAX bot), shared by the autoresponder family and offer campaigns. Without a known
+     * account only the per-channel rules apply.
+     */
+    default Admission reserveForSender(Purpose purpose, String sourceKind, long sourceId,
+                                       ClientMessageDelivery.Target target, String senderClientId) {
+        return reserve(purpose, sourceKind, sourceId, target);
+    }
+
+    /** {@link #reserveForSender(Purpose, String, long, ClientMessageDelivery.Target, String)} by platform. */
+    default Admission reserveForSender(Purpose purpose, String sourceKind, long sourceId,
+                                       String platform, String senderClientId) {
+        return reserveOnPlatform(purpose, sourceKind, sourceId, platform);
+    }
 }

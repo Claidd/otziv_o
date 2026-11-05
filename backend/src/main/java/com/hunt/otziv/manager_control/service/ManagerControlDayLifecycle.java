@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import java.security.Principal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -52,6 +53,30 @@ public class ManagerControlDayLifecycle {
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
 
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
+
+    /**
+     * The end-of-day stage lasts until 05:00 of the next morning. Only in that window may the
+     * previous day still be refreshed or closed; afterwards it is history.
+     */
+    static boolean isPreviousDayClosingWindow(LocalDate controlDate, LocalDateTime now) {
+        return controlDate != null && now != null
+                && controlDate.equals(now.toLocalDate().minusDays(1))
+                && now.toLocalTime().isBefore(MORNING_STAGE_START);
+    }
+
+    /**
+     * Today's control is always current. A previous day is current only while its closing
+     * window lasts and it has not been closed; a closed or older day is never reopened or rescored.
+     */
+    static boolean isControlDayCurrent(ManagerDailyControl control, LocalDateTime now) {
+        if (control == null || control.getControlDate() == null || now == null) {
+            return false;
+        }
+        if (!control.getControlDate().isBefore(now.toLocalDate())) {
+            return true;
+        }
+        return control.getClosedAt() == null && isPreviousDayClosingWindow(control.getControlDate(), now);
+    }
 
     List<String> closeBlockers(ManagerDailyControl control, List<ManagerDailyControlItem> items) {
         List<String> blockers = new ArrayList<>();

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy } from '@angular/core';
 import { ManualPaymentTasksApi } from '../core/manual-payment-tasks.api';
 import { ContractorAccrualHistoryApi, type ContractorSelfAccrualAdjustment } from '../core/contractor-accrual-history.api';
 import { DictionariesApi } from '../core/dictionaries.api';
+import { WorkerDayResultsApi, type WorkerDayResult } from '../core/worker-day-results.api';
 import { inject, Component, computed, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationStart, ParamMap, Router, RouterLink } from '@angular/router';
@@ -77,6 +78,13 @@ type HomeTone = 'blue' | 'green' | 'teal' | 'violet' | 'yellow';
 type MetricTone = 'green' | 'blue' | 'yellow' | 'red';
 type TeamKey = 'managers' | 'marketologs' | 'workers' | 'operators';
 type TeamProgressMode = 'day' | 'month';
+type DayExcuseMode = 'excuse' | 'revoke';
+type DayExcuseDialog = {
+  mode: DayExcuseMode;
+  workerId: number;
+  workerName: string;
+  day: WorkerDayResult;
+};
 type ScoreAccrualTarget = {
   user: Pick<AdminUser, 'id' | 'fio' | 'username'>;
   kind: ContractorAccrualAdjustmentKind;
@@ -847,7 +855,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                                 >{{ memberEfficiency(progress) }}</span>
                               }
                             }
-                            <img [src]="imageUrl(member.imageId)" [alt]="member.fio || member.login">
+                            <img [src]="imageUrl(member.imageId, member.imageUrl)" [alt]="member.fio || member.login">
                             <div>
                               <strong>{{ member.fio || member.login }}</strong>
                               <span>{{ member.login }}</span>
@@ -870,6 +878,34 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                                 </section>
                                 <p class="team-progress-summary">{{ teamProgressSummary(progress) }}</p>
                               }
+                            }
+                            @if (section.key === 'workers' && dayResult(member); as day) {
+                              <section
+                                class="day-result"
+                                [class.reached]="day.reached100 && !day.excused"
+                                [class.excused]="day.excused"
+                                [class.missed]="!day.reached100"
+                              >
+                                <span class="material-icons-sharp" aria-hidden="true">
+                                  {{ day.excused ? 'verified' : day.reached100 ? 'task_alt' : 'event_busy' }}
+                                </span>
+                                <div>
+                                  <strong>{{ dayResultTitle(day) }}</strong>
+                                  <small>{{ dayResultSummary(day) }}</small>
+                                  @if (day.excused) {
+                                    <small class="day-result-reason">
+                                      {{ day.excuseReason }}@if (day.excusedBy) { · {{ day.excusedBy }} }
+                                    </small>
+                                  }
+                                </div>
+                                @if (day.canExcuse) {
+                                  <button type="button" (click)="openDayExcuse(member, day, 'excuse')">Засчитать день</button>
+                                } @else if (day.canRevoke) {
+                                  <button type="button" class="secondary" (click)="openDayExcuse(member, day, 'revoke')">
+                                    Отменить зачёт
+                                  </button>
+                                }
+                              </section>
                             }
                             <dl>
                               @for (row of teamRows(section.key, member); track row.label) {
@@ -930,7 +966,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                         @for (user of scoreUsers(section.key); track scoreTrack(user)) {
                           <article class="person-card score-card">
                             <b>{{ $index + 1 }}</b>
-                            <img [src]="imageUrl(user.imageId)" [alt]="user.fio">
+                            <img [src]="imageUrl(user.imageId, user.imageUrl)" [alt]="user.fio">
                             <div class="score-identity">
                               <div class="score-person-heading">
                                 <strong>{{ user.fio }}</strong>
@@ -1021,6 +1057,65 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                 </div>
               </app-mobile-action-sheet>
             </ion-content>
+        </ng-template>
+      </ion-modal>
+      <ion-modal class="sheet-modal day-excuse-sheet" [isOpen]="dayExcuseDialog() !== null" (didDismiss)="onDayExcuseDismissed()">
+        <ng-template>
+          <ion-content>
+            @if (dayExcuseDialog(); as dialog) {
+              <app-mobile-action-sheet
+                [kicker]="dialog.workerName"
+                [title]="dialog.mode === 'excuse' ? 'Засчитать день?' : 'Отменить зачёт дня?'"
+                (close)="closeDayExcuse()"
+              >
+                <div class="day-excuse-form">
+                  <p class="day-excuse-subject">
+                    {{ dialog.day.date.split('-').reverse().join('.') }}
+                    · выполнено {{ dialog.day.completedCount }} из {{ dialog.day.eligibleCount }}
+                  </p>
+                  @if (dialog.mode === 'excuse') {
+                    <p class="day-excuse-hint">
+                      День будет засчитан как выполненный на 100%, серия продолжится, последующие дни серии
+                      будут пересчитаны. Реальные цифры дня останутся в истории. Сообщения в Telegram, очки и
+                      награды не создаются. Решение записывается в журнал действий и его можно отменить.
+                    </p>
+                  } @else {
+                    <p class="day-excuse-hint">
+                      День вернётся к исходному итогу, серия этого и последующих дней будет пересчитана.
+                      Отмена тоже записывается в журнал действий.
+                    </p>
+                  }
+                  <label>
+                    <span>Причина</span>
+                    <textarea
+                      rows="3"
+                      maxlength="500"
+                      [disabled]="dayExcuseSaving()"
+                      [ngModel]="dayExcuseReason()"
+                      (ngModelChange)="dayExcuseReason.set($event)"
+                      [placeholder]="dialog.mode === 'excuse'
+                        ? 'Например: задача восстановления другой фирмы без аккаунта'
+                        : 'Почему зачёт отменяется'"
+                    ></textarea>
+                  </label>
+                  @if (dayExcuseError()) {
+                    <p class="day-excuse-error" role="alert">{{ dayExcuseError() }}</p>
+                  }
+                  <div class="day-excuse-actions">
+                    <button type="button" (click)="closeDayExcuse()" [disabled]="dayExcuseSaving()">Отмена</button>
+                    <button
+                      type="button"
+                      class="primary"
+                      (click)="confirmDayExcuse()"
+                      [disabled]="dayExcuseSaving() || !dayExcuseReason().trim()"
+                    >
+                      {{ dayExcuseSaving() ? 'Сохраняю' : dialog.mode === 'excuse' ? 'Засчитать день' : 'Отменить зачёт' }}
+                    </button>
+                  </div>
+                </div>
+              </app-mobile-action-sheet>
+            }
+          </ion-content>
         </ng-template>
       </ion-modal>
       @if (scoreAccrualTarget(); as target) {
@@ -2584,12 +2679,146 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       font-weight: 800;
       line-height: 1.05;
     }
+
+    .day-result {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 0.4rem 0.5rem;
+      border: 1px solid var(--otziv-surface-border-yellow);
+      border-radius: 0.75rem;
+      padding: 0.5rem 0.55rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-surface-gradient-yellow);
+    }
+
+    .day-result.reached,
+    .day-result.excused {
+      border-color: var(--otziv-surface-border-green);
+      background: var(--otziv-surface-gradient-green);
+    }
+
+    .day-result.excused {
+      border-style: dashed;
+    }
+
+    .day-result > .material-icons-sharp {
+      color: var(--otziv-info);
+      font-size: 1.1rem;
+    }
+
+    .day-result.reached > .material-icons-sharp,
+    .day-result.excused > .material-icons-sharp {
+      color: var(--otziv-success);
+    }
+
+    .day-result div {
+      display: grid;
+      min-width: 0;
+      gap: 0.1rem;
+    }
+
+    .day-result strong {
+      font-size: 0.72rem;
+      font-weight: 900;
+    }
+
+    .day-result small {
+      color: var(--otziv-info);
+      font-size: 0.64rem;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .day-result button {
+      grid-column: 1 / -1;
+      min-height: 2.25rem;
+      border: 1px solid var(--otziv-primary);
+      border-radius: 999px;
+      color: var(--otziv-white);
+      background: var(--otziv-primary);
+      font-size: 0.72rem;
+      font-weight: 900;
+    }
+
+    .day-result button.secondary {
+      color: var(--otziv-primary);
+      background: var(--otziv-white);
+    }
+
+    .day-excuse-form {
+      display: grid;
+      gap: 0.7rem;
+      overflow: auto;
+    }
+
+    .day-excuse-subject,
+    .day-excuse-hint,
+    .day-excuse-error {
+      margin: 0;
+      font-size: 0.78rem;
+      line-height: 1.4;
+    }
+
+    .day-excuse-hint {
+      color: var(--otziv-info);
+    }
+
+    .day-excuse-error {
+      color: var(--otziv-danger);
+      font-weight: 800;
+    }
+
+    .day-excuse-form label {
+      display: grid;
+      gap: 0.3rem;
+      font-size: 0.76rem;
+      font-weight: 800;
+    }
+
+    .day-excuse-form textarea {
+      width: 100%;
+      min-height: 5rem;
+      border: 1px solid var(--otziv-surface-border-neutral);
+      border-radius: 0.7rem;
+      padding: 0.55rem 0.65rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      font: inherit;
+      font-size: 0.85rem;
+    }
+
+    .day-excuse-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .day-excuse-actions button {
+      min-height: 2.6rem;
+      border: 1px solid var(--otziv-surface-border-neutral);
+      border-radius: 999px;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      font-weight: 800;
+    }
+
+    .day-excuse-actions button.primary {
+      border-color: var(--otziv-primary);
+      color: var(--otziv-white);
+      background: var(--otziv-primary);
+    }
+
+    .day-excuse-actions button:disabled {
+      opacity: 0.6;
+    }
   `]
 })
 export class HomePage implements OnInit, OnDestroy {
   private readonly manualPaymentTasksApi = inject(ManualPaymentTasksApi);
   private readonly contractorAccrualHistoryApi = inject(ContractorAccrualHistoryApi);
   private readonly dictionariesApi = inject(DictionariesApi);
+  private readonly workerDayResultsApi = inject(WorkerDayResultsApi);
   @ViewChild('sectionModal') private sectionModal?: IonModal;
 
   private routeSubscription?: Subscription;
@@ -2620,6 +2849,12 @@ export class HomePage implements OnInit, OnDestroy {
   readonly contractorAccrualHistoryLoading = signal(false);
   readonly contractorAccrualHistoryError = signal<string | null>(null);
   readonly team = signal<TeamResponse | null>(null);
+  /** Final day results (with the owner "Засчитать день" state) of the selected closed day. */
+  readonly dayResults = signal<ReadonlyMap<number, WorkerDayResult>>(new Map());
+  readonly dayExcuseDialog = signal<DayExcuseDialog | null>(null);
+  readonly dayExcuseReason = signal('');
+  readonly dayExcuseSaving = signal(false);
+  readonly dayExcuseError = signal<string | null>(null);
   readonly score = signal<ScoreResponse | null>(null);
   readonly scoreAccrualTarget = signal<ScoreAccrualTarget | null>(null);
   readonly analytics = signal<AnalyticsResponse | null>(null);
@@ -2808,6 +3043,105 @@ export class HomePage implements OnInit, OnDestroy {
     this.sectionSheetOpen.set(false);
   }
 
+  /** Owners and admins see the final result of a closed day and may count it. */
+  canSeeDayResults(): boolean {
+    return this.auth.hasAnyRealmRole(MOBILE_ROLES.ownerAdmin) && this.selectedDate() < this.todayIso();
+  }
+
+  dayResult(member: TeamMember): WorkerDayResult | null {
+    if (this.teamProgressMode() !== 'day' || !this.canSeeDayResults()) {
+      return null;
+    }
+    const day = this.dayResults().get(member.id);
+    return day && day.date === this.selectedDate() ? day : null;
+  }
+
+  dayResultTitle(day: WorkerDayResult): string {
+    if (day.excused) {
+      return 'День засчитан владельцем';
+    }
+    return day.reached100 ? 'Итог дня: 100%' : 'Итог дня: цель не выполнена';
+  }
+
+  dayResultSummary(day: WorkerDayResult): string {
+    const streak = Math.max(0, day.streakDays || 0);
+    return `${day.completedCount} из ${day.eligibleCount} · серия ${streak} ${this.dayWord(streak)} на 100%`;
+  }
+
+  openDayExcuse(member: TeamMember, day: WorkerDayResult, mode: DayExcuseMode): void {
+    this.dayExcuseReason.set('');
+    this.dayExcuseError.set(null);
+    this.dayExcuseDialog.set({ mode, workerId: member.id, workerName: member.fio || member.login, day });
+  }
+
+  closeDayExcuse(): void {
+    if (this.dayExcuseSaving()) {
+      return;
+    }
+    this.dayExcuseDialog.set(null);
+    this.dayExcuseError.set(null);
+  }
+
+  onDayExcuseDismissed(): void {
+    if (!this.dayExcuseSaving()) {
+      this.dayExcuseDialog.set(null);
+    }
+  }
+
+  async confirmDayExcuse(): Promise<void> {
+    const dialog = this.dayExcuseDialog();
+    const reason = this.dayExcuseReason().trim();
+    if (!dialog || this.dayExcuseSaving()) {
+      return;
+    }
+    if (!reason) {
+      this.dayExcuseError.set('Укажите причину — она попадёт в журнал действий.');
+      return;
+    }
+    this.dayExcuseSaving.set(true);
+    this.dayExcuseError.set(null);
+    try {
+      const result = await firstValueFrom(dialog.mode === 'excuse'
+        ? this.workerDayResultsApi.excuse(dialog.workerId, dialog.day.date, reason)
+        : this.workerDayResultsApi.revoke(dialog.workerId, dialog.day.date, reason));
+      this.dayResults.update((current) => new Map(current).set(dialog.workerId, result.day));
+      this.dayExcuseSaving.set(false);
+      this.dayExcuseDialog.set(null);
+      // The day's progress strip and the month totals read the corrected snapshot.
+      void this.reload(true);
+    } catch (error) {
+      this.dayExcuseSaving.set(false);
+      this.dayExcuseError.set(this.errorMessage(error));
+    }
+  }
+
+  private async loadDayResults(date: string, requestId: number): Promise<void> {
+    if (!this.canSeeDayResults()) {
+      this.dayResults.set(new Map());
+      return;
+    }
+    try {
+      const response = await firstValueFrom(this.workerDayResultsApi.getDayResults(date));
+      if (requestId === this.reloadEpoch) {
+        this.dayResults.set(new Map((response.workers ?? []).map((day) => [day.workerId, day])));
+      }
+    } catch {
+      if (requestId === this.reloadEpoch) {
+        // Final results are supplementary; the team view stays usable without them.
+        this.dayResults.set(new Map());
+      }
+    }
+  }
+
+  private dayWord(days: number): string {
+    const mod100 = days % 100;
+    const mod10 = days % 10;
+    if (mod100 >= 11 && mod100 <= 14) return 'дней';
+    if (mod10 === 1) return 'день';
+    if (mod10 >= 2 && mod10 <= 4) return 'дня';
+    return 'дней';
+  }
+
   setDate(value: string): void {
     const nextDate = value || this.todayIso();
     this.selectedDate.set(nextDate);
@@ -2902,6 +3236,7 @@ export class HomePage implements OnInit, OnDestroy {
             return;
           }
           this.team.set(team);
+          await this.loadDayResults(selectedDate, requestId);
           break;
         }
         case 'score': {
@@ -3871,8 +4206,8 @@ export class HomePage implements OnInit, OnDestroy {
     return this.dictionarySummary()?.items ?? [];
   }
 
-  imageUrl(imageId?: number | null): string {
-    return this.api.imageUrl(imageId || 1);
+  imageUrl(imageId?: number | null, signedPath?: string | null): string {
+    return this.api.imageUrl(imageId || 1, signedPath);
   }
 
   logout(): void {

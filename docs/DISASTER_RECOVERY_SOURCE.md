@@ -23,7 +23,8 @@ locations:
 
 - the production environment file and all API/database/OAuth secrets;
 - Android signing keystore, its properties and recovery credentials;
-- encrypted MySQL backups and the independent backup-encryption key;
+- encrypted MySQL and Keycloak (PostgreSQL) backups and the independent
+  backup-encryption key that protects both;
 - S3/object-storage business content and its recovery credentials;
 - any required messaging/browser session state that cannot be recreated.
 
@@ -31,7 +32,8 @@ Do not place these values in a repository, release asset or ordinary cloud drive
 The backup encryption key must not exist only beside the backups it decrypts.
 The database backup destination must also use the dedicated `BACKUP_S3_*`
 account and bucket rather than the application's primary `S3_*` storage. A
-verified backup run emits `backup-evidence.jsonl`; copy those non-secret records
+verified backup run emits `backup-evidence.jsonl` (MySQL) and
+`keycloak-backup-evidence.jsonl` (Keycloak); copy those non-secret records
 to monitoring/audit storage, but do not mistake evidence metadata for the backup
 object itself. See `docs/R0_BACKUP_RESTORE_DRILL.md` for the exact upload,
 version-bound HEAD/download/checksum and Object Lock retention contract.

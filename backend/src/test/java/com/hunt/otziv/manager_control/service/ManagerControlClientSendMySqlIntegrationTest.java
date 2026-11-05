@@ -287,6 +287,37 @@ class ManagerControlClientSendMySqlIntegrationTest {
         assertThat(sends.get()).isZero();
     }
 
+    /** Card 9245: a company without a bound chat is refused at the click, before payment preparation or any queued attempt. */
+    @Test void companyWithoutBoundChatIsRefusedWithAClearReasonBeforeAnyQueuedAttempt() {
+        when(sender.route(any(), any(), any())).thenReturn(new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Route(
+                "MAX", "max_group_missing", "MAX-группа компании не привязана к боту."));
+        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH))
+                .isInstanceOfSatisfying(ResponseStatusException.class, refused -> {
+                    assertThat(refused.getStatusCode().value()).isEqualTo(409);
+                    assertThat(refused.getReason()).isEqualTo("MAX-группа компании не привязана к боту.");
+                });
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_message_queue", Integer.class)).isZero();
+        assertThat(state()).isEqualTo("OPEN");
+        assertThat(comment()).isEqualTo("original");
+        assertThat(sends.get()).isZero();
+        verify(payments, never()).prepareAuthorized(anyLong(), any());
+    }
+
+    @Test void queuedCommandWithoutAChatFailsOnceAndRestoresTheCard() {
+        enqueue();
+        result.set(ClientMessageSendResult.failed("max_group_missing", "MAX-группа компании не привязана к боту"));
+        worker.drain();
+        assertThat(sends.get()).isEqualTo(1);
+        assertThat(deliveryState().status()).isEqualTo("FAILED");
+        assertThat(deliveryState().errorCode()).isEqualTo("max_group_missing");
+        assertThat(deliveryState().attempts()).isEqualTo(1);
+        assertThat(state()).isEqualTo("OPEN");
+        assertThat(comment()).isEqualTo("original");
+        due();
+        worker.drain();
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
     @ParameterizedTest @ValueSource(strings = {"PREPARED", "UNKNOWN"})
     void scheduledPreparationAppearingAfterEnqueueBlocksProviderDispatch(String deliveryStatus) {
         realReservationState();

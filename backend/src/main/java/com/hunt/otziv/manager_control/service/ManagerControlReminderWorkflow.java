@@ -15,6 +15,7 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemReposito
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -22,9 +23,12 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.security.Principal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -64,42 +68,133 @@ public class ManagerControlReminderWorkflow {
 
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
 
-    @Transactional
+    private final PlatformTransactionManager transactionManager;
+
+    static final String PASS_LEASE_NAME = "manager-control-pass";
+    /** Renewed in every manager's transaction; bounds only an owner that stopped mid-pass. */
+    static final Duration PASS_LEASE_DURATION = Duration.ofMinutes(15);
+
+    /** Field-injected so existing constructors and tests stay unchanged; always present in the application. */
+    @Autowired(required = false)
+    private SchedulerLeaseService leases;
+
+    record OwnerTelegramMessage(long chatId, String text) {}
+
+    /**
+     * One short transaction per manager; owner Telegram messages are sent only
+     * after that manager's transaction commits. Previously every manager was
+     * processed in one transaction holding card row locks, with Telegram
+     * calls inside it, and one failing manager rolled back all the others.
+     *
+     * <p>One instance runs the pass at a time (rolling deploy overlap): it holds a DB lease that
+     * every manager's transaction renews, so an instance that lost the lease commits nothing more
+     * and sends no further owner notices.
+     */
     public void runTestModeNotifications() {
-        LocalDate today = LocalDate.now();
-        LocalDateTime now = LocalDateTime.now();
-        List<Manager> managers = managerRepository.findAllWithUserAndImage();
-        if (managers.isEmpty()) {
+        if (leases == null) {
+            runTestModeNotifications(LocalDateTime.now(), null);
             return;
         }
-        managers = managerRepository.findAllManagersWorkers(managers);
-        for (Manager manager : managers) {
-            managerControl(manager, today, null, true, false);
-            dailyControlRepository.findByControlDateAndManager(today, manager).ifPresent(control -> {
-                sendOverdueStageNotifications(control, now, false);
-                autoCloseControlIfReady(control, now);
-            });
+        var acquired = leases.tryAcquire(PASS_LEASE_NAME, PASS_LEASE_DURATION);
+        if (acquired.isEmpty()) {
+            return;
         }
-        if (!now.toLocalTime().isBefore(MORNING_STAGE_START)) {
-            LocalDate previousDay = today.minusDays(1);
-            for (Manager manager : managers) {
-                dailyControlRepository.findByControlDateAndManager(previousDay, manager).ifPresent(control -> {
-                    sendOverdueStageNotifications(control, now, true);
-                    autoCloseControlIfReady(control, now);
-                });
-            }
+        SchedulerLeaseService.Lease lease = acquired.get();
+        try {
+            runTestModeNotifications(LocalDateTime.now(), lease);
+        } finally {
+            leases.release(lease);
         }
     }
 
-    void sendOverdueStageNotifications(ManagerDailyControl control, LocalDateTime now, boolean previousDayOnly) {
+    void runTestModeNotifications(LocalDateTime now) {
+        runTestModeNotifications(now, null);
+    }
+
+    /**
+     * The end-of-day stage lasts until 05:00. Until then the previous day's open control is
+     * refreshed and closed automatically once nothing blocks it; from 05:00 an unfinished previous
+     * day is reported to the owners once. A closed previous day is never touched again.
+     */
+    private void runTestModeNotifications(LocalDateTime now, SchedulerLeaseService.Lease lease) {
+        LocalDate today = now.toLocalDate();
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        List<Long> managerIds = transaction.execute(status -> managerRepository.findAllWithUserAndImage().stream()
+                .map(Manager::getId).filter(Objects::nonNull).toList());
+        if (managerIds == null || managerIds.isEmpty()) {
+            return;
+        }
+        boolean previousDayClosingWindow = now.toLocalTime().isBefore(MORNING_STAGE_START);
+        for (Long managerId : managerIds) {
+            List<OwnerTelegramMessage> outgoing = new ArrayList<>();
+            try {
+                transaction.executeWithoutResult(status -> {
+                    holdPassLease(lease);
+                    Manager manager = managerRepository.findByIdWithUser(managerId)
+                            .map(found -> managerRepository.findAllManagersWorkers(List.of(found)))
+                            .flatMap(found -> found.stream().findFirst())
+                            .orElse(null);
+                    if (manager == null) {
+                        return;
+                    }
+                    managerControl(manager, today, null, true, false);
+                    dailyControlRepository.findByControlDateAndManager(today, manager).ifPresent(control -> {
+                        sendOverdueStageNotifications(control, now, false, outgoing);
+                        autoCloseControlIfReady(control, now);
+                    });
+                    LocalDate yesterday = today.minusDays(1);
+                    dailyControlRepository.findByControlDateAndManager(yesterday, manager).ifPresent(control -> {
+                        if (control.getClosedAt() != null) {
+                            return;
+                        }
+                        if (previousDayClosingWindow) {
+                            // Refreshing an open previous day ends with its automatic close when nothing blocks it.
+                            managerControl(manager, yesterday, null, true, false);
+                        } else {
+                            sendOverdueStageNotifications(control, now, true, outgoing);
+                        }
+                    });
+                });
+            } catch (PassLeaseLost lost) {
+                log.warn("Manager control pass stopped: the scheduler lease was lost", lost);
+                return;
+            } catch (RuntimeException failure) {
+                outgoing.clear();
+                log.warn("Manager control pass failed: managerId={}, error={}", managerId, failure.toString(), failure);
+                continue;
+            }
+            sendOwnerMessages(outgoing);
+        }
+    }
+
+    /** Renews the pass lease inside the manager's transaction; without it nothing of this manager commits. */
+    private void holdPassLease(SchedulerLeaseService.Lease lease) {
+        if (lease == null || leases == null) {
+            return;
+        }
+        try {
+            leases.holdForTransaction(lease, PASS_LEASE_DURATION);
+        } catch (RuntimeException lost) {
+            throw new PassLeaseLost(lost);
+        }
+    }
+
+    private static final class PassLeaseLost extends RuntimeException {
+        PassLeaseLost(Throwable cause) {
+            super(cause);
+        }
+    }
+
+    void sendOverdueStageNotifications(ManagerDailyControl control, LocalDateTime now, boolean previousDayOnly,
+                                       List<OwnerTelegramMessage> outgoing) {
         List<ManagerDailyControlItem> items = activeControlItems(dailyControlItemRepository.findByControl(control));
         long openAction = items.stream().filter(cardLifecycle::isOpenActionItem).count();
         boolean changed = false;
-        if ((previousDayOnly || control.getControlDate().isBefore(now.toLocalDate())) && !now.toLocalTime().isBefore(MORNING_STAGE_START) && control.getFinalCheckedAt() == null && control.getEveningNotificationSentAt() == null) {
+        if ((previousDayOnly || control.getControlDate().isBefore(now.toLocalDate())) && !now.toLocalTime().isBefore(MORNING_STAGE_START) && control.getClosedAt() == null && control.getFinalCheckedAt() == null && control.getEveningNotificationSentAt() == null) {
             control.setEveningNotificationSentAt(now);
             String text = overdueStageText(control, "конец дня", "05:00", openAction);
             cardLifecycle.saveEvent(control, null, null, ManagerDailyControlEventType.TEST_NOTIFICATION, null, text);
-            notifyOwners(control, "Просрочен конец дня", text);
+            notifyOwners(control, "Просрочен конец дня", text, outgoing);
             changed = true;
         }
         if (changed) {
@@ -115,28 +210,49 @@ public class ManagerControlReminderWorkflow {
         return "Просрочен " + stageName + ": " + managerName(control.getManager()) + ", дата " + control.getControlDate() + ", дедлайн " + deadline + ", открытых пунктов " + openAction;
     }
 
-    void notifyOwners(ManagerDailyControl control, String title, String text) {
+    /** Reminders are written in the caller's transaction; Telegram messages are queued for after commit. */
+    void notifyOwners(ManagerDailyControl control, String title, String text, List<OwnerTelegramMessage> outgoing) {
         List<User> recipients = new ArrayList<>();
         recipients.addAll(userRepository.findAllOwners("ROLE_OWNER"));
         recipients.addAll(userRepository.findAllOwners("ROLE_ADMIN"));
         recipients.stream().filter(Objects::nonNull).filter(user -> user.getId() != null).collect(Collectors.toMap(User::getId, Function.identity(), (left, right) -> left)).values().forEach(user -> {
             createReminder(user, title, text, SOURCE_CONTROL_OWNER, control.getId());
             if (user.getTelegramChatId() != null) {
-                telegramService.sendMessage(user.getTelegramChatId(), title + "\n" + text);
+                outgoing.add(new OwnerTelegramMessage(user.getTelegramChatId(), title + "\n" + text));
             }
         });
     }
 
-    void notifyOwnersAboutDeferredConcreteItem(ManagerDailyControl control, ManagerDailyControlConcreteItem concreteItem, Principal principal) {
+    /**
+     * Builds the owners' deferral notice inside the card transaction; the caller sends it with
+     * {@link #sendOwnerMessages} after that transaction has committed.
+     */
+    List<OwnerTelegramMessage> deferredConcreteItemMessages(ManagerDailyControl control, ManagerDailyControlConcreteItem concreteItem, Principal principal) {
         if (control == null || concreteItem == null) {
-            return;
+            return List.of();
         }
         String title = "Карточка контроля отложена";
         String text = String.join("\n", title, "Менеджер контроля: " + managerName(control.getManager()), "Отложил: " + currentUserDisplayName(principal), "Карточка: " + safe(concreteItem.getTitle()), "Статус: " + safe(concreteItem.getStatusLabel()), "Проблема: " + safe(concreteItem.getReason()), "Комментарий: " + safe(concreteItem.getComment()), "Ссылка: " + deferredConcreteItemUrl(control, concreteItem));
         List<User> recipients = new ArrayList<>();
         recipients.addAll(userRepository.findAllOwners("ROLE_OWNER"));
         recipients.addAll(userRepository.findAllOwners("ROLE_ADMIN"));
-        recipients.stream().filter(Objects::nonNull).filter(user -> user.getId() != null && user.getTelegramChatId() != null).collect(Collectors.toMap(User::getId, Function.identity(), (left, right) -> left)).values().forEach(user -> telegramService.sendMessage(user.getTelegramChatId(), text));
+        return recipients.stream().filter(Objects::nonNull).filter(user -> user.getId() != null && user.getTelegramChatId() != null)
+                .collect(Collectors.toMap(User::getId, Function.identity(), (left, right) -> left)).values().stream()
+                .map(user -> new OwnerTelegramMessage(user.getTelegramChatId(), text)).toList();
+    }
+
+    /** Sends committed owner notices; one failed recipient does not stop the others. Call without a transaction. */
+    void sendOwnerMessages(List<OwnerTelegramMessage> messages) {
+        if (messages == null) {
+            return;
+        }
+        for (OwnerTelegramMessage message : messages) {
+            try {
+                telegramService.sendMessage(message.chatId(), message.text());
+            } catch (RuntimeException failure) {
+                log.warn("Owner control notice was not sent: chatId={}", message.chatId(), failure);
+            }
+        }
     }
 
     String deferredConcreteItemUrl(ManagerDailyControl control, ManagerDailyControlConcreteItem concreteItem) {

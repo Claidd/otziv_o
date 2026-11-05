@@ -52,8 +52,9 @@ public class ManagerArchiveService {
         int safePageNumber = Math.max(pageNumber, 0);
         int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
         String safeKeyword = keyword == null ? "" : keyword.trim();
-        long total = repository.countOrders(scope, mode, safeKeyword);
-        List<ManagerArchiveOrderListItem> orders = repository.findOrders(scope, mode, safeKeyword, safePageNumber, safePageSize, sortDirection);
+        ManagerArchiveRepository.OrderPage page = repository.findOrdersPage(scope, mode, safeKeyword, safePageNumber, safePageSize, sortDirection);
+        long total = page.total();
+        List<ManagerArchiveOrderListItem> orders = page.items();
         if (!canSeeArchiveFinance(authentication)) {
             orders = orders.stream()
                     .map(this::withoutFinance)

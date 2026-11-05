@@ -3,6 +3,7 @@ package com.hunt.otziv.s3.backup.service;
 import com.hunt.otziv.s3.backup.config.BackupProperties;
 import com.hunt.otziv.scheduler.service.SchedulerLeaseService;
 import com.hunt.otziv.scheduler.service.SchedulerLeaseService.Lease;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
@@ -10,6 +11,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.config.FixedDelayTask;
@@ -31,12 +33,14 @@ public class BackupScheduler implements SchedulingConfigurer {
     private static final Duration MAX_CATCH_UP_CHECK_INTERVAL = Duration.ofHours(1);
     private static final int MAX_CATCH_UP_OCCURRENCES = 128;
     private static final int SPRING_CRON_FIELD_COUNT = 6;
+    static final String FAILURE_METRIC = "otziv.backup.failures";
 
     private final DatabaseBackupService backupService;
     private final SchedulerLeaseService schedulerLeaseService;
     private final BackupProperties backupProperties;
     private CronExpression scheduleExpression;
     private ZoneId scheduleZone;
+    private volatile MeterRegistry meterRegistry;
 
     public BackupScheduler(
             DatabaseBackupService backupService,
@@ -46,6 +50,22 @@ public class BackupScheduler implements SchedulingConfigurer {
         this.backupService = backupService;
         this.schedulerLeaseService = schedulerLeaseService;
         this.backupProperties = backupProperties;
+    }
+
+    /** Failed scheduled runs, for the backup alert. Both series start at 0 so the first failure is an increase. */
+    @Autowired(required = false)
+    void setMeterRegistry(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        for (String trigger : new String[]{"daily", "catch_up"}) {
+            meterRegistry.counter(FAILURE_METRIC, "trigger", trigger);
+        }
+    }
+
+    private void countFailure(String trigger) {
+        MeterRegistry registry = meterRegistry;
+        if (registry != null) {
+            registry.counter(FAILURE_METRIC, "trigger", trigger).increment();
+        }
     }
 
     @PostConstruct
@@ -119,6 +139,7 @@ public class BackupScheduler implements SchedulingConfigurer {
             }
         } catch (Exception exception) {
             log.error("Daily database backup failed", exception);
+            countFailure("daily");
         }
     }
 
@@ -140,7 +161,7 @@ public class BackupScheduler implements SchedulingConfigurer {
 
             boolean acquired = runWithLease(() -> {
                 if (requiresCatchUp(scheduledAt.get(), now)) {
-                    backupService.runCatchUpBackup();
+                    backupService.runCatchUpBackup(scheduledAt.get());
                 }
             });
             if (!acquired) {
@@ -148,6 +169,7 @@ public class BackupScheduler implements SchedulingConfigurer {
             }
         } catch (Exception exception) {
             log.error("Database backup catch-up failed", exception);
+            countFailure("catch_up");
         }
     }
 

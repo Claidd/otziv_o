@@ -99,3 +99,14 @@ loki.write "local" {
     url = "http://loki:3100/loki/api/v1/push"
   }
 }
+
+// Host memory and disk for alert rules. /proc/meminfo in the container is the host's;
+// the data volume and the log bind mount sit on the host disks. Prometheus scrapes
+// /api/v0/component/prometheus.exporter.unix.host/metrics (job "host").
+prometheus.exporter.unix "host" {
+  set_collectors = ["meminfo", "filesystem"]
+
+  filesystem {
+    mount_points_exclude = "^/(dev|proc|run|sys|etc)($|/)"
+  }
+}

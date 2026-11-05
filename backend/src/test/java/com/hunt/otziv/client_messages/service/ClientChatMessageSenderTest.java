@@ -525,6 +525,62 @@ class ClientChatMessageSenderTest {
         verify(whatsAppService).sendMessageToGroup("old-client", "111111111@g.us", "original text", "repair:1");
     }
 
+    /** Card 9245 (05.11): MAX link without a bound chat used to fail as invalid_operation_envelope five times. */
+    @ParameterizedTest
+    @ValueSource(strings = {"MAX", "TELEGRAM"})
+    void keyedDeliveryToAnUnboundBotGroupIsAnExplicitPermanentRoutingFailure(String platform) {
+        Company company = "MAX".equals(platform)
+                ? company("https://max.ru/join/6CnIZCfuUU3_GQ2EBRJJiZPQYfdkzpQecMLU6vZWuPY", null, null)
+                : company("https://t.me/example", null, null);
+
+        ClientMessageSendResult result = sender.sendWithOperationId(company, "client", null, "Напоминание", null,
+                "813fc8cd-1bcc-4f7a-8fa6-877544ed6d30");
+
+        String expected = "MAX".equals(platform) ? "max_group_missing" : "telegram_group_missing";
+        assertFalse(result.sent());
+        assertEquals(expected, result.errorCode());
+        assertTrue(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isPermanentlyUnsent(result));
+        verify(operationFence, never()).execute(anyString(), anyString(), nullable(String.class), anyString(), any());
+        verify(maxBotClient, never()).sendMessageToChatOnce(anyLong(), anyString());
+        verify(telegramService, never()).sendMessageOnceWithInlineKeyboardMessageId(anyLong(), anyString(), any(), anyList());
+    }
+
+    @Test
+    void unboundBotGroupStillReportsTheRecordedOutcomeOfAnEarlierAttempt() {
+        Company company = company("https://max.ru/join/abc", null, null);
+        var unknown = new ClientMessageOperationFence.Snapshot("op:1", "MAX", "PREPARED", "d", "e", "token", null);
+        when(operationFence.lookup("op:1")).thenReturn(java.util.Optional.of(unknown));
+
+        ClientMessageSendResult result = sender.sendWithOperationId(company, "client", null, "Напоминание", null, "op:1");
+
+        assertEquals("operation_unknown", result.errorCode());
+        assertFalse(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result));
+    }
+
+    @Test
+    void routePreviewMirrorsTheChecksMadeBeforeAProviderCall() {
+        assertEquals("max_group_missing", sender.route(target("https://max.ru/join/abc", null, null), "client", null).unavailableCode());
+        assertEquals("MAX", sender.route(target("https://max.ru/join/abc", null, 77L), null, null).platform());
+        assertTrue(sender.route(target("https://max.ru/join/abc", null, 77L), null, null).available());
+        assertEquals("telegram_group_missing", sender.route(target("https://t.me/x", null, null), "client", null).unavailableCode());
+        assertTrue(sender.route(target("https://t.me/x", -100L, null), null, null).available());
+        assertEquals("whatsapp_group_missing",
+                sender.route(target("https://chat.whatsapp.com/abc", null, null), "client", " ").unavailableCode());
+        assertEquals("whatsapp_client_missing",
+                sender.route(target("https://chat.whatsapp.com/abc", null, null), null, "1203@g.us").unavailableCode());
+        var whatsapp = sender.route(target("https://chat.whatsapp.com/abc", null, null), "client", "1203@g.us");
+        assertTrue(whatsapp.available());
+        assertEquals("WHATSAPP", whatsapp.platform());
+        assertEquals("chat_platform_unknown", sender.route(target("", null, null), "client", "g").unavailableCode());
+        assertEquals("company_missing", sender.route(null, "client", "g").unavailableCode());
+        assertFalse(sender.route(target("https://max.ru/join/abc", null, null), "client", null).unavailableMessage().isBlank());
+        verifyNoMoreInteractions(operationFence, maxBotClient, telegramService, whatsAppService, routeRecovery);
+    }
+
+    private com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target(String urlChat, Long telegramChatId, Long maxChatId) {
+        return new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(1L, "Компания", urlChat, telegramChatId, maxChatId);
+    }
+
     private String receipt(String token) {
         return "{\"status\":\"ok\",\"operationId\":\"" + token + "\",\"state\":\"SUCCEEDED\",\"messageId\":\"fixture\"}";
     }

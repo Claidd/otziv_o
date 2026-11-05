@@ -1,0 +1,232 @@
+{
+  "schema": "otziv-apt-c48-capture-window-v1",
+  "result": "PASS",
+  "productionAccess": false,
+  "dataWrites": false,
+  "containersRestarted": false,
+  "originalNetwork": "otziv-prod-local_internal_net",
+  "temporaryNetwork": {
+    "name": "otziv-apt-c48-capture-bdab7ba99f49",
+    "label": "com.otziv.apt-c48-capture.owner=bdab7ba99f49",
+    "internal": true
+  },
+  "checkUrl": "http://localhost:8088/keycloak/realms/otziv/.well-known/openid-configuration",
+  "executedScriptSha256": "d1c1550949a7a1e3c6f7c9faab87263d07876bdb8ac61c90acf1875e268184fa",
+  "dockerEndpoint": "npipe",
+  "before": {
+    "keycloak": {
+      "id": "2b4a1ddbc1cb9b136e33c85948618b81b91846f7a0bac4eec67695f3b83f0506",
+      "name": "otziv-prod-local-keycloak-1",
+      "imageId": "sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
+      "startedAt": "2026-11-05T17:16:29.177096046Z",
+      "restarts": 0,
+      "running": true,
+      "networks": [
+        "otziv-prod-local_internal_net"
+      ],
+      "portBindings": {},
+      "attachment": {
+        "aliases": [
+          "keycloak",
+          "otziv-prod-local-keycloak-1"
+        ],
+        "ipAddress": "172.18.0.9"
+      }
+    },
+    "keycloak-postgres": {
+      "id": "4d41f3a084f5d54a3977008ac4d5d6aa412e83d4b4d2d2178c14155064b0a86c",
+      "name": "otziv-prod-local-keycloak-postgres-1",
+      "imageId": "sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+      "startedAt": "2026-11-05T17:16:17.332322841Z",
+      "restarts": 0,
+      "running": true,
+      "networks": [
+        "otziv-prod-local_internal_net"
+      ],
+      "portBindings": {},
+      "attachment": {
+        "aliases": [
+          "keycloak-postgres",
+          "otziv-prod-local-keycloak-postgres-1"
+        ],
+        "ipAddress": "172.18.0.3"
+      }
+    }
+  },
+  "windowOpenedAt": "2026-11-05T17:30:15.513695+00:00",
+  "isolated": {
+    "keycloak": {
+      "networks": [
+        "otziv-apt-c48-capture-bdab7ba99f49"
+      ],
+      "aliases": [
+        "keycloak",
+        "otziv-prod-local-keycloak-1"
+      ]
+    },
+    "keycloak-postgres": {
+      "networks": [
+        "otziv-apt-c48-capture-bdab7ba99f49"
+      ],
+      "aliases": [
+        "keycloak-postgres",
+        "otziv-prod-local-keycloak-postgres-1"
+      ]
+    }
+  },
+  "captureStartedAt": "2026-11-05T17:30:17.673470+00:00",
+  "captureCompletedAt": "2026-11-05T17:30:30.617643+00:00",
+  "captureExitCode": 0,
+  "captureSha256": "9d8b6df1e95bc6be8c29d420fd45de496158649d34b997262a2ce4ddc338c839",
+  "captureResult": "PASS",
+  "windowClosedAt": "2026-11-05T17:30:35.146626+00:00",
+  "restoreNotes": [],
+  "after": {
+    "keycloak": {
+      "id": "2b4a1ddbc1cb9b136e33c85948618b81b91846f7a0bac4eec67695f3b83f0506",
+      "name": "otziv-prod-local-keycloak-1",
+      "imageId": "sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
+      "startedAt": "2026-11-05T17:16:29.177096046Z",
+      "restarts": 0,
+      "running": true,
+      "networks": [
+        "otziv-prod-local_internal_net"
+      ],
+      "portBindings": {},
+      "attachment": {
+        "aliases": [
+          "keycloak",
+          "otziv-prod-local-keycloak-1"
+        ],
+        "ipAddress": "172.18.0.9"
+      }
+    },
+    "keycloak-postgres": {
+      "id": "4d41f3a084f5d54a3977008ac4d5d6aa412e83d4b4d2d2178c14155064b0a86c",
+      "name": "otziv-prod-local-keycloak-postgres-1",
+      "imageId": "sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+      "startedAt": "2026-11-05T17:16:17.332322841Z",
+      "restarts": 0,
+      "running": true,
+      "networks": [
+        "otziv-prod-local_internal_net"
+      ],
+      "portBindings": {},
+      "attachment": {
+        "aliases": [
+          "keycloak-postgres",
+          "otziv-prod-local-keycloak-postgres-1"
+        ],
+        "ipAddress": "172.18.0.3"
+      }
+    }
+  },
+  "nginxReloaded": false,
+  "stackStatus": 200,
+  "temporaryNetworkRemaining": 0,
+  "commands": [
+    [
+      "docker",
+      "network",
+      "create",
+      "--internal",
+      "--label",
+      "com.otziv.apt-c48-capture.owner=bdab7ba99f49",
+      "otziv-apt-c48-capture-bdab7ba99f49"
+    ],
+    [
+      "docker",
+      "network",
+      "connect",
+      "--alias",
+      "keycloak",
+      "--alias",
+      "otziv-prod-local-keycloak-1",
+      "otziv-apt-c48-capture-bdab7ba99f49",
+      "2b4a1ddbc1cb9b136e33c85948618b81b91846f7a0bac4eec67695f3b83f0506"
+    ],
+    [
+      "docker",
+      "network",
+      "disconnect",
+      "otziv-prod-local_internal_net",
+      "2b4a1ddbc1cb9b136e33c85948618b81b91846f7a0bac4eec67695f3b83f0506"
+    ],
+    [
+      "docker",
+      "network",
+      "connect",
+      "--alias",
+      "keycloak-postgres",
+      "--alias",
+      "otziv-prod-local-keycloak-postgres-1",
+      "otziv-apt-c48-capture-bdab7ba99f49",
+      "4d41f3a084f5d54a3977008ac4d5d6aa412e83d4b4d2d2178c14155064b0a86c"
+    ],
+    [
+      "docker",
+      "network",
+      "disconnect",
+      "otziv-prod-local_internal_net",
+      "4d41f3a084f5d54a3977008ac4d5d6aa412e83d4b4d2d2178c14155064b0a86c"
+    ],
+    [
+      "python",
+      "-B",
+      "infrastructure/runtime-security/apt-c48-rehearsal.py",
+      "capture",
+      "--private-directory",
+      "<private>",
+      "--output",
+      "infrastructure/runtime-security/proofs/c48-keycloak/rehearsal"
+    ],
+    [
+      "docker",
+      "network",
+      "connect",
+      "--alias",
+      "keycloak",
+      "--alias",
+      "otziv-prod-local-keycloak-1",
+      "--ip",
+      "172.18.0.9",
+      "otziv-prod-local_internal_net",
+      "2b4a1ddbc1cb9b136e33c85948618b81b91846f7a0bac4eec67695f3b83f0506"
+    ],
+    [
+      "docker",
+      "network",
+      "disconnect",
+      "otziv-apt-c48-capture-bdab7ba99f49",
+      "2b4a1ddbc1cb9b136e33c85948618b81b91846f7a0bac4eec67695f3b83f0506"
+    ],
+    [
+      "docker",
+      "network",
+      "connect",
+      "--alias",
+      "keycloak-postgres",
+      "--alias",
+      "otziv-prod-local-keycloak-postgres-1",
+      "--ip",
+      "172.18.0.3",
+      "otziv-prod-local_internal_net",
+      "4d41f3a084f5d54a3977008ac4d5d6aa412e83d4b4d2d2178c14155064b0a86c"
+    ],
+    [
+      "docker",
+      "network",
+      "disconnect",
+      "otziv-apt-c48-capture-bdab7ba99f49",
+      "4d41f3a084f5d54a3977008ac4d5d6aa412e83d4b4d2d2178c14155064b0a86c"
+    ],
+    [
+      "docker",
+      "network",
+      "rm",
+      "otziv-apt-c48-capture-bdab7ba99f49"
+    ]
+  ],
+  "restoredExactly": true,
+  "addressesPreserved": true
+}

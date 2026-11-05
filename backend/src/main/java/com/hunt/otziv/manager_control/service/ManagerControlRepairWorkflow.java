@@ -87,20 +87,27 @@ public class ManagerControlRepairWorkflow {
         if (ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE.equals(entityType) || ManagerAutomationFailureService.ENTITY_COMMON_INVOICE_AUTOMATION.equals(entityType)) {
             return repairAutomationFailureConcreteItem(concreteItem, control, principal);
         }
+        // Automation issues are looked up for the control's manager only (current order/company owner),
+        // so a reassigned source is not found there. Every other repair checks its source directly.
         if ("COMMON_INVOICE".equals(entityType)) {
+            Long invoiceId = concreteItem.getEntityId();
+            accessPolicy.requireOwnSource(managerId -> invoiceRepairWorkflow.isAssignedTo(invoiceId, managerId), principal, authentication);
             return repairCommonInvoiceConcreteItem(concreteItem, control, principal);
         }
         if (ENTITY_PUBLICATION_DATE_REVIEW.equals(entityType)) {
-            return repairPublicationDateConcreteItem(concreteItem, control, principal);
+            return repairPublicationDateConcreteItem(concreteItem, control, principal, authentication);
         }
         if (ENTITY_TELEGRAM_CHAT.equals(entityType)) {
+            accessPolicy.requireOwnCompany(concreteItem.getEntityId(), authentication);
             return repairTelegramChatConcreteItem(concreteItem, control, principal);
         }
         if ("COMPANY_CHAT_BINDING".equals(entityType)) {
             Company company = companyRepository.findById(concreteItem.getEntityId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания карточки контроля не найдена"));
+            accessPolicy.requireOwnCompany(company.getId(), authentication);
             return repairCompanyChatBindingConcreteItem(concreteItem, control, company, principal);
         }
         if (ENTITY_ORDER_PAYMENT_INTEGRITY.equals(entityType)) {
+            accessPolicy.requireOwnOrder(concreteItem.getEntityId(), authentication);
             OrderPaymentIntegrityService.RepairResult result = orderPaymentIntegrityService.repair(concreteItem.getEntityId());
             return resolveRepairedConcreteItem(concreteItem, control, "Заказ возвращен в «Оплачено», лишних ссылок закрыто: " + result.expiredLinks() + ", платежных очередей закрыто: " + result.closedMessageStates() + ". Следующий заказ не изменялся.", principal, "Устранен повторный платежный цикл");
         }
@@ -108,6 +115,7 @@ public class ManagerControlRepairWorkflow {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Автопочинка доступна только для заказов с клиентской автоматизацией");
         }
         Order order = orderRepository.findById(concreteItem.getEntityId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
+        accessPolicy.requireOwnOrder(order.getId(), authentication);
         if (concretePresenter.isChatBindingIssueConcrete(concreteItem)) {
             return repairChatBindingIssueConcreteItem(concreteItem, control, order, principal);
         }
@@ -176,12 +184,13 @@ public class ManagerControlRepairWorkflow {
         return problemExamples.reviewOrder(review);
     }
 
-    ManagerControlConcreteItemResponse repairPublicationDateConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, Principal principal) {
+    ManagerControlConcreteItemResponse repairPublicationDateConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, Principal principal, Authentication authentication) {
         Review review = reviewRepository.findById(concreteItem.getEntityId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв карточки контроля не найден"));
         Order order = reviewOrder(review);
         if (order == null || order.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У отзыва не найден заказ");
         }
+        accessPolicy.requireOwnOrder(order.getId(), authentication);
         publicationApprovalService.repairMissingDates(order.getId(), "source=manager_control;controlItemId=" + concreteItem.getId());
         Review repaired = reviewRepository.findById(review.getId()).orElse(review);
         if (!repaired.isPublish() && repaired.getPublishedDate() == null) {

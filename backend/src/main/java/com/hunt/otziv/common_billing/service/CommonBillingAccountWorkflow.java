@@ -451,12 +451,12 @@ public class CommonBillingAccountWorkflow {
                 itemsByInvoiceId.computeIfAbsent(item.getInvoice().getId(), ignored -> new ArrayList<>()).add(item);
             }
         }
+        // One batch of amount/recovery/payment reads for all current invoices
+        // (previously several queries per order and per invoice).
+        settlementService.refreshInvoiceAmounts(invoiceByAccountId.values(), itemsByInvoiceId);
         Map<Long, CommonInvoiceSummaryResponse> summaries = new HashMap<>();
-        invoiceByAccountId.forEach((accountId, invoice) -> {
-            List<CommonInvoiceOrder> items = itemsByInvoiceId.getOrDefault(invoice.getId(), List.of());
-            refreshInvoiceAmounts(invoice, items);
-            summaries.put(accountId, toInvoiceSummary(invoice, items));
-        });
+        invoiceByAccountId.forEach((accountId, invoice) ->
+                summaries.put(accountId, toInvoiceSummary(invoice, itemsByInvoiceId.getOrDefault(invoice.getId(), List.of()))));
         return summaries;
     }
 
