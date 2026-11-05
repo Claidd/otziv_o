@@ -635,8 +635,8 @@ export class TeamComponent implements OnDestroy {
     return activeWork ? `${base} · активно ${activeWork}` : base;
   }
 
-  imageUrl(imageId?: number | null): string {
-    return this.cabinetApi.imageUrl(imageId);
+  imageUrl(imageId?: number | null, signedPath?: string | null): string {
+    return this.cabinetApi.imageUrl(imageId, signedPath);
   }
 
   editUrl(userId: number): string {

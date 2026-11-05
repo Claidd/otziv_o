@@ -847,7 +847,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                                 >{{ memberEfficiency(progress) }}</span>
                               }
                             }
-                            <img [src]="imageUrl(member.imageId)" [alt]="member.fio || member.login">
+                            <img [src]="imageUrl(member.imageId, member.imageUrl)" [alt]="member.fio || member.login">
                             <div>
                               <strong>{{ member.fio || member.login }}</strong>
                               <span>{{ member.login }}</span>
@@ -930,7 +930,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                         @for (user of scoreUsers(section.key); track scoreTrack(user)) {
                           <article class="person-card score-card">
                             <b>{{ $index + 1 }}</b>
-                            <img [src]="imageUrl(user.imageId)" [alt]="user.fio">
+                            <img [src]="imageUrl(user.imageId, user.imageUrl)" [alt]="user.fio">
                             <div class="score-identity">
                               <div class="score-person-heading">
                                 <strong>{{ user.fio }}</strong>
@@ -3871,8 +3871,8 @@ export class HomePage implements OnInit, OnDestroy {
     return this.dictionarySummary()?.items ?? [];
   }
 
-  imageUrl(imageId?: number | null): string {
-    return this.api.imageUrl(imageId || 1);
+  imageUrl(imageId?: number | null, signedPath?: string | null): string {
+    return this.api.imageUrl(imageId || 1, signedPath);
   }
 
   logout(): void {

@@ -49,4 +49,11 @@ describe('CabinetApi freshness and request isolation', () => {
       http.expectOne(r => r.url.endsWith('/profile')).flush({ date: '2026-09-12' });
     }
   });
+
+  it('prefers the signed image link and keeps the bare id path only as a fallback', () => {
+    expect(api.imageUrl(42, '/images/42?exp=1793790900&sig=abc')).toMatch(/\/images\/42\?exp=1793790900&sig=abc$/);
+    expect(api.imageUrl(42, null)).toMatch(/\/images\/42$/);
+    expect(api.imageUrl(null, undefined)).toMatch(/\/images\/1$/);
+    expect(api.imageUrl(42, 'https://evil.example/x.png')).toMatch(/\/images\/42$/);
+  });
 });

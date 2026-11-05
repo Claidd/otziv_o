@@ -1,5 +1,7 @@
 package com.hunt.otziv.u_users.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.hunt.otziv.u_users.images.SignedImageUrls;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -31,4 +33,9 @@ public record AdminUserResponse(
         LocalDateTime lastLoginAt,
         Set<String> roles
 ) {
+    /** Short-lived signed link to the user's photo, relative to the backend base URL. */
+    @JsonProperty(value = "imageUrl", access = JsonProperty.Access.READ_ONLY)
+    public String imageUrl() {
+        return SignedImageUrls.pathFor(imageId);
+    }
 }

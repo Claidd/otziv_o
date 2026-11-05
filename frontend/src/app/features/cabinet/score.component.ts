@@ -386,8 +386,8 @@ export class ScoreComponent {
     ].filter(Boolean) as Array<{ label: string; value: string }>;
   }
 
-  imageUrl(imageId?: number | null): string {
-    return this.cabinetApi.imageUrl(imageId);
+  imageUrl(imageId?: number | null, signedPath?: string | null): string {
+    return this.cabinetApi.imageUrl(imageId, signedPath);
   }
 
   userTrack(user: ScoreUser): string {

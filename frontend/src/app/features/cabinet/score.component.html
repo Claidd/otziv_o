@@ -56,11 +56,11 @@
 
               @if (score()?.financeVisible && user.userId && !section.financialOnly) {
                 <a class="avatar-link" [routerLink]="['/admin/user-info', user.userId]">
-                  <img [src]="imageUrl(user.imageId)" [alt]="user.fio">
+                  <img [src]="imageUrl(user.imageId, user.imageUrl)" [alt]="user.fio">
                 </a>
               } @else {
                 <div class="avatar-link">
-                  <img [src]="imageUrl(user.imageId)" [alt]="user.fio">
+                  <img [src]="imageUrl(user.imageId, user.imageUrl)" [alt]="user.fio">
                 </div>
               }
 

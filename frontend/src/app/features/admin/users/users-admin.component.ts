@@ -302,7 +302,11 @@ export class UsersAdminComponent implements OnDestroy {
       return previewUrl;
     }
 
-    const imageId = this.selectedUser()?.imageId;
+    const user = this.selectedUser();
+    if (user?.imageUrl?.startsWith('/images/')) {
+      return `${appEnvironment.backendBaseUrl}${user.imageUrl}`;
+    }
+    const imageId = user?.imageId;
     return imageId ? `${appEnvironment.backendBaseUrl}/images/${imageId}` : null;
   });
 

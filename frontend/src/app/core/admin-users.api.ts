@@ -46,6 +46,8 @@ export interface AdminUser {
   managerAuditTelegramGroupChatId?: number | null;
   managerAuditTelegramBotInviteUrl?: string;
   imageId?: number | null;
+  /** Short-lived signed link relative to the backend base URL. */
+  imageUrl?: string | null;
   active: boolean;
   createTime?: string;
   lastLoginAt?: string;

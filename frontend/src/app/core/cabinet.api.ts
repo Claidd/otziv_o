@@ -27,6 +27,8 @@ export interface UserLk {
   username: string;
   role: string;
   image: number;
+  /** Short-lived signed link relative to the backend base URL. */
+  imageUrl?: string | null;
   leadCount: number;
   reviewCount: number;
 }
@@ -35,6 +37,7 @@ export interface UserStat {
   id: number;
   fio: string;
   imageId: number;
+  imageUrl?: string | null;
   coefficient?: number | null;
   percentNoPay?: number | null;
   avgPublish1Day?: number | null;
@@ -152,6 +155,7 @@ export interface TeamMember {
   login: string;
   fio: string;
   imageId: number;
+  imageUrl?: string | null;
   sum1Month?: number;
   sum1MonthKopecks?: number | null;
   order1Month?: number;
@@ -259,6 +263,7 @@ export interface ScoreUser {
   inVigul?: number | null;
   inPublish?: number | null;
   imageId?: number | null;
+  imageUrl?: string | null;
   userId?: number | null;
   order1Month?: number | null;
   review1Month?: number | null;
@@ -545,7 +550,14 @@ export class CabinetApi {
     );
   }
 
-  imageUrl(imageId?: number | null): string {
+  /**
+   * Prefers the short-lived signed link from the API; the bare id path is only a fallback for
+   * responses from a backend that does not sign links yet.
+   */
+  imageUrl(imageId?: number | null, signedPath?: string | null): string {
+    if (signedPath && signedPath.startsWith('/images/')) {
+      return `${appEnvironment.backendBaseUrl}${signedPath}`;
+    }
     const id = imageId || 1;
     return `${appEnvironment.backendBaseUrl}/images/${id}`;
   }

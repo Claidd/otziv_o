@@ -1,5 +1,8 @@
 package com.hunt.otziv.admin.dto.personal;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.hunt.otziv.u_users.images.SignedImageUrls;
+
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,4 +30,10 @@ public class OperatorsListDTO {
 //    private BigDecimal sum1Day;
 //    private BigDecimal sum1Week;
 //    private BigDecimal sum1Month;
+
+    /** Short-lived signed link to the photo, relative to the backend base URL. */
+    @JsonProperty(value = "imageUrl", access = JsonProperty.Access.READ_ONLY)
+    public String getImageUrl() {
+        return SignedImageUrls.pathForOrDefault(imageId);
+    }
 }

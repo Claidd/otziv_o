@@ -606,7 +606,10 @@ export class AdminLayoutComponent {
     this.cabinetApi.getProfile(undefined, { skipAuthRedirectOn401: true }).subscribe({
       next: (profile) => {
         const imageId = this.customProfileImageId(profile.workerZp?.imageId, profile.user?.image);
-        this.headerProfileFallbackUrl.set(imageId ? this.cabinetApi.imageUrl(imageId) : null);
+        const signedPath = imageId && imageId === profile.workerZp?.imageId
+          ? profile.workerZp?.imageUrl
+          : profile.user?.imageUrl;
+        this.headerProfileFallbackUrl.set(imageId ? this.cabinetApi.imageUrl(imageId, signedPath) : null);
       },
       error: () => {
         this.headerProfileFallbackUrl.set(null);

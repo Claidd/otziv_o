@@ -115,11 +115,11 @@
               <div class="person-identity">
                 @if (team()?.canOpenUserInfo) {
                   <a class="avatar-link" [routerLink]="['/admin/user-info', member.userId]">
-                    <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
+                    <img [src]="imageUrl(member.imageId, member.imageUrl)" [alt]="member.fio">
                   </a>
                 } @else {
                   <div class="avatar-link">
-                    <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
+                    <img [src]="imageUrl(member.imageId, member.imageUrl)" [alt]="member.fio">
                   </div>
                 }
 
