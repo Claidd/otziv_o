@@ -51,4 +51,24 @@ public record ManagerDailySummaryResponse(
         String aggregationStatus,
         java.time.LocalDateTime snapshotAt
 ) {
+
+    /**
+     * The same day without {@code count} still-open unanswered messages: used by the personal
+     * audit for messages that are not a remark yet. Stored metrics are not changed.
+     */
+    public ManagerDailySummaryResponse withoutUnanswered(long count) {
+        long removed = Math.min(Math.max(0, count), Math.max(0, unansweredCount));
+        if (removed == 0) {
+            return this;
+        }
+        return new ManagerDailySummaryResponse(date, managerId, managerUserId, managerName, score, grade,
+                taskTotal, taskCompleted, Math.max(0, taskOpen - removed), taskAutoClosed, taskResolved,
+                taskActionTaken, taskDeferred, taskAcknowledged, taskProgressPercent, overdueCount, riskCount,
+                unansweredCount - removed, taskOtherOpen, firstReplyCount, firstReplyAverageSeconds,
+                firstReplyMedianSeconds, allReplyAverageSeconds, allReplyMedianSeconds, allReplyP90Seconds,
+                replyCount, repliesInSla, problemCount, problemResolvedCount, problemActionTakenCount,
+                problemOpenCount, problemResolutionAverageSeconds, siteActiveSeconds, messengerActiveSeconds,
+                confirmedActiveSeconds, leadActionCount, targetSlaCount, targetSlaMetCount, hardSlaBreachCount,
+                controlledSeconds, cleanQueueSeconds, dayStars, dayStatus, xpEarned, aggregationStatus, snapshotAt);
+    }
 }

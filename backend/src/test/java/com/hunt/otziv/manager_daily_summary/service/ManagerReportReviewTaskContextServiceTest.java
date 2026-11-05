@@ -313,6 +313,33 @@ class ManagerReportReviewTaskContextServiceTest {
                         org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void aMessageAnsweredAfterTheSnapshotOrYoungerThanTheGraceIsNotARemarkYet() {
+        var at = LocalDateTime.of(2026, 9, 14, 22, 5, 30);
+        var answered = source(7699L, ManagerDailyControlItemStatus.OPEN); answered.setEntityId(4676L);
+        var fresh = source(7742L, ManagerDailyControlItemStatus.OPEN); fresh.setEntityId(4728L);
+        var overdue = source(9249L, ManagerDailyControlItemStatus.OPEN); overdue.setEntityId(6914L);
+        var risk = source(7496L, ManagerDailyControlItemStatus.OPEN); risk.setEntityType("RISK"); risk.setEntityId(194L);
+        ClientChatUnansweredItem answeredChat = chat(4676L, ClientChatUnansweredStatus.ANSWERED, at.minusSeconds(44));
+        ClientChatUnansweredItem freshChat = chat(4728L, ClientChatUnansweredStatus.OPEN, at.minusMinutes(3));
+        ClientChatUnansweredItem overdueChat = chat(6914L, ClientChatUnansweredStatus.OPEN, at.minusMinutes(17));
+        when(unansweredRepository.findAllById(org.mockito.ArgumentMatchers.anyIterable()))
+                .thenReturn(List.of(answeredChat, freshChat, overdueChat));
+
+        assertThat(service.unansweredNotYetARemark(List.of(answered, fresh, overdue, risk), at, 10))
+                .containsExactlyInAnyOrder(7699L, 7742L);
+        assertThat(service.unansweredNotYetARemark(List.of(answered, fresh, overdue), at, 0))
+                .containsExactly(7699L);
+    }
+
+    private ClientChatUnansweredItem chat(Long id, ClientChatUnansweredStatus status, LocalDateTime lastClientMessageAt) {
+        ClientChatUnansweredItem item = new ClientChatUnansweredItem();
+        item.setId(id);
+        item.setStatus(status);
+        item.setLastClientMessageAt(lastClientMessageAt);
+        return item;
+    }
+
     private ManagerDailyControlConcreteItem source(
             Long id,
             ManagerDailyControlItemStatus status

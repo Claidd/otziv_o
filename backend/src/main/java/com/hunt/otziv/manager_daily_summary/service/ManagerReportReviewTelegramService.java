@@ -216,6 +216,12 @@ public class ManagerReportReviewTelegramService {
             Long recipientChatId,
             boolean testMode
     ) {
+        // A client message answered right after the evening snapshot, or still younger than the
+        // audit grace, is not a remark: it is neither counted nor listed for question generation.
+        long notYetRemarks = formatter.auditExcludedUnanswered(summary);
+        if (notYetRemarks > 0) {
+            summary = summary.withoutUnanswered(notYetRemarks);
+        }
         List<ManagerDailyControlConcreteItem> overdueDeferred = overdueDeferred(manager.getId(), summary.date());
         ManagerFormattedReport report = withDeferredCases(formatter.formatPersonal(summary), overdueDeferred);
         review.setSummaryDate(summary.date());

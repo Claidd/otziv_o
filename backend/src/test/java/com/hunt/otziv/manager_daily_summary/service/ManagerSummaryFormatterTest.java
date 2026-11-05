@@ -1,5 +1,6 @@
 package com.hunt.otziv.manager_daily_summary.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,7 +55,7 @@ class ManagerSummaryFormatterTest {
                 .thenReturn(Optional.empty());
         when(dailyRepository.findByManager_IdAndSummaryDateBetween(anyLong(), any(), any())).thenReturn(List.of());
         when(workerProgressService.progressByManagerIds(anyList(), any())).thenReturn(Map.of());
-        when(debtTaskDetailsService.tasks(any(), anyList())).thenReturn(Map.of());
+        org.mockito.Mockito.lenient().when(debtTaskDetailsService.tasks(any(), anyList())).thenReturn(Map.of());
         when(communicationSectionService.section(anyLong(), any())).thenReturn(new ManagerReportSection(
                 "💬 <b>Клиентские сообщения</b>\n<b>Вывод.</b> Ответы в основном по существу.\n"
                         + "<b>Рекомендации:</b>\n• Всегда называть следующий шаг.",
@@ -215,6 +216,22 @@ class ManagerSummaryFormatterTest {
 
         assertTrue(report.contains("Не выполнена 1 задача — заказ №28264: 5 текстов к написанию, в работе с 21:53."));
         assertTrue(report.contains("Задачи без доступного аккаунта (1) в недобор не включены."));
+    }
+
+    @Test
+    void personalAuditListsOnlyTheMessagesThatAreAlreadyRemarks() {
+        var category = new ManagerDebtTaskDetailsService.DebtCategory("UNANSWERED_CLIENT_MESSAGES",
+                "Неотвеченные сообщения", 1, "/admin/manager-control/1",
+                List.of(new ManagerDebtTaskDetailsService.DebtItem(9249L, "Toyama motors", "16 мин. без ответа", "", "")));
+        when(debtTaskDetailsService.auditTasks(LocalDate.of(2026, 7, 13), 1L))
+                .thenReturn(new ManagerDebtTaskDetailsService.ManagerDebtTasks(1L, List.of(category), 1));
+        when(debtTaskDetailsService.auditExcludedUnanswered(LocalDate.of(2026, 7, 13), 1L)).thenReturn(1L);
+
+        ManagerFormattedReport report = formatter.formatPersonal(row("Вика", "CALCULATED"));
+
+        assertTrue(report.questionContext().contains("sourceTaskId=9249"));
+        assertEquals(1, formatter.auditExcludedUnanswered(row("Вика", "CALCULATED")));
+        org.mockito.Mockito.verify(debtTaskDetailsService, org.mockito.Mockito.never()).tasks(any(), anyList());
     }
 
     @Test

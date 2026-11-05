@@ -25,16 +25,22 @@ class ManagerDebtTaskDetailsServiceTest {
     private ManagerDailyControlItemRepository itemRepository;
     private ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private ManagerDebtTaskDetailsService service;
+    private ManagerReportReviewTaskContextService taskContextService;
+    private ManagerReportReviewSettingsService reviewSettings;
 
     @BeforeEach
     void setUp() {
         controlRepository = mock(ManagerDailyControlRepository.class);
         itemRepository = mock(ManagerDailyControlItemRepository.class);
         concreteItemRepository = mock(ManagerDailyControlConcreteItemRepository.class);
+        taskContextService = mock(ManagerReportReviewTaskContextService.class);
+        reviewSettings = mock(ManagerReportReviewSettingsService.class);
         service = new ManagerDebtTaskDetailsService(
                 controlRepository,
                 itemRepository,
-                concreteItemRepository
+                concreteItemRepository,
+                taskContextService,
+                reviewSettings
         );
     }
 
@@ -100,6 +106,62 @@ class ManagerDebtTaskDetailsServiceTest {
                 .contains("открыть каждую", "содержательный ответ");
         assertThat(service.completionCriterion(result.get(2L).categories().getFirst()))
                 .contains("стал 0");
+    }
+
+    @Test
+    void auditLeavesOutMessagesAnsweredAfterTheSnapshotOrStillWithinTheGrace() {
+        LocalDate date = LocalDate.of(2026, 9, 14);
+        ManagerDailyControl control = new ManagerDailyControl();
+        control.setId(90L);
+        control.setControlDate(date);
+        control.setManager(Manager.builder().id(3L).build());
+        ManagerDailyControlItem unanswered = item(700L, control, "UNANSWERED_CLIENT_MESSAGES",
+                "Неотвеченные сообщения", 2, ManagerDailyControlItemStatus.OPEN);
+        ManagerDailyControlConcreteItem fresh = concrete(7699L, control, unanswered, "Красотулька", "0 мин. без ответа");
+        ManagerDailyControlConcreteItem old = concrete(7700L, control, unanswered, "Toyama motors", "16 мин. без ответа");
+        when(controlRepository.findByControlDate(date)).thenReturn(List.of(control));
+        when(itemRepository.findByControlIn(List.of(control))).thenReturn(List.of(unanswered));
+        when(concreteItemRepository.findByParentItemIn(List.of(unanswered))).thenReturn(List.of(fresh, old));
+        when(reviewSettings.unansweredGraceMinutes()).thenReturn(10);
+        when(taskContextService.unansweredNotYetARemark(
+                org.mockito.ArgumentMatchers.eq(List.of(fresh, old)),
+                org.mockito.ArgumentMatchers.any(java.time.LocalDateTime.class),
+                org.mockito.ArgumentMatchers.eq(10))).thenReturn(java.util.Set.of(7699L));
+
+        var audit = service.auditTasks(date, 3L);
+
+        assertThat(audit.auditExcludedUnanswered()).isEqualTo(1);
+        assertThat(audit.categories()).singleElement().satisfies(category -> {
+            assertThat(category.count()).isEqualTo(1);
+            assertThat(category.items()).extracting(ManagerDebtTaskDetailsService.DebtItem::title)
+                    .containsExactly("Toyama motors");
+        });
+        assertThat(service.auditExcludedUnanswered(date, 3L)).isEqualTo(1);
+        // The owner's team summary keeps the whole open queue.
+        assertThat(service.tasks(date, List.of(3L)).get(3L).categories().getFirst().items()).hasSize(2);
+    }
+
+    @Test
+    void auditDropsTheCategoryWhenEveryOpenMessageIsNotARemarkYet() {
+        LocalDate date = LocalDate.of(2026, 9, 15);
+        ManagerDailyControl control = new ManagerDailyControl();
+        control.setId(91L);
+        control.setControlDate(date);
+        control.setManager(Manager.builder().id(3L).build());
+        ManagerDailyControlItem unanswered = item(701L, control, "UNANSWERED_CLIENT_MESSAGES",
+                "Неотвеченные сообщения", 1, ManagerDailyControlItemStatus.OPEN);
+        ManagerDailyControlConcreteItem fresh = concrete(7742L, control, unanswered, "22 Философа", "2 мин. без ответа");
+        when(controlRepository.findByControlDate(date)).thenReturn(List.of(control));
+        when(itemRepository.findByControlIn(List.of(control))).thenReturn(List.of(unanswered));
+        when(concreteItemRepository.findByParentItemIn(List.of(unanswered))).thenReturn(List.of(fresh));
+        when(reviewSettings.unansweredGraceMinutes()).thenReturn(10);
+        when(taskContextService.unansweredNotYetARemark(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.any(java.time.LocalDateTime.class),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(java.util.Set.of(7742L));
+
+        assertThat(service.auditTasks(date, 3L)).isNull();
+        assertThat(service.auditExcludedUnanswered(date, 3L)).isEqualTo(1);
     }
 
     private ManagerDailyControlItem item(

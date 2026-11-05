@@ -42,6 +42,21 @@ public class ManagerReportReviewSettingsService {
     private final ManagerReportReviewEventRepository eventRepository;
     private final ManagerReportReviewAccessPolicy accessPolicy;
 
+    /**
+     * Audit-only grace for a client message that is still unanswered when the evening
+     * snapshot is taken. The control board keeps its own immediate warning
+     * ({@code manager-control.unanswered-client-messages.warning-minutes}); a message the
+     * manager could not reasonably have answered yet is not an audit remark.
+     */
+    public static final String UNANSWERED_GRACE_MINUTES = PREFIX + "unanswered-grace-minutes";
+    static final int DEFAULT_UNANSWERED_GRACE_MINUTES = 10;
+    static final int MAX_UNANSWERED_GRACE_MINUTES = 60;
+
+    public int unansweredGraceMinutes() {
+        return Math.max(0, Math.min(MAX_UNANSWERED_GRACE_MINUTES,
+                settings.getInt(UNANSWERED_GRACE_MINUTES, DEFAULT_UNANSWERED_GRACE_MINUTES)));
+    }
+
     @Transactional(readOnly = true)
     public ManagerReportReviewSettingsResponse settings() {
         return response();

@@ -34,11 +34,58 @@ public class ManagerDebtTaskDetailsService {
     private final ManagerDailyControlRepository controlRepository;
     private final ManagerDailyControlItemRepository itemRepository;
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
+    private final ManagerReportReviewTaskContextService taskContextService;
+    private final ManagerReportReviewSettingsService reviewSettings;
 
     @Transactional(readOnly = true)
     public Map<Long, ManagerDebtTasks> tasks(
             LocalDate date,
             List<Long> managerIds
+    ) {
+        return tasks(date, managerIds, Set.of());
+    }
+
+    /**
+     * The manager's open debt as the personal audit sees it at this moment. An unanswered
+     * client message that got a reply after the control snapshot, or that is younger than
+     * the audit grace, is not listed: it is not yet a remark for the manager.
+     */
+    @Transactional(readOnly = true)
+    public ManagerDebtTasks auditTasks(LocalDate date, Long managerId) {
+        if (date == null || managerId == null) return null;
+        Set<Long> excluded = auditExcludedUnansweredCards(date, managerId);
+        ManagerDebtTasks tasks = tasks(date, List.of(managerId), excluded).get(managerId);
+        return tasks == null ? null : new ManagerDebtTasks(managerId, tasks.categories(), excluded.size());
+    }
+
+    /** How many still-open unanswered cards the personal audit does not count yet. */
+    @Transactional(readOnly = true)
+    public long auditExcludedUnanswered(LocalDate date, Long managerId) {
+        return date == null || managerId == null ? 0 : auditExcludedUnansweredCards(date, managerId).size();
+    }
+
+    private Set<Long> auditExcludedUnansweredCards(LocalDate date, Long managerId) {
+        List<ManagerDailyControl> controls = controlRepository.findByControlDate(date).stream()
+                .filter(control -> control.getManager() != null && managerId.equals(control.getManager().getId()))
+                .toList();
+        if (controls.isEmpty()) return Set.of();
+        List<ManagerDailyControlItem> unanswered = itemRepository.findByControlIn(controls).stream()
+                .filter(this::openActionItem)
+                .filter(item -> UNANSWERED.equals(clean(item.getReasonCode())))
+                .toList();
+        if (unanswered.isEmpty()) return Set.of();
+        List<ManagerDailyControlConcreteItem> openCards = concreteItemRepository.findByParentItemIn(unanswered).stream()
+                .filter(item -> item.getStatus() == ManagerDailyControlItemStatus.OPEN)
+                .toList();
+        Set<Long> excluded = taskContextService.unansweredNotYetARemark(
+                openCards, java.time.LocalDateTime.now(), reviewSettings.unansweredGraceMinutes());
+        return excluded == null ? Set.of() : excluded;
+    }
+
+    private Map<Long, ManagerDebtTasks> tasks(
+            LocalDate date,
+            List<Long> managerIds,
+            Set<Long> excludedCards
     ) {
         if (date == null || managerIds == null || managerIds.isEmpty()) {
             return Map.of();
@@ -60,11 +107,16 @@ public class ManagerDebtTaskDetailsService {
         if (openItems.isEmpty()) {
             return Map.of();
         }
+        List<ManagerDailyControlConcreteItem> openCards = concreteItemRepository.findByParentItemIn(openItems).stream()
+                .filter(item -> item.getStatus() == ManagerDailyControlItemStatus.OPEN)
+                .filter(item -> item.getParentItem() != null && item.getParentItem().getId() != null)
+                .toList();
+        Map<Long, Long> excludedByParent = openCards.stream()
+                .filter(item -> item.getId() != null && excludedCards.contains(item.getId()))
+                .collect(Collectors.groupingBy(item -> item.getParentItem().getId(), Collectors.counting()));
         Map<Long, List<ManagerDailyControlConcreteItem>> concreteByParent =
-                concreteItemRepository.findByParentItemIn(openItems).stream()
-                        .filter(item -> item.getStatus() == ManagerDailyControlItemStatus.OPEN)
-                        .filter(item -> item.getParentItem() != null
-                                && item.getParentItem().getId() != null)
+                openCards.stream()
+                        .filter(item -> item.getId() == null || !excludedCards.contains(item.getId()))
                         .collect(Collectors.groupingBy(
                                 item -> item.getParentItem().getId(),
                                 LinkedHashMap::new,
@@ -85,11 +137,17 @@ public class ManagerDebtTaskDetailsService {
                     ))
                     .map(this::debtItem)
                     .toList();
+            long count = Math.max(0, item.getCount());
+            long excluded = excludedByParent.getOrDefault(item.getId(), 0L);
+            if (excluded > 0) {
+                count = Math.max(concrete.size(), count - excluded);
+                if (count == 0) continue;
+            }
             byManager.computeIfAbsent(managerId, ignored -> new ArrayList<>()).add(
                     new DebtCategory(
                             clean(item.getReasonCode()),
                             categoryLabel(item),
-                            Math.max(0, item.getCount()),
+                            count,
                             clean(item.getTargetUrl()),
                             concrete
                     )
@@ -192,9 +250,18 @@ public class ManagerDebtTaskDetailsService {
         return text.length() <= max ? text : text.substring(0, Math.max(0, max - 1)) + "…";
     }
 
-    public record ManagerDebtTasks(Long managerId, List<DebtCategory> categories) {
+    /**
+     * @param auditExcludedUnanswered open unanswered-message cards left out of the personal
+     *                                audit (answered after the snapshot or within the grace)
+     */
+    public record ManagerDebtTasks(Long managerId, List<DebtCategory> categories, long auditExcludedUnanswered) {
         public ManagerDebtTasks {
             categories = categories == null ? List.of() : List.copyOf(categories);
+            auditExcludedUnanswered = Math.max(0, auditExcludedUnanswered);
+        }
+
+        public ManagerDebtTasks(Long managerId, List<DebtCategory> categories) {
+            this(managerId, categories, 0);
         }
     }
 

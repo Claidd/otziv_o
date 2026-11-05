@@ -303,6 +303,29 @@ class ManagerReportReviewTelegramServiceTest {
     }
 
     @Test
+    void messageAnsweredRightAfterTheSnapshotOrWithinTheGraceIsNotAnAuditRemark() {
+        // The evening snapshot still counts one open message; the audit sees it answered or too fresh.
+        ManagerDailySummaryResponse summary = mock(ManagerDailySummaryResponse.class);
+        when(summary.date()).thenReturn(LocalDate.of(2026, 7, 25));
+        ManagerDailySummaryResponse audit = summary(0);
+        when(formatter.auditExcludedUnanswered(summary)).thenReturn(1L);
+        when(summary.withoutUnanswered(1L)).thenReturn(audit);
+        when(formatter.formatPersonal(audit)).thenReturn(new ManagerFormattedReport(
+                "Отчёт без замечаний", "<h2>Отчёт без замечаний</h2>"));
+        when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
+                .thenReturn(Optional.empty());
+        when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), any())).thenReturn(Optional.of(503));
+
+        assertThat(service.deliver(manager, summary)).isTrue();
+
+        verify(formatter, never()).formatPersonal(summary);
+        verify(qualityService, never()).generateQuestions(any(String.class), anyInt());
+        verify(sessionRepository, atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(review ->
+                review.getIssueCount() == 0 && review.isAutoCompleted()));
+    }
+
+    @Test
     void doesNotBuildOrSendAuditForDisabledManager() {
         manager.setReportReviewEnabled(false);
         ManagerDailySummaryResponse summary = mock(ManagerDailySummaryResponse.class);
