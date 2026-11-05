@@ -59,6 +59,48 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
     @Autowired com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository messagePoints;
     static final LocalDate FROM = LocalDate.of(2026, 8, 1), TO = FROM.plusMonths(1);
 
+    @Autowired com.hunt.otziv.archive.repository.ManagerArchiveRepository archive;
+
+    /** PERF-23: the archive page carries the total of the same search pass; a page past the end falls back to the count. */
+    @Test void archiveSearchPageCarriesTheSameTotalAsTheCount() {
+        Long archived = jdbc.query("SELECT order_status_id FROM order_statuses WHERE order_status_title='Архив'",
+                (rs, row) -> rs.getLong(1)).stream().findFirst().orElseGet(() -> {
+                    jdbc.update("INSERT INTO order_statuses(order_status_title) VALUES('Архив')");
+                    return jdbc.queryForObject("SELECT order_status_id FROM order_statuses WHERE order_status_title='Архив'", Long.class);
+                });
+        long base = 9_100_000L;
+        for (int i = 0; i < 3; i++) {
+            jdbc.update("""
+                    INSERT INTO archive_orders(order_id,order_status,company_title_snapshot,archived_at,order_changed)
+                    VALUES(?,?,?,?,?)""", base + i, archived, "Перфпоиск кафе " + i,
+                    FROM.atStartOfDay().plusHours(i), FROM.plusDays(i));
+        }
+        jdbc.update("INSERT INTO archive_orders(order_id,order_status,company_title_snapshot,archived_at,order_changed) VALUES(?,?,?,?,?)",
+                base + 10, archived, "Другая компания", FROM.atStartOfDay(), FROM);
+        jdbc.update("INSERT INTO archive_order_details(order_detail_id,order_detail_order) VALUES(UUID_TO_BIN(UUID()),?)", base + 10);
+        jdbc.update("""
+                INSERT INTO archive_reviews(review_id,review_order_details,review_text)
+                SELECT ?, order_detail_id, 'Большое спасибо, перфпоиск отзыв' FROM archive_order_details WHERE order_detail_order=?""",
+                base, base + 10);
+        var scope = com.hunt.otziv.archive.dto.ArchiveAccessScope.all();
+
+        var first = archive.findOrdersPage(scope, "all", "перфпоиск", 0, 2, "desc");
+        var second = archive.findOrdersPage(scope, "all", "перфпоиск", 1, 2, "desc");
+        var pastEnd = archive.findOrdersPage(scope, "all", "перфпоиск", 5, 2, "desc");
+
+        assertThat(first.total()).isEqualTo(4).isEqualTo(archive.countOrders(scope, "all", "перфпоиск"));
+        assertThat(first.items()).extracting(com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem::id)
+                .containsExactly(base + 2, base + 1);
+        assertThat(second.total()).isEqualTo(4);
+        assertThat(second.items()).extracting(com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem::id)
+                .containsExactly(base + 10, base);
+        assertThat(pastEnd.items()).isEmpty();
+        assertThat(pastEnd.total()).isEqualTo(4);
+        assertThat(archive.findOrdersPage(scope, "all", "нет-такого-перфпоиска", 0, 2, "desc").total()).isZero();
+        assertThat(archive.findOrdersPage(scope, "all", "", 0, 5, "desc").total())
+                .isEqualTo(archive.countOrders(scope, "all", ""));
+    }
+
     /** PERF-19: reply statistics read only chats replied by the manager's staff that day, with their full lookback history. */
     @Test void replyHistoryKeepsWholeLookbackOfChatsRepliedThatDayOnly() {
         var manager = managers.findAll().getFirst();

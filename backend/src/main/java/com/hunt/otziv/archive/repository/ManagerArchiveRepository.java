@@ -58,15 +58,35 @@ public class ManagerArchiveRepository {
             int pageSize,
             String sortDirection
     ) {
+        return findOrdersPage(scope, mode, keyword, pageNumber, pageSize, sortDirection).items();
+    }
+
+    public record OrderPage(List<ManagerArchiveOrderListItem> items, long total) {}
+
+    /**
+     * One page and the total number of matches from a single pass over the
+     * search filter (COUNT(*) OVER () before LIMIT). The substring search over
+     * orders and review texts used to run twice: once for the count and once
+     * for the page. Only a page past the end needs the separate count.
+     */
+    public OrderPage findOrdersPage(
+            ArchiveAccessScope scope,
+            String mode,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            String sortDirection
+    ) {
         MapSqlParameterSource params = orderParams(scope, mode, keyword)
                 .addValue("limit", pageSize)
                 .addValue("offset", Math.max(pageNumber, 0) * pageSize);
         String direction = orderDirection(sortDirection);
         String orderBy = "ORDER BY sort_at " + direction + ", order_id " + direction;
 
-        return jdbc.query("""
+        long[] total = {-1};
+        List<ManagerArchiveOrderListItem> items = jdbc.query("""
                 WITH archive_page AS (
-                    SELECT *
+                    SELECT archive_keys.*, COUNT(*) OVER () AS total_count
                     FROM (
                 """ + archiveOrderPageKeysSelect(scope, mode, keyword) + """
                         UNION ALL
@@ -82,7 +102,14 @@ public class ManagerArchiveRepository {
                 """ + liveClosedOrdersSelectFromPage() + """
                 ) archive_union
                 """ + orderBy + """
-                """, params, (rs, rowNum) -> orderListItem(rs));
+                """, params, (rs, rowNum) -> {
+                    total[0] = rs.getLong("total_count");
+                    return orderListItem(rs);
+                });
+        if (items.isEmpty()) {
+            return new OrderPage(items, pageNumber <= 0 ? 0 : countOrders(scope, mode, keyword));
+        }
+        return new OrderPage(items, total[0]);
     }
 
     public Optional<ManagerArchiveOrderListItem> findOrder(ArchiveAccessScope scope, Long orderId) {
@@ -603,7 +630,8 @@ public class ManagerArchiveRepository {
                             WHERE az.zp_order = ao.order_id
                         ), 0) AS zp_sum,
                         'archive' AS source,
-                        page.sort_at AS sort_at
+                        page.sort_at AS sort_at,
+                        page.total_count AS total_count
                 FROM archive_page page
                 JOIN archive_orders ao ON ao.order_id = page.order_id
                 LEFT JOIN companies c ON c.company_id = ao.order_company
@@ -673,7 +701,8 @@ public class ManagerArchiveRepository {
                             WHERE z.zp_order = o.order_id
                         ), 0) AS zp_sum,
                         'live' AS source,
-                        page.sort_at AS sort_at
+                        page.sort_at AS sort_at,
+                        page.total_count AS total_count
                 FROM archive_page page
                 JOIN orders o ON o.order_id = page.order_id
                 LEFT JOIN companies c ON c.company_id = o.order_company
