@@ -83,29 +83,29 @@
     },
     {
       "component": "keycloak",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
-      "commit": "0e45d5b4d5628e72b1f4e4d97f35618cc29f78f5",
-      "run": "40803539182",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:2e935efdb594ee4a3f0bc8343b1e6a76def33d70a4981cbd730ce5942ff47009",
+      "commit": "5d35c198898be7001769cf6ead6a0f3c2342cd07",
+      "run": "42065294809",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c45-keycloak.json",
-        "sha256": "6bc4f420d899df1109133759bf6b3b3d37fc51cf4f4677d10a27bd1ef549129d"
+        "path": "infrastructure/runtime-security/reviewed-images-c48-keycloak.json",
+        "sha256": "6fce2cfb66e7fab4fca9c16888d781b8acf1509c42e5a1eb799d89592cac855f"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c45-keycloak/publication/publication.json",
-        "sha256": "43dec62fcce52a8ad743eea37a6696638e4f4d5a1325b22b91fa7e936ea37dfa"
+        "path": "infrastructure/runtime-security/proofs/c48-keycloak/publication/publication.json",
+        "sha256": "f22e4f579d99935d2426779b3d7187abf4c28299f54218e7207be17cf6dccf7f"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c45-keycloak/anonymous/anonymous-download.json",
-        "sha256": "5cc5220aa119e5c44f085ef094cc9a487aa07de6e3dbcc84ecf2dceafa9610cc"
+        "path": "infrastructure/runtime-security/proofs/c48-keycloak/anonymous/anonymous-download.json",
+        "sha256": "e854e156f30ea7e78c030d4baf8e74a1c0b16828f8f1c5801e4a5ca9d72af070"
       },
-      "brotliRefreshAcceptance": {
-        "path": "infrastructure/runtime-security/proofs/c45-keycloak/acceptance.json",
-        "sha256": "31982503c42028bdb39ede68138c689ab26a680c209e05011c95035b6764110e"
+      "aptRefreshAcceptance": {
+        "path": "infrastructure/runtime-security/proofs/c48-keycloak/acceptance.json",
+        "sha256": "3aee40d722d7564e77a558dffda50c18fc1fc92a11a41db1f990e94ea28526c0"
       },
       "migrationAcceptance": {
-        "path": "infrastructure/runtime-security/proofs/c45-keycloak/acceptance.json",
-        "sha256": "31982503c42028bdb39ede68138c689ab26a680c209e05011c95035b6764110e"
+        "path": "infrastructure/runtime-security/proofs/c48-keycloak/acceptance.json",
+        "sha256": "3aee40d722d7564e77a558dffda50c18fc1fc92a11a41db1f990e94ea28526c0"
       }
     },
     {

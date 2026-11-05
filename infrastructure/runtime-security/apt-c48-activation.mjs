@@ -23,7 +23,8 @@ export const SPEC = Object.freeze({
     parentActivationSha256: 'b25e0fb8fe0c993333e5b363c675e0ef8ab6cf8a711cbe7310589d9acb35fff6',
     protected: ['opt/keycloak/providers/otziv-security-generation.jar', 'opt/keycloak/bin/kc.sh'],
     proofs: ['inspection/inspection.json', 'inspection/runtime.json.gz', 'executed-inspection.py.txt',
-      'executed-runtime-inventory.py.txt', 'rehearsal/capture.json', 'rehearsal/replay.json', 'executed-rehearsal.py.txt']},
+      'executed-runtime-inventory.py.txt', 'rehearsal/capture.json', 'rehearsal/replay.json', 'executed-rehearsal.py.txt',
+      'rehearsal/capture-window.json', 'executed-capture-window.py.txt']},
   alloy: {parent: C43_ALLOY_REFERENCE, parentConfig: C43_ALLOY_CONFIG, distribution: 'ubuntu-24.04',
     version: '2.8.4ubuntu0.1', previous: '2.8.3',
     packages: {'libapt-pkg6.0t64': ['libapt-pkg6.0t64:amd64', 'a50f3e68a793f90b05f44a4b5f2f59f3ec7687e39b5d8bbd1da44c84671fa3d6'],
@@ -252,6 +253,47 @@ export function validateAptC48Rehearsal(capture, replay, publication, sourceSha2
     assert.deepEqual(replay.candidateDatabase[key], replay.sourceDatabase[key], 'apt_c48_database_changed:' + key);
 }
 
+// The unchanged capture guard requires one shared Internal network. The local
+// issuer pair was moved to a labelled temporary --internal network only for the
+// capture and restored to its Compose network, aliases and addresses afterwards.
+export function validateAptC48CaptureWindow(window, capture, captureSha256, sourceSha256) {
+  assert.equal(window.schema, 'otziv-apt-c48-capture-window-v1', 'apt_c48_window_schema');
+  assert.equal(window.result, 'PASS', 'apt_c48_window_failed');
+  assert.equal(window.executedScriptSha256, sourceSha256, 'apt_c48_window_executed_script');
+  assert.deepEqual([window.productionAccess, window.dataWrites, window.containersRestarted], [false, false, false],
+    'apt_c48_window_scope');
+  assert.ok(['npipe', 'unix'].includes(window.dockerEndpoint), 'apt_c48_window_local_docker');
+  assert.equal(window.originalNetwork, 'otziv-prod-local_internal_net', 'apt_c48_window_original_network');
+  const temporary = window.temporaryNetwork?.name;
+  assert.match(temporary || '', /^otziv-apt-c48-capture-[a-f0-9]{12}$/, 'apt_c48_window_temporary_network');
+  assert.equal(window.temporaryNetwork.label, 'com.otziv.apt-c48-capture.owner=' + temporary.slice(-12), 'apt_c48_window_ownership');
+  assert.equal(window.temporaryNetwork.internal, true, 'apt_c48_window_not_internal');
+  assert.equal(window.temporaryNetworkRemaining, 0, 'apt_c48_window_network_leak');
+  const images = {keycloak: C45_REFERENCE, 'keycloak-postgres': C36_POSTGRES};
+  assert.deepEqual(Object.keys(window.before).sort(), Object.keys(images).sort(), 'apt_c48_window_services');
+  const keys = ['id', 'imageId', 'startedAt', 'restarts', 'running', 'networks', 'portBindings'];
+  for (const [service, reference] of Object.entries(images)) {
+    const before = window.before[service], after = window.after?.[service], isolated = window.isolated?.[service];
+    assert.equal(before.imageId, 'sha256:' + reference.split('@sha256:')[1], 'apt_c48_window_image:' + service);
+    assert.deepEqual([before.running, before.networks, before.portBindings], [true, [window.originalNetwork], {}],
+      'apt_c48_window_source_state:' + service);
+    assert.deepEqual(isolated, {networks: [temporary], aliases: before.attachment.aliases}, 'apt_c48_window_isolation:' + service);
+    assert.deepEqual(Object.fromEntries(keys.map(key => [key, after?.[key]])), Object.fromEntries(keys.map(key => [key, before[key]])),
+      'apt_c48_window_runtime_changed:' + service);
+    assert.deepEqual(after.attachment, before.attachment, 'apt_c48_window_not_restored:' + service);
+    assert.deepEqual({id: capture.sourceBefore.containers[service === 'keycloak' ? 'keycloak' : 'postgres'].id,
+      startedAt: capture.sourceBefore.containers[service === 'keycloak' ? 'keycloak' : 'postgres'].startedAt},
+    {id: before.id, startedAt: before.startedAt}, 'apt_c48_window_capture_source:' + service);
+  }
+  assert.deepEqual([window.restoredExactly, window.addressesPreserved, window.stackStatus], [true, true, 200], 'apt_c48_window_restore');
+  assert.deepEqual([window.captureExitCode, window.captureResult, window.captureSha256], [0, 'PASS', captureSha256],
+    'apt_c48_window_capture');
+  const times = [window.windowOpenedAt, window.captureStartedAt, capture.startedAt, capture.completedAt,
+    window.captureCompletedAt, window.windowClosedAt].map(value => Date.parse(value));
+  assert.ok(times.every(Number.isFinite) && times.every((value, index) => index === 0 || times[index - 1] <= value),
+    'apt_c48_window_order');
+}
+
 const ALLOY_BINARY_FIELDS = ['schema', 'status', 'binarySha256', 'buildInfoSha256', 'goJoseVersion', 'buildInfoReader',
   'functionCount', 'daemonFunctions', 'clientFunctions', 'functionNamesSha256', 'packageCount', 'daemonPackages', 'closureSha256'];
 
@@ -290,9 +332,12 @@ export async function validateAptC48Activation(component, publication, entry, re
   validateAptC48Runtime(component, runtime, inspection, publication, await read(ROOT + 'c48-' + component + '-apt-packages.json'));
   assert.equal(inspection.executedScriptSha256, hash(take('executed-inspection.py.txt')), 'apt_c48_executed_inspector');
   assert.equal(inspection.inventoryScriptSha256, hash(take('executed-runtime-inventory.py.txt')), 'apt_c48_executed_inventory');
-  if (component === 'keycloak')
-    validateAptC48Rehearsal(JSON.parse(take('rehearsal/capture.json')), JSON.parse(take('rehearsal/replay.json')),
-      publication, hash(take('executed-rehearsal.py.txt')));
+  if (component === 'keycloak') {
+    const capture = JSON.parse(take('rehearsal/capture.json'));
+    validateAptC48Rehearsal(capture, JSON.parse(take('rehearsal/replay.json')), publication, hash(take('executed-rehearsal.py.txt')));
+    validateAptC48CaptureWindow(JSON.parse(take('rehearsal/capture-window.json')), capture, hash(take('rehearsal/capture.json')),
+      hash(take('executed-capture-window.py.txt')));
+  }
   const raw = JSON.parse(await read(dirname(entry.publication.path) + '/vulnerabilities.json'));
   assert.equal(raw.Metadata.ImageID, publication.imageId, 'apt_c48_scan_image');
   assert.equal(raw.Results.flatMap(result => result.Vulnerabilities || []).filter(item => item.VulnerabilityID === ADVISORY).length,

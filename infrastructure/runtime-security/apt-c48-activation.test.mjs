@@ -4,8 +4,8 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {gunzipSync} from 'node:zlib';
 import {hash} from './ssl-refresh.mjs';
-import {validateAptC48Runtime, validateAptC48Rehearsal, couplePostgresC36WithKeycloakC48, dpkgFilters, excluded,
-  resolvePath, C45_REFERENCE, C45_CONFIG, C43_ALLOY_REFERENCE} from './apt-c48-activation.mjs';
+import {validateAptC48Runtime, validateAptC48Rehearsal, validateAptC48CaptureWindow, couplePostgresC36WithKeycloakC48,
+  dpkgFilters, excluded, resolvePath, C45_REFERENCE, C45_CONFIG, C43_ALLOY_REFERENCE} from './apt-c48-activation.mjs';
 import {C36_POSTGRES, C36_POSTGRES_CONFIG} from './guava-c43-activation.mjs';
 
 const load = async component => {
@@ -186,12 +186,48 @@ test('the actual Alloy publication binds the apt overlay to the unchanged C43 bi
   await assert.rejects(validateActivation(image, unbound, baseline, read), /apt_c48_acceptance_digest/);
 });
 
-test('the published C48 issuer stays held until its data and rollback acceptance', async () => {
+const rehearsal = new URL('./proofs/c48-keycloak/', import.meta.url);
+const rehearsalJson = async name => JSON.parse(await readFile(new URL(name, rehearsal)));
+const actualCapture = await rehearsalJson('rehearsal/capture.json'), actualReplay = await rehearsalJson('rehearsal/replay.json');
+const actualWindow = await rehearsalJson('rehearsal/capture-window.json');
+const captureSha = hash(await readFile(new URL('rehearsal/capture.json', rehearsal)));
+const rehearsalSha = hash(await readFile(new URL('executed-rehearsal.py.txt', rehearsal)));
+const windowSha = hash(await readFile(new URL('executed-capture-window.py.txt', rehearsal)));
+
+test('actual C48 rehearsal preserves all 102 tables and both rollback paths on C45/C36', () => {
+  validateAptC48Rehearsal(actualCapture, actualReplay, actual.keycloak.publication, rehearsalSha);
+});
+
+test('the actual capture ran in an internal-only window and the stand was restored exactly', () => {
+  validateAptC48CaptureWindow(actualWindow, actualCapture, captureSha, windowSha);
+});
+for (const [name, mutate, error] of [
+  ['a non-internal temporary network', value => { value.temporaryNetwork.internal = false; }, 'window_not_internal'],
+  ['a leaked temporary network', value => { value.temporaryNetworkRemaining = 1; }, 'window_network_leak'],
+  ['another isolated network', value => { value.isolated.keycloak.networks.push('otziv-prod-local_internal_net'); }, 'window_isolation'],
+  ['changed aliases', value => { value.after['keycloak-postgres'].attachment.aliases.pop(); }, 'window_not_restored'],
+  ['a changed address', value => { value.after.keycloak.attachment.ipAddress = '172.18.0.99'; }, 'window_not_restored'],
+  ['a restarted issuer', value => { value.after.keycloak.restarts = 1; }, 'window_runtime_changed'],
+  ['an unhealthy stand', value => { value.stackStatus = 502; }, 'window_restore'],
+  ['another capture', value => { value.captureSha256 = '0'.repeat(64); }, 'window_capture'],
+  ['a capture outside the window', value => { value.windowClosedAt = value.windowOpenedAt; }, 'window_order'],
+  ['another source container', value => { value.before.keycloak.id = '0'.repeat(64); value.after.keycloak.id = '0'.repeat(64); }, 'window_capture_source'],
+  ['a remote Docker engine', value => { value.dockerEndpoint = 'ssh'; }, 'window_local_docker'],
+  ['another image', value => { value.before['keycloak-postgres'].imageId = 'sha256:' + '0'.repeat(64); }, 'window_image'],
+]) test('C48 capture window rejects ' + name, () => {
+  const value = structuredClone(actualWindow); mutate(value);
+  assert.throws(() => validateAptC48CaptureWindow(value, actualCapture, captureSha, windowSha), new RegExp(error));
+});
+
+test('the actual publication binds full C48 issuer acceptance to the accepted C45 parent', async () => {
   const {createEvidenceReader, validateActivation} = await import('./reviewed-image-defaults.mjs');
   const read = await createEvidenceReader(fileURLToPath(new URL('../../', import.meta.url)));
   const baseline = await read('infrastructure/runtime-security/reviewed-images.json');
   const image = JSON.parse(baseline).images.find(item => item.component === 'keycloak');
-  const draft = JSON.parse(await read('infrastructure/runtime-security/proofs/c48-keycloak/activation-draft.json'));
-  assert.equal(draft.activationReady, false);
-  await assert.rejects(validateActivation(image, draft.entry, baseline, read), /apt_c48_keycloak_data_acceptance_required/);
+  const entry = JSON.parse(await read('infrastructure/runtime-security/proofs/c48-keycloak/activation-candidate.json'));
+  assert.equal(actual.keycloak.runtime.parent.reference, C45_REFERENCE);
+  assert.equal(await validateActivation(image, entry, baseline, read), entry.reference);
+  const unbound = structuredClone(entry);
+  unbound.migrationAcceptance.sha256 = '0'.repeat(64);
+  await assert.rejects(validateActivation(image, unbound, baseline, read), /apt_c48_migration_binding/);
 });
