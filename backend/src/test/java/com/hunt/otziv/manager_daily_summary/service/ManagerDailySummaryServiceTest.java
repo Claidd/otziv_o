@@ -74,6 +74,20 @@ class ManagerDailySummaryServiceTest {
                 dailyRepository, appSettingService, jdbcTemplate,
                 queueStateService, managerControlService, new ManagerActionBalanceService(), scoreLedgerRepository, gamificationEventService
         );
+        // PERF-19: the reply history query returns only chats with a staff reply in the day.
+        // Emulate that SQL filter over each test's full message stub; expectations stay unchanged.
+        org.mockito.Mockito.lenient().when(messageRepository.findManagerHistoryOfChatsRepliedBetween(any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    LocalDateTime dayFrom = invocation.getArgument(1), dayTo = invocation.getArgument(2);
+                    List<ClientChatMessage> all = messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
+                            invocation.getArgument(0), invocation.getArgument(3), invocation.getArgument(4));
+                    java.util.Set<String> replied = all.stream()
+                            .filter(message -> message.getSenderRole() == ClientChatSenderRole.STAFF && message.getChatId() != null)
+                            .filter(message -> !message.getMessageAt().isBefore(dayFrom) && message.getMessageAt().isBefore(dayTo))
+                            .map(message -> message.getPlatform() + ":" + message.getChatId())
+                            .collect(java.util.stream.Collectors.toSet());
+                    return all.stream().filter(message -> replied.contains(message.getPlatform() + ":" + message.getChatId())).toList();
+                });
         when(appSettingService.getInt(anyString(), anyInt())).thenAnswer(invocation -> invocation.getArgument(1));
         when(dailyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(dailyRepository.findBySummaryDateBetweenOrderByManager_IdAscSummaryDateAsc(any(), any())).thenReturn(List.of());

@@ -125,9 +125,12 @@ public class ManagerDailySummaryService {
         List<ClientChatMessage> dayMessages = messageRepository
                 .findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(manager.getId(), from, to);
         int replyLookbackDays = Math.max(7, appSettingService.getInt("manager.summary.raw-retention-days", 90));
+        // Only chats with a staff reply during the day can contribute reply times;
+        // their history is still read over the whole lookback (previously every
+        // message of the manager for 90 days, including bodies, was loaded).
         ReplyStats replies = replyStats(
-                messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
-                        manager.getId(), from.minusDays(replyLookbackDays), to),
+                messageRepository.findManagerHistoryOfChatsRepliedBetween(
+                        manager.getId(), from, to, from.minusDays(replyLookbackDays), to),
                 from,
                 to
         );

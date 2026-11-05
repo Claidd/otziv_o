@@ -59,6 +59,53 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
     @Autowired com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository messagePoints;
     static final LocalDate FROM = LocalDate.of(2026, 8, 1), TO = FROM.plusMonths(1);
 
+    /** PERF-19: reply statistics read only chats replied by the manager's staff that day, with their full lookback history. */
+    @Test void replyHistoryKeepsWholeLookbackOfChatsRepliedThatDayOnly() {
+        var manager = managers.findAll().getFirst();
+        var dayFrom = FROM.atStartOfDay();
+        var dayTo = dayFrom.plusDays(1);
+        var from = dayFrom.minusDays(90);
+        var whatsapp = com.hunt.otziv.client_chat_control.model.ClientChatPlatform.WHATSAPP;
+        var telegram = com.hunt.otziv.client_chat_control.model.ClientChatPlatform.TELEGRAM;
+        var client = com.hunt.otziv.client_chat_control.model.ClientChatSenderRole.CLIENT;
+        var staff = com.hunt.otziv.client_chat_control.model.ClientChatSenderRole.STAFF;
+        java.util.function.Function<Object[], com.hunt.otziv.client_chat_control.model.ClientChatMessage> message = values -> {
+            var row = new com.hunt.otziv.client_chat_control.model.ClientChatMessage();
+            row.setPlatform((com.hunt.otziv.client_chat_control.model.ClientChatPlatform) values[0]);
+            row.setChatId((String) values[1]);
+            row.setSenderRole((com.hunt.otziv.client_chat_control.model.ClientChatSenderRole) values[2]);
+            row.setMessageAt((LocalDateTime) values[3]);
+            row.setManager((Boolean) values[4] ? manager : null);
+            row.setDirection(com.hunt.otziv.client_chat_control.model.ClientChatDirection.values()[0]);
+            row.setExternalMessageId("reply-history-" + values[1] + "-" + values[3] + "-" + values[2]);
+            row.setMessageText("text");
+            em.persist(row);
+            return row;
+        };
+        var expected = List.of(
+                message.apply(new Object[]{whatsapp, "chat-a", client, from, true}),
+                message.apply(new Object[]{whatsapp, "chat-a", client, dayFrom.minusDays(5), true}),
+                message.apply(new Object[]{whatsapp, "chat-a", staff, dayFrom.plusHours(1), true}),
+                message.apply(new Object[]{whatsapp, "chat-a", client, dayTo, true}));
+        message.apply(new Object[]{whatsapp, "chat-a", client, from.minusNanos(1000), true});  // before lookback
+        message.apply(new Object[]{whatsapp, "chat-a", client, dayTo.plusNanos(1000), true});  // after the day
+        message.apply(new Object[]{whatsapp, "chat-a", client, dayFrom.plusHours(2), false});  // another manager
+        message.apply(new Object[]{telegram, "chat-a", client, dayFrom.plusHours(1), true});   // same id, other platform
+        message.apply(new Object[]{telegram, "chat-a", staff, dayFrom.minusNanos(1000), true}); // replied the day before
+        message.apply(new Object[]{whatsapp, "chat-b", client, dayFrom.plusHours(3), true});
+        message.apply(new Object[]{whatsapp, "chat-b", staff, dayTo, true});                    // reply after the day
+        message.apply(new Object[]{whatsapp, "chat-c", client, dayFrom.plusHours(4), true});
+        message.apply(new Object[]{whatsapp, "chat-c", staff, dayFrom.plusHours(5), false});    // replied by someone else
+        em.flush(); em.clear();
+
+        var history = messagePoints.findManagerHistoryOfChatsRepliedBetween(manager.getId(), dayFrom, dayTo, from, dayTo);
+
+        assertThat(history.stream().map(com.hunt.otziv.client_chat_control.model.ClientChatMessage::getId).toList())
+                .containsExactlyElementsOf(expected.stream().map(com.hunt.otziv.client_chat_control.model.ClientChatMessage::getId).toList());
+        assertThat(messagePoints.findManagerHistoryOfChatsRepliedBetween(manager.getId(), dayTo, dayTo.plusDays(1), from, dayTo.plusDays(1)))
+                .extracting(com.hunt.otziv.client_chat_control.model.ClientChatMessage::getChatId).containsOnly("chat-b");
+    }
+
     @Test void constructorActivityProjectionsKeepActorScopeAndTimestampEdges() {
         var manager = managers.findAll().getFirst();
         var from = FROM.atStartOfDay();
