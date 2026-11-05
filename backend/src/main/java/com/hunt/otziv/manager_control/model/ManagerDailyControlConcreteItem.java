@@ -141,6 +141,10 @@ public class ManagerDailyControlConcreteItem {
     @Column(name = "automatic_resolution", nullable = false)
     private boolean automaticResolution;
 
+    /** Set only when the card was closed because its control day is older than 30 days (not a real resolution). */
+    @Column(name = "expired_at")
+    private LocalDateTime expiredAt;
+
     @Column(name = "resolved_episode_count", nullable = false) private long resolvedEpisodeCount;
     @Column(name = "action_taken_episode_count", nullable = false) private long actionTakenEpisodeCount;
     @Column(name = "deferred_episode_count", nullable = false) private long deferredEpisodeCount;

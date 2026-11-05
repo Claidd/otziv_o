@@ -185,21 +185,31 @@ public class ManagerControlReminderWorkflow {
         }
     }
 
+    /**
+     * From 05:00 an unclosed previous day is reported to the owners once, and only while it still holds
+     * unresolved action work (an OPEN action item or an OPEN card inside one). Missing stage timestamps
+     * alone (acceptance, day check, final check) are not reported: a day without open work closes itself
+     * in its closing window or simply stays as it is.
+     */
     void sendOverdueStageNotifications(ManagerDailyControl control, LocalDateTime now, boolean previousDayOnly,
                                        List<OwnerTelegramMessage> outgoing) {
+        boolean due = (previousDayOnly || control.getControlDate().isBefore(now.toLocalDate()))
+                && !now.toLocalTime().isBefore(MORNING_STAGE_START)
+                && control.getClosedAt() == null
+                && control.getEveningNotificationSentAt() == null;
+        if (!due) {
+            return;
+        }
         List<ManagerDailyControlItem> items = activeControlItems(dailyControlItemRepository.findByControl(control));
+        if (!dayLifecycle.hasUnresolvedActionWork(items)) {
+            return;
+        }
         long openAction = items.stream().filter(cardLifecycle::isOpenActionItem).count();
-        boolean changed = false;
-        if ((previousDayOnly || control.getControlDate().isBefore(now.toLocalDate())) && !now.toLocalTime().isBefore(MORNING_STAGE_START) && control.getClosedAt() == null && control.getFinalCheckedAt() == null && control.getEveningNotificationSentAt() == null) {
-            control.setEveningNotificationSentAt(now);
-            String text = overdueStageText(control, "конец дня", "05:00", openAction);
-            cardLifecycle.saveEvent(control, null, null, ManagerDailyControlEventType.TEST_NOTIFICATION, null, text);
-            notifyOwners(control, "Просрочен конец дня", text, outgoing);
-            changed = true;
-        }
-        if (changed) {
-            dailyControlRepository.save(control);
-        }
+        control.setEveningNotificationSentAt(now);
+        String text = overdueStageText(control, "конец дня", "05:00", openAction);
+        cardLifecycle.saveEvent(control, null, null, ManagerDailyControlEventType.TEST_NOTIFICATION, null, text);
+        notifyOwners(control, "Просрочен конец дня", text, outgoing);
+        dailyControlRepository.save(control);
     }
 
     boolean autoCloseControlIfReady(ManagerDailyControl control, LocalDateTime now) {
