@@ -518,6 +518,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (selected.manifestSet === 'c45-keycloak') {
     await validateBrotliC45Activation(publication.value, entry, read, validateActivation);
   }
+  if (['c48-keycloak', 'c48-alloy'].includes(selected.manifestSet)) {
+    assert.fail('apt_c48_runtime_and_data_acceptance_required');
+  }
   if (selected.manifestSet === 'c36-alloy') {
     await validateAlloyC36ActivationScan(publication.value, entry.publication.path, read);
   }
