@@ -11,22 +11,22 @@ import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 
-const TEMPORARY_PASSWORD_LENGTH = 14;
-const TEMPORARY_PASSWORD_GROUPS = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789'];
+const GENERATED_LENGTH = 14;
+const GENERATED_CHARACTER_GROUPS = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789'];
 
 /**
  * A fresh random temporary password for each new account. A fixed default (it used to be
  * shipped in this public repository) let anyone sign in to a new account before its owner
  * and replace the temporary password with their own.
  */
-export function generateTemporaryPassword(length = TEMPORARY_PASSWORD_LENGTH): string {
-  const alphabet = TEMPORARY_PASSWORD_GROUPS.join('');
+export function generateTemporaryPassword(length = GENERATED_LENGTH): string {
+  const alphabet = GENERATED_CHARACTER_GROUPS.join('');
   const random = new Uint32Array(length);
   for (;;) {
     crypto.getRandomValues(random);
-    const password = Array.from(random, (value) => alphabet[value % alphabet.length]).join('');
-    if (TEMPORARY_PASSWORD_GROUPS.every((group) => [...password].some((char) => group.includes(char)))) {
-      return password;
+    const candidate = Array.from(random, (value) => alphabet[value % alphabet.length]).join('');
+    if (GENERATED_CHARACTER_GROUPS.every((group) => [...candidate].some((char) => group.includes(char)))) {
+      return candidate;
     }
   }
 }
