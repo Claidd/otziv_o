@@ -10,6 +10,7 @@ const {
   FileDeliveryIdempotencyStore,
   ParticipantPhoneResolver,
   RecentOutboundRegistry,
+  createEditHandler,
   createMessageHandler,
   generatedOutboundKey,
   reconciliationPayloads,
@@ -602,6 +603,15 @@ function wireClientEvents(instance, current, trackEvent) {
       });
     });
   });
+  instance.on("message_edit", (message, newBody) => {
+    if (!current()) return;
+    trackEvent(() => handleEditedMessage(message, newBody)).catch((error) => {
+      log("warn", "Message edit webhook failed", {
+        stage: error.stage || "delivery",
+        error: error.message,
+      });
+    });
+  });
   instance.on("message_ack", (message, ack) => {
     if (!current()) return;
     captureOperationReceipt(message);
@@ -715,6 +725,14 @@ const handleIncomingMessage = createMessageHandler({
   postWebhook: (webhookPath, payload) => webhookPath === "/webhook/outreach-reply"
     ? postOutreachWebhook(webhookPath, payload)
     : postBackendWebhook(webhookPath, payload),
+  log,
+});
+
+const handleEditedMessage = createEditHandler({
+  clientId: CLIENT_ID,
+  participantResolver: participantPhoneResolver,
+  groupWebhookEnabled: GROUP_WEBHOOK_ENABLED,
+  postWebhook: (webhookPath, payload) => postBackendWebhook(webhookPath, payload),
   log,
 });
 

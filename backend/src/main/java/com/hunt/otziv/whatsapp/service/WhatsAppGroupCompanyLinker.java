@@ -215,6 +215,36 @@ public class WhatsAppGroupCompanyLinker {
         return updated;
     }
 
+    /** Scalars of a company whose stored WhatsApp invite can be compared with its bound group. */
+    record InviteTarget(Long companyId, String groupId, String inviteCode, String inviteLink) {
+    }
+
+    /**
+     * Companies whose invite link should open their bound group: active, binding required (not banned),
+     * a WhatsApp invite and a bound group, and not waiting for a newly saved link to be confirmed.
+     */
+    List<InviteTarget> inviteTargets() {
+        return companiesWithChatUrl().stream()
+                .map(WhatsAppGroupCompanyLinker::inviteTarget)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    Optional<InviteTarget> inviteTarget(Long companyId) {
+        return companyId == null ? Optional.empty()
+                : companyRepository.findById(companyId).flatMap(WhatsAppGroupCompanyLinker::inviteTarget);
+    }
+
+    private static Optional<InviteTarget> inviteTarget(Company company) {
+        if (company == null || company.getId() == null || !company.isActive()
+                || !CompanyChatBindingPolicy.isRequired(company) || company.isWhatsAppInvitePending()
+                || !hasText(company.getGroupId())) {
+            return Optional.empty();
+        }
+        return whatsAppInviteCode(company.getUrlChat())
+                .map(code -> new InviteTarget(company.getId(), company.getGroupId().trim(), code, company.getUrlChat().trim()));
+    }
+
     static Optional<String> whatsAppInviteCode(String value) {
         if (!hasText(value)) {
             return Optional.empty();

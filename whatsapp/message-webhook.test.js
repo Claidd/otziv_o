@@ -11,12 +11,54 @@ const {
   MemoryDeliveryIdempotencyStore,
   ParticipantPhoneResolver,
   RecentOutboundRegistry,
+  createEditHandler,
   createMessageHandler,
   deriveGroupId,
   generatedOutboundKey,
   reconciliationPayloads,
   trackedBody,
 } = require("./message-webhook");
+
+test("reports a group message edit as its own event pointing at the original message", async () => {
+  const calls = [];
+  const handler = createEditHandler({
+    clientId: "whatsapp_lika",
+    postWebhook: async (route, payload) => { calls.push({ route, payload }); return { queued: true }; },
+    now: () => 1_700_000_999_000,
+  });
+
+  const result = await handler({
+    from: "12001@g.us",
+    author: "79834636568@c.us",
+    fromMe: true,
+    body: "Следующая публикация будет 22.10",
+    latestEditSenderTimestampMs: 1_700_000_123_456,
+    id: { _serialized: "true_12001@g.us_3EB0REPLY" },
+  }, "Здравствуйте. Даты задаются системой. Следующая публикация будет 22.10");
+
+  assert.deepEqual(result, { queued: true, edit: true });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].route, "/webhook/whatsapp-group-edit");
+  assert.equal(calls[0].payload.editOf, "true_12001@g.us_3EB0REPLY");
+  assert.equal(calls[0].payload.messageId, "true_12001@g.us_3EB0REPLY:edit:1700000123456");
+  assert.equal(calls[0].payload.editedAt, 1_700_000_123);
+  assert.equal(calls[0].payload.timestamp, 1_700_000_123);
+  assert.equal(calls[0].payload.message, "Здравствуйте. Даты задаются системой. Следующая публикация будет 22.10");
+  assert.equal(calls[0].payload.fromMe, true);
+});
+
+test("ignores edits outside groups, empty edits and disabled group webhooks", async () => {
+  const calls = [];
+  const postWebhook = async (route, payload) => calls.push({ route, payload });
+  const handler = createEditHandler({ clientId: "whatsapp_lika", postWebhook });
+  const disabled = createEditHandler({ clientId: "whatsapp_lika", postWebhook, groupWebhookEnabled: false });
+  const groupMessage = { from: "12001@g.us", author: "7@c.us", id: { _serialized: "m1" } };
+
+  assert.deepEqual(await handler({ from: "79990001122@c.us", id: { _serialized: "p1" } }, "Личное"), { ignored: true });
+  assert.deepEqual(await handler(groupMessage, "   "), { ignored: true });
+  assert.deepEqual(await disabled(groupMessage, "Новый текст"), { ignored: true });
+  assert.equal(calls.length, 0);
+});
 
 test("derives group id without loading chat metadata", () => {
   assert.equal(deriveGroupId({ from: "12001@g.us" }), "12001@g.us");

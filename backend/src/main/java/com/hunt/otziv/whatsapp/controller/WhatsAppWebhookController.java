@@ -49,6 +49,7 @@ public class WhatsAppWebhookController {
         WhatsAppGroupReplyDTO groupReply = parseBody(requestBody, WhatsAppGroupReplyDTO.class, "group");
         if (groupReply == null || !hasText(groupReply.getClientId()) || !hasText(groupReply.getGroupId())
                 || !hasText(groupReply.getMessageId()) || !hasText(groupReply.getMessage())
+                || groupReply.getEditOf() != null
                 || groupReply.getClientId().length() > 512 || groupReply.getGroupId().length() > 512
                 || groupReply.getMessageId().length() > 512) {
             return ResponseEntity.badRequest().build();
@@ -56,6 +57,39 @@ public class WhatsAppWebhookController {
 
         log.info("WhatsApp group webhook accepted from {}", request.getRemoteAddr());
         var result = groupWebhookDeduplicator.execute(groupReply, () -> groupReplyService.processGroupReply(groupReply));
+        if (result == WhatsAppGroupWebhookDeduplicator.Result.IN_PROGRESS) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).header("Retry-After", "1").build();
+        }
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * The gateway reports that a group message was edited. Same authentication and receipt
+     * deduplication as group replies; the edit is stored as evidence and never opens a chat item.
+     */
+    @PostMapping("/whatsapp-group-edit")
+    public ResponseEntity<Void> handleGroupEdit(
+            HttpServletRequest request,
+            @RequestHeader(value = "X-WhatsApp-Webhook-Secret", required = false) String providedSecret,
+            @RequestHeader(value = "X-WhatsApp-Webhook-Signature", required = false) String signature,
+            @RequestBody String requestBody
+    ) {
+        if (!hasText(webhookSecret)) {
+            log.error("WhatsApp group edit webhook rejected: webhook secret is not configured");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        }
+        if (!isWebhookAllowed(webhookSecret, providedSecret, signature, requestBody)) {
+            log.warn("WhatsApp group edit webhook rejected from {}", request.getRemoteAddr());
+            return ResponseEntity.status(401).build();
+        }
+        WhatsAppGroupReplyDTO edit = parseBody(requestBody, WhatsAppGroupReplyDTO.class, "group edit");
+        if (edit == null || !hasText(edit.getClientId()) || !hasText(edit.getGroupId())
+                || !hasText(edit.getMessageId()) || !hasText(edit.getEditOf()) || !hasText(edit.getMessage())
+                || edit.getClientId().length() > 512 || edit.getGroupId().length() > 512
+                || edit.getMessageId().length() > 512 || edit.getEditOf().length() > 512) {
+            return ResponseEntity.badRequest().build();
+        }
+        var result = groupWebhookDeduplicator.execute(edit, () -> groupReplyService.processGroupEdit(edit));
         if (result == WhatsAppGroupWebhookDeduplicator.Result.IN_PROGRESS) {
             return ResponseEntity.status(HttpStatus.CONFLICT).header("Retry-After", "1").build();
         }

@@ -137,10 +137,10 @@ public interface ClientChatMessageRepository extends JpaRepository<ClientChatMes
     @Modifying
     @Query("""
         UPDATE ClientChatMessage message
-        SET message.messageText = ''
+        SET message.messageText = '', message.editedText = NULL
         WHERE message.messageAt < :cutoff
-          AND message.messageText IS NOT NULL
-          AND message.messageText <> ''
+          AND ((message.messageText IS NOT NULL AND message.messageText <> '')
+               OR message.editedText IS NOT NULL)
     """)
     int anonymizeTextBefore(@Param("cutoff") LocalDateTime cutoff);
 

@@ -6,4 +6,8 @@ import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 public interface GroupReplyService {
 
     void processGroupReply(WhatsAppGroupReplyDTO groupReply);
+
+    /** A sender edited a group message: recorded as evidence only, never as a new message or command. */
+    default void processGroupEdit(WhatsAppGroupReplyDTO groupEdit) {
+    }
 }

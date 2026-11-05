@@ -22,4 +22,15 @@ public class WhatsAppGroupReplyDTO {
      */
     private Boolean systemGenerated;
     private String message;
+    /**
+     * Only on /webhook/whatsapp-group-edit: the id of the edited message. messageId is then the id of
+     * this edit event (unique per edit), message is the new full text and editedAt its epoch second.
+     */
+    private String editOf;
+    private Long editedAt;
+
+    public WhatsAppGroupReplyDTO(String clientId, String groupId, String groupName, String from, String fromName,
+                                 String messageId, Long timestamp, boolean fromMe, Boolean systemGenerated, String message) {
+        this(clientId, groupId, groupName, from, fromName, messageId, timestamp, fromMe, systemGenerated, message, null, null);
+    }
 }

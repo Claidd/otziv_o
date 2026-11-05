@@ -77,6 +77,28 @@ class WhatsAppWebhookControllerTest {
     }
 
     @Test
+    void groupEditGoesOnlyToTheEditRouteWithItsOwnReceipt() {
+        String edit = "{\"clientId\":\"whatsapp_lika\",\"groupId\":\"12001@g.us\",\"messageId\":\"m-1:edit:1700000123456\","
+                + "\"editOf\":\"m-1\",\"editedAt\":1700000123,\"fromMe\":true,\"message\":\"Следующая публикация 22.10\"}";
+
+        ResponseEntity<Void> accepted = controller.handleGroupEdit(request(), SECRET, null, edit);
+        ResponseEntity<Void> asReply = controller.handleGroupReply(request(), SECRET, null, edit);
+        ResponseEntity<Void> withoutOriginal = controller.handleGroupEdit(request(), SECRET, null,
+                edit.replace("\"editOf\":\"m-1\",", ""));
+        ResponseEntity<Void> wrongSecret = controller.handleGroupEdit(request(), "wrong", null, edit);
+
+        assertEquals(HttpStatus.OK, accepted.getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, asReply.getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, withoutOriginal.getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED, wrongSecret.getStatusCode());
+        ArgumentCaptor<WhatsAppGroupReplyDTO> captor = ArgumentCaptor.forClass(WhatsAppGroupReplyDTO.class);
+        verify(groupReplyService).processGroupEdit(captor.capture());
+        assertEquals("m-1", captor.getValue().getEditOf());
+        assertEquals(1700000123L, captor.getValue().getEditedAt());
+        verify(groupReplyService, org.mockito.Mockito.never()).processGroupReply(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void rejectsInvalidGroupSecret() {
         String body = "{\"clientId\":\"whatsapp_vika\",\"groupId\":\"12001@g.us\","
                 + "\"messageId\":\"message-1\",\"message\":\"hello\"}";

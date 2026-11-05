@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 @ConditionalOnProperty(prefix = "max.bot.long-polling", name = "enabled", havingValue = "true")
 public class MaxBotLongPollingService {
 
-    private static final String UPDATE_TYPES = "bot_started,bot_added,message_created";
+    private static final String UPDATE_TYPES = "bot_started,bot_added,message_created,message_edited";
 
     private final MaxBotClient maxBotClient;
     private final MaxBotUpdateService maxBotUpdateService;

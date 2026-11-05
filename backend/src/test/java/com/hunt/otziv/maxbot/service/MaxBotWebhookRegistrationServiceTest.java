@@ -30,7 +30,7 @@ class MaxBotWebhookRegistrationServiceTest {
 
         verify(client).registerWebhook(
                 "https://o-ogo.ru/webhook/max",
-                List.of("bot_started", "bot_added", "message_created"),
+                List.of("bot_started", "bot_added", "message_created", "message_edited"),
                 "secret_123"
         );
     }
@@ -101,7 +101,8 @@ class MaxBotWebhookRegistrationServiceTest {
                 "bot_started, bot_added, bot_started, message_created"
         );
 
-        assertEquals(List.of("bot_started", "bot_added", "message_created"), service.parsedUpdateTypes());
+        // Tracked messages need their edits too, even when the deploy lists only the older types.
+        assertEquals(List.of("bot_started", "bot_added", "message_created", "message_edited"), service.parsedUpdateTypes());
     }
 
     private MaxBotClient configuredClient() {

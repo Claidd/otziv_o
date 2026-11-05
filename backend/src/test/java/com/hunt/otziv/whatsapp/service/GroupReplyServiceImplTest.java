@@ -106,6 +106,29 @@ class GroupReplyServiceImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.processGroupReply(reply)).hasMessage("tracking failed");
     }
 
+    @org.junit.jupiter.api.Test void groupEditIsOnlyRecordedAsAnEditOfTheOriginalMessage() {
+        var edit = new WhatsAppGroupReplyDTO(); edit.setClientId("whatsapp_lika"); edit.setGroupId("1@g.us");
+        edit.setMessageId("m-1:edit:1700000123456"); edit.setEditOf("m-1"); edit.setEditedAt(1_700_000_123L);
+        edit.setMessage("Здравствуйте. Следующая публикация будет 22.10");
+
+        service.processGroupEdit(edit);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand.class);
+        org.mockito.Mockito.verify(clientChatMessageTrackerService).trackEdit(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("m-1", captor.getValue().externalMessageId());
+        org.junit.jupiter.api.Assertions.assertEquals("1@g.us", captor.getValue().chatId());
+        org.junit.jupiter.api.Assertions.assertEquals(java.time.LocalDateTime.ofInstant(
+                java.time.Instant.ofEpochSecond(1_700_000_123L), java.time.ZoneId.systemDefault()), captor.getValue().editedAt());
+        org.mockito.Mockito.verify(clientChatMessageTrackerService, org.mockito.Mockito.never())
+                .track(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(companyService, groupCompanyLinker, publicationProgressPreferenceService, replyOutbox, unlinkedEvents);
+
+        var reply = new WhatsAppGroupReplyDTO("whatsapp_lika", "1@g.us", null, null, null,
+                "m-1:edit:1700000123456", null, false, null, "x");
+        org.junit.jupiter.api.Assertions.assertNotEquals(WhatsAppGroupWebhookDeduplicator.key(reply),
+                WhatsAppGroupWebhookDeduplicator.key(edit));
+    }
+
     @org.junit.jupiter.api.Test void firstMessageIsTrackedAfterCompanyIsLinkedByGroupName() {
         var reply = new WhatsAppGroupReplyDTO(); reply.setClientId("client"); reply.setGroupId("1@g.us");
         reply.setGroupName("Company"); reply.setMessageId("first"); reply.setMessage("hello");

@@ -408,6 +408,19 @@ describe('unanswered client card outcomes outside the chat', () => {
     expect(page.isConcreteUpdating(6914)).toBe(false);
   });
 
+  it('recognizes a stale WhatsApp invite chat-link card and whether a current link is offered', () => {
+    const page = createPage({}).page;
+    const stale = { controlEntityId: 9001, type: 'COMPANY_CHAT_BINDING', itemStatus: 'OPEN', chatUrl: 'https://chat.whatsapp.com/NewInviteCode12345',
+      reason: 'Почему в контроле: ссылка-приглашение WhatsApp в карточке компании больше не открывает привязанную группу. '
+        + 'Подключённый аккаунт видит актуальную ссылку: https://chat.whatsapp.com/NewInviteCode12345.' } as any;
+    expect(page.isStaleWhatsAppInvite(stale)).toBe(true);
+    expect(page.hasCurrentWhatsAppInvite(stale)).toBe(true);
+    const unknownCurrent = { ...stale, reason: 'Почему в контроле: ссылка-приглашение WhatsApp в карточке компании больше не открывает привязанную группу.' };
+    expect(page.hasCurrentWhatsAppInvite(unknownCurrent)).toBe(false);
+    const unbound = { ...stale, reason: 'Почему в контроле: WhatsApp-группа не привязана к компании.' };
+    expect(page.isStaleWhatsAppInvite(unbound)).toBe(false);
+  });
+
   it('lets a manager hand an owner-check audit card over without a comment, while the owner must write one', () => {
     const audit = { controlEntityId: 7001, type: 'CLIENT_CHAT_AUDIT', status: 'Проверка владельца', itemStatus: 'OPEN',
       reason: 'Арсен: Здравствуйте. Менеджер ответил вне чата: «Ответила лично в 22:10». Проверяет владелец или администратор.' } as any;

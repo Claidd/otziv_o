@@ -1598,7 +1598,9 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       return isExplicitlyRepairableCommonInvoiceReason(card.reason);
     }
     const text = `${card.type} ${card.reason || ''}`.toLowerCase();
+    // Chat-link cards (including a WhatsApp invite that no longer opens the bound group) re-check the link.
     return card.type === 'ORDER_PAYMENT_INTEGRITY'
+      || card.type === 'COMPANY_CHAT_BINDING'
       || text.includes('invoice')
       || text.includes('telegram')
       || text.includes('автоответчик')

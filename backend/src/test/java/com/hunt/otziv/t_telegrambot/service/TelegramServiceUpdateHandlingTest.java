@@ -129,6 +129,35 @@ class TelegramServiceUpdateHandlingTest {
         assertTrue(service.sentMessages.isEmpty());
     }
 
+    @Test void groupMessageEditIsTrackedAsAnEditAndNeverRunsAsACommand() {
+        CapturingTelegramService service=service();
+        var tracker=mock(com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService.class);
+        ReflectionTestUtils.setField(service,"clientChatMessageTrackerService",tracker);
+        Update edited=textUpdate(-100123L,"supergroup","/start abc — уточнила дату");
+        Message message=edited.getMessage();
+        message.setMessageId(77);
+        message.setEditDate(1_793_900_000);
+        edited.setMessage(null);
+        edited.setEditedMessage(message);
+
+        service.onUpdateReceived(edited);
+
+        verify(tracker).trackEdit(argThat(command->command.platform()==com.hunt.otziv.client_chat_control.model.ClientChatPlatform.TELEGRAM
+                && command.chatId().equals("-100123") && command.externalMessageId().equals("77")
+                && command.editedText().equals("/start abc — уточнила дату")
+                && command.editedAt().equals(java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochSecond(1_793_900_000L), java.time.ZoneId.systemDefault()))));
+        verify(tracker,never()).track(any());
+        verifyNoInteractions(telegramGroupLinkService,userService);
+        assertTrue(service.sentMessages.isEmpty());
+
+        Update privateEdit=textUpdate(500L,"private","исправил");
+        privateEdit.getMessage().setMessageId(78);
+        privateEdit.setEditedMessage(privateEdit.getMessage());
+        privateEdit.setMessage(null);
+        service.onUpdateReceived(privateEdit);
+        verify(tracker).trackEdit(any());
+    }
+
     @Test void membershipEventDoesNotBecomeAClientReply() {
         CapturingTelegramService service=service();
         var tracker=mock(com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService.class);

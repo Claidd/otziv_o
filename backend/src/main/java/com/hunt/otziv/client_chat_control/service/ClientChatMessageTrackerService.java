@@ -2,6 +2,7 @@ package com.hunt.otziv.client_chat_control.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
+import com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand;
 import com.hunt.otziv.client_chat_control.dto.ClientChatUnansweredExample;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
@@ -189,6 +190,57 @@ public class ClientChatMessageTrackerService {
             return;
         }
         openOrRefresh(savedMessage, company, manager);
+    }
+
+    /**
+     * The sender edited an already received message. The text as first received stays in
+     * {@code message_text}; the latest edit and its time are stored beside it, so evidence shows what
+     * a reply actually answered. An edit never opens, reopens or closes an unanswered item: only a
+     * still open item of this very client message shows the corrected question to the manager.
+     * An edit of a message we never received is ignored.
+     */
+    @Transactional
+    public void trackEdit(ClientChatMessageEditCommand command) {
+        if (!enabled() || command == null || command.platform() == null
+                || !hasText(command.chatId()) || !hasText(command.externalMessageId())) {
+            return;
+        }
+        String editedText = safe(command.editedText());
+        if (editedText.isBlank()) {
+            return;
+        }
+        ClientChatMessage message = messageRepository.findByPlatformAndChatIdAndExternalMessageId(
+                command.platform(),
+                limit(command.chatId(), 160),
+                limit(command.externalMessageId(), 255)
+        ).orElse(null);
+        if (message == null) {
+            log.debug("Client chat edit ignored, original is unknown: platform={}, chatId={}",
+                    command.platform(), command.chatId());
+            return;
+        }
+        LocalDateTime editedAt = command.editedAt() == null ? LocalDateTime.now() : command.editedAt();
+        String latest = hasText(message.getEditedText()) ? message.getEditedText() : message.getMessageText();
+        if (editedText.equals(safe(latest))
+                || (message.getEditedAt() != null && editedAt.isBefore(message.getEditedAt()))) {
+            // A repeated delivery, or an older edit arriving after a newer one.
+            return;
+        }
+        message.setEditedText(editedText);
+        message.setEditedAt(editedAt);
+        message.setEditCount(message.getEditCount() + 1);
+        messageRepository.save(message);
+        if (message.getSenderRole() == ClientChatSenderRole.STAFF || message.getSenderRole() == ClientChatSenderRole.BOT) {
+            return;
+        }
+        unansweredRepository.findByLastClientMessage(message).stream()
+                .filter(item -> item.getStatus() == ClientChatUnansweredStatus.OPEN)
+                .forEach(item -> {
+                    item.setLastMessageText(limit(editedText, 4000));
+                    unansweredRepository.save(item);
+                    // A prepared "no answer needed" review covered the old text; prepare it again.
+                    events.publishEvent(new ClientChatReviewPrefetch.Requested(item.getId()));
+                });
     }
 
     private void reconcileExistingMessage(

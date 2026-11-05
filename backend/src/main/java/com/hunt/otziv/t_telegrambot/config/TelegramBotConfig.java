@@ -79,7 +79,8 @@ public class TelegramBotConfig {
         options.setMaxThreads(1);
         options.setBaseUrl("https://api.telegram.org/bot");
         options.setGetUpdatesTimeout(normalizedLongPollingTimeoutSeconds);
-        options.setAllowedUpdates(List.of("message", "callback_query", "my_chat_member"));
+        // edited_message: client chat control keeps the original text and the edit (it never reopens a chat).
+        options.setAllowedUpdates(List.of("message", "edited_message", "callback_query", "my_chat_member"));
 
         if (proxyEnabled && proxyHost != null && !proxyHost.isBlank()) {
             options.setProxyHost(proxyHost);

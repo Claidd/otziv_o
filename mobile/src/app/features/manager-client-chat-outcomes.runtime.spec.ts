@@ -51,6 +51,13 @@ describe('unanswered client card outcomes outside the chat (mobile)', () => {
     fixture.destroy();
   });
 
+  it('offers the link re-check on a chat-link card whose WhatsApp invite no longer opens the group', () => {
+    const { fixture, page } = createPage({});
+    expect(page.showRepair({ controlEntityId: 9001, type: 'COMPANY_CHAT_BINDING', title: 'Toyama motors', itemStatus: 'OPEN',
+      reason: 'Почему в контроле: ссылка-приглашение WhatsApp в карточке компании больше не открывает привязанную группу.' })).toBe(true);
+    fixture.destroy();
+  });
+
   it('offers the current invite after a confirmed stale-link report', async () => {
     const report = vi.fn().mockReturnValue(of({ item: card, message: 'Подключённый WhatsApp-аккаунт видит актуальную ссылку-приглашение',
       inviteUrl: 'https://chat.whatsapp.com/NewInviteCode12345' }));

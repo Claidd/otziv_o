@@ -75,8 +75,19 @@ public class ClientChatMessage {
     @Column(name = "sender_name", length = 255)
     private String senderName;
 
+    /** The text as first received; an edit never overwrites it. */
     @Column(name = "message_text", columnDefinition = "TEXT")
     private String messageText;
+
+    /** Latest text after the sender edited the message on the provider side; null if never edited. */
+    @Column(name = "edited_text", columnDefinition = "TEXT")
+    private String editedText;
+
+    @Column(name = "edited_at")
+    private LocalDateTime editedAt;
+
+    @Column(name = "edit_count", nullable = false)
+    private int editCount;
 
     @Column(name = "matched_company_count", nullable = false)
     private int matchedCompanyCount;
