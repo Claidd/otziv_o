@@ -9,6 +9,9 @@ x-default-logging: &default-logging
 networks:
   docker_observer_net:
     internal: true
+  # Prometheus reads container state from the observer's metrics-only listener.
+  observer_metrics_net:
+    internal: true
   internal_net:
     driver: bridge
   external_review_net:
@@ -47,6 +50,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - docker_observer_net
+      - observer_metrics_net
 
   mysql:
     # A different running DB image is blocked by the ordinary deployment guard.
@@ -442,7 +446,7 @@ services:
       TELEGRAM_PROXY_HOST: ${TELEGRAM_PROXY_HOST:-}
       TELEGRAM_PROXY_PORT: ${TELEGRAM_PROXY_PORT:-8888}
       TELEGRAM_PROXY_TYPE: ${TELEGRAM_PROXY_TYPE:-HTTP}
-      TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-794146111,828987226}
+      TELEGRAM_ADMIN_CHAT_IDS: &telegram-admin-chat-ids ${TELEGRAM_ADMIN_CHAT_IDS:-794146111,828987226}
       WHATSAPP_PROXY_ENABLED: ${WHATSAPP_PROXY_ENABLED:-false}
       WHATSAPP_PROXY_HOST: ${WHATSAPP_PROXY_HOST:-}
       WHATSAPP_PROXY_PORT: ${WHATSAPP_PROXY_PORT:-8888}
@@ -977,6 +981,7 @@ services:
         condition: service_healthy
     networks:
       - internal_net
+      - observer_metrics_net
 
   loki:
     image: ghcr.io/claidd/otziv-security@sha256:87d426476ddadecd314b8c7e0064df618c84b6461be52d05c830be9095e3c14e
@@ -1058,6 +1063,8 @@ services:
 
   grafana:
     image: ghcr.io/claidd/otziv-security@sha256:07233e89f1964d967e516a7b97856011a502213194a27c941fc5cf5d052208fa
+    # Builds the Telegram contact point for the alert rules, then runs the image entrypoint.
+    entrypoint: ["/bin/sh", "/etc/otziv/grafana-alerting-entrypoint.sh"]
     oom_score_adj: 400
     restart: unless-stopped
     logging: *default-logging
@@ -1076,10 +1083,18 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SECURITY_COOKIE_SECURE: "true"
       GF_SECURITY_COOKIE_SAMESITE: "strict"
+      # Alerts go to the admin chats through the application bot and its proxy (INF-3).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ADMIN_CHAT_IDS: *telegram-admin-chat-ids
+      TELEGRAM_PROXY_ENABLED: ${TELEGRAM_PROXY_ENABLED:-false}
+      TELEGRAM_PROXY_HOST: ${TELEGRAM_PROXY_HOST:-}
+      TELEGRAM_PROXY_PORT: ${TELEGRAM_PROXY_PORT:-8888}
+      TELEGRAM_PROXY_TYPE: ${TELEGRAM_PROXY_TYPE:-HTTP}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./infrastructure/grafana/alerting-entrypoint.sh:/etc/otziv/grafana-alerting-entrypoint.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health"]
       interval: 30s

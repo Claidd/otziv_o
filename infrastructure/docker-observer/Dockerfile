@@ -5,6 +5,6 @@ RUN apk upgrade --no-cache && \
 WORKDIR /observer
 COPY proxy.js ./
 COPY deployment-probe.cjs ./
-EXPOSE 2375
+EXPOSE 2375 9323
 HEALTHCHECK --interval=30s --timeout=5s CMD node -e "require('http').get('http://127.0.0.1:2375/_ping', r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 CMD ["node", "proxy.js"]

@@ -78,6 +78,24 @@ class BackupSchedulerTest {
     }
 
     @Test
+    void failedScheduledRunsAreCountedForTheBackupAlert() throws Exception {
+        var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        scheduler.setMeterRegistry(registry);
+        assertThat(registry.get(BackupScheduler.FAILURE_METRIC).tag("trigger", "daily").counter().count()).isZero();
+        assertThat(registry.get(BackupScheduler.FAILURE_METRIC).tag("trigger", "catch_up").counter().count()).isZero();
+        Lease lease = new Lease("database-backup.daily", "owner", 3L);
+        when(schedulerLeaseService.tryAcquire("database-backup.daily", Duration.ofHours(1)))
+                .thenReturn(Optional.of(lease));
+        org.mockito.Mockito.doThrow(new IllegalStateException("failed"))
+                .when(backupService).runDailyBackup();
+
+        scheduler.daily();
+
+        assertThat(registry.get(BackupScheduler.FAILURE_METRIC).tag("trigger", "daily").counter().count()).isEqualTo(1.0);
+        assertThat(registry.get(BackupScheduler.FAILURE_METRIC).tag("trigger", "catch_up").counter().count()).isZero();
+    }
+
+    @Test
     void registersConfiguredDailyScheduleAndRequiredCatchUpByDefault() {
         ScheduledTaskRegistrar registrar = new ScheduledTaskRegistrar();
 

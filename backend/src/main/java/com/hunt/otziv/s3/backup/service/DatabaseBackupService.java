@@ -415,6 +415,11 @@ public class DatabaseBackupService {
         return backupProps.getKeycloak() != null && backupProps.getKeycloak().isEnabled();
     }
 
+    /** Databases with their own evidence file, as backed up by every scheduled run. */
+    List<String> evidenceDatabases() {
+        return isKeycloakBackupEnabled() ? List.of(DATABASE_MYSQL, DATABASE_KEYCLOAK) : List.of(DATABASE_MYSQL);
+    }
+
     private String validateKeycloakConfiguration(String mysqlEvidenceFileName) {
         BackupProperties.Keycloak keycloak = backupProps.getKeycloak();
         requireNonBlank(keycloak.getDb(), "backup.keycloak.db");

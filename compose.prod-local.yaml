@@ -9,6 +9,9 @@ x-default-logging: &default-logging
 networks:
   docker_observer_net:
     internal: true
+  # Prometheus reads container state from the observer's metrics-only listener.
+  observer_metrics_net:
+    internal: true
   internal_net:
     driver: bridge
   external_review_net:
@@ -43,6 +46,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - docker_observer_net
+      - observer_metrics_net
 
   mysql:
     # The local restore script initializes a separate empty, versioned volume.
@@ -800,6 +804,7 @@ services:
         condition: service_healthy
     networks:
       - internal_net
+      - observer_metrics_net
 
   loki:
     image: ghcr.io/claidd/otziv-security@sha256:87d426476ddadecd314b8c7e0064df618c84b6461be52d05c830be9095e3c14e
@@ -867,6 +872,8 @@ services:
 
   grafana:
     image: ghcr.io/claidd/otziv-security@sha256:07233e89f1964d967e516a7b97856011a502213194a27c941fc5cf5d052208fa
+    # Builds the Telegram contact point for the alert rules, then runs the image entrypoint.
+    entrypoint: ["/bin/sh", "/etc/otziv/grafana-alerting-entrypoint.sh"]
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -882,10 +889,12 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SECURITY_COOKIE_SECURE: "false"
       GF_SECURITY_COOKIE_SAMESITE: "lax"
+      # No bot token on the local stand: the entrypoint keeps Telegram delivery off.
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./infrastructure/grafana/alerting-entrypoint.sh:/etc/otziv/grafana-alerting-entrypoint.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health"]
       interval: 30s
