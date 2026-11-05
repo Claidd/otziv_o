@@ -15,6 +15,7 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemReposito
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -22,10 +23,12 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.security.Principal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -67,6 +70,14 @@ public class ManagerControlReminderWorkflow {
 
     private final PlatformTransactionManager transactionManager;
 
+    static final String PASS_LEASE_NAME = "manager-control-pass";
+    /** Renewed in every manager's transaction; bounds only an owner that stopped mid-pass. */
+    static final Duration PASS_LEASE_DURATION = Duration.ofMinutes(15);
+
+    /** Field-injected so existing constructors and tests stay unchanged; always present in the application. */
+    @Autowired(required = false)
+    private SchedulerLeaseService leases;
+
     record OwnerTelegramMessage(long chatId, String text) {}
 
     /**
@@ -74,9 +85,30 @@ public class ManagerControlReminderWorkflow {
      * after that manager's transaction commits. Previously every manager was
      * processed in one transaction holding card row locks, with Telegram
      * calls inside it, and one failing manager rolled back all the others.
+     *
+     * <p>One instance runs the pass at a time (rolling deploy overlap): it holds a DB lease that
+     * every manager's transaction renews, so an instance that lost the lease commits nothing more
+     * and sends no further owner notices.
      */
     public void runTestModeNotifications() {
-        runTestModeNotifications(LocalDateTime.now());
+        if (leases == null) {
+            runTestModeNotifications(LocalDateTime.now(), null);
+            return;
+        }
+        var acquired = leases.tryAcquire(PASS_LEASE_NAME, PASS_LEASE_DURATION);
+        if (acquired.isEmpty()) {
+            return;
+        }
+        SchedulerLeaseService.Lease lease = acquired.get();
+        try {
+            runTestModeNotifications(LocalDateTime.now(), lease);
+        } finally {
+            leases.release(lease);
+        }
+    }
+
+    void runTestModeNotifications(LocalDateTime now) {
+        runTestModeNotifications(now, null);
     }
 
     /**
@@ -84,7 +116,7 @@ public class ManagerControlReminderWorkflow {
      * refreshed and closed automatically once nothing blocks it; from 05:00 an unfinished previous
      * day is reported to the owners once. A closed previous day is never touched again.
      */
-    void runTestModeNotifications(LocalDateTime now) {
+    private void runTestModeNotifications(LocalDateTime now, SchedulerLeaseService.Lease lease) {
         LocalDate today = now.toLocalDate();
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         List<Long> managerIds = transaction.execute(status -> managerRepository.findAllWithUserAndImage().stream()
@@ -97,6 +129,7 @@ public class ManagerControlReminderWorkflow {
             List<OwnerTelegramMessage> outgoing = new ArrayList<>();
             try {
                 transaction.executeWithoutResult(status -> {
+                    holdPassLease(lease);
                     Manager manager = managerRepository.findByIdWithUser(managerId)
                             .map(found -> managerRepository.findAllManagersWorkers(List.of(found)))
                             .flatMap(found -> found.stream().findFirst())
@@ -122,12 +155,33 @@ public class ManagerControlReminderWorkflow {
                         }
                     });
                 });
+            } catch (PassLeaseLost lost) {
+                log.warn("Manager control pass stopped: the scheduler lease was lost", lost);
+                return;
             } catch (RuntimeException failure) {
                 outgoing.clear();
                 log.warn("Manager control pass failed: managerId={}, error={}", managerId, failure.toString(), failure);
                 continue;
             }
             sendOwnerMessages(outgoing);
+        }
+    }
+
+    /** Renews the pass lease inside the manager's transaction; without it nothing of this manager commits. */
+    private void holdPassLease(SchedulerLeaseService.Lease lease) {
+        if (lease == null || leases == null) {
+            return;
+        }
+        try {
+            leases.holdForTransaction(lease, PASS_LEASE_DURATION);
+        } catch (RuntimeException lost) {
+            throw new PassLeaseLost(lost);
+        }
+    }
+
+    private static final class PassLeaseLost extends RuntimeException {
+        PassLeaseLost(Throwable cause) {
+            super(cause);
         }
     }
 

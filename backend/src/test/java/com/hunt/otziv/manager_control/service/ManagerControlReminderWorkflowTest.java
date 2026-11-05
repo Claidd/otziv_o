@@ -160,4 +160,41 @@ class ManagerControlReminderWorkflowTest {
         assertThat(yesterday.getEveningNotificationSentAt()).isNotNull();
         verify(telegram, times(1)).sendMessage(anyLong(), anyString());
     }
+
+    @Test
+    void passHeldByAnotherInstanceIsSkipped() {
+        var leases = mock(com.hunt.otziv.scheduler.service.SchedulerLeaseService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(workflow, "leases", leases);
+        when(leases.tryAcquire(anyString(), any(java.time.Duration.class))).thenReturn(Optional.empty());
+
+        workflow.runTestModeNotifications();
+
+        verify(leases).tryAcquire(ManagerControlReminderWorkflow.PASS_LEASE_NAME, ManagerControlReminderWorkflow.PASS_LEASE_DURATION);
+        verifyNoInteractions(managers, dailySnapshot, transactions, telegram);
+        verify(leases, never()).release(any());
+    }
+
+    @Test
+    void everyManagerTransactionRenewsTheLeaseAndALostLeaseStopsThePass() {
+        var leases = mock(com.hunt.otziv.scheduler.service.SchedulerLeaseService.class);
+        var lease = new com.hunt.otziv.scheduler.service.SchedulerLeaseService.Lease("manager-control-pass", "owner", 3);
+        org.springframework.test.util.ReflectionTestUtils.setField(workflow, "leases", leases);
+        when(leases.tryAcquire(anyString(), any(java.time.Duration.class))).thenReturn(Optional.of(lease));
+        doNothing().doThrow(new IllegalStateException("Projection refresh lease lost"))
+                .when(leases).holdForTransaction(lease, ManagerControlReminderWorkflow.PASS_LEASE_DURATION);
+        Manager first = manager(1L), second = manager(2L), third = manager(3L);
+        when(managers.findAllWithUserAndImage()).thenReturn(List.of(first, second, third));
+        when(transactions.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+
+        workflow.runTestModeNotifications();
+
+        verify(dailySnapshot).managerControl(eq(first), any(), isNull(), eq(true), eq(false));
+        verify(dailySnapshot, never()).managerControl(eq(second), any(), any(), anyBoolean(), anyBoolean());
+        verify(dailySnapshot, never()).managerControl(eq(third), any(), any(), anyBoolean(), anyBoolean());
+        verify(leases, times(2)).holdForTransaction(lease, ManagerControlReminderWorkflow.PASS_LEASE_DURATION);
+        // The second manager's transaction rolls back without its work; the pass ends there.
+        verify(transactions, times(1)).rollback(any());
+        verify(leases).release(lease);
+        verifyNoInteractions(telegram);
+    }
 }

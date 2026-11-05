@@ -96,7 +96,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         WorkerRiskIncident incident = riskIncident();
         ManagerDailyControlConcreteItem item = riskConcreteItem();
 
-        when(concreteItemRepository.findById(30L)).thenReturn(Optional.of(item));
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
         when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
@@ -120,7 +120,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         manager.setActive(true);
         ManagerDailyControlConcreteItem item = riskConcreteItem();
 
-        when(concreteItemRepository.findById(30L)).thenReturn(Optional.of(item));
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(riskIncident()));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
         when(userService.findByChatId(999L)).thenReturn(Optional.of(manager));
@@ -199,7 +199,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         item.setSubtitle("Варначка · без изменений 2 дн. · 1 шт. · 2500.00 руб.");
         item.setReason("Заказ без изменений");
 
-        when(concreteItemRepository.findById(31L)).thenReturn(Optional.of(item));
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(item));
         when(reviewRepository.findById(88L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(444L)).thenReturn(Optional.of(workerUser));
 
@@ -217,7 +217,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         WorkerRiskIncident incident = riskIncident();
         ManagerDailyControlConcreteItem item = riskConcreteItem();
 
-        when(concreteItemRepository.findById(30L)).thenReturn(Optional.of(item));
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
         when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
@@ -460,6 +460,138 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         assertEquals(ManagerDailyControlItemStatus.OPEN, item.getStatus());
         assertEquals(null, item.getFollowUpAt());
         assertEquals(ManagerDailyControlItemStatus.OPEN, parent.getStatus());
+    }
+
+    @Test
+    void explanationCallbackEditsAndPromptsOnlyAfterTheCardTransactionCommits() {
+        java.util.concurrent.atomic.AtomicBoolean inTransaction = new java.util.concurrent.atomic.AtomicBoolean();
+        ManagerControlWorkerTaskTelegramCallbackService committed = serviceWith(new ManagerControlTransactionRunner() {
+            @Override
+            public <T> T required(java.util.function.Supplier<T> work) {
+                inTransaction.set(true);
+                try {
+                    return work.get();
+                } finally {
+                    inTransaction.set(false);
+                }
+            }
+        });
+        User worker = worker();
+        ManagerDailyControlConcreteItem item = riskConcreteItem();
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
+        when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(riskIncident()));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
+        when(telegramService.editMessageText(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any())).thenAnswer(call -> {
+            assertFalse(inTransaction.get(), "edit inside the card transaction");
+            return true;
+        });
+        when(telegramService.sendMessage(anyLong(), any(String.class))).thenAnswer(call -> {
+            assertFalse(inTransaction.get(), "prompt inside the card transaction");
+            return true;
+        });
+
+        Optional<String> answer = committed.handle(callbackFromGroup(-100123L, 444L, "mc-task-risk-explain:30"));
+
+        assertEquals(Optional.of("Ответьте на сообщение бота с кодом запроса"), answer);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(concreteItemRepository, riskIncidentRepository, telegramService);
+        order.verify(concreteItemRepository, org.mockito.Mockito.atLeastOnce()).save(item);
+        order.verify(riskIncidentRepository).save(any(WorkerRiskIncident.class));
+        order.verify(telegramService).editMessageText(eq(-100123L), eq(12), contains("ОЖИДАЕМ ОТВЕТ"), eq(null), eq(null));
+        order.verify(telegramService).sendMessage(eq(-100123L), contains("Код запроса: risk-77"));
+    }
+
+    @Test
+    void rolledBackCallbackDecisionSendsNothing() {
+        ManagerControlWorkerTaskTelegramCallbackService failingCommit = serviceWith(new ManagerControlTransactionRunner() {
+            @Override
+            public <T> T required(java.util.function.Supplier<T> work) {
+                work.get();
+                throw new IllegalStateException("commit failed");
+            }
+        });
+        User worker = worker();
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(generalConcreteItem()));
+        when(reviewRepository.findById(88L)).thenReturn(Optional.of(reviewOf(worker)));
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> failingCommit.handle(callbackFromGroup(-100123L, 444L, "mc-task-explain:31")));
+
+        org.mockito.Mockito.verifyNoInteractions(telegramService);
+    }
+
+    @Test
+    void repeatedExplanationTapKeepsTheAnswerWithoutASecondPrompt() {
+        User worker = worker();
+        ManagerDailyControlConcreteItem item = generalConcreteItem();
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(item));
+        when(reviewRepository.findById(88L)).thenReturn(Optional.of(reviewOf(worker)));
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
+
+        Optional<String> first = service.handle(callbackFromGroup(-100123L, 444L, "mc-task-explain:31"));
+        LocalDateTime promptedAt = item.getWorkerExplanationPromptedAt();
+        Optional<String> repeated = service.handle(callbackFromGroup(-100123L, 444L, "mc-task-explain:31"));
+
+        assertEquals(Optional.of("Ответьте на сообщение бота с кодом запроса"), first);
+        assertEquals(first, repeated);
+        assertEquals(promptedAt, item.getWorkerExplanationPromptedAt());
+        verify(telegramService, org.mockito.Mockito.times(1)).editMessageText(eq(-100123L), eq(12), any(), eq(null), eq(null));
+        verify(telegramService, org.mockito.Mockito.times(1)).sendMessage(eq(-100123L), contains("Код запроса: task-31"));
+    }
+
+    @Test
+    void failedMessageEditStillSendsTheExplanationPrompt() {
+        User worker = worker();
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(generalConcreteItem()));
+        when(reviewRepository.findById(88L)).thenReturn(Optional.of(reviewOf(worker)));
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
+        when(telegramService.editMessageText(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any()))
+                .thenThrow(new IllegalStateException("message is not modified"));
+
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 444L, "mc-task-explain:31"));
+
+        assertEquals(Optional.of("Ответьте на сообщение бота с кодом запроса"), answer);
+        verify(telegramService).sendMessage(eq(-100123L), contains("Код запроса: task-31"));
+    }
+
+    @Test
+    void lostSchedulerLeaseLeavesTheReminderUnclaimedAndUnsent() {
+        LocalDateTime sentAt = LocalDateTime.of(2026, 7, 15, 10, 0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> service.remindPendingExplanation(30L, sentAt.plusHours(3), () -> {
+                    throw new IllegalStateException("lease lost");
+                }));
+
+        verify(concreteItemRepository, never()).findByIdForUpdate(any());
+        verify(concreteItemRepository, never()).save(any());
+        verify(notificationMediaDeliveryService, never()).send(any(), anyLong(), any(), any(), any(), any());
+    }
+
+    private ManagerControlWorkerTaskTelegramCallbackService serviceWith(ManagerControlTransactionRunner runner) {
+        return new ManagerControlWorkerTaskTelegramCallbackService(
+                concreteItemRepository,
+                userService,
+                personalReminderService,
+                badReviewTaskService,
+                reviewRecoveryTaskService,
+                reviewRepository,
+                orderRepository,
+                riskIncidentRepository,
+                userRepository,
+                telegramService,
+                notificationMediaDeliveryService,
+                runner
+        );
+    }
+
+    private Review reviewOf(User workerUser) {
+        Worker reviewWorker = new Worker();
+        reviewWorker.setUser(workerUser);
+        Review review = new Review();
+        review.setWorker(reviewWorker);
+        return review;
     }
 
     private com.hunt.otziv.manager_control.model.ManagerDailyControl control(java.time.LocalDate date, LocalDateTime closedAt) {

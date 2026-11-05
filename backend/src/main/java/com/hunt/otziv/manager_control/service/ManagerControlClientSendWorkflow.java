@@ -3,6 +3,7 @@ package com.hunt.otziv.manager_control.service;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
+import com.hunt.otziv.client_messages.api.ManualDispatchJournal;
 import com.hunt.otziv.u_users.api.DeferredUserAuthority;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
@@ -104,6 +105,29 @@ public class ManagerControlClientSendWorkflow {
         PreparedClientMessage p = queuedSnapshot(command);
         return delivery.deliverWithOperationId(p.company() == null ? null : p.company().target(), p.managerClientId(),
                 p.groupId(), p.message(), telegramCopyButton(p.paymentInstruction()), p.deliveryToken());
+    }
+
+    /** The account the queued command sends from (sender interval journal); {@code null} without a route. */
+    ManualDispatchJournal.Sender dispatchSender(ManagerClientMessageQueue.Command command) {
+        PreparedClientMessage p = queuedSnapshot(command);
+        var route = delivery.route(p.company() == null ? null : p.company().target(), p.managerClientId(), p.groupId());
+        return route == null || !route.available() || route.platform() == null
+                ? null : new ManualDispatchJournal.Sender(route.platform(), p.managerClientId());
+    }
+
+    /**
+     * A company without a bound chat for its active platform cannot receive the message (card 9245:
+     * a MAX link without a bound MAX group). Say so now, before any payment preparation or queued
+     * attempt, instead of failing the queued command later.
+     */
+    private void requireDeliverableChat(Order order) {
+        ManagerControlMessageCompany company = ManagerControlMessageCompany.capture(order.getCompany());
+        ClientMessageDelivery.Route route = delivery.route(company == null ? null : company.target(),
+                order.getManager() == null ? null : order.getManager().getClientId(),
+                order.getCompany() == null ? null : order.getCompany().getGroupId());
+        if (route != null && !route.available()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, route.unavailableMessage());
+        }
     }
 
     void completeQueued(ManagerClientMessageQueue.Claim claim, ManagerClientMessageQueue.Command command,
@@ -218,6 +242,7 @@ public class ManagerControlClientSendWorkflow {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
         accessPolicy.requireCurrentOrderAccess(order.getId(), authentication);
         deliveryState.requireSendAllowed(concreteItem, deliveryContext(order));
+        requireDeliverableChat(order);
         BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction paymentInstruction =
                 clientMessageText.isPaymentControlOrder(order)
                         ? paymentInstructionOrchestrator.prepareAuthorized(order.getId(), authentication)

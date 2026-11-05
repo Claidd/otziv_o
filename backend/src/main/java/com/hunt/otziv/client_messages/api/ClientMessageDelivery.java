@@ -32,6 +32,35 @@ public interface ClientMessageDelivery {
     /** Fresh current company preference, without changing an already frozen destination. */
     boolean publicationProgressEnabled(Long companyId);
 
+    /**
+     * The chat a new keyed delivery to {@code target} would use now ({@code WHATSAPP}, {@code TELEGRAM}
+     * or {@code MAX}) and, when it cannot start, the same known-unsent code the delivery would return,
+     * with a message for the operator.
+     */
+    record Route(String platform, String unavailableCode, String unavailableMessage) {
+        public boolean available() {
+            return unavailableCode == null;
+        }
+    }
+
+    /** Read-only preview without provider I/O; {@code null} when the implementation cannot tell. */
+    default Route route(Target target, String clientId, String groupId) {
+        return null;
+    }
+
+    /**
+     * A known-unsent rejection that a retry of the same frozen command cannot cure: the snapshot has no
+     * chat to deliver to, or the payload itself was refused. Such a command fails at once instead of
+     * repeating identical attempts.
+     */
+    static boolean isPermanentlyUnsent(ClientMessageSendResult result) {
+        return isKnownUnsent(result) && java.util.Set.of("company_missing", "message_empty", "chat_platform_missing",
+                "chat_platform_unknown", "whatsapp_client_missing", "whatsapp_group_missing", "telegram_group_missing",
+                "max_group_missing", "invalid_request", "payload_too_large", "invalid_json", "invalid_operation_id",
+                "invalid_operation_envelope")
+                .contains(result.errorCode().trim().toLowerCase(java.util.Locale.ROOT));
+    }
+
     static boolean isKnownUnsent(ClientMessageSendResult result) {
         return result != null && !result.sent() && result.errorCode() != null
                 && java.util.Set.of("company_missing", "message_empty", "chat_platform_missing", "chat_platform_unknown",

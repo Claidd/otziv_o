@@ -16,6 +16,11 @@ import org.springframework.stereotype.Component;
  * can starve the other. A WAITING mark older than two gaps is ignored: a lane that stopped asking
  * does not keep blocking.
  *
+ * <p>Manual messages of the manager control (reply to a client, manual delivery) are recorded on the
+ * same account as {@link #MANUAL_LANE} and never wait here: they only move the account's next free
+ * slot, so the background lanes keep the channel gap after an operator's message. They take no part
+ * in the turn alternation between the two background lanes.
+ *
  * <p>Callers hold {@code ScheduledClientMessageStateRepository.lockDispatchBudget()} in the same
  * transaction, so decisions for one account are serialized with every other background sender.
  */
@@ -42,6 +47,8 @@ public class SenderAccountPacing {
     }
 
     static final int RETENTION_DAYS = 3;
+    /** Ledger lane of an operator's message; recorded only as SENT and never admitted or held. */
+    public static final String MANUAL_LANE = "MANUAL";
     private static final int MAX_ACCOUNT_LENGTH = 191;
 
     private final SenderDispatchLedger ledger;
@@ -75,7 +82,8 @@ public class SenderAccountPacing {
         Decision decision = decide(lane, now, gapSeconds,
                 latest.get(SenderDispatchLedger.SENT + ":" + lane.name()),
                 latest.get(SenderDispatchLedger.SENT + ":" + other.name()),
-                latest.get(SenderDispatchLedger.WAITING + ":" + other.name()));
+                latest.get(SenderDispatchLedger.WAITING + ":" + other.name()),
+                latest.get(SenderDispatchLedger.SENT + ":" + MANUAL_LANE));
         if (decision.allowed()) {
             ledger.purgeOlderThan(now.minusDays(RETENTION_DAYS));
             ledger.record(account, lane.name(), SenderDispatchLedger.SENT, now);
@@ -87,19 +95,43 @@ public class SenderAccountPacing {
         return decision;
     }
 
+    /**
+     * Records an operator's message about to leave from {@code account}. It is never held: the
+     * background lanes see it as the account's latest dispatch and keep the gap after it.
+     */
+    public void recordManual(String account, LocalDateTime now) {
+        if (account == null || now == null) {
+            return;
+        }
+        ledger.purgeOlderThan(now.minusDays(RETENTION_DAYS));
+        ledger.record(account, MANUAL_LANE, SenderDispatchLedger.SENT, now);
+    }
+
     static Decision decide(Lane lane, LocalDateTime now, int gapSeconds, LocalDateTime ownLastSent,
                            LocalDateTime otherLastSent, LocalDateTime otherWaitingAt) {
-        LocalDateTime lastSent = latestOf(ownLastSent, otherLastSent);
+        return decide(lane, now, gapSeconds, ownLastSent, otherLastSent, otherWaitingAt, null);
+    }
+
+    /** {@code manualLastSent} moves the next free slot only; the turn is decided between the two lanes. */
+    static Decision decide(Lane lane, LocalDateTime now, int gapSeconds, LocalDateTime ownLastSent,
+                           LocalDateTime otherLastSent, LocalDateTime otherWaitingAt, LocalDateTime manualLastSent) {
+        LocalDateTime laneLastSent = latestOf(ownLastSent, otherLastSent);
+        LocalDateTime lastSent = latestOf(laneLastSent, manualLastSent);
         if (lastSent == null) {
             return Decision.allow();
         }
         LocalDateTime free = lastSent.plusSeconds(gapSeconds);
         if (free.isAfter(now)) {
-            return new Decision(false, free, Hold.INTERVAL,
-                    "Аккаунт отправителя занят другой рассылкой; следующий слот: " + free.withNano(0));
+            boolean manualLatest = manualLastSent != null && (laneLastSent == null || manualLastSent.isAfter(laneLastSent));
+            return new Decision(false, free, Hold.INTERVAL, (manualLatest
+                    ? "Аккаунт отправителя только что отправил сообщение менеджера вручную; следующий слот: "
+                    : "Аккаунт отправителя занят другой рассылкой; следующий слот: ") + free.withNano(0));
         }
-        boolean tookPreviousSlot = ownLastSent != null && !ownLastSent.isBefore(lastSent);
-        boolean otherWaiting = otherWaitingAt != null && otherWaitingAt.isAfter(lastSent)
+        if (laneLastSent == null) {
+            return Decision.allow();
+        }
+        boolean tookPreviousSlot = ownLastSent != null && !ownLastSent.isBefore(laneLastSent);
+        boolean otherWaiting = otherWaitingAt != null && otherWaitingAt.isAfter(laneLastSent)
                 && !otherWaitingAt.isBefore(now.minusSeconds(2L * gapSeconds + 60));
         if (tookPreviousSlot && otherWaiting) {
             String owner = lane == Lane.CAMPAIGN ? "автоответчика" : "рассылки предложений";

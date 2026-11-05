@@ -83,6 +83,69 @@ class SenderAccountPacingTest {
     }
 
     @Test
+    void manualMessageHoldsBothBackgroundLanesForOneGapOnItsAccountOnly() {
+        pacing.recordManual(ACCOUNT, t0);
+
+        var autoresponder = pacing.admit(AUTORESPONDER, ACCOUNT, GAP, t0.plusSeconds(30));
+        assertThat(autoresponder.allowed()).isFalse();
+        assertThat(autoresponder.hold()).isEqualTo(SenderAccountPacing.Hold.INTERVAL);
+        assertThat(autoresponder.nextAt()).isEqualTo(t0.plusSeconds(GAP));
+        assertThat(autoresponder.code()).isEqualTo("rate_limited");
+        assertThat(autoresponder.reason()).contains("вручную");
+        assertThat(pacing.admit(CAMPAIGN, ACCOUNT, GAP, t0.plusSeconds(60)).nextAt()).isEqualTo(t0.plusSeconds(GAP));
+        assertThat(pacing.admit(CAMPAIGN, "WHATSAPP:vika", GAP, t0.plusSeconds(30)).allowed()).isTrue();
+
+        // After the gap the manual message takes no turn: the first lane to ask gets the slot.
+        assertThat(pacing.admit(CAMPAIGN, ACCOUNT, GAP, t0.plusSeconds(GAP)).allowed()).isTrue();
+        assertThat(ledger.count(ACCOUNT, SenderAccountPacing.MANUAL_LANE, "SENT")).isEqualTo(1);
+    }
+
+    @Test
+    void manualMessageBetweenLaneSlotsKeepsTheirAlternation() {
+        assertThat(pacing.admit(AUTORESPONDER, ACCOUNT, GAP, t0).allowed()).isTrue();
+        assertThat(pacing.admit(CAMPAIGN, ACCOUNT, GAP, t0.plusSeconds(30)).allowed()).isFalse();
+        pacing.recordManual(ACCOUNT, t0.plusSeconds(60));
+
+        // The lanes' own gap has passed, the manual message's has not.
+        var held = pacing.admit(AUTORESPONDER, ACCOUNT, GAP, t0.plusSeconds(GAP + 10));
+        assertThat(held.hold()).isEqualTo(SenderAccountPacing.Hold.INTERVAL);
+        assertThat(held.nextAt()).isEqualTo(t0.plusSeconds(60 + GAP));
+
+        // The campaign was waiting and the autoresponder took the previous lane slot: the campaign's turn.
+        assertThat(pacing.admit(AUTORESPONDER, ACCOUNT, GAP, t0.plusSeconds(60 + GAP)).hold())
+                .isEqualTo(SenderAccountPacing.Hold.TURN);
+        assertThat(pacing.admit(CAMPAIGN, ACCOUNT, GAP, t0.plusSeconds(60 + GAP + 5)).allowed()).isTrue();
+    }
+
+    @Test
+    void manualMessageIsNeverHeldAndAnUnknownAccountIsNotRecorded() {
+        assertThat(pacing.admit(AUTORESPONDER, ACCOUNT, GAP, t0).allowed()).isTrue();
+        pacing.recordManual(ACCOUNT, t0.plusSeconds(1));
+        pacing.recordManual(ACCOUNT, t0.plusSeconds(2));
+        pacing.recordManual(null, t0.plusSeconds(3));
+
+        assertThat(ledger.count(ACCOUNT, SenderAccountPacing.MANUAL_LANE, "SENT")).isEqualTo(2);
+        assertThat(ledger.rows).noneMatch(row -> row.account() == null);
+        assertThat(ledger.rows).noneMatch(row -> SenderAccountPacing.MANUAL_LANE.equals(row.lane())
+                && !"SENT".equals(row.event()));
+    }
+
+    @Test
+    void manualJournalWritesTheOperatorMessageOnItsSendingAccount() {
+        var clock = java.time.Clock.fixed(java.time.Instant.parse("2026-11-05T12:51:04Z"), java.time.ZoneId.of("Asia/Irkutsk"));
+        var journal = new ManualSenderDispatchJournal(pacing, new ClientMessageTime(clock));
+
+        journal.recordManualDispatch(new com.hunt.otziv.client_messages.api.ManualDispatchJournal.Sender("WHATSAPP", " lika "));
+        journal.recordManualDispatch(new com.hunt.otziv.client_messages.api.ManualDispatchJournal.Sender("MAX", null));
+        journal.recordManualDispatch(new com.hunt.otziv.client_messages.api.ManualDispatchJournal.Sender("WHATSAPP", null));
+        journal.recordManualDispatch(null);
+
+        assertThat(ledger.rows).extracting(InMemorySenderDispatchLedger.Row::account).containsExactly(ACCOUNT, "MAX");
+        assertThat(ledger.rows).allMatch(row -> row.at().equals(LocalDateTime.of(2026, 11, 5, 20, 51, 4))
+                && SenderAccountPacing.MANUAL_LANE.equals(row.lane()));
+    }
+
+    @Test
     void oldRowsArePurgedWhenANewSlotIsRecorded() {
         ledger.record(ACCOUNT, "CAMPAIGN", "SENT", t0.minusDays(4));
         assertThat(pacing.admit(AUTORESPONDER, ACCOUNT, GAP, t0).allowed()).isTrue();
