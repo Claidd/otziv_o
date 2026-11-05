@@ -2289,6 +2289,99 @@
       "hardDeadlineAt" : "2026-09-07T08:00:00",
       "slaState" : "contract-example"
     },
+    "ManagerControlStaleChatInviteResponseOutput" : {
+      "item" : {
+        "controlEntityId" : 2,
+        "type" : "contract-example",
+        "entityId" : 2,
+        "title" : "contract-example",
+        "subtitle" : "contract-example",
+        "status" : "contract-example",
+        "ageDays" : 2,
+        "reason" : "contract-example",
+        "targetUrl" : "contract-example",
+        "orderDetailsId" : "contract-example",
+        "chatUrl" : "contract-example",
+        "followUpAt" : "2026-09-07T08:00:00",
+        "lastManualTouchAt" : "2026-09-07T08:00:00",
+        "itemStatus" : "contract-example",
+        "actionType" : "contract-example",
+        "comment" : "contract-example",
+        "updatedAt" : "2026-09-07T08:00:00",
+        "resolvedAt" : "2026-09-07T08:00:00",
+        "workerNotificationAttemptedAt" : "2026-09-07T08:00:00",
+        "workerNotificationSentAt" : "2026-09-07T08:00:00",
+        "workerNotificationAcceptedAt" : "2026-09-07T08:00:00",
+        "workerNotificationAcceptedByUserId" : 2,
+        "workerNotificationFailureReason" : "contract-example",
+        "contactText" : "contract-example",
+        "riskResolutionAction" : "contract-example",
+        "workerExplanation" : "contract-example",
+        "workerExplanationAt" : "2026-09-07T08:00:00",
+        "penaltyPoints" : 2,
+        "rollbackStatus" : "contract-example",
+        "rollbackMessage" : "contract-example",
+        "canRollback" : false,
+        "specialistName" : "contract-example",
+        "firstObservedAt" : "2026-09-07T08:00:00",
+        "targetDeadlineAt" : "2026-09-07T08:00:00",
+        "hardDeadlineAt" : "2026-09-07T08:00:00",
+        "slaState" : "contract-example",
+        "delivery" : {
+          "operationId" : "contract-example",
+          "status" : "contract-example",
+          "attempts" : 2,
+          "errorCode" : "contract-example"
+        },
+        "diagnosis" : {
+          "caseId" : 2,
+          "version" : 2,
+          "episode" : 2,
+          "status" : "contract-example",
+          "observedAt" : "2026-09-07T08:00:00",
+          "facts" : [ {
+            "reference" : "contract-example",
+            "subject" : "contract-example",
+            "field" : "contract-example",
+            "value" : "contract-example"
+          } ],
+          "diagnosis" : {
+            "summary" : "contract-example",
+            "confirmedFacts" : [ {
+              "text" : "contract-example",
+              "evidenceRefs" : [ "contract-example" ]
+            } ],
+            "hypotheses" : [ {
+              "text" : "contract-example",
+              "evidenceRefs" : [ "contract-example" ]
+            } ],
+            "missingEvidence" : [ "contract-example" ],
+            "actions" : [ {
+              "code" : "contract-example",
+              "text" : "contract-example",
+              "owner" : "contract-example",
+              "verification" : "contract-example",
+              "evidenceRefs" : [ "contract-example" ]
+            } ],
+            "verification" : [ "contract-example" ]
+          },
+          "model" : "contract-example",
+          "promptVersion" : "contract-example",
+          "rolloutMode" : "contract-example"
+        },
+        "auditCommitments" : [ {
+          "id" : 2,
+          "action" : "contract-example",
+          "owner" : "contract-example",
+          "dueAt" : "2026-09-07T08:00:00",
+          "verification" : "contract-example",
+          "status" : "contract-example"
+        } ],
+        "clientMessageSendBlockedReason" : "contract-example"
+      },
+      "message" : "contract-example",
+      "inviteUrl" : "contract-example"
+    },
     "ManagerControlSummaryResponseOutput" : {
       "date" : "2026-09-07",
       "generatedAt" : "2026-09-07T08:00:00",
