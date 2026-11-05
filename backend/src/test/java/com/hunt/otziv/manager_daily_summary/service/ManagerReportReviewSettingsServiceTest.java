@@ -226,4 +226,14 @@ class ManagerReportReviewSettingsServiceTest {
         return new ManagerReportReviewEvidenceSettings(diagnosis, diagnosisIds, 40, 5000, 45, true,
                 answer, answerIds, 7000, 100, true, 120, false, 10);
     }
+
+    @Test
+    void auditGraceForFreshUnansweredMessagesDefaultsToTenMinutesWithinBounds() {
+        when(settings.getInt("manager.report-review.unanswered-grace-minutes", 10)).thenReturn(10, -5, 240, 0);
+
+        assertThat(service.unansweredGraceMinutes()).isEqualTo(10);
+        assertThat(service.unansweredGraceMinutes()).isZero();
+        assertThat(service.unansweredGraceMinutes()).isEqualTo(60);
+        assertThat(service.unansweredGraceMinutes()).isZero();
+    }
 }

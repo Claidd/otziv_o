@@ -10,8 +10,11 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.service.WorkerService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
+import com.hunt.otziv.workload_shadow.api.MandatoryAccountBlockers;
+import com.hunt.otziv.workload_shadow.api.MandatoryAccountBlockers.BlockedTask;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
@@ -40,6 +43,15 @@ public class ThematicStaffNotificationJob {
     private static final String PROGRESS_HOUR = "worker.thematic-notifications.progress-hour";
     private static final String MANAGER_PROGRESS_HOUR = "manager.thematic-notifications.progress-hour";
     private static final String RETENTION_DAYS = "thematic-notifications.retention-days";
+    private static final String ACCOUNT_BLOCKER_ENABLED = "worker.account-blocker-notice.enabled";
+    private static final String ACCOUNT_BLOCKER_DELAY_MINUTES = "worker.account-blocker-notice.delay-minutes";
+    private static final String MANAGER_ACCOUNT_BLOCKER_HOUR = "manager.account-blocker-notice.hour";
+    /**
+     * An account blocker decides whether the day can reach 100%, so this operational notice is
+     * outside the motivational per-day cap (see ThematicNotificationDispatchStore); it is still
+     * sent at most once per recipient per day.
+     */
+    private static final int OPERATIONAL_NOTICE_CAP = Integer.MAX_VALUE;
 
     private final WorkerService workerService;
     private final ManagerRepository managerRepository;
@@ -48,6 +60,7 @@ public class ThematicStaffNotificationJob {
     private final ThematicNotificationDispatchStore dispatchStore;
     private final AppSettingService appSettingService;
     private final org.springframework.context.ApplicationEventPublisher mediaEvents;
+    private final MandatoryAccountBlockers accountBlockers;
 
     @Scheduled(
             cron = "${worker.thematic-notifications.cron:0 0 11,13,16,17 * * *}",
@@ -103,6 +116,146 @@ public class ThematicStaffNotificationJob {
         dispatchStore.deleteBefore(date.minusDays(retentionDays));
         log.info("Thematic staff notifications processed: workersSent={}, managersSent={}, date={}, hour={}",
                 workerSent, managerSent, date, hour);
+    }
+
+    /**
+     * Staff-only notice about today's cards that have no usable account. The day close adds them
+     * to the denominator, so an unnoticed blocker costs the specialist the 100% day. The specialist
+     * gets the list once per day, after the shift has started; the manager gets a short version
+     * once per day from the configured midday hour if cards are still blocked.
+     */
+    @Scheduled(
+            cron = "${worker.account-blocker-notice.cron:0 */15 * * * *}",
+            zone = "${worker.progress.zone:Asia/Irkutsk}"
+    )
+    public void dispatchAccountBlockers() {
+        if (!appSettingService.getBoolean(ENABLED, true)
+                || !appSettingService.getBoolean(ACCOUNT_BLOCKER_ENABLED, true)) {
+            return;
+        }
+        try {
+            MandatoryAccountBlockers.WorkloadDay day = accountBlockers.currentDay();
+            dispatchAccountBlockersAt(LocalDateTime.now(day.zone()), day);
+        } catch (RuntimeException exception) {
+            log.warn("Account blocker notices skipped: {}", exception.getMessage());
+        }
+    }
+
+    void dispatchAccountBlockersAt(LocalDateTime now, MandatoryAccountBlockers.WorkloadDay day) {
+        if (day == null || !day.blockersCountAgainstDay()) {
+            return;
+        }
+        LocalTime time = now.toLocalTime();
+        int delayMinutes = bounded(appSettingService.getInt(ACCOUNT_BLOCKER_DELAY_MINUTES, 15), 0, 240);
+        // The shift window doubles as quiet hours: nothing is sent before the plan starts or after it ends.
+        if (time.isBefore(day.shiftStart().plusMinutes(delayMinutes)) || !time.isBefore(day.shiftEnd())) {
+            return;
+        }
+        LocalDate date = now.toLocalDate();
+        List<Worker> workers = workerService.getAllWorkers().stream()
+                .filter(Objects::nonNull)
+                .filter(worker -> worker.getId() != null)
+                .filter(worker -> eligibleUser(worker.getUser()))
+                .toList();
+        if (workers.isEmpty()) {
+            return;
+        }
+        String workerEvent = NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code();
+        Set<Long> notifiedWorkers = dispatchStore.recipientsWithDispatch(workerEvent, date);
+        List<Worker> pendingWorkers = workers.stream()
+                .filter(worker -> workerChatId(worker.getUser()) != 0L)
+                .filter(worker -> !notifiedWorkers.contains(worker.getUser().getId()))
+                .toList();
+
+        boolean managerPhase = now.getHour() >= settingHour(MANAGER_ACCOUNT_BLOCKER_HOUR, 13);
+        List<Manager> pendingManagers = managerPhase ? pendingAccountBlockerManagers(date) : List.of();
+        Set<Long> workerIds = new java.util.LinkedHashSet<>();
+        pendingWorkers.forEach(worker -> workerIds.add(worker.getId()));
+        Map<Long, Worker> activeWorkers = new java.util.LinkedHashMap<>();
+        workers.forEach(worker -> activeWorkers.putIfAbsent(worker.getId(), worker));
+        pendingManagers.forEach(manager -> teamWorkerIds(manager).stream()
+                .filter(activeWorkers::containsKey)
+                .forEach(workerIds::add));
+        if (workerIds.isEmpty()) {
+            return;
+        }
+        Map<Long, List<BlockedTask>> blocked = accountBlockers.blockedTasks(workerIds, now);
+        if (blocked.isEmpty()) {
+            return;
+        }
+
+        int workerSent = 0;
+        for (Worker worker : pendingWorkers) {
+            List<BlockedTask> tasks = blocked.getOrDefault(worker.getId(), List.of());
+            if (!tasks.isEmpty() && send(workerEvent, worker.getUser(), workerChatId(worker.getUser()), date,
+                    OPERATIONAL_NOTICE_CAP, AccountBlockerNoticeText.worker(date, tasks))) {
+                workerSent++;
+            }
+        }
+        int managerSent = 0;
+        for (Manager manager : pendingManagers) {
+            Map<String, List<BlockedTask>> byWorker = new java.util.LinkedHashMap<>();
+            teamWorkerIds(manager).stream()
+                    .map(activeWorkers::get)
+                    .filter(Objects::nonNull)
+                    .sorted(java.util.Comparator.comparing(ThematicStaffNotificationJob::workerName,
+                            String.CASE_INSENSITIVE_ORDER))
+                    .forEach(worker -> {
+                        List<BlockedTask> tasks = blocked.getOrDefault(worker.getId(), List.of());
+                        if (!tasks.isEmpty()) {
+                            String name = workerName(worker);
+                            byWorker.put(byWorker.containsKey(name) ? name + " (#" + worker.getId() + ")" : name, tasks);
+                        }
+                    });
+            if (!byWorker.isEmpty() && send(
+                    NotificationMediaEventCatalog.MANAGER_WORKER_ACCOUNT_BLOCKED.code(),
+                    manager.getUser(),
+                    managerChatId(manager, manager.getUser()),
+                    date,
+                    OPERATIONAL_NOTICE_CAP,
+                    AccountBlockerNoticeText.manager(date, byWorker))) {
+                managerSent++;
+            }
+        }
+        if (workerSent > 0 || managerSent > 0) {
+            log.info("Account blocker notices sent: workers={}, managers={}, date={}", workerSent, managerSent, date);
+        }
+    }
+
+    private List<Manager> pendingAccountBlockerManagers(LocalDate date) {
+        Set<Long> notified = dispatchStore.recipientsWithDispatch(
+                NotificationMediaEventCatalog.MANAGER_WORKER_ACCOUNT_BLOCKED.code(), date);
+        List<Manager> managers = managerRepository.findAllWithUserAndImage();
+        if (!managers.isEmpty()) {
+            managers = managerRepository.findAllManagersWorkers(managers);
+        }
+        return managers.stream()
+                .filter(Objects::nonNull)
+                .filter(manager -> eligibleUser(manager.getUser()))
+                .filter(manager -> managerChatId(manager, manager.getUser()) != 0L)
+                .filter(manager -> !notified.contains(manager.getUser().getId()))
+                .toList();
+    }
+
+    private static List<Long> teamWorkerIds(Manager manager) {
+        Collection<Worker> team = manager.getUser() == null || manager.getUser().getWorkers() == null
+                ? Set.of()
+                : manager.getUser().getWorkers();
+        return team.stream().filter(Objects::nonNull).map(Worker::getId).filter(Objects::nonNull)
+                .distinct().toList();
+    }
+
+    private static String workerName(Worker worker) {
+        User user = worker.getUser();
+        if (user == null) {
+            return "Специалист #" + worker.getId();
+        }
+        if (user.getFio() != null && !user.getFio().isBlank()) {
+            return user.getFio().trim();
+        }
+        return user.getUsername() == null || user.getUsername().isBlank()
+                ? "Специалист #" + worker.getId()
+                : user.getUsername();
     }
 
     private boolean dispatchWorker(

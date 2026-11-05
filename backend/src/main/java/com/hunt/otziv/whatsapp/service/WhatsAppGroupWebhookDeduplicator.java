@@ -52,7 +52,9 @@ public class WhatsAppGroupWebhookDeduplicator {
 
     static String key(WhatsAppGroupReplyDTO reply) {
         if (reply == null) throw new IllegalArgumentException("inbound_identity_required");
-        String[] parts = { "whatsapp", "/webhook/whatsapp-group-reply", reply.getClientId(), reply.getGroupId(), reply.getMessageId() };
+        // An edit event has its own route and its own messageId (unique per edit).
+        String route = reply.getEditOf() == null ? "/webhook/whatsapp-group-reply" : "/webhook/whatsapp-group-edit";
+        String[] parts = { "whatsapp", route, reply.getClientId(), reply.getGroupId(), reply.getMessageId() };
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             for (String value : parts) {

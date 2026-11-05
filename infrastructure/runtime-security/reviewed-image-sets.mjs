@@ -3,12 +3,13 @@ import { createHash } from 'node:crypto';
 import { readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { C26_POLICY } from './keycloak-runtime-dependencies.mjs';
+import { OVERLAYS, overlayReleaseSets } from './os-package-overlay-registry.mjs';
 
 export const BASELINE_MANIFEST_SHA256 = 'd48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2';
 const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
-const RELEASE_SETS = Object.freeze({
+const EXPLICIT_RELEASE_SETS = {
   'c42-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c42-mysql.json', context: 'infrastructure/runtime-security/builds/c42-mysql', dockerfile: 'infrastructure/runtime-security/builds/c42-mysql/Dockerfile' },
   'c46-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c46-mysql.json', context: 'infrastructure/runtime-security/builds/c46-mysql', dockerfile: 'infrastructure/runtime-security/builds/c46-mysql/Dockerfile' },
   'c41-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c41-nginx.json', context: 'infrastructure/runtime-security/builds/c41-nginx', dockerfile: 'infrastructure/runtime-security/builds/c41-nginx/Dockerfile' },
@@ -108,7 +109,9 @@ const RELEASE_SETS = Object.freeze({
   'c43-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c43-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-loki/Dockerfile' },
   'c43-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c43-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-alloy/Dockerfile' },
   'c43-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c43-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-grafana/Dockerfile' },
-});
+};
+// Later official OS package overlays are registered data (os-package-overlays.json).
+const RELEASE_SETS = Object.freeze({ ...EXPLICIT_RELEASE_SETS, ...overlayReleaseSets(EXPLICIT_RELEASE_SETS) });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.
 export function supplementalReviewedSources() {
@@ -164,7 +167,8 @@ export function validateReviewedImageSet(name, manifestBytes, baselineBytes = ma
   assert.equal(image.prepare, undefined, 'reviewed_image_set_preparation_forbidden');
   assert.equal(image.sourceBeforeRef, original.sourceBeforeRef, 'reviewed_image_set_historical_source_changed');
   assert.deepEqual(image.defaultReferencesBefore, original.defaultReferencesBefore, 'reviewed_image_set_service_coverage_changed');
-  if (['c26-keycloak', 'c35-keycloak', 'c43-keycloak', 'c45-keycloak', 'c48-keycloak'].includes(name))
+  if (['c26-keycloak', 'c35-keycloak', 'c43-keycloak', 'c45-keycloak', 'c48-keycloak'].includes(name)
+    || OVERLAYS.get(name)?.component === 'keycloak')
     assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
   return manifest;
 }

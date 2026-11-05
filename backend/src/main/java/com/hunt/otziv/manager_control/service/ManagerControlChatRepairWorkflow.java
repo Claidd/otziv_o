@@ -138,6 +138,10 @@ public class ManagerControlChatRepairWorkflow {
             return resolveRepairedConcreteItem(concreteItem, control, "Компания в статусе «Бан»: привязка группы не требуется, карточка скрыта из контроля", principal, "Закрыта лишняя карточка привязки соцсети");
         }
         String before = clientTextChatBindingProblem(company);
+        if (before.isBlank() && "COMPANY_CHAT_BINDING".equals(concreteItem.getEntityType())
+                && isWhatsAppChat(safe(company.getUrlChat()).toLowerCase(Locale.ROOT))) {
+            requireWorkingWhatsAppInvite(concreteItem, company);
+        }
         if (before.isBlank()) {
             return resolveRepairedConcreteItem(concreteItem, control, "Группа уже привязана, карточка скрыта из контроля", principal, "Проверена привязка соцсети");
         }
@@ -161,6 +165,26 @@ public class ManagerControlChatRepairWorkflow {
             }
         }
         throw new ResponseStatusException(HttpStatus.CONFLICT, manualChatBindingRepairInstruction(company));
+    }
+
+    /**
+     * A bound group whose stored invite no longer opens it stays on the card until the manager saves
+     * the right link in the company; the check reads only and never changes the link or the group.
+     */
+    void requireWorkingWhatsAppInvite(ManagerDailyControlConcreteItem concreteItem, Company company) {
+        var recheck = problemExamples.recheckWhatsAppInvite(company);
+        var result = recheck == null ? null : recheck.result();
+        boolean staleCard = safe(concreteItem.getReason()).contains(ManagerControlProblemExamples.STALE_WHATSAPP_INVITE_REASON);
+        if (result == com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.RecheckResult.STALE
+                || (result == com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.RecheckResult.UNKNOWN && staleCard)) {
+            String current = safe(recheck.currentInviteLink());
+            throw new ResponseStatusException(HttpStatus.CONFLICT, (result == com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.RecheckResult.STALE
+                    ? "Ссылка-приглашение WhatsApp в карточке компании больше не открывает привязанную группу. "
+                    : "Не удалось подтвердить, что ссылка-приглашение WhatsApp открывает группу: подключённый аккаунт сейчас не видит ссылку группы. ")
+                    + (current.isBlank() ? "" : "Актуальная ссылка: " + current + ". ")
+                    + "Сохраните правильную ссылку на чат в карточке компании и нажмите «Починить» ещё раз. "
+                    + "Привязка группы автоматически не меняется, клиентам ничего не отправляется.");
+        }
     }
 
     ManagerControlConcreteItemResponse resolveRepairedConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, String comment, Principal principal, String eventComment) {

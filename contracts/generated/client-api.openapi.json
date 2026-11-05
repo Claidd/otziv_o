@@ -27670,7 +27670,7 @@
     "sha256" : "13565d8bc768451e84cced956fdf27349719d0f790ec4c1d48ba34879932f389"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/dto/ManagerDailySummaryResponse.java",
-    "sha256" : "efb93fb7e5e69b02a49a4ac404b98771ea2fc5ed7b8184ccedecdc6f63d83a84"
+    "sha256" : "7974032fbb966983698f92d44dd99247d1442e1c3c645bb27f2a418e6cc1a792"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/dto/ManagerReportDisputeResolutionRequest.java",
     "sha256" : "753023944c748b2529f197edabbe3e284eb54e370d66bd135485bbb53d0063e9"

@@ -135,6 +135,19 @@ public enum NotificationMediaEventCatalog {
             "У специалиста остались активные задачи в разделе публикации",
             false
     ),
+    WORKER_ACCOUNT_BLOCKED_TASKS(
+            NotificationRecipientType.WORKER,
+            "Задачи дня без аккаунта",
+            "В плане дня есть задачи без рабочего аккаунта, которые войдут в итог дня; "
+                    + "подсказка нажать «Получить аккаунт» или «смена» в карточке либо написать менеджеру",
+            false
+    ),
+    MANAGER_WORKER_ACCOUNT_BLOCKED(
+            NotificationRecipientType.MANAGER,
+            "У специалистов задачи без аккаунта",
+            "К середине дня у специалистов менеджера остались задачи без рабочего аккаунта",
+            false
+    ),
     MANAGER_REPORT_REMINDER(
             NotificationRecipientType.MANAGER,
             "Напоминание менеджеру о разборе",

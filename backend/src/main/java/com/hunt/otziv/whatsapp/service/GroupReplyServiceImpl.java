@@ -3,6 +3,7 @@ package com.hunt.otziv.whatsapp.service;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
+import com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
@@ -124,6 +125,27 @@ public class GroupReplyServiceImpl implements GroupReplyService {
 
         trackGroupReply(reply);
         log.info("Обработка ответа из группы '{}' завершена", reply.getGroupName());
+    }
+
+    /**
+     * Only the edit is recorded: no company linking, no preference command, no new client message.
+     * An edit of a message that was never received is ignored by the tracker.
+     */
+    @Override
+    @Transactional
+    public void processGroupEdit(WhatsAppGroupReplyDTO edit) {
+        if (edit == null || !hasText(edit.getGroupId()) || !hasText(edit.getEditOf())) {
+            return;
+        }
+        log.info("WhatsApp group message edit received: groupId={}, messageLength={}",
+                edit.getGroupId(), textLength(edit.getMessage()));
+        clientChatMessageTrackerService.trackEdit(new ClientChatMessageEditCommand(
+                ClientChatPlatform.WHATSAPP,
+                edit.getGroupId(),
+                edit.getEditOf(),
+                edit.getMessage(),
+                edit.getEditedAt() == null ? LocalDateTime.now() : whatsappMessageTime(edit.getEditedAt())
+        ));
     }
 
     private void trackGroupReply(WhatsAppGroupReplyDTO reply) {

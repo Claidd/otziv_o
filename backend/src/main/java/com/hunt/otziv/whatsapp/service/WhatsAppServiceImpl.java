@@ -460,6 +460,33 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         }
     }
 
+    /** Read-only: the gateway's cached group list (never a forced refresh) and whether it is fresh. */
+    @Override
+    public GroupsSnapshot groupsSnapshot(String clientId) {
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(baseUrl(clientId) + "/groups", String.class);
+            String body = response.getBody();
+            if (!hasText(body)) {
+                return GroupsSnapshot.unavailable();
+            }
+            JsonNode root = MAPPER.readTree(body);
+            String status = root.path("status").asText("ok");
+            boolean available = response.getStatusCode().is2xxSuccessful() && "ok".equalsIgnoreCase(status);
+            String cachedAt = root.path("groupsCachedAt").isTextual() ? root.path("groupsCachedAt").asText() : null;
+            return new GroupsSnapshot(available ? parseGroups(body) : List.of(), available,
+                    root.path("stale").asBoolean(false), cachedAt);
+        } catch (WhatsAppConfigurationException e) {
+            log.warn("WhatsApp-группы для проверки ссылок не запрошены: {}", e.getMessage());
+            return GroupsSnapshot.unavailable();
+        } catch (RestClientResponseException | ResourceAccessException e) {
+            log.warn("WhatsApp-клиент {} не вернул группы для проверки ссылок: {}", clientId, e.getMessage());
+            return GroupsSnapshot.unavailable();
+        } catch (Exception e) {
+            log.warn("Не удалось прочитать WhatsApp-группы клиента {} для проверки ссылок: {}", clientId, e.getMessage());
+            return GroupsSnapshot.unavailable();
+        }
+    }
+
     @Override
     public List<WhatsAppReconciledMessage> reconcileGroupMessages(
             String clientId,

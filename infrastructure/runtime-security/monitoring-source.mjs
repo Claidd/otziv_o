@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFile,appendFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {repositoryInventory} from './upstream-images.mjs';
+import {overlayForManifest} from './os-package-overlay-registry.mjs';
 
 const COMPONENTS = new Set(['prometheus', 'grafana', 'loki', 'tempo', 'alloy']);
 const IMMUTABLE_REF = /^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
@@ -30,6 +31,7 @@ export function isPublishedMonitoringOverlayManifest(component, selected) {
     (['loki', 'tempo', 'alloy', 'grafana'].includes(component) && selected === `infrastructure/runtime-security/reviewed-images-c43-${component}.json`) ||
     (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c44-grafana.json') ||
     (component === 'alloy' && selected === 'infrastructure/runtime-security/reviewed-images-c48-alloy.json') ||
+    overlayForManifest(component, selected) !== undefined ||
     selected === `infrastructure/runtime-security/reviewed-images-c36-${component}.json` ||
     (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c30-grafana.json') ||
     (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c40-grafana.json') ||

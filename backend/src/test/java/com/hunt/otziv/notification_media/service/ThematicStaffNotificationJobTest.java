@@ -19,6 +19,9 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.service.WorkerService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
+import com.hunt.otziv.workload_shadow.api.MandatoryAccountBlockers;
+import com.hunt.otziv.workload_shadow.api.MandatoryAccountBlockers.BlockedTask;
+import com.hunt.otziv.workload_shadow.api.MandatoryAccountBlockers.Kind;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,8 +48,13 @@ class ThematicStaffNotificationJobTest {
     private ThematicNotificationDispatchStore dispatchStore;
     @Mock
     private AppSettingService appSettingService;
+    @Mock
+    private MandatoryAccountBlockers accountBlockers;
 
     private ThematicStaffNotificationJob job;
+
+    private static final MandatoryAccountBlockers.WorkloadDay SHIFT = new MandatoryAccountBlockers.WorkloadDay(
+            java.time.ZoneId.of("Asia/Irkutsk"), java.time.LocalTime.of(10, 0), java.time.LocalTime.of(22, 0), true);
 
     @BeforeEach
     void setUp() {
@@ -57,7 +65,8 @@ class ThematicStaffNotificationJobTest {
                 mediaDeliveryService,
                 dispatchStore,
                 appSettingService,
-                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class)
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
+                accountBlockers
         );
         when(appSettingService.getInt(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
@@ -276,6 +285,101 @@ class ThematicStaffNotificationJobTest {
                 eq("HTML"),
                 eq(List.of())
         );
+    }
+
+    @Test
+    void accountBlockerNoticeListsTodaysBlockedCardsWithTheButtonsTheSpecialistSees() {
+        LocalDate date = LocalDate.of(2026, 11, 6);
+        Worker worker = worker(6L, 60L, -600L, date.atTime(9, 0));
+        when(workerService.getAllWorkers()).thenReturn(List.of(worker));
+        when(dispatchStore.recipientsWithDispatch(anyString(), eq(date))).thenReturn(Set.of());
+        when(accountBlockers.blockedTasks(Set.of(6L), date.atTime(10, 15))).thenReturn(Map.of(6L, List.of(
+                new BlockedTask(6L, Kind.RECOVERY, 1160L, 5L, "Цветы <Опт>", 900L, true),
+                new BlockedTask(6L, Kind.PUBLISH, 77L, 5L, "Цветы <Опт>", 901L, false))));
+
+        job.dispatchAccountBlockersAt(date.atTime(10, 15), SHIFT);
+
+        verify(dispatchStore).claim(NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code(), 60L, date,
+                Integer.MAX_VALUE);
+        verify(mediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code()),
+                eq(-600L),
+                eq(60L),
+                argThat(text -> text.contains("Рабочий день: <b>06.11.2026</b>")
+                        && text.contains("• Восстановление · «Цветы &lt;Опт&gt;», заказ №900 — нажмите «Получить аккаунт»")
+                        && text.contains("• Публикация · «Цветы &lt;Опт&gt;», заказ №901 — нажмите «смена»")
+                        && text.contains("напишите менеджеру")),
+                eq("HTML"),
+                eq(List.of())
+        );
+        verify(dispatchStore).markSent(NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code(), 60L, date);
+        // Before the midday hour the manager is not involved yet.
+        verify(managerRepository, never()).findAllWithUserAndImage();
+    }
+
+    @Test
+    void accountBlockerNoticeStaysInsideTheShiftAndOnlyWhenBlockersCount() {
+        LocalDate date = LocalDate.of(2026, 11, 6);
+
+        job.dispatchAccountBlockersAt(date.atTime(10, 14), SHIFT);
+        job.dispatchAccountBlockersAt(date.atTime(22, 0), SHIFT);
+        job.dispatchAccountBlockersAt(date.atTime(12, 0), new MandatoryAccountBlockers.WorkloadDay(
+                SHIFT.zone(), SHIFT.shiftStart(), SHIFT.shiftEnd(), false));
+
+        verify(workerService, never()).getAllWorkers();
+        verify(accountBlockers, never()).blockedTasks(any(), any());
+        verify(mediaDeliveryService, never()).send(anyString(), anyLong(), anyLong(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void accountBlockerNoticeIsSentOncePerDayAndSkipsWorkersWithoutBlockers() {
+        LocalDate date = LocalDate.of(2026, 11, 6);
+        Worker notified = worker(6L, 60L, -600L, date.atTime(9, 0));
+        Worker clear = worker(7L, 70L, -700L, date.atTime(9, 0));
+        Worker noChat = worker(8L, 80L, null, date.atTime(9, 0));
+        when(workerService.getAllWorkers()).thenReturn(List.of(notified, clear, noChat));
+        when(dispatchStore.recipientsWithDispatch(
+                NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code(), date)).thenReturn(Set.of(60L));
+        when(accountBlockers.blockedTasks(Set.of(7L), date.atTime(11, 0))).thenReturn(Map.of());
+
+        job.dispatchAccountBlockersAt(date.atTime(11, 0), SHIFT);
+
+        verify(accountBlockers).blockedTasks(Set.of(7L), date.atTime(11, 0));
+        verify(mediaDeliveryService, never()).send(anyString(), anyLong(), anyLong(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void managerGetsShortVersionFromMiddayWhileCardsAreStillBlocked() {
+        LocalDate date = LocalDate.of(2026, 11, 6);
+        Worker worker = worker(6L, 60L, null, date.atTime(9, 0));
+        worker.getUser().setFio("Альфия");
+        when(workerService.getAllWorkers()).thenReturn(List.of(worker));
+        when(dispatchStore.recipientsWithDispatch(anyString(), eq(date))).thenReturn(Set.of());
+        User managerUser = User.builder().id(201L).username("manager").active(true).telegramChatId(201L)
+                .workers(Set.of(worker)).build();
+        Manager manager = Manager.builder().id(21L).user(managerUser).auditTelegramGroupChatId(-2100L).build();
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
+        when(accountBlockers.blockedTasks(Set.of(6L), date.atTime(13, 0))).thenReturn(Map.of(6L, List.of(
+                new BlockedTask(6L, Kind.RECOVERY, 1160L, 5L, "Цветы", null, true),
+                new BlockedTask(6L, Kind.NAGUL, 12L, 5L, "Цветы", 900L, false),
+                new BlockedTask(6L, Kind.NAGUL, 13L, 5L, "Цветы", 900L, false))));
+
+        job.dispatchAccountBlockersAt(date.atTime(13, 0), SHIFT);
+
+        verify(mediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.MANAGER_WORKER_ACCOUNT_BLOCKED.code()),
+                eq(-2100L),
+                eq(201L),
+                argThat(text -> text.contains("• Альфия: <b>3</b> (восстановление, выгул ×2)")
+                        && text.contains("«Получить аккаунт» или «смена»")),
+                eq("HTML"),
+                eq(List.of())
+        );
+        // The specialist has no chat, so only the manager hears about it.
+        verify(mediaDeliveryService, never()).send(
+                eq(NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code()),
+                anyLong(), anyLong(), anyString(), anyString(), any());
     }
 
     private void prepare(Worker worker, DailyWorkProgressResponse progress) {

@@ -284,6 +284,11 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         if (handleChatMigrationUpdate(update)) {
             return;
         }
+        if (update != null && update.hasEditedMessage()) {
+            // An edit is evidence only: it never runs a command again.
+            trackTelegramEditedMessage(update.getEditedMessage());
+            return;
+        }
         if (update == null || !update.hasMessage()) {
             return;
         }
@@ -711,6 +716,25 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             ));
         } catch (Exception e) {
             log.warn("Telegram group message tracking failed chatId={}", update.getMessage().getChatId(), e);
+        }
+    }
+
+    void trackTelegramEditedMessage(Message message) {
+        if (clientChatMessageTrackerService == null || message == null || message.getChatId() == null
+                || message.getMessageId() == null
+                || (message.getChat() != null && "private".equalsIgnoreCase(message.getChat().getType()))) {
+            return;
+        }
+        try {
+            clientChatMessageTrackerService.trackEdit(new com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand(
+                    ClientChatPlatform.TELEGRAM,
+                    String.valueOf(message.getChatId()),
+                    String.valueOf(message.getMessageId()),
+                    telegramMessageText(message),
+                    message.getEditDate() == null ? LocalDateTime.now() : telegramMessageTime(message.getEditDate())
+            ));
+        } catch (Exception e) {
+            log.warn("Telegram edited message tracking failed chatId={}", message.getChatId(), e);
         }
     }
 

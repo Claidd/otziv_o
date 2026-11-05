@@ -178,3 +178,11 @@ infrastructure/runtime-security/apt-c48-capture-window.py -text
 infrastructure/runtime-security/apt-c48-activation.mjs text eol=lf
 infrastructure/runtime-security/c48-parent-*.json text eol=lf
 infrastructure/runtime-security/proofs/c48-*/** -text
+
+# Official OS package overlay template: executed scripts keep exact bytes.
+infrastructure/runtime-security/os-package-overlay.py -text
+infrastructure/runtime-security/os-package-overlay-rehearsal.py -text
+infrastructure/runtime-security/os-package-overlay.mjs text eol=lf
+infrastructure/runtime-security/os-package-overlay-registry.mjs text eol=lf
+infrastructure/runtime-security/os-package-overlays.json text eol=lf
+infrastructure/runtime-security/fixtures/os-overlay-*.parity.json text eol=lf

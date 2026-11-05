@@ -303,6 +303,69 @@ class ManagerReportReviewTelegramServiceTest {
     }
 
     @Test
+    void messageAnsweredRightAfterTheSnapshotOrWithinTheGraceIsNotAnAuditRemark() {
+        // The evening snapshot still counts one open message; the audit sees it answered or too fresh.
+        ManagerDailySummaryResponse summary = mock(ManagerDailySummaryResponse.class);
+        when(summary.date()).thenReturn(LocalDate.of(2026, 7, 25));
+        ManagerDailySummaryResponse audit = summary(0);
+        when(formatter.auditExcludedUnanswered(summary)).thenReturn(1L);
+        when(summary.withoutUnanswered(1L)).thenReturn(audit);
+        when(formatter.formatPersonal(audit)).thenReturn(new ManagerFormattedReport(
+                "Отчёт без замечаний", "<h2>Отчёт без замечаний</h2>"));
+        when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
+                .thenReturn(Optional.empty());
+        when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), any())).thenReturn(Optional.of(503));
+
+        assertThat(service.deliver(manager, summary)).isTrue();
+
+        verify(formatter, never()).formatPersonal(summary);
+        verify(qualityService, never()).generateQuestions(any(String.class), anyInt());
+        verify(sessionRepository, atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(review ->
+                review.getIssueCount() == 0 && review.isAutoCompleted()));
+    }
+
+    @Test
+    void aFullyResolvedDayNeedsNoAiQuestions() {
+        // 07.10: 10 problems during the day, all closed; 14 past SLA breaches; nothing open.
+        ManagerDailySummaryResponse closedDay = mock(ManagerDailySummaryResponse.class);
+        when(closedDay.problemCount()).thenReturn(10L);
+        when(closedDay.hardSlaBreachCount()).thenReturn(14L);
+        assertThat(ManagerReportReviewTelegramService.issueCount(closedDay)).isZero();
+
+        ManagerDailySummaryResponse openDay = mock(ManagerDailySummaryResponse.class);
+        when(openDay.problemCount()).thenReturn(10L);
+        when(openDay.hardSlaBreachCount()).thenReturn(14L);
+        when(openDay.unansweredCount()).thenReturn(1L);
+        assertThat(ManagerReportReviewTelegramService.issueCount(openDay)).isEqualTo(15);
+
+        ManagerDailySummaryResponse openProblem = mock(ManagerDailySummaryResponse.class);
+        when(openProblem.problemCount()).thenReturn(4L);
+        when(openProblem.problemOpenCount()).thenReturn(2L);
+        assertThat(ManagerReportReviewTelegramService.issueCount(openProblem)).isEqualTo(4);
+    }
+
+    @Test
+    void oldButtonsOfAnAuditClosedByTheResetDoNotReopenIt() {
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(187L);
+        review.setManager(manager);
+        review.setManagerUserId(17L);
+        review.setRecipientChatId(700L);
+        review.setStatus(ManagerReportReviewStatus.COMPLETED);
+        review.setAnswerQuality("AUDIT_RESET");
+        when(sessionRepository.findForUpdateById(187L)).thenReturn(Optional.of(review));
+        when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
+
+        for (String action : List.of("dispute", "study", "start")) {
+            var answer = service.handle(callback(action, 187L));
+            assertThat(answer).hasValueSatisfying(text -> assertThat(text).contains("закрыт при запуске обновлённого аудита"));
+        }
+        org.mockito.Mockito.verifyNoInteractions(telegramService);
+        verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
     void doesNotBuildOrSendAuditForDisabledManager() {
         manager.setReportReviewEnabled(false);
         ManagerDailySummaryResponse summary = mock(ManagerDailySummaryResponse.class);
@@ -1163,6 +1226,8 @@ class ManagerReportReviewTelegramServiceTest {
         when(summary.date()).thenReturn(LocalDate.of(2026, 7, 25));
         when(summary.managerName()).thenReturn("Менеджер");
         when(summary.problemCount()).thenReturn(problems);
+        // A problem that triggers AI questions is still open at the evening snapshot.
+        when(summary.problemOpenCount()).thenReturn(problems);
         return summary;
     }
 

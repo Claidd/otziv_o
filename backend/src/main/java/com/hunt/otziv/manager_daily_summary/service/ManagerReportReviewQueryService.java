@@ -117,7 +117,8 @@ public class ManagerReportReviewQueryService {
                 review.getMinimumReadSeconds(),
                 review.getReadSeconds(),
                 totalReviewSeconds,
-                review.getCompletedAt() != null && review.getReadSeconds() < review.getMinimumReadSeconds(),
+                review.getCompletedAt() != null && review.getReadSeconds() < review.getMinimumReadSeconds()
+                        && !closedBySystem(review),
                 review.getQuestionsSource(),
                 review.getAiUnavailableStartedAt() != null,
                 Math.max(0, review.getAiUnavailableSeconds()),
@@ -215,6 +216,11 @@ public class ManagerReportReviewQueryService {
         text = CREDENTIAL.matcher(text).replaceAll("$1=[скрыто]");
         text = BEARER.matcher(text).replaceAll("Bearer [скрыто]");
         return API_KEY.matcher(text).replaceAll("[ключ скрыт]");
+    }
+
+    /** Closed by the settings switch or the clean-slate reset, not finished by the manager. */
+    private boolean closedBySystem(ManagerReportReviewSession review) {
+        return "AUDIT_RESET".equals(review.getAnswerQuality()) || "AUDIT_DISABLED".equals(review.getAnswerQuality());
     }
 
     private long totalReviewSeconds(ManagerReportReviewSession review) {

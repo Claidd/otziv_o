@@ -2,6 +2,7 @@ package com.hunt.otziv.maxbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
+import com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
@@ -24,6 +25,7 @@ public class MaxBotUpdateService {
     private static final String TYPE_BOT_STARTED = "bot_started";
     private static final String TYPE_BOT_ADDED = "bot_added";
     private static final String TYPE_MESSAGE_CREATED = "message_created";
+    static final String TYPE_MESSAGE_EDITED = "message_edited";
 
     private final MaxGroupLinkService maxGroupLinkService;
     private final MaxBotClient maxBotClient;
@@ -84,6 +86,12 @@ public class MaxBotUpdateService {
                 return;
             }
             trackMessageCreated(update, chatId, userId, messageText);
+            return;
+        }
+
+        if (TYPE_MESSAGE_EDITED.equals(updateType)) {
+            // An edit is evidence only: it never runs a command again.
+            trackMessageEdited(update, chatId);
             return;
         }
 
@@ -231,6 +239,35 @@ public class MaxBotUpdateService {
         } catch (Exception e) {
             log.warn("MAX message_created tracking failed chatId={}", chatId, e);
         }
+    }
+
+    private void trackMessageEdited(JsonNode update, Long chatId) {
+        String messageId = messageId(update);
+        if (clientChatMessageTrackerService == null || chatId == null || !hasText(messageId) || isKnownBotSender(update)) {
+            return;
+        }
+        try {
+            clientChatMessageTrackerService.trackEdit(new ClientChatMessageEditCommand(
+                    ClientChatPlatform.MAX,
+                    String.valueOf(chatId),
+                    messageId,
+                    messageText(update),
+                    editTime(update)
+            ));
+        } catch (Exception e) {
+            log.warn("MAX message_edited tracking failed chatId={}", chatId, e);
+        }
+    }
+
+    /** The update's own timestamp is the moment of the edit; message.timestamp keeps the original time. */
+    private static LocalDateTime editTime(JsonNode update) {
+        Long timestamp = longValue(update, "timestamp");
+        if (timestamp == null || timestamp <= 0) {
+            return LocalDateTime.now();
+        }
+        return timestamp > 10_000_000_000L
+                ? LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault())
+                : LocalDateTime.ofInstant(Instant.ofEpochSecond(timestamp), ZoneId.systemDefault());
     }
 
     private boolean isKnownBotSender(JsonNode update) {

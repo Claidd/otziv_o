@@ -54,6 +54,35 @@ public class ManagerReportReviewTaskContextService {
      * problem is still on the manager's board. An old copy whose problem left the board, or
      * a deferral made by someone else, is not asked about.
      */
+    /**
+     * Unanswered-message cards that are not an audit remark at {@code at}: the client got a
+     * staff reply (or the case was otherwise closed) after the evening control snapshot, or
+     * the client's message is still younger than the audit grace. Returns the card ids.
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> unansweredNotYetARemark(Collection<ManagerDailyControlConcreteItem> cards,
+                                             java.time.LocalDateTime at, int graceMinutes) {
+        if (cards == null || cards.isEmpty() || at == null) return Set.of();
+        java.util.Map<Long, Long> cardByChat = new java.util.HashMap<>();
+        for (ManagerDailyControlConcreteItem card : cards) {
+            if (card != null && card.getId() != null && card.getEntityId() != null
+                    && "CLIENT_CHAT_UNANSWERED".equals(clean(card.getEntityType()))) {
+                cardByChat.put(card.getEntityId(), card.getId());
+            }
+        }
+        if (cardByChat.isEmpty()) return Set.of();
+        java.time.LocalDateTime youngerThan = at.minusMinutes(Math.max(0, graceMinutes));
+        Set<Long> result = new LinkedHashSet<>();
+        for (ClientChatUnansweredItem chat : unansweredRepository.findAllById(cardByChat.keySet())) {
+            if (chat == null || chat.getId() == null) continue;
+            boolean repliedSinceSnapshot = chat.getStatus() != ClientChatUnansweredStatus.OPEN;
+            boolean withinGrace = chat.getLastClientMessageAt() != null
+                    && chat.getLastClientMessageAt().isAfter(youngerThan);
+            if (repliedSinceSnapshot || withinGrace) result.add(cardByChat.get(chat.getId()));
+        }
+        return Set.copyOf(result);
+    }
+
     @Transactional(readOnly = true)
     public boolean deferralAttributable(ManagerDailyControlConcreteItem item, LocalDate reportDate) {
         if (item == null || item.getControl() == null || item.getControl().managerId() == null || reportDate == null) {

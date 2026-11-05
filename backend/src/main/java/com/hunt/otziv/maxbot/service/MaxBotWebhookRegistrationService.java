@@ -94,13 +94,25 @@ public class MaxBotWebhookRegistrationService {
         return baseUrl.replaceAll("/+$", "") + DEFAULT_WEBHOOK_PATH;
     }
 
+    /**
+     * Tracked chat messages also need their edits (client chat control keeps the original text and the
+     * edit); the deploy configuration lists only the older types, so message_edited follows message_created.
+     */
     List<String> parsedUpdateTypes() {
-        return Arrays.stream(trimmed(updateTypes).split(","))
+        List<String> configured = Arrays.stream(trimmed(updateTypes).split(","))
                 .map(String::trim)
                 .filter(MaxBotWebhookRegistrationService::hasText)
                 .distinct()
                 .toList();
+        if (!configured.contains(MESSAGE_CREATED) || configured.contains(MaxBotUpdateService.TYPE_MESSAGE_EDITED)) {
+            return configured;
+        }
+        List<String> withEdits = new java.util.ArrayList<>(configured);
+        withEdits.add(MaxBotUpdateService.TYPE_MESSAGE_EDITED);
+        return List.copyOf(withEdits);
     }
+
+    private static final String MESSAGE_CREATED = "message_created";
 
     private static String trimmed(String value) {
         return value == null ? "" : value.trim();

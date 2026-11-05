@@ -1,0 +1,82 @@
+{
+  "schema": "otziv-os-package-overlay-spec-v1",
+  "generation": "c48",
+  "component": "keycloak",
+  "status": "accepted",
+  "namePrefix": "apt-c48",
+  "advisory": "CVE-2026-109518",
+  "distribution": "ubuntu-22.04",
+  "parent": {
+    "reference": "ghcr.io/claidd/otziv-security@sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
+    "configId": "sha256:ba4b2b070f6b58a0f74725860b143e722372a556002e28079654ce2be44048b3",
+    "activation": {
+      "path": "infrastructure/runtime-security/c48-parent-keycloak.json",
+      "sha256": "b25e0fb8fe0c993333e5b363c675e0ef8ab6cf8a711cbe7310589d9acb35fff6"
+    }
+  },
+  "recipeComment": "Preserve the accepted C45 issuer and all Java/provider bytes; update only the official Ubuntu apt packages.",
+  "runtimeUser": "1000:0",
+  "labels": {
+    "otziv.apt": "2.4.15ubuntu0.1",
+    "otziv.apt-advisory": "CVE-2026-109518"
+  },
+  "packages": [
+    {
+      "name": "libapt-pkg6.0",
+      "dpkgInfoName": "libapt-pkg6.0:amd64",
+      "version": "2.4.15ubuntu0.1",
+      "previousVersion": "2.4.14",
+      "sha256": "3a6fbab029e15ca7b8da642c17ec110995a6e3a0bc40eaa08e239cfc94d6c426",
+      "url": "https://security.ubuntu.com/ubuntu/pool/main/a/apt/libapt-pkg6.0_2.4.15ubuntu0.1_amd64.deb",
+      "staging": "/tmp/otziv-libapt-pkg.deb"
+    },
+    {
+      "name": "apt",
+      "dpkgInfoName": "apt",
+      "version": "2.4.15ubuntu0.1",
+      "previousVersion": "2.4.14",
+      "sha256": "2d4db9a3017c5364e50af5bc2f0c76828b52933b682eff4728f1211e081c6736",
+      "url": "https://security.ubuntu.com/ubuntu/pool/main/a/apt/apt_2.4.15ubuntu0.1_amd64.deb",
+      "staging": "/tmp/otziv-apt.deb"
+    }
+  ],
+  "packageInventory": {
+    "path": "infrastructure/runtime-security/c48-keycloak-apt-packages.json",
+    "sha256": "cda895082b4c69c324d248a6e2c07da90d4bb830440a1d932dd20ee8fdce21ad",
+    "schema": "otziv-official-apt-packages-v1"
+  },
+  "dpkgConfig": {
+    "etc/dpkg/dpkg.cfg": "fead43b89af3ea5691c48f32d7fe1ba0f7ab229fb5d230f612d76fe8e6f5a015",
+    "etc/dpkg/dpkg.cfg.d/docker-apt-speedup": "94372f4a7672c283c0fe956b0638ec8731e21584d880ba782a1a338b906caeb1",
+    "etc/dpkg/dpkg.cfg.d/excludes": "61159013263411a7c7a4157a6ddcd4eca3329ee698e508850070af11338098db"
+  },
+  "protectedPaths": [
+    "opt/keycloak/providers/otziv-security-generation.jar",
+    "opt/keycloak/bin/kc.sh"
+  ],
+  "changedPrefixes": [
+    "usr/lib/x86_64-linux-gnu/libapt-pkg.so."
+  ],
+  "acceptanceKey": "aptRefreshAcceptance",
+  "rehearsal": {
+    "sourcePostgres": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+    "sourcePostgresConfig": "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc",
+    "sourceKeycloak": "ghcr.io/claidd/otziv-security@sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
+    "sourceKeycloakConfig": "sha256:ba4b2b070f6b58a0f74725860b143e722372a556002e28079654ce2be44048b3",
+    "replayPostgres": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+    "replayPostgresConfig": "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc",
+    "tableCount": 102,
+    "captureWindow": true
+  },
+  "coupling": {
+    "postgresReference": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+    "postgresConfigId": "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc",
+    "historicalKeycloakReference": "ghcr.io/claidd/otziv-security@sha256:c28364544835f5fbef6d4e0b0b3e63154127f7fb440b05432760f11235b5f4a9",
+    "historicalKeycloakConfigId": "sha256:60a8dd92cf43b8cf909a9e13f231da1f59103f9259cf482185c54856dcfd6a1b"
+  },
+  "compressedProofs": {
+    "infrastructure/runtime-security/proofs/c48-keycloak/publication/registry-attestation-0-payload-0.json": "efaa0ffa79581f91289fa34ef9b7ab99dfa775a56685f38379213d2179f6c3e2",
+    "infrastructure/runtime-security/proofs/c48-keycloak/anonymous/registry-attestation-0-payload-0.json": "efaa0ffa79581f91289fa34ef9b7ab99dfa775a56685f38379213d2179f6c3e2",
+    "infrastructure/runtime-security/proofs/c48-keycloak/publication/vulnerabilities.json": "dac0c359e05677b7e7cb3af6c9450992a84d05c469cd03dd94354b9f28663d76"
+  }
+}

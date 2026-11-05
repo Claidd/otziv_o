@@ -17,6 +17,14 @@ public class ThematicNotificationDispatchStore {
 
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_SENT = "SENT";
+    /**
+     * Operational notices that decide whether the day can reach 100%. They are still sent at most
+     * once per recipient and day, but neither use nor consume the motivational daily cap.
+     */
+    static final java.util.Set<String> OPERATIONAL_EVENT_CODES = java.util.Set.of(
+            NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code(),
+            NotificationMediaEventCatalog.MANAGER_WORKER_ACCOUNT_BLOCKED.code()
+    );
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -25,20 +33,24 @@ public class ThematicNotificationDispatchStore {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("eventCode", eventCode)
                 .addValue("recipientUserId", recipientUserId)
-                .addValue("dispatchDate", Date.valueOf(date));
+                .addValue("dispatchDate", Date.valueOf(date))
+                .addValue("operationalCodes", OPERATIONAL_EVENT_CODES);
         // Serialize scheduled and action-triggered claims for this recipient.
         if (jdbc.queryForList("SELECT id FROM users WHERE id=:recipientUserId FOR UPDATE", params).isEmpty()) {
             return false;
         }
-        Integer sentToday = jdbc.queryForObject("""
-                SELECT COUNT(*)
-                FROM thematic_notification_dispatches
-                WHERE recipient_user_id = :recipientUserId
-                  AND dispatch_date = :dispatchDate
-                  AND status IN ('PENDING', 'SENT')
-                """, params, Integer.class);
-        if (sentToday != null && sentToday >= Math.max(1, maxPerDay)) {
-            return false;
+        if (!OPERATIONAL_EVENT_CODES.contains(eventCode)) {
+            Integer sentToday = jdbc.queryForObject("""
+                    SELECT COUNT(*)
+                    FROM thematic_notification_dispatches
+                    WHERE recipient_user_id = :recipientUserId
+                      AND dispatch_date = :dispatchDate
+                      AND status IN ('PENDING', 'SENT')
+                      AND event_code NOT IN (:operationalCodes)
+                    """, params, Integer.class);
+            if (sentToday != null && sentToday >= Math.max(1, maxPerDay)) {
+                return false;
+            }
         }
         return jdbc.update("""
                 INSERT IGNORE INTO thematic_notification_dispatches (
@@ -82,6 +94,22 @@ public class ThematicNotificationDispatchStore {
                   AND dispatch_date = :dispatchDate
                   AND status = 'PENDING'
                 """, dispatchParams(eventCode, recipientUserId, date));
+    }
+
+    /** Recipients that already have this event claimed or sent for the day (once-per-day guard). */
+    public java.util.Set<Long> recipientsWithDispatch(String eventCode, LocalDate date) {
+        if (eventCode == null || date == null) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(jdbc.queryForList("""
+                SELECT recipient_user_id
+                FROM thematic_notification_dispatches
+                WHERE event_code = :eventCode
+                  AND dispatch_date = :dispatchDate
+                  AND status IN ('PENDING', 'SENT')
+                """, new MapSqlParameterSource()
+                .addValue("eventCode", eventCode)
+                .addValue("dispatchDate", Date.valueOf(date)), Long.class));
     }
 
     public Map<Long, Long> activePublicationCounts(Collection<Long> workerIds, LocalDate progressDate) {

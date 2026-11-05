@@ -719,6 +719,94 @@ class ClientChatMessageTrackerServiceTest {
         assertFalse(ClientChatMessageTrackerService.ownerCheckPending(item));
     }
 
+    @Test
+    void editOfAnAnsweredClientMessageKeepsTheOriginalAndNeverReopensOrCreatesAnItem() {
+        ClientChatMessage original = clientMessage("Сколько стоит отзыв?");
+        ClientChatUnansweredItem answered = openItem("Сколько стоит отзыв?");
+        answered.setStatus(ClientChatUnansweredStatus.ANSWERED);
+        answered.setLastClientMessage(original);
+        when(messageRepository.findByPlatformAndChatIdAndExternalMessageId(ClientChatPlatform.WHATSAPP, "12001@g.us", "client-1"))
+                .thenReturn(Optional.of(original));
+        when(unansweredRepository.findByLastClientMessage(original)).thenReturn(List.of(answered));
+        LocalDateTime editedAt = original.getMessageAt().plusMinutes(30);
+
+        service.trackEdit(edit("Сколько стоит отзыв с фото?", editedAt));
+
+        assertEquals("Сколько стоит отзыв?", original.getMessageText());
+        assertEquals("Сколько стоит отзыв с фото?", original.getEditedText());
+        assertEquals(editedAt, original.getEditedAt());
+        assertEquals(1, original.getEditCount());
+        verify(messageRepository).save(original);
+        assertEquals(ClientChatUnansweredStatus.ANSWERED, answered.getStatus());
+        assertEquals("Сколько стоит отзыв?", answered.getLastMessageText());
+        verify(unansweredRepository, never()).save(any());
+        verify(unansweredRepository, never()).findFirstByPlatformAndChatIdAndStatusOrderByLastClientMessageAtDesc(any(), any(), any());
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void editOfAStillOpenClientMessageShowsTheCorrectedQuestionAndKeepsTheWaitingTime() {
+        ClientChatMessage original = clientMessage("Когда публикация?");
+        ClientChatUnansweredItem open = openItem("Когда публикация?");
+        open.setId(41L);
+        open.setLastClientMessage(original);
+        LocalDateTime waitingSince = open.getLastClientMessageAt();
+        when(messageRepository.findByPlatformAndChatIdAndExternalMessageId(ClientChatPlatform.WHATSAPP, "12001@g.us", "client-1"))
+                .thenReturn(Optional.of(original));
+        when(unansweredRepository.findByLastClientMessage(original)).thenReturn(List.of(open));
+
+        service.trackEdit(edit("Когда следующая публикация в 2ГИС?", LocalDateTime.now()));
+
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        assertEquals("Когда следующая публикация в 2ГИС?", open.getLastMessageText());
+        assertEquals(waitingSince, open.getLastClientMessageAt());
+        verify(unansweredRepository).save(open);
+        verify(events).publishEvent(new ClientChatReviewPrefetch.Requested(41L));
+    }
+
+    @Test
+    void repeatedOlderOrUnknownEditsAndStaffEditsDoNotTouchClientItems() {
+        ClientChatMessage reply = clientMessage("Даты задаются системой");
+        reply.setSenderRole(ClientChatSenderRole.STAFF);
+        when(messageRepository.findByPlatformAndChatIdAndExternalMessageId(ClientChatPlatform.WHATSAPP, "12001@g.us", "client-1"))
+                .thenReturn(Optional.of(reply));
+        LocalDateTime editedAt = reply.getMessageAt().plusMinutes(2);
+
+        service.trackEdit(edit("Даты задаются системой. Следующая публикация 22.10", editedAt));
+        service.trackEdit(edit("Даты задаются системой. Следующая публикация 22.10", editedAt));
+        service.trackEdit(edit("Промежуточная версия", editedAt.minusMinutes(1)));
+
+        assertEquals("Даты задаются системой", reply.getMessageText());
+        assertEquals("Даты задаются системой. Следующая публикация 22.10", reply.getEditedText());
+        assertEquals(1, reply.getEditCount());
+        verify(messageRepository).save(reply);
+        verify(unansweredRepository, never()).findByLastClientMessage(any());
+
+        when(messageRepository.findByPlatformAndChatIdAndExternalMessageId(ClientChatPlatform.WHATSAPP, "12001@g.us", "unknown"))
+                .thenReturn(Optional.empty());
+        service.trackEdit(new com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand(
+                ClientChatPlatform.WHATSAPP, "12001@g.us", "unknown", "Новый текст", LocalDateTime.now()));
+        verify(unansweredRepository, never()).save(any());
+        verify(messageRepository, never()).save(org.mockito.ArgumentMatchers.argThat(message -> message != reply));
+    }
+
+    private static ClientChatMessage clientMessage(String text) {
+        ClientChatMessage message = new ClientChatMessage();
+        message.setId(501L);
+        message.setPlatform(ClientChatPlatform.WHATSAPP);
+        message.setChatId("12001@g.us");
+        message.setExternalMessageId("client-1");
+        message.setSenderRole(ClientChatSenderRole.CLIENT);
+        message.setMessageText(text);
+        message.setMessageAt(LocalDateTime.now().minusHours(1));
+        return message;
+    }
+
+    private static com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand edit(String text, LocalDateTime editedAt) {
+        return new com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand(
+                ClientChatPlatform.WHATSAPP, "12001@g.us", "client-1", text, editedAt);
+    }
+
     private static ClientChatMessageCommand command(String messageId) {
         return new ClientChatMessageCommand(
                 ClientChatPlatform.WHATSAPP,

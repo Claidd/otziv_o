@@ -695,13 +695,28 @@ public class ManagerCommunicationDailyReportSectionService {
             }
         }
         int to = Math.min(messages.size(), anchorIndex + 9);
-        return messages.subList(from, to).stream()
-                .map(message -> new ExchangeMessage(
-                        message.getMessageAt(),
-                        message.getSenderRole() == ClientChatSenderRole.STAFF ? "сотрудник" : "клиент",
-                        shortText(message.getSenderName(), 80),
-                        shortText(message.getMessageText(), 400)))
-                .toList();
+        // An edited message keeps its original text at its own time; the edit is a separate, later
+        // entry, so the checker sees which version a reply answered (dispute #22: the reply was edited).
+        List<ExchangeMessage> exchange = new java.util.ArrayList<>();
+        for (ClientChatMessage message : messages.subList(from, to)) {
+            String role = message.getSenderRole() == ClientChatSenderRole.STAFF ? "сотрудник" : "клиент";
+            String sender = shortText(message.getSenderName(), 80);
+            boolean edited = message.getEditCount() > 0 && hasText(message.getEditedText());
+            exchange.add(new ExchangeMessage(message.getMessageAt(), role, sender,
+                    shortText(message.getMessageText(), 400) + (edited ? " (исходный текст, позже изменён)" : "")));
+            if (edited) {
+                exchange.add(new ExchangeMessage(message.getEditedAt(), role, sender,
+                        "ИЗМЕНИЛ сообщение от " + timeOf(message.getMessageAt()) + ", новый текст: "
+                                + shortText(message.getEditedText(), 400)));
+            }
+        }
+        exchange.sort(java.util.Comparator.comparing(ExchangeMessage::at,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        return List.copyOf(exchange);
+    }
+
+    private static String timeOf(LocalDateTime at) {
+        return at == null ? "неизвестного времени" : at.withNano(0).toString().replace('T', ' ');
     }
 
     private int anchorIndex(ClientChatUnansweredItem item, List<ClientChatMessage> messages) {
@@ -770,6 +785,13 @@ public class ManagerCommunicationDailyReportSectionService {
             fact.put("senderName", shortText(message.getSenderName(), 200));
             fact.put("direction", message.getDirection() == null ? "" : message.getDirection().name());
             fact.put("text", shortText(message.getMessageText(), 400));
+            if (message.getEditCount() > 0 && hasText(message.getEditedText())) {
+                // "text" is the original; a reply sent before editedAt answered the original.
+                fact.put("textIsOriginal", true);
+                fact.put("editedText", shortText(message.getEditedText(), 400));
+                fact.put("editedAt", message.getEditedAt() == null ? "" : message.getEditedAt().toString());
+                fact.put("editCount", message.getEditCount());
+            }
             fact.put("authorAttribution", replyAuthorAttribution(item, message));
             return fact;
         }).toList();

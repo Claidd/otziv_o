@@ -41,6 +41,22 @@ public interface WhatsAppService {
     default List<WhatsAppGroupInfo> listGroups(String clientId, boolean forceRefresh) {
         return listGroups(clientId);
     }
+    /**
+     * The gateway's cached group list. {@code available} is a successful read; {@code stale} means the
+     * cache is older than its TTL (reading it starts a background refresh); {@code cachedAt} identifies
+     * the snapshot, so a caller can require a later, different one before drawing conclusions.
+     */
+    record GroupsSnapshot(List<WhatsAppGroupInfo> groups, boolean available, boolean stale, String cachedAt) {
+        public GroupsSnapshot {
+            groups = groups == null ? List.of() : List.copyOf(groups);
+        }
+        public static GroupsSnapshot unavailable() {
+            return new GroupsSnapshot(List.of(), false, true, null);
+        }
+    }
+    default GroupsSnapshot groupsSnapshot(String clientId) {
+        return GroupsSnapshot.unavailable();
+    }
     Optional<WhatsAppGroupInfo> resolveGroupByInvite(String clientId, String inviteLinkOrCode);
     List<WhatsAppReconciledMessage> reconcileGroupMessages(
             String clientId,

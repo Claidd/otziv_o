@@ -56,6 +56,28 @@ public class ManagerSummaryFormatter {
         );
     }
 
+    /**
+     * Still-open unanswered messages that the personal audit does not count yet: answered
+     * after the evening snapshot or younger than the audit grace.
+     */
+    public long auditExcludedUnanswered(ManagerDailySummaryResponse summary) {
+        if (summary == null || summary.date() == null || summary.managerId() == null) return 0;
+        try {
+            return Math.max(0, debtTaskDetailsService.auditExcludedUnanswered(summary.date(), summary.managerId()));
+        } catch (RuntimeException exception) {
+            return 0;
+        }
+    }
+
+    private ManagerDebtTaskDetailsService.ManagerDebtTasks auditDebtTasks(ManagerDailySummaryResponse manager) {
+        if (manager.date() == null || manager.managerId() == null) return null;
+        try {
+            return debtTaskDetailsService.auditTasks(manager.date(), manager.managerId());
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
     public ManagerFormattedReport formatPersonal(ManagerDailySummaryResponse manager) {
         if (manager == null) {
             return new ManagerFormattedReport(
@@ -68,8 +90,7 @@ public class ManagerSummaryFormatter {
                 .get(manager.managerId());
         List<ManagerWorkerDailyProgressService.MissedWorkerGoal> missedGoals =
                 workerProgressService.missedPreviousDayGoals(manager.managerId(), manager.date());
-        ManagerDebtTaskDetailsService.ManagerDebtTasks debtTasks = debtTasks(List.of(manager))
-                .get(manager.managerId());
+        ManagerDebtTaskDetailsService.ManagerDebtTasks debtTasks = auditDebtTasks(manager);
         String date = manager.date().format(DATE);
         StringBuilder html = new StringBuilder("📘 <b>Персональный разбор · ")
                 .append(date).append("</b>\n\n")

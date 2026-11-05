@@ -170,6 +170,35 @@ class MaxBotUpdateServiceTest {
         assertEquals("[Вложение: image]", captor.getValue().messageText());
     }
 
+    @Test
+    void messageEditIsTrackedAsAnEditWithTheEditTimeAndNeverAsACommand() throws Exception {
+        MaxBotUpdateService service = service();
+        JsonNode update = MAPPER.readTree("""
+                {
+                  "update_type": "message_edited",
+                  "timestamp": 1793900060000,
+                  "message": {
+                    "timestamp": 1793900000000,
+                    "recipient": { "chat_id": -74761808437879, "chat_type": "chat" },
+                    "sender": { "user_id": 182858506, "name": "Татьяна" },
+                    "body": { "mid": "mid.edit-1", "text": "/start abc Мы же обговаривали 5 × 200₽ за отзыв" }
+                  }
+                }
+                """);
+
+        service.handleUpdate(update);
+
+        ArgumentCaptor<com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand> captor =
+                ArgumentCaptor.forClass(com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand.class);
+        verify(clientChatMessageTrackerService).trackEdit(captor.capture());
+        assertEquals("-74761808437879", captor.getValue().chatId());
+        assertEquals("mid.edit-1", captor.getValue().externalMessageId());
+        assertEquals("/start abc Мы же обговаривали 5 × 200₽ за отзыв", captor.getValue().editedText());
+        assertEquals(java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(1793900060000L), java.time.ZoneId.systemDefault()),
+                captor.getValue().editedAt());
+        verifyNoMoreInteractions(maxGroupLinkService, maxBotClient, publicationProgressPreferenceService);
+    }
+
     private MaxBotUpdateService service() {
         return new MaxBotUpdateService(
                 maxGroupLinkService,

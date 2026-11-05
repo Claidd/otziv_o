@@ -108,6 +108,8 @@ export function isDeliveryReconciliationCard(example: ManagerControlConcreteItem
 /** Server markers of an audit card that waits for the owner's check of an answer given outside the chat. */
 const CLIENT_CHAT_OWNER_CHECK_STATUS = 'Проверка владельца';
 const CLIENT_CHAT_OWNER_CLAIM_PREFIX = 'Менеджер ответил вне чата: «';
+const STALE_WHATSAPP_INVITE_MARKER = 'больше не открывает привязанную группу';
+const CURRENT_WHATSAPP_INVITE_MARKER = 'Подключённый аккаунт видит актуальную ссылку';
 
 export function shouldHideClientChatUnansweredAfterAction(
   example: Pick<ManagerControlConcreteItem, 'itemStatus'>
@@ -632,6 +634,8 @@ export class ManagerControlComponent implements OnInit {
       case 'PLAN_PENDING':
         return 'ждём план';
       case 'COMPLETED':
+        if (review.answerQuality === 'AUDIT_RESET') return 'закрыт при запуске обновлённого аудита';
+        if (review.answerQuality === 'AUDIT_DISABLED') return 'закрыт: аудит отключён';
         if (review.autoCompleted) return 'принят автоматически · обязательных вопросов нет';
         return 'отчёт принят';
       case 'DISPUTE_PENDING':
@@ -701,6 +705,12 @@ export class ManagerControlComponent implements OnInit {
       case 'REVIEW_CANCELLED_NO_VALID_ISSUES': return 'Аудит отменён: корректных замечаний не осталось';
       case 'AUTO_COMPLETED': return 'Принят автоматически: обязательных вопросов по доступным данным нет';
       case 'REVIEW_COMPLETED': return 'Все вопросы пройдены';
+      case 'AUDIT_RESET': return 'Разбор закрыт при запуске обновлённого аудита';
+      case 'AUDIT_DISABLED': return 'Аудит отключён в настройках';
+      case 'DEADLINE_RESTARTED_AFTER_OWNER_DECISION': return 'Срок начат заново после решения владельца';
+      case 'AI_VERIFICATION_PAUSED': return 'Проверка приостановлена: ИИ недоступен';
+      case 'AI_VERIFICATION_RESUMED': return 'Проверка возобновлена';
+      case 'OWNER_VERIFICATION_REQUESTED': return 'Проверка передана владельцу';
       default: return eventType;
     }
   }
@@ -2592,6 +2602,16 @@ export class ManagerControlComponent implements OnInit {
     return fallback
       .replace(/\.\s*Укажите в комментарии найденный ответ или выполненное действие\.?$/i, '')
       .trim() || 'Текст сообщения не найден. Откройте переписку для проверки.';
+  }
+
+  /** Chat-link card of a bound WhatsApp group whose stored invite no longer opens it. */
+  isStaleWhatsAppInvite(example: ManagerControlConcreteItem): boolean {
+    return example.type === 'COMPANY_CHAT_BINDING' && (example.reason ?? '').includes(STALE_WHATSAPP_INVITE_MARKER);
+  }
+
+  /** The connected account administers the group and sees its current invite (the card's chat link). */
+  hasCurrentWhatsAppInvite(example: ManagerControlConcreteItem): boolean {
+    return this.isStaleWhatsAppInvite(example) && (example.reason ?? '').includes(CURRENT_WHATSAPP_INVITE_MARKER);
   }
 
   /** Audit card of a manager's answer outside the chat: only an owner or administrator confirms it. */

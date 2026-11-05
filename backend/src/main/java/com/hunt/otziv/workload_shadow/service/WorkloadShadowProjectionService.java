@@ -259,6 +259,42 @@ public class WorkloadShadowProjectionService {
         )).toList();
     }
 
+    /**
+     * Today's account-bound work that the day close adds to the denominator although it has no
+     * usable account: the same source batches and the same {@link WorkBatch#mandatoryExternalBlocker}
+     * rule as {@link #recalculate}. Order batches never carry an account blocker. Read-only.
+     */
+    @Transactional(readOnly = true)
+    public List<BlockedBatch> mandatoryAccountBlockers(Collection<Long> workerIds, LocalDateTime observedAt) {
+        List<Long> ids = workerIds == null ? List.of() : workerIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty() || observedAt == null) {
+            return List.of();
+        }
+        WorkloadShadowSettingsResponse settings = settingsService.current();
+        LocalDate progressDate = observedAt.toLocalDate();
+        LocalDateTime intakeCutoff = progressDate.atTime(settingsService.shiftEnd(settings));
+        List<WorkBatch> batches = new ArrayList<>();
+        // Walk minutes only size the work; they never decide whether a card is blocked.
+        loadAccountBoundBatches(ids, progressDate, observedAt, settings, 1, batches);
+        return batches.stream()
+                .filter(batch -> batch.mandatoryExternalBlocker(intakeCutoff))
+                .map(batch -> new BlockedBatch(
+                        batch.workerId(),
+                        batch.section(),
+                        batch.batchKey(),
+                        batch.companyId(),
+                        batch.orderId()
+                ))
+                .toList();
+    }
+
+    /** One account-blocked work item counted against the specialist's day. */
+    public record BlockedBatch(long workerId, String section, String batchKey, Long companyId, Long orderId) {
+    }
+
     private List<WorkBatch> activeBatches(
             List<Long> workerIds,
             LocalDate date,
@@ -266,13 +302,27 @@ public class WorkloadShadowProjectionService {
             WorkloadShadowSettingsResponse settings,
             int effectiveWalkMinutes
     ) {
+        ZoneId businessZone = settingsService.zone(settings);
+        List<WorkBatch> result = new ArrayList<>();
+        loadOrderBatches(workerIds, observedAt, settings, businessZone, result);
+        loadAccountBoundBatches(workerIds, date, observedAt, settings, effectiveWalkMinutes, result);
+        return result;
+    }
+
+    /** Nagul, publish, bad-review and recovery cards: the only sources with an account blocker. */
+    private void loadAccountBoundBatches(
+            List<Long> workerIds,
+            LocalDate date,
+            LocalDateTime observedAt,
+            WorkloadShadowSettingsResponse settings,
+            int effectiveWalkMinutes,
+            List<WorkBatch> result
+    ) {
         LocalDate nagulDate = date.plusDays(appSettingService.getInt(
                 AppSettingService.NAGUL_LOOKAHEAD_DAYS,
                 14
         ));
         ZoneId businessZone = settingsService.zone(settings);
-        List<WorkBatch> result = new ArrayList<>();
-        loadOrderBatches(workerIds, observedAt, settings, businessZone, result);
         loadNagulBatches(
                 workerIds,
                 nagulDate,
@@ -285,7 +335,6 @@ public class WorkloadShadowProjectionService {
         loadPublishBatches(workerIds, date, observedAt, settings, businessZone, result);
         loadBadBatches(workerIds, date, settings, businessZone, result);
         loadRecoveryBatches(workerIds, date, settings, businessZone, result);
-        return result;
     }
 
     private Map<Long, WorkloadClassification> deferredAndBlockedUnits(

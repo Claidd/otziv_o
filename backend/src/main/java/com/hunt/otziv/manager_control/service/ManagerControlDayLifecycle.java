@@ -164,7 +164,11 @@ public class ManagerControlDayLifecycle {
             if (!openConcreteItems.isEmpty()) {
                 blockers.add("Остались открытые карточки внутри пунктов: " + openConcreteItems.stream().limit(5).map(ManagerDailyControlConcreteItem::getTitle).collect(Collectors.joining(", ")));
             }
-            List<ManagerDailyControlItem> incompleteConcreteParents = concreteParents.stream().filter(item -> concreteByParentId.getOrDefault(item.getId(), List.of()).size() < item.getCount()).toList();
+            // A resolved red item needs no further cards: its problem is gone (05.11 stand data: every
+            // unclosed day without open work was held only by resolved items with fewer cards than count).
+            List<ManagerDailyControlItem> incompleteConcreteParents = concreteParents.stream()
+                    .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.RESOLVED)
+                    .filter(item -> concreteByParentId.getOrDefault(item.getId(), List.of()).size() < item.getCount()).toList();
             if (!incompleteConcreteParents.isEmpty()) {
                 blockers.add("Не раскрыты все карточки по красным пунктам: " + incompleteConcreteParents.stream().limit(5).map(item -> item.getLabel() + " " + concreteByParentId.getOrDefault(item.getId(), List.of()).size() + "/" + item.getCount()).collect(Collectors.joining(", ")));
             }
@@ -174,6 +178,24 @@ public class ManagerControlDayLifecycle {
             blockers.add("Нет комментария по критичным пунктам: " + criticalWithoutComment.stream().limit(5).map(ManagerDailyControlItem::getLabel).collect(Collectors.joining(", ")));
         }
         return blockers;
+    }
+
+    /**
+     * Work the manager left undone: an OPEN action item or an OPEN card inside an action item.
+     * Missing stage timestamps (acceptance, day check, final check) are not unresolved work.
+     */
+    boolean hasUnresolvedActionWork(List<ManagerDailyControlItem> items) {
+        if (items == null || items.isEmpty()) {
+            return false;
+        }
+        if (items.stream().anyMatch(cardLifecycle::isOpenActionItem)) {
+            return true;
+        }
+        List<ManagerDailyControlItem> actionParents = items.stream()
+                .filter(item -> item.getGroup() == ManagerDailyControlGroup.ACTION && item.getId() != null)
+                .toList();
+        return !actionParents.isEmpty() && dailyControlConcreteItemRepository.findByParentItemIn(actionParents).stream()
+                .anyMatch(card -> card.getStatus() == ManagerDailyControlItemStatus.OPEN);
     }
 
     List<ManagerDailyControlItem> activeControlItems(List<ManagerDailyControlItem> items) {

@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ManagerRiskDailyReportSectionService {
 
     private final WorkerRiskIncidentRepository repository;
+    private final ManagerAuditSourceOwners sourceOwners;
 
     @Transactional(readOnly = true)
     public String format(Long managerId, LocalDate date) {
@@ -49,6 +51,18 @@ public class ManagerRiskDailyReportSectionService {
         long open = incidents.stream()
                 .filter(item -> item.getStatus() == WorkerRiskIncidentStatus.OPEN)
                 .count();
+        // Remarks only about the manager's own cases: the source still belongs to this manager and
+        // nobody else (owner, administrator, maintenance) took the decision. The explanation is
+        // always the specialist's, never the manager's.
+        Map<Long, Long> orderOwners = sourceOwners.currentOrderManagers(today.stream()
+                .map(WorkerRiskIncident::getOrderId).filter(java.util.Objects::nonNull).toList());
+        Long managerUserId = today.isEmpty() ? null : sourceOwners.managerUserId(managerId);
+        List<WorkerRiskIncident> ownToday = today.stream()
+                .filter(item -> attributable(item, managerId, managerUserId, orderOwners))
+                .toList();
+        long ownPartial = responses(ownToday, WorkerRiskExplanationQuality.PARTIAL)
+                + responses(ownToday, WorkerRiskExplanationQuality.CONTRADICTORY)
+                + responses(ownToday, WorkerRiskExplanationQuality.IRRELEVANT);
         long logical = responses(today, WorkerRiskExplanationQuality.LOGICAL);
         long partial = responses(today, WorkerRiskExplanationQuality.PARTIAL);
         long contradictory = responses(today, WorkerRiskExplanationQuality.CONTRADICTORY);
@@ -70,7 +84,14 @@ public class ManagerRiskDailyReportSectionService {
                 .count();
         long averageDecisionMinutes = averageDecisionMinutes(today);
 
-        List<WorkerRiskIncident> examples = today.stream()
+        long ownOverdue = ownToday.stream()
+                .filter(item -> item.getResponseDueAt() != null)
+                .filter(item -> item.getExplanationAcceptedAt() == null)
+                .filter(item -> !item.getResponseDueAt().isAfter(dayTo))
+                .count();
+        long ownAudit = ownToday.stream().filter(WorkerRiskIncident::isAuditRequired).count();
+
+        List<WorkerRiskIncident> examples = ownToday.stream()
                 .filter(item -> item.isAuditRequired()
                         || item.getExplanationQuality() == WorkerRiskExplanationQuality.PARTIAL
                         || item.getExplanationQuality() == WorkerRiskExplanationQuality.CONTRADICTORY
@@ -78,13 +99,13 @@ public class ManagerRiskDailyReportSectionService {
                 .limit(2)
                 .toList();
         StringBuilder analysis = new StringBuilder("🛡 <b>Работа с рисками</b>\n");
-        if (partial + contradictory + irrelevant > 0) {
+        if (ownPartial > 0) {
             analysis.append("<b>Вывод.</b> Часть пояснений не доказывает, что проблема действительно проверена и решена.\n")
                     .append("<b>Рекомендация.</b> Не принимайте «Хорошо» и «Проверим»: просите назвать действие, результат и проверяемый факт.");
-        } else if (overdue > 0) {
+        } else if (ownOverdue > 0) {
             analysis.append("<b>Вывод.</b> Качество пояснений приемлемое, но разбор рисков затягивается.\n")
                     .append("<b>Рекомендация.</b> Запрашивайте пояснение раньше и завершайте решение до истечения SLA.");
-        } else if (audit > 0) {
+        } else if (ownAudit > 0) {
             analysis.append("<b>Вывод.</b> Есть решения, которым не хватает подтверждённых фактов.\n")
                     .append("<b>Рекомендация.</b> Проверьте очередь аудита и зафиксируйте основание каждого решения.");
         } else if (!today.isEmpty()) {
@@ -95,15 +116,22 @@ public class ManagerRiskDailyReportSectionService {
         if (!examples.isEmpty()) {
             analysis.append("\n<b>Примеры для разбора</b>");
             for (WorkerRiskIncident example : examples) {
-                analysis.append("\n• «").append(escape(shortText(example.getTitle(), 110))).append("»");
+                // Name the author: the explanation is the specialist's, the decision is the manager's.
+                analysis.append("\n• Специалист ").append(escape(shortText(workerName(example), 60)))
+                        .append(": «").append(escape(shortText(example.getTitle(), 110))).append("»");
                 if (hasText(example.getWorkerExplanation())) {
-                    analysis.append(" → «")
+                    analysis.append(" → пояснение специалиста «")
                             .append(escape(shortText(example.getWorkerExplanation(), 90)))
                             .append("»");
                 }
                 if (hasText(example.getExplanationQualityReason())) {
                     analysis.append(". ").append(escape(shortText(example.getExplanationQualityReason(), 140)));
                 }
+                analysis.append(example.getResolvedAt() == null
+                        ? " Решение менеджера ещё не принято."
+                        : " Решение менеджера: " + (hasText(example.getManagerResolutionComment())
+                                ? "«" + escape(shortText(example.getManagerResolutionComment(), 90)) + "»."
+                                : "принято без комментария."));
                 if (example.isAuditRequired()) {
                     analysis.append(" Нужен аудит владельца.");
                 }
@@ -126,6 +154,25 @@ public class ManagerRiskDailyReportSectionService {
                 + "\n7 дней: рисков " + week.size()
                 + " · сомнительных пояснений " + weekQuestionable;
         return new ManagerReportSection(analysis.toString(), metrics);
+    }
+
+    /**
+     * The manager answers only for a case whose source still belongs to them and whose
+     * decision, if taken, is their own. A case decided by the owner, an administrator or
+     * maintenance, or one whose order moved to another manager, is not their remark.
+     */
+    static boolean attributable(WorkerRiskIncident incident, Long managerId, Long managerUserId,
+                                Map<Long, Long> currentOrderManagers) {
+        if (incident == null || managerId == null || !managerId.equals(incident.getAssignedManagerId())) return false;
+        Long currentOwner = incident.getOrderId() == null ? null : currentOrderManagers.get(incident.getOrderId());
+        if (currentOwner != null && !managerId.equals(currentOwner)) return false;
+        return incident.getResolvedAt() == null
+                || managerUserId != null && managerUserId.equals(incident.getResolvedByUserId());
+    }
+
+    private String workerName(WorkerRiskIncident incident) {
+        return hasText(incident.getWorkerName()) ? incident.getWorkerName()
+                : hasText(incident.getWorkerUsername()) ? incident.getWorkerUsername() : "без имени";
     }
 
     private long responses(List<WorkerRiskIncident> incidents, WorkerRiskExplanationQuality quality) {

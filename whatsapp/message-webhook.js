@@ -559,6 +559,50 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, partici
   };
 }
 
+// whatsapp-web.js emits message_edit(message, newBody, prevBody) when a sender edits a message.
+// The backend keeps the original text and stores the edit beside it; an edit is never a new message.
+// Each edit gets its own messageId so the durable inbox and the backend receipt treat it as one event.
+function createEditHandler({ clientId, postWebhook, participantResolver, groupWebhookEnabled = true,
+  metadataTimeoutMs = 2000, now = () => Date.now(), log }) {
+  if (typeof postWebhook !== "function") {
+    throw new Error("postWebhook is required");
+  }
+  return async function handleEdit(message, newBody) {
+    const from = serializedId(message && message.from);
+    if (!message || from === "status@broadcast" || !groupWebhookEnabled || isSystemNotification(message)) {
+      return { ignored: true };
+    }
+    const groupId = deriveGroupId(message);
+    const originalId = messageId(message);
+    const body = String(newBody === undefined || newBody === null ? message.body || "" : newBody).trim();
+    if (!groupId || !originalId || !body) {
+      return { ignored: true };
+    }
+    const editedAtMs = Number(message.latestEditSenderTimestampMs) > 0
+      ? Math.floor(Number(message.latestEditSenderTimestampMs))
+      : Math.floor(now());
+    const [metadata, participantId] = await Promise.all([
+      groupMetadata(message, groupId, log, metadataTimeoutMs),
+      resolvedParticipantId(participantResolver, serializedId(message.author) || from, log),
+    ]);
+    const editedAt = Math.floor(editedAtMs / 1000);
+    const result = await postWebhook("/webhook/whatsapp-group-edit", {
+      clientId,
+      groupId: metadata.groupId,
+      groupName: metadata.groupName,
+      from: participantId,
+      fromName: String(message._data && message._data.notifyName || "").trim(),
+      messageId: `${originalId}:edit:${editedAtMs}`,
+      editOf: originalId,
+      timestamp: editedAt,
+      editedAt,
+      fromMe: Boolean(message.fromMe),
+      message: body,
+    });
+    return { [result && result.queued ? "queued" : "delivered"]: true, edit: true };
+  };
+}
+
 async function reconciliationPayloads({
   clientId,
   groupId,
@@ -625,6 +669,7 @@ module.exports = {
   MemoryDeliveryIdempotencyStore,
   ParticipantPhoneResolver,
   RecentOutboundRegistry,
+  createEditHandler,
   createMessageHandler,
   deriveGroupId,
   groupMetadata,

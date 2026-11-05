@@ -224,10 +224,10 @@ public class ManagerPerformanceService {
                 .mapToLong(ManagerDailyControlItem::getCount)
                 .sum();
         long openCount = concreteItems.stream()
-                .filter(item -> item.getStatus() == ManagerDailyControlItemStatus.OPEN)
+                .filter(item -> !handledByManager(item))
                 .count();
         long handledCount = concreteItems.stream()
-                .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.OPEN)
+                .filter(ManagerPerformanceService::handledByManager)
                 .count();
         if (concreteItems.isEmpty()) {
             openCount = actionItems(items).stream()
@@ -410,6 +410,17 @@ public class ManagerPerformanceService {
     private java.util.function.Predicate<WorkerRiskIncident> distinctByIncidentId() {
         Set<Object> seen = java.util.concurrent.ConcurrentHashMap.newKeySet();
         return risk -> seen.add(risk.getId() == null ? risk : risk.getId());
+    }
+
+    /**
+     * A card closed by the 30-day expiry job was never handled unless the manager touched it before;
+     * otherwise past months would retroactively look better after the backlog cleanup.
+     */
+    static boolean handledByManager(ManagerDailyControlConcreteItem item) {
+        if (item.getExpiredAt() != null) {
+            return item.getLastManualTouchAt() != null;
+        }
+        return item.getStatus() != ManagerDailyControlItemStatus.OPEN;
     }
 
     private SlaStats concreteSla(

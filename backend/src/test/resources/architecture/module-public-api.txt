@@ -94,3 +94,7 @@ com.hunt.otziv.u_users.api.StaffTelegramLinks
 # Signed /images/{id} links for cabinet and admin user lists. Owner u_users; callers admin DTOs and
 # ApiCabinetController; no authorization or transaction of its own (pure link signing).
 com.hunt.otziv.u_users.api.UserImageLinks
+# Workload-owned account blockers of today's counted cards (same rule as the day close). Owner
+# workload_shadow; caller notification_media staff notices; read-only REQUIRED transaction, no
+# authorization of its own (callers pass scheduler-resolved worker ids), sends nothing.
+com.hunt.otziv.workload_shadow.api.MandatoryAccountBlockers

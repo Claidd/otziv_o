@@ -45,6 +45,25 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
 
     List<ManagerDailyControlConcreteItem> findByControl(ManagerDailyControl control);
 
+    /** Unresolved cards of control days before {@code before}, in id order after {@code afterId} (card expiry). */
+    @Query("""
+            SELECT item.id FROM ManagerDailyControlConcreteItem item
+            WHERE item.status <> :resolved
+              AND item.control.controlDate < :before
+              AND item.id > :afterId
+            ORDER BY item.id
+            """)
+    List<Long> findUnresolvedIdsOfControlDaysBefore(
+            @Param("before") LocalDate before,
+            @Param("resolved") ManagerDailyControlItemStatus resolved,
+            @Param("afterId") long afterId,
+            Pageable pageable
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT item FROM ManagerDailyControlConcreteItem item WHERE item.id IN :ids ORDER BY item.id")
+    List<ManagerDailyControlConcreteItem> findAllByIdInForUpdate(@Param("ids") Collection<Long> ids);
+
     @Query("""
             SELECT item FROM ManagerDailyControlConcreteItem item
             WHERE item.control.manager.id = :managerId
@@ -57,6 +76,7 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
                   WHERE later.control.manager.id = :managerId
                     AND later.entityKey = item.entityKey
                     AND later.status = :resolved
+                    AND later.expiredAt IS NULL
                     AND later.resolvedAt >= item.deferredAt
               )
             ORDER BY item.deferredAt ASC, item.id ASC
@@ -74,6 +94,7 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
             WHERE later.control.manager.id = :managerId
               AND later.entityKey = :entityKey
               AND later.status = :resolved
+              AND later.expiredAt IS NULL
               AND later.resolvedAt >= :deferredAt
             """)
     boolean existsResolutionAfterDeferral(

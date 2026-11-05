@@ -123,12 +123,59 @@ class ManagerControlReminderWorkflowTest {
         owner.setTelegramChatId(500L);
         when(users.findAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
         when(users.findAllOwners("ROLE_ADMIN")).thenReturn(List.of());
+        when(dayLifecycle.hasUnresolvedActionWork(any())).thenReturn(true);
 
         workflow.runTestModeNotifications(day.plusDays(1).atTime(5, 10));
         workflow.runTestModeNotifications(day.plusDays(1).atTime(5, 20));
 
         verify(telegram, times(1)).sendMessage(eq(500L), startsWith("Просрочен конец дня"));
         verify(dailySnapshot, never()).managerControl(eq(only), eq(day), any(), anyBoolean(), anyBoolean());
+    }
+
+    /** 05.11 stand: 22 of 54 notices in 30 days reported days without any open work, only missing timestamps. */
+    @Test
+    void previousDayWithoutUnresolvedActionWorkIsNotReportedEvenWithoutStageChecks() {
+        Manager only = manager(1L);
+        when(managers.findAllWithUserAndImage()).thenReturn(List.of(only));
+        when(transactions.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        LocalDate day = LocalDate.of(2026, 11, 4);
+        ManagerDailyControl unchecked = new ManagerDailyControl();
+        unchecked.setId(81L);
+        unchecked.setManager(only);
+        unchecked.setControlDate(day);
+        when(controls.findByControlDateAndManager(day, only)).thenReturn(Optional.of(unchecked));
+        when(dayLifecycle.hasUnresolvedActionWork(any())).thenReturn(false);
+
+        workflow.runTestModeNotifications(day.plusDays(1).atTime(5, 10));
+
+        assertThat(unchecked.getEveningNotificationSentAt()).isNull();
+        verify(controls, never()).save(unchecked);
+        verifyNoInteractions(telegram, reminders);
+    }
+
+    @Test
+    void finalCheckWithoutClosingDoesNotHideWorkThatIsStillOpen() {
+        Manager only = manager(1L);
+        when(managers.findAllWithUserAndImage()).thenReturn(List.of(only));
+        when(transactions.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        LocalDate day = LocalDate.of(2026, 11, 4);
+        ManagerDailyControl checked = new ManagerDailyControl();
+        checked.setId(82L);
+        checked.setManager(only);
+        checked.setControlDate(day);
+        checked.setFinalCheckedAt(day.atTime(21, 0));
+        when(controls.findByControlDateAndManager(day, only)).thenReturn(Optional.of(checked));
+        User owner = new User();
+        owner.setId(5L);
+        owner.setTelegramChatId(500L);
+        when(users.findAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
+        when(users.findAllOwners("ROLE_ADMIN")).thenReturn(List.of());
+        when(dayLifecycle.hasUnresolvedActionWork(any())).thenReturn(true);
+
+        workflow.runTestModeNotifications(day.plusDays(1).atTime(5, 10));
+
+        verify(telegram).sendMessage(eq(500L), startsWith("Просрочен конец дня"));
+        assertThat(checked.getEveningNotificationSentAt()).isNotNull();
     }
 
     @Test
@@ -148,6 +195,7 @@ class ManagerControlReminderWorkflowTest {
         owner.setTelegramChatId(500L);
         when(users.findAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
         when(users.findAllOwners("ROLE_ADMIN")).thenReturn(List.of(owner));
+        when(dayLifecycle.hasUnresolvedActionWork(any())).thenReturn(true);
 
         workflow.runTestModeNotifications();
 

@@ -1495,6 +1495,30 @@
                             </div>
                           }
 
+                          @if (example.type === 'COMPANY_CHAT_BINDING') {
+                            <div class="review-followup order-open-action">
+                              @if (chatUrl(example)) {
+                                <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
+                                  <span class="material-icons-sharp">{{ hasCurrentWhatsAppInvite(example) ? 'link' : 'forum' }}</span>
+                                  {{ hasCurrentWhatsAppInvite(example) ? 'Актуальная ссылка' : 'Чат' }}
+                                </a>
+                              }
+                              <button
+                                type="button"
+                                class="review-action repair-action"
+                                (click)="repairConcreteItem(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Проверить ссылку на чат компании; привязка группы автоматически не меняется"
+                              >
+                                <span class="material-icons-sharp">build</span>
+                                Починить
+                              </button>
+                              @if (isStaleWhatsAppInvite(example)) {
+                                <small>сохраните рабочую ссылку в карточке компании, затем нажмите «Починить»</small>
+                              }
+                            </div>
+                          }
+
                           @if (example.type === 'ORDER_PAYMENT_INTEGRITY' || example.type === 'PUBLICATION_DATE_REVIEW') {
                             <div class="review-followup order-open-action">
                               <button

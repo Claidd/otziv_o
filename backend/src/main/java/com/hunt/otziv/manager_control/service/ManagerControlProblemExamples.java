@@ -40,6 +40,7 @@ import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
+import com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -147,6 +148,8 @@ public class ManagerControlProblemExamples {
     private final ManagerDailyControlRepository dailyControlRepository;
 
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
+
+    private final WhatsAppInviteLinkHealth whatsAppInviteLinkHealth;
 
     List<ManagerControlConcreteItemResponse> detailExamples(Manager manager, ManagerDailyControlItem item, LocalDate today) {
         if (item == null || item.getCount() <= 0) {
@@ -372,7 +375,83 @@ public class ManagerControlProblemExamples {
     }
 
     List<ManagerControlConcreteItemResponse> chatBindingIssueExamples(Manager manager, LocalDate today, int limit) {
-        return companyRepository.findChatBindingIssuesByManager(manager).stream().limit(Math.max(1, limit)).map(company -> companyChatBindingIssueExample(company, today, manager)).toList();
+        List<ManagerControlConcreteItemResponse> examples = new ArrayList<>(companyRepository.findChatBindingIssuesByManager(manager).stream().limit(Math.max(1, limit)).map(company -> companyChatBindingIssueExample(company, today, manager)).toList());
+        // A bound group whose stored invite no longer opens it is repaired the same way: by the manager.
+        staleWhatsAppInvites(manager).stream().limit(Math.max(0, Math.max(1, limit) - examples.size()))
+                .map(stale -> staleWhatsAppInviteExample(stale.company(), stale.invite(), today, manager))
+                .forEach(examples::add);
+        return List.copyOf(examples);
+    }
+
+    record StaleCompanyInvite(Company company, WhatsAppInviteLinkHealth.StaleInvite invite) {
+    }
+
+    /**
+     * Confirmed stale invites of the manager's companies whose link has not been replaced since, that
+     * are active and not banned (the existing chat binding policy). Never changes anything.
+     */
+    List<StaleCompanyInvite> staleWhatsAppInvites(Manager manager) {
+        if (manager == null || manager.getId() == null || whatsAppInviteLinkHealth == null) {
+            return List.of();
+        }
+        List<WhatsAppInviteLinkHealth.StaleInvite> stale;
+        try {
+            stale = whatsAppInviteLinkHealth.staleInvites();
+        } catch (RuntimeException failure) {
+            log.warn("Stale WhatsApp invites are unavailable: {}", failure.getMessage());
+            return List.of();
+        }
+        if (stale == null || stale.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, WhatsAppInviteLinkHealth.StaleInvite> byCompany = stale.stream()
+                .filter(invite -> invite.companyId() != null)
+                .collect(Collectors.toMap(WhatsAppInviteLinkHealth.StaleInvite::companyId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        return java.util.stream.StreamSupport.stream(companyRepository.findAllById(byCompany.keySet()).spliterator(), false)
+                .filter(company -> company.getManager() != null && manager.getId().equals(company.getManager().getId()))
+                .filter(Company::isActive)
+                .filter(company -> company.getStatus() == null || !"бан".equalsIgnoreCase(safe(company.getStatus().getTitle())))
+                .filter(company -> safe(company.getGroupId()).length() > 0)
+                .filter(company -> sameWhatsAppInviteCode(company.getUrlChat(), byCompany.get(company.getId()).storedInviteCode()))
+                .sorted(Comparator.comparing(Company::getId))
+                .map(company -> new StaleCompanyInvite(company, byCompany.get(company.getId())))
+                .toList();
+    }
+
+    long staleWhatsAppInviteCount(Manager manager) {
+        return staleWhatsAppInvites(manager).size();
+    }
+
+    ManagerControlConcreteItemResponse staleWhatsAppInviteExample(Company company, WhatsAppInviteLinkHealth.StaleInvite invite, LocalDate today, Manager manager) {
+        String status = company.getStatus() == null ? "" : safe(company.getStatus().getTitle());
+        String specialistName = concretePresenter.companySpecialistName(company);
+        String current = invite == null ? "" : safe(invite.currentInviteLink());
+        String reason = "Почему в контроле: " + STALE_WHATSAPP_INVITE_REASON + ". "
+                + (current.isBlank() ? "" : "Подключённый аккаунт видит актуальную ссылку: " + current + ". ")
+                + "Сохраните правильную ссылку на чат в компании и нажмите «Починить». Привязка группы не менялась, клиентам ничего не отправлялось.";
+        return new ManagerControlConcreteItemResponse(null, "COMPANY_CHAT_BINDING", company.getId(), safe(company.getTitle()).isBlank() ? "Компания #" + company.getId() : company.getTitle(), specialistName.isBlank() ? "Специалист не назначен" : specialistName, status, company.getUpdateStatus() == null ? null : daysSince(company.getUpdateStatus(), today), reason, companyTargetUrl(manager, company), null, current.isBlank() ? company.getUrlChat() : current, null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null, null, null, null, null, null, null, null, specialistName);
+    }
+
+    static final String STALE_WHATSAPP_INVITE_REASON = "ссылка-приглашение WhatsApp в карточке компании больше не открывает привязанную группу";
+
+    /** The manager's «Починить» on a stale invite card: checks the stored link now, changes nothing. */
+    WhatsAppInviteLinkHealth.Recheck recheckWhatsAppInvite(Company company) {
+        if (company == null || company.getId() == null || whatsAppInviteLinkHealth == null) {
+            return new WhatsAppInviteLinkHealth.Recheck(WhatsAppInviteLinkHealth.RecheckResult.NOT_APPLICABLE, null);
+        }
+        return whatsAppInviteLinkHealth.recheck(company.getId());
+    }
+
+    static boolean sameWhatsAppInviteCode(String companyLink, String storedCode) {
+        java.util.regex.Matcher matcher = WHATSAPP_INVITE.matcher(safeStatic(companyLink));
+        return storedCode != null && matcher.find() && storedCode.equals(matcher.group(1));
+    }
+
+    private static final java.util.regex.Pattern WHATSAPP_INVITE =
+            java.util.regex.Pattern.compile("(?i)chat\\.whatsapp\\.com/([A-Za-z0-9_-]{10,})");
+
+    private static String safeStatic(String value) {
+        return value == null ? "" : value.trim();
     }
 
     ManagerControlConcreteItemResponse companyChatBindingIssueExample(Company company, LocalDate today, Manager manager) {
