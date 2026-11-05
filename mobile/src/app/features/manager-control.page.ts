@@ -1190,6 +1190,12 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       case 'PLAN_PENDING':
         return 'ждём план действий';
       case 'COMPLETED':
+        if (review.answerQuality === 'AUDIT_RESET') {
+          return 'закрыт при запуске обновлённого аудита';
+        }
+        if (review.answerQuality === 'AUDIT_DISABLED') {
+          return 'закрыт: аудит отключён';
+        }
         if (review.autoCompleted) {
           return 'принят автоматически · обязательных вопросов нет';
         }

@@ -56,6 +56,8 @@ public class ManagerReportReviewTelegramService {
     private static final String OWNER_NEEDS_CONTEXT = "owner-context";
     private static final String QUESTIONS_AI = "AI";
     private static final String QUESTIONS_PENDING_AI = "PENDING_AI";
+    /** answer_quality of the audits closed by the clean-slate migration V1_10_381. */
+    static final String AUDIT_RESET = "AUDIT_RESET";
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy");
     private static final List<ManagerReportReviewStatus> TEXT_PENDING_STATUSES = List.of(
             ManagerReportReviewStatus.QUESTION_PENDING,
@@ -415,6 +417,10 @@ public class ManagerReportReviewTelegramService {
         }
         if (!canAccess(review, actor, telegramUserId, callbackChatId)) {
             return Optional.of("Этот разбор назначен другому менеджеру");
+        }
+        // V1_10_381 closed every audit of the previous rules; its old buttons must not reopen it.
+        if (AUDIT_RESET.equals(review.getAnswerQuality())) {
+            return Optional.of("Этот разбор закрыт при запуске обновлённого аудита. Новые вопросы придут со следующим отчётом");
         }
         if (command.action().startsWith(DISPUTE_ISSUE_PREFIX)) {
             Long issueId = parseIssueId(command.action());
@@ -2153,15 +2159,23 @@ public class ManagerReportReviewTelegramService {
         return reason.isBlank() ? "" : "Нужно уточнить: " + limit(reason, 1000) + "\n\n";
     }
 
-    private int issueCount(ManagerDailySummaryResponse summary) {
+    /**
+     * How many AI questions the current day may need. {@code problemCount} also counts problems
+     * resolved during the day and {@code hardSlaBreachCount} counts the day's past breaches, so a
+     * fully closed day (no open item, no open problem) needs none. Mandatory system questions
+     * (worker goals, deferred cards, commitments) are added separately.
+     */
+    static int issueCount(ManagerDailySummaryResponse summary) {
         if (summary == null) return 0;
         long explicit = Math.max(0, summary.problemCount());
-        long open = Math.max(0, summary.overdueCount())
+        long openNow = Math.max(0, summary.overdueCount())
                 + Math.max(0, summary.riskCount())
                 + Math.max(0, summary.unansweredCount())
                 + Math.max(0, summary.taskOtherOpen())
-                + Math.max(0, summary.hardSlaBreachCount());
-        return (int) Math.min(Integer.MAX_VALUE, Math.max(explicit, open));
+                + Math.max(0, summary.problemOpenCount());
+        long breaches = Math.max(0, summary.hardSlaBreachCount());
+        if (openNow == 0) return 0;
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(explicit, openNow + breaches));
     }
 
     private List<ManagerDailyControlConcreteItem> overdueDeferred(Long managerId, java.time.LocalDate reportDate) {

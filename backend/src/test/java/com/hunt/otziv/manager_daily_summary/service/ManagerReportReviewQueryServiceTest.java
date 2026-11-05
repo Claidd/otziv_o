@@ -66,6 +66,19 @@ class ManagerReportReviewQueryServiceTest {
     }
 
     @Test
+    void anAuditClosedByTheResetIsNotShownAsAHastyReview() {
+        review.setStatus(com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewStatus.COMPLETED);
+        review.setCompletedAt(java.time.LocalDateTime.of(2026, 11, 6, 4, 37));
+        review.setMinimumReadSeconds(60);
+        review.setReadSeconds(5);
+        review.setAnswerQuality("AUDIT_RESET");
+        assertThat(service.reviews(date).getFirst().quickReview()).isFalse();
+
+        review.setAnswerQuality("ACCEPTED");
+        assertThat(service.reviews(date).getFirst().quickReview()).isTrue();
+    }
+
+    @Test
     void preservesHistoricalAnswerAndMarksMissingStructuredAssessment() {
         review.setAnswersJson("""
                 [{"questionIndex":0,"question":"Вопрос","answer":"Старый ответ","accepted":true,

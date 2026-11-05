@@ -634,6 +634,8 @@ export class ManagerControlComponent implements OnInit {
       case 'PLAN_PENDING':
         return 'ждём план';
       case 'COMPLETED':
+        if (review.answerQuality === 'AUDIT_RESET') return 'закрыт при запуске обновлённого аудита';
+        if (review.answerQuality === 'AUDIT_DISABLED') return 'закрыт: аудит отключён';
         if (review.autoCompleted) return 'принят автоматически · обязательных вопросов нет';
         return 'отчёт принят';
       case 'DISPUTE_PENDING':
@@ -703,6 +705,12 @@ export class ManagerControlComponent implements OnInit {
       case 'REVIEW_CANCELLED_NO_VALID_ISSUES': return 'Аудит отменён: корректных замечаний не осталось';
       case 'AUTO_COMPLETED': return 'Принят автоматически: обязательных вопросов по доступным данным нет';
       case 'REVIEW_COMPLETED': return 'Все вопросы пройдены';
+      case 'AUDIT_RESET': return 'Разбор закрыт при запуске обновлённого аудита';
+      case 'AUDIT_DISABLED': return 'Аудит отключён в настройках';
+      case 'DEADLINE_RESTARTED_AFTER_OWNER_DECISION': return 'Срок начат заново после решения владельца';
+      case 'AI_VERIFICATION_PAUSED': return 'Проверка приостановлена: ИИ недоступен';
+      case 'AI_VERIFICATION_RESUMED': return 'Проверка возобновлена';
+      case 'OWNER_VERIFICATION_REQUESTED': return 'Проверка передана владельцу';
       default: return eventType;
     }
   }
