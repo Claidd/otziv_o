@@ -59,6 +59,43 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
     @Autowired com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository messagePoints;
     static final LocalDate FROM = LocalDate.of(2026, 8, 1), TO = FROM.plusMonths(1);
 
+    @Autowired com.hunt.otziv.z_zp.repository.ZpRepository rewards;
+
+    /** PERF-22: one marker join selects exactly the rewards whose ledger marker is missing or stale. */
+    @Test void rewardRepairSelectsMissingOrStaleMarkersOnly() {
+        LocalDateTime changed = FROM.atTime(10, 0), now = LocalDateTime.now();
+        long base = 9_200_000L;
+        java.util.function.BiConsumer<Long, String> reward = (id, role) -> jdbc.update("""
+                INSERT INTO zp(zp_id,zp_fio,zp_user,zp_profession,zp_order,zp_amount,zp_date,zp_updated_at,zp_active,zp_contractor_role)
+                VALUES(?,?,1,1,0,1,?,?,b'0',?)""", id, "repair-" + id, FROM, changed, role);
+        java.util.function.Consumer<Object[]> marker = values -> jdbc.update(
+                "INSERT INTO contractor_reward_sync_markers(source_zp_id,source_active,source_updated_at) VALUES(?,?,?)", values);
+        reward.accept(base + 1, "SPECIALIST");                                  // no marker
+        reward.accept(base + 2, "SPECIALIST"); marker.accept(new Object[]{base + 2, false, changed});            // in sync
+        reward.accept(base + 3, "MANAGER");    marker.accept(new Object[]{base + 3, true, changed});             // active differs
+        reward.accept(base + 4, "SPECIALIST"); marker.accept(new Object[]{base + 4, false, null});               // never stamped
+        reward.accept(base + 5, "SPECIALIST"); marker.accept(new Object[]{base + 5, false, changed.minusSeconds(1)}); // older
+        reward.accept(base + 6, "SPECIALIST"); marker.accept(new Object[]{base + 6, false, changed.plusSeconds(1)});  // newer
+        reward.accept(base + 7, null);                                           // not a contractor reward
+        reward.accept(base + 8, "SPECIALIST");
+        jdbc.update("INSERT INTO contractor_reward_repair_claims(source_zp_id,lease_until) VALUES(?,?)", base + 8, now.plusMinutes(5));
+        reward.accept(base + 9, "SPECIALIST");
+        jdbc.update("INSERT INTO contractor_reward_repair_claims(source_zp_id,lease_until,next_retry_at) VALUES(?,?,?)",
+                base + 9, now.minusMinutes(5), now.minusMinutes(1));
+        reward.accept(base + 10, "SPECIALIST");
+        jdbc.update("INSERT INTO contractor_reward_repair_claims(source_zp_id,next_retry_at) VALUES(?,?)", base + 10, now.plusMinutes(5));
+        em.flush(); em.clear();
+
+        var selected = rewards.findContractorRewardsNeedingGlobalRepair(now, org.springframework.data.domain.PageRequest.of(0, 10_000))
+                .stream().map(com.hunt.otziv.z_zp.model.Zp::getId).filter(id -> id > base).toList();
+
+        assertThat(selected).containsExactly(base + 1, base + 3, base + 4, base + 5, base + 9);
+        assertThat(rewards.findContractorRewardsNeedingGlobalRepair(now, org.springframework.data.domain.PageRequest.of(0, 10_000))
+                .stream().map(com.hunt.otziv.z_zp.model.Zp::getId).distinct().count())
+                .as("one row per reward").isEqualTo(rewards.findContractorRewardsNeedingGlobalRepair(now,
+                        org.springframework.data.domain.PageRequest.of(0, 10_000)).size());
+    }
+
     @Autowired com.hunt.otziv.archive.repository.ManagerArchiveRepository archive;
 
     /** PERF-23: the archive page carries the total of the same search pass; a page past the end falls back to the count. */
