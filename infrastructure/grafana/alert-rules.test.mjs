@@ -77,7 +77,7 @@ test('audit INF-3 conditions are covered', () => {
 test('the delivery rules from Prometheus are delivered unchanged through Grafana', () => {
   const source = read('../prometheus/delivery-rules.yml');
   const alerts = [...source.matchAll(/- alert: (\S+)\r?\n\s+expr: (.+)\r?\n\s+for: (\S+)\r?\n\s+labels:\r?\n\s+severity: (\S+)\r?\n\s+annotations:\r?\n\s+summary: "(.+)"\r?\n\s+description: "(.+)"/g)];
-  assert.equal(alerts.length, 5);
+  assert.equal(alerts.length, 7);
   for (const [, name, , forDuration, severity, summary, description] of alerts) {
     const rule = byTitle[name];
     assert.ok(rule, name);
@@ -164,9 +164,23 @@ test('rule expressions fire on synthetic failures and stay quiet otherwise (pinn
       alert_rule_test: [
         alert('ClientDeliveryQueueDelayed', '6m', [{ queue: 'paper', state: 'QUEUED', job: 'app', instance: 'app:8080' }]),
         alert('ClientDeliveryRequiresReconciliation', '6m'), alert('ClientDeliveryLeaseExpired', '6m'),
+        alert('ClientDeliveryFailed', '6m'), alert('WhatsAppUnlinkedGroupMessage', '6m'),
         alert('ClientDeliveryInspectionUnavailable', '3m', [{}]),
         alert('InteractiveProjectionRefreshStale', '4m'),
         alert('InteractiveProjectionRefreshStale', '7m', [{ projection: 'manager-control', job: 'app', instance: 'app:8080' }])] },
+    // Old terminal failures and parked unlinked messages stay quiet; only a new one alerts, once, and resolves.
+    { interval: '1m', input_series: [
+        s('otziv_delivery_queue_jobs{queue="manager_client",state="FAILED",job="app",instance="app:8080"}', '7x20 8x70'),
+        s('otziv_delivery_queue_jobs{queue="manager_client",state="UNKNOWN",job="app",instance="app:8080"}', '0x90'),
+        s('otziv_delivery_queue_oldest_seconds{queue="whatsapp_unlinked",state="QUEUED",job="app",instance="app:8080"}', '200000x90'),
+        s('otziv_delivery_queue_jobs{queue="whatsapp_unlinked",state="QUEUED",job="app",instance="app:8080"}', '1x30 2x60')],
+      alert_rule_test: [
+        alert('ClientDeliveryRequiresReconciliation', '15m'), alert('ClientDeliveryQueueDelayed', '15m'),
+        alert('ClientDeliveryFailed', '15m'), alert('WhatsAppUnlinkedGroupMessage', '15m'),
+        alert('ClientDeliveryFailed', '25m', [{ queue: 'manager_client', state: 'FAILED', job: 'app', instance: 'app:8080' }]),
+        alert('ClientDeliveryFailed', '58m'),
+        alert('WhatsAppUnlinkedGroupMessage', '35m', [{ queue: 'whatsapp_unlinked', state: 'QUEUED', job: 'app', instance: 'app:8080' }]),
+        alert('WhatsAppUnlinkedGroupMessage', '75m')] },
   ];
   const dir = fixtureDir('otziv-alert-rules-');
   try {

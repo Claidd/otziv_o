@@ -3,7 +3,7 @@ groups:
     interval: 30s
     rules:
       - alert: ClientDeliveryQueueDelayed
-        expr: otziv_delivery_queue_oldest_seconds{state=~"QUEUED|RETRYABLE"} > 300
+        expr: otziv_delivery_queue_oldest_seconds{state=~"QUEUED|RETRYABLE",queue!="whatsapp_unlinked"} > 300
         for: 5m
         labels:
           severity: warning
@@ -11,13 +11,29 @@ groups:
           summary: "Очередь {{ $labels.queue }} ожидает отправки более 5 минут"
           description: "Проверьте режим отправки и готовность шлюза. Сохранённые команды повторяются только при доказанном отказе до отправки."
       - alert: ClientDeliveryRequiresReconciliation
-        expr: otziv_delivery_queue_jobs{state=~"UNKNOWN|FAILED"} > 0
+        expr: otziv_delivery_queue_jobs{state="UNKNOWN"} > 0
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Очередь {{ $labels.queue }} требует сверки"
           description: "Проверьте сохранённую операцию и квитанцию провайдера. Отсутствие подтверждения не разрешает повторную рассылку."
+      - alert: ClientDeliveryFailed
+        expr: delta(otziv_delivery_queue_jobs{state="FAILED",queue!="whatsapp_unlinked"}[30m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "В очереди {{ $labels.queue }} есть новая неотправленная команда"
+          description: "Отправка точно не выполнена, повторной рассылки не будет. Карточка возвращена менеджеру; причину видно в карточке или в журнале очереди."
+      - alert: WhatsAppUnlinkedGroupMessage
+        expr: delta(otziv_delivery_queue_jobs{queue="whatsapp_unlinked",state="QUEUED"}[30m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Сообщение из WhatsApp-группы без привязки к компании"
+          description: "Привяжите группу к компании или проверьте, нужна ли она. Сообщение хранится до 30 дней и будет обработано после привязки."
       - alert: ClientDeliveryLeaseExpired
         expr: otziv_delivery_queue_expired_leases > 0
         for: 5m

@@ -917,7 +917,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "otziv_delivery_queue_oldest_seconds{state=~\"QUEUED|RETRYABLE\"}",
+                "expr": "otziv_delivery_queue_oldest_seconds{state=~\"QUEUED|RETRYABLE\",queue!=\"whatsapp_unlinked\"}",
                 "instant": true,
                 "range": false
               }
@@ -989,7 +989,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "otziv_delivery_queue_jobs{state=~\"UNKNOWN|FAILED\"}",
+                "expr": "otziv_delivery_queue_jobs{state=\"UNKNOWN\"}",
                 "instant": true,
                 "range": false
               }
@@ -1041,6 +1041,150 @@
           "annotations": {
             "summary": "Очередь {{ .Labels.queue }} требует сверки",
             "description": "Проверьте сохранённую операцию и квитанцию провайдера. Отсутствие подтверждения не разрешает повторную рассылку."
+          },
+          "labels": {
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "otziv-client-delivery-failed",
+          "title": "ClientDeliveryFailed",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "delta(otziv_delivery_queue_jobs{state=\"FAILED\",queue!=\"whatsapp_unlinked\"}[30m])",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": ""
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "1m",
+          "annotations": {
+            "summary": "В очереди {{ .Labels.queue }} есть новая неотправленная команда",
+            "description": "Отправка точно не выполнена, повторной рассылки не будет. Карточка возвращена менеджеру; причину видно в карточке или в журнале очереди."
+          },
+          "labels": {
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "otziv-whatsapp-unlinked-message",
+          "title": "WhatsAppUnlinkedGroupMessage",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "delta(otziv_delivery_queue_jobs{queue=\"whatsapp_unlinked\",state=\"QUEUED\"}[30m])",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": ""
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "1m",
+          "annotations": {
+            "summary": "Сообщение из WhatsApp-группы без привязки к компании",
+            "description": "Привяжите группу к компании или проверьте, нужна ли она. Сообщение хранится до 30 дней и будет обработано после привязки."
           },
           "labels": {
             "severity": "warning"
