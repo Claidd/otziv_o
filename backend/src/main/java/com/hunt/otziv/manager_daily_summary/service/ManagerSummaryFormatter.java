@@ -520,8 +520,13 @@ public class ManagerSummaryFormatter {
         }
         for (ManagerWorkerDailyProgressService.MissedWorkerGoal goal : missedGoals) {
             String detail = escape(goal.workerName()) + ": выполнено <b>" + goal.completed()
-                    + " из " + goal.total() + "</b>, осталось "
-                    + Math.max(0, goal.total() - goal.completed()) + ".";
+                    + " из " + goal.total() + "</b> ед. работы, осталось "
+                    + goal.remaining() + "."
+                    + (goal.unfinishedTasks().isEmpty() ? ""
+                            : " " + escape(capitalized(WorkerGoalRemarkText.shortfall(goal))) + ".")
+                    + (goal.blockedUnits() > 0
+                            ? " Задачи без доступного аккаунта (" + goal.blockedUnits() + ") в недобор не включены."
+                            : "");
             result.append(rich ? "<li>" + detail + "</li>" : "• " + detail + "\n");
         }
         if (rich) {
@@ -935,6 +940,10 @@ public class ManagerSummaryFormatter {
     private long processed(ManagerDailySummaryResponse row) {
         if (row == null) return 0;
         return Math.max(0, row.taskCompleted()) + Math.max(0, row.taskAutoClosed());
+    }
+
+    private String capitalized(String value) {
+        return value == null || value.isEmpty() ? "" : Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
     private String escape(String value) {

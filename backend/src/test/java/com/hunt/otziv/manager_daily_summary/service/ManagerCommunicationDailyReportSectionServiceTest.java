@@ -29,6 +29,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -453,6 +454,35 @@ class ManagerCommunicationDailyReportSectionServiceTest {
         message.setMessageAt(at);
         message.setMessageText(text);
         return message;
+    }
+
+    @Test
+    void exchangeShowsTheClientSeriesSinceThePreviousReplyAndAllFollowingReplies() {
+        LocalDateTime closedAt = LocalDateTime.of(2026, 9, 23, 12, 30);
+        ClientChatUnansweredItem item = item(91L, closedAt, "Как им написать или позвонить?", null);
+        item.setPlatform(ClientChatPlatform.WHATSAPP);
+        item.setChatId("group-1");
+        LocalDateTime asked = item.getLastClientMessageAt();
+        var history = List.of(
+                message(1L, null, ClientChatSenderRole.CLIENT, ClientChatDirection.INCOMING, "Клиент", asked.minusHours(3), "Старый вопрос"),
+                message(2L, null, ClientChatSenderRole.STAFF, ClientChatDirection.OUTGOING, "Анжелика", asked.minusHours(2),
+                        "Обновить данные можно в личном кабинете 2ГИС"),
+                message(3L, null, ClientChatSenderRole.CLIENT, ClientChatDirection.INCOMING, "Клиент", asked.minusMinutes(2), "Не нашла их адрес"),
+                message(4L, null, ClientChatSenderRole.CLIENT, ClientChatDirection.INCOMING, "Клиент", asked, "Как им написать или позвонить?"),
+                message(5L, null, ClientChatSenderRole.STAFF, ClientChatDirection.OUTGOING, "Анжелика", asked.plusMinutes(3),
+                        "Телефон поддержки 2ГИС: 8 (800) 200-36-00"),
+                message(6L, null, ClientChatSenderRole.STAFF, ClientChatDirection.OUTGOING, "Анжелика", asked.plusMinutes(4),
+                        "Или почта feedback@account.2gis.ru"));
+        when(messageRepository.findByPlatformAndChatIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
+                ClientChatPlatform.WHATSAPP, "group-1", asked.minusHours(12), closedAt.plusMinutes(30))).thenReturn(history);
+
+        var exchange = service.exchange(item);
+
+        assertThat(exchange).extracting(ManagerCommunicationDailyReportSectionService.ExchangeMessage::text)
+                .containsExactly("Обновить данные можно в личном кабинете 2ГИС", "Не нашла их адрес",
+                        "Как им написать или позвонить?", "Телефон поддержки 2ГИС: 8 (800) 200-36-00",
+                        "Или почта feedback@account.2gis.ru");
+        assertThat(exchange.getFirst().describe()).startsWith("[2026-09-23 10:20 сотрудник Анжелика] Обновить данные");
     }
 
     private ClientChatUnansweredItem item(

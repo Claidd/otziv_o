@@ -260,6 +260,25 @@ class ManagerReportReviewEvidenceFlowTest {
         verify(progress,never()).missedPreviousDayGoals(9L,LocalDate.of(2026,11,4));
     }
 
+    @Test void theCheckerSeesTheUnfinishedOrderAndItsArrivalTimeFromTheDayPlan() {
+        var progress=(ManagerWorkerDailyProgressService)ReflectionTestUtils.getField(service,"workerProgressService");
+        review.setSummaryDate(LocalDate.of(2026,11,2));
+        var goal=new ManagerWorkerDailyProgressService.MissedWorkerGoal(13L,"Виктория Ц.",LocalDate.of(2026,11,1),57,62,0,
+                List.of(new ManagerWorkerDayPlanReader.UnfinishedTask("NEW",28264L,5,LocalDate.of(2026,11,1).atTime(21,53,35))),
+                LocalDate.of(2026,11,1).atTime(20,28,49));
+        when(progress.missedPreviousDayGoals(9L,LocalDate.of(2026,11,2))).thenReturn(List.of(goal));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion(WorkerGoalRemarkText.question(goal),
+                List.of("специалист и недобор"));
+
+        String evidence=ReflectionTestUtils.invokeMethod(service,"answerContext",review,question);
+
+        assertThat(evidence).contains("worker-goal:13:2026-11-01:total","worker-goal:13:2026-11-01:last_reached_100_at",
+                        "worker-goal-plan:13:2026-11-01:1:unfinished_task","заказ №28264: 5 текстов к написанию, в работе с 21:53",
+                        "worker_daily_goal_plan","Состав недобора взят из плана дня")
+                .doesNotContain("требует журнала задач");
+        verify(context,never()).workerGoalTaskEvidence(any(),any(),any());
+    }
+
     @Test
     void passesFreshRelevantFactsAndPersistsFullAssessmentAndOriginalSnapshot() throws Exception {
         var assessment = assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Проверено по источнику");

@@ -253,6 +253,7 @@ class ManagerReportReviewTelegramServiceTest {
                 eq(manager.getId()), any(LocalDateTime.class), any(LocalDateTime.class),
                 eq(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.RESOLVED)))
                 .thenReturn(List.of(deferred));
+        when(taskContextService.deferralAttributable(deferred, summary.date())).thenReturn(true);
         when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
                 .thenReturn(Optional.empty());
         when(qualityService.questionsJson(any())).thenReturn("[{}]");
@@ -270,6 +271,35 @@ class ManagerReportReviewTelegramServiceTest {
                 review.getIssueCount() == 1
                         && review.getReportSnapshot().contains("Отложенные более суток")
                         && review.getQuestionsContext().contains("sourceTaskId=175")));
+    }
+
+    @Test
+    void deferredCardIsNotAskedWhenTheManagerDidNotDeferALiveProblem() {
+        ManagerDailySummaryResponse summary = summary(0);
+        when(formatter.formatPersonal(summary)).thenReturn(new ManagerFormattedReport(
+                "Отчёт без замечаний", "<h2>Отчёт без замечаний</h2>"));
+        var deferred = new com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem();
+        deferred.setId(4201L);
+        deferred.setEntityKey("ORDER:21052");
+        deferred.setTitle("Пункт приема цветного и черного металла");
+        deferred.setDeferredAt(LocalDateTime.now().minusDays(75));
+        deferred.setStatus(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.DEFERRED);
+        when(concreteItemRepository.findOverdueDeferredForAudit(
+                eq(manager.getId()), any(LocalDateTime.class), any(LocalDateTime.class),
+                eq(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.RESOLVED)))
+                .thenReturn(List.of(deferred));
+        when(taskContextService.deferralAttributable(deferred, summary.date())).thenReturn(false);
+        when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
+                .thenReturn(Optional.empty());
+        when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), any())).thenReturn(Optional.of(503));
+
+        assertThat(service.deliver(manager, summary)).isTrue();
+
+        verify(sessionRepository, atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(review ->
+                review.getIssueCount() == 0
+                        && !review.getReportSnapshot().contains("Отложенные более суток")
+                        && review.isAutoCompleted()));
     }
 
     @Test

@@ -2009,26 +2009,25 @@ public class ManagerReportReviewTelegramService {
             var goals = workerProgressService.missedPreviousDayGoals(review.managerId(), workerGoalReportDate(question,review.getSummaryDate()));
             if (goals != null && !goals.isEmpty()) {
                 StringBuilder goalFacts = new StringBuilder("\nСЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n");
+                boolean planKnown = false;
                 for (var goal : goals) {
                     if (!question.question().contains(goal.workerName())) continue;
-                    for (var field : java.util.Map.of("worker_name", clean(goal.workerName()),
-                            "goal_date", goal.date().toString(), "completed", String.valueOf(goal.completed()),
-                            "total", String.valueOf(goal.total())).entrySet()) {
-                        try {
-                            goalFacts.append(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
-                                    java.util.Map.of("id", "worker-goal:" + goal.workerId() + ":" + goal.date() + ":" + field.getKey(),
-                                            "source", "worker_daily_goal", "field", field.getKey(), "value", field.getValue(),
-                                            "observedAt", java.time.Instant.now().toString()))).append('\n');
-                        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
-                            throw new IllegalStateException("Cannot encode worker goal evidence", invalid);
-                        }
+                    goalFacts.append(workerGoalFacts(goal));
+                    if (goal.unfinishedTasks().isEmpty()) {
+                        goalFacts.append(clean(taskContextService.workerGoalTaskEvidence(goal.workerId(),review.managerId(),goal.date()))).append('\n');
+                    } else {
+                        planKnown = true;
                     }
-                    goalFacts.append(clean(taskContextService.workerGoalTaskEvidence(goal.workerId(),review.managerId(),goal.date()))).append('\n');
                     goalFacts.append(followingWorkerGoalFacts(goal,
                             java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Irkutsk")).toLocalDate(), java.util.Set.of()));
                 }
-                goalFacts.append("Время поступления отдельных задач и причина недобора здесь не установлены. ")
-                        .append("Менеджер может предложить проверку; утверждение о позднем поступлении требует журнала задач.\n");
+                goalFacts.append(planKnown
+                        ? "Состав недобора взят из плана дня специалиста: worker_daily_goal_plan — незакрытые на конец дня "
+                                + "обязательные задачи (единицы одного заказа и раздела — одна задача) и время, с которого задача была в работе. "
+                                + "Работа после контрольного времени и задачи без доступного аккаунта в цель не входят. "
+                                + "Причина недобора здесь не установлена; рассказ менеджера о ней — объяснение с его слов.\n"
+                        : "Время поступления отдельных задач и причина недобора здесь не установлены. "
+                                + "Менеджер может предложить проверку; утверждение о позднем поступлении требует журнала задач.\n");
                 fresh += goalFacts;
             }
         }
@@ -2055,6 +2054,43 @@ public class ManagerReportReviewTelegramService {
         return facts.isEmpty()?"":"ДОПОЛНЕНИЕ ПРИ ПОВТОРНОЙ СВЕРКЕ: итоги закрытых дней до отправки ответа. "
                 +"Получены сейчас; не являются доказательством разговора или погашения прежнего недобора.\n"
                 +facts;
+    }
+
+    /** Goal counters keep their historical ids; the day plan adds the unfinished tasks. */
+    private String workerGoalFacts(ManagerWorkerDailyProgressService.MissedWorkerGoal goal) {
+        String prefix = "worker-goal:" + goal.workerId() + ":" + goal.date() + ":";
+        java.util.Map<String, String> fields = new java.util.LinkedHashMap<>();
+        fields.put("worker_name", clean(goal.workerName()));
+        fields.put("goal_date", goal.date().toString());
+        fields.put("completed", String.valueOf(goal.completed()));
+        fields.put("total", String.valueOf(goal.total()));
+        if (goal.blockedUnits() > 0) fields.put("account_blocked_units_excluded", String.valueOf(goal.blockedUnits()));
+        if (goal.lastReached100At() != null) fields.put("last_reached_100_at", goal.lastReached100At().toString());
+        StringBuilder facts = new StringBuilder();
+        fields.forEach((field, value) -> facts.append(goalFact(prefix + field, "worker_daily_goal", field, value)));
+        int number = 0;
+        for (var task : goal.unfinishedTasks()) {
+            String taskPrefix = "worker-goal-plan:" + goal.workerId() + ":" + goal.date() + ":" + (++number) + ":";
+            java.util.Map<String, String> taskFields = new java.util.LinkedHashMap<>();
+            taskFields.put("unfinished_task", WorkerGoalRemarkText.task(task, goal.date()));
+            taskFields.put("section", clean(task.section()));
+            if (task.orderId() != null) taskFields.put("order_id", String.valueOf(task.orderId()));
+            taskFields.put("units", String.valueOf(task.units()));
+            if (task.availableAt() != null) taskFields.put("in_work_since", task.availableAt().toString());
+            taskFields.forEach((field, value) -> facts.append(
+                    goalFact(taskPrefix + field, "worker_daily_goal_plan", field, value)));
+        }
+        return facts.toString();
+    }
+
+    private String goalFact(String id, String source, String field, String value) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(java.util.Map.of(
+                    "id", id, "source", source, "field", field, "value", value,
+                    "observedAt", java.time.Instant.now().toString())) + "\n";
+        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+            throw new IllegalStateException("Cannot encode worker goal evidence", invalid);
+        }
     }
 
     private String followingWorkerGoalFacts(ManagerWorkerDailyProgressService.MissedWorkerGoal goal,
@@ -2133,6 +2169,8 @@ public class ManagerReportReviewTelegramService {
         LinkedHashMap<String, ManagerDailyControlConcreteItem> distinct = new LinkedHashMap<>();
         for (ManagerDailyControlConcreteItem item : candidates) {
             if (taskContextService.resolvedSatisfactorily(item.getId())) continue;
+            // Only the manager's own deferral of a problem that is still on the board is a remark.
+            if (!taskContextService.deferralAttributable(item, reportDate)) continue;
             distinct.putIfAbsent(item.getEntityKey() == null ? "id:" + item.getId() : item.getEntityKey(), item);
         }
         return List.copyOf(distinct.values());
@@ -2186,13 +2224,12 @@ public class ManagerReportReviewTelegramService {
         if (missed == null || missed.isEmpty()) {
             return List.of();
         }
+        // Facts, not wording: only work the specialist could and had to finish is counted,
+        // and the units of one order form one task (see ManagerWorkerDailyProgressService).
         return missed.stream().map(goal -> new ManagerReportReviewQualityService.ReviewQuestion(
-                "Специалист " + goal.workerName() + " за " + goal.date().format(DATE)
-                        + " выполнил " + goal.completed() + " из " + goal.total()
-                        + " задач и не достиг дневной цели. Какие задачи остались невыполненными, "
-                        + "что помешало и как вы поможете специалисту закрыть этот долг?",
-                List.of("специалист " + goal.workerName() + " и недобор "
-                                + (goal.total() - goal.completed()) + " задач",
+                WorkerGoalRemarkText.question(goal),
+                List.of("специалист " + goal.workerName() + " и недобор: "
+                                + WorkerGoalRemarkText.shortfall(goal),
                         "конкретные невыполненные задачи или проверяемая причина недобора",
                         "конкретное действие менеджера и способ проверить результат")
         )).toList();
