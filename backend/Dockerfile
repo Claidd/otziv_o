@@ -31,7 +31,7 @@ FROM eclipse-temurin:25-jre-jammy@sha256:6a11121e5419a1eb4def2bba2f74a4c1b560395
 RUN --mount=type=bind,from=pgdg-client,source=/pgdg,target=/tmp/pgdg \
     test "$(dpkg --print-architecture)" = amd64 \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl default-mysql-client libssl3 openssl libbrotli1=1.0.9-2ubuntu0.1 \
+    && apt-get install -y --no-install-recommends ca-certificates curl default-mysql-client libssl3 openssl libbrotli1=1.0.9-2ubuntu0.1 apt=2.4.15ubuntu0.1 libapt-pkg6.0=2.4.15ubuntu0.1 \
         /tmp/pgdg/postgresql-client-common.deb /tmp/pgdg/libpq5.deb /tmp/pgdg/postgresql-client-17.deb \
     && rm -rf /var/lib/apt/lists/* \
     && /usr/lib/postgresql/17/bin/pg_dump --version | grep -Fx "pg_dump (PostgreSQL) 17.11 (Ubuntu 17.11-1.pgdg22.04+2)"
