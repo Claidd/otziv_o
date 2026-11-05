@@ -41,6 +41,10 @@ class WorkerMonthlyRollupConcurrencyMySqlIntegrationTest {
         when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_MONTHLY_AGGREGATE_ENABLED, true)).thenReturn(true);
         service = new StaffDailyProgressService(new NamedParameterJdbcTemplate(ds), settings,
                 mock(WorkloadShadowProgressReadService.class));
+        for (String table : List.of("worker_performance_monthly", "worker_daily_performance", "workload_shadow_worker_daily",
+                "reviews", "review_recovery_tasks", "worker_activity_events", "workers")) {
+            jdbc.execute("DROP TABLE IF EXISTS " + table);
+        }
         jdbc.execute("CREATE TABLE workers(worker_id BIGINT PRIMARY KEY,user_id BIGINT) ENGINE=InnoDB");
         jdbc.execute("INSERT INTO workers VALUES(7,17)");
         String daily = "progress_date DATE,worker_id BIGINT,worker_user_id BIGINT,";
@@ -108,5 +112,41 @@ class WorkerMonthlyRollupConcurrencyMySqlIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT bot_change_count FROM worker_performance_monthly WHERE worker_id=7", Long.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT bot_block_count FROM worker_performance_monthly WHERE worker_id=7", Long.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT completed_count FROM worker_performance_monthly WHERE worker_id=7", Long.class)).isEqualTo(10);
+    }
+
+    /** PERF-15: month boundaries of the open-month subqueries after replacing COALESCE and the per-row worker lookup. */
+    @Test void openMonthCountsKeepPublicationAndActivityBoundaries() {
+        jdbc.execute("INSERT INTO workers VALUES(8,18)");
+        jdbc.execute("""
+                INSERT INTO reviews(review_worker,review_publish,review_published_marked_at,review_changed) VALUES
+                  (7,1,'2026-11-03 10:00:00','2026-10-20'),
+                  (7,1,'2026-11-30 23:59:59.999999',NULL),
+                  (7,1,'2026-10-31 23:59:59.999999','2026-11-02'),
+                  (7,1,'2026-12-01 00:00:00','2026-11-20'),
+                  (7,1,NULL,'2026-11-01'),
+                  (7,1,NULL,'2026-11-30'),
+                  (7,1,NULL,'2026-10-31'),
+                  (7,1,NULL,'2026-12-01'),
+                  (7,1,NULL,NULL),
+                  (7,0,'2026-11-05 10:00:00','2026-11-05'),
+                  (8,1,'2026-11-05 10:00:00','2026-11-05')""");
+        jdbc.execute("""
+                INSERT INTO worker_activity_events(worker_user_id,action,created_at) VALUES
+                  (17,'BAD_TASK_BOT_CHANGE','2026-11-30 23:59:59.999999'),
+                  (17,'RECOVERY_TASK_BOT_CHANGE','2026-10-31 23:59:59.999999'),
+                  (17,'RECOVERY_TASK_BOT_CHANGE','2026-12-01 00:00:00'),
+                  (17,'REVIEW_COPY_LOGIN','2026-11-10 10:00:00'),
+                  (18,'REVIEW_BOT_CHANGE','2026-11-10 10:00:00'),
+                  (17,'REVIEW_BOT_DEACTIVATE','2026-11-10 10:00:00'),
+                  (17,'REVIEW_BOT_DEACTIVATE','2026-12-01 00:00:00')""");
+
+        transaction.executeWithoutResult(status -> service.rebuildMonthlyAggregates(month, false));
+
+        assertThat(jdbc.queryForObject("SELECT publish_completed_count FROM worker_performance_monthly WHERE worker_id=7", Long.class))
+                .isEqualTo(4);
+        assertThat(jdbc.queryForObject("SELECT bot_change_count FROM worker_performance_monthly WHERE worker_id=7", Long.class))
+                .isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT bot_block_count FROM worker_performance_monthly WHERE worker_id=7", Long.class))
+                .isEqualTo(1);
     }
 }
