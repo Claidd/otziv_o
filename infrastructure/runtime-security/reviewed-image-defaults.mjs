@@ -19,6 +19,8 @@ import { C43_ALLOY_PROOF_LABEL, C43_ALLOY_BUILD_INFO_READER } from './alloy-c43-
 import {validateGuavaC43Activation,couplePostgresC36WithKeycloakC43} from './guava-c43-activation.mjs';
 import {validateBrotliC45Activation,couplePostgresC36WithKeycloakC45} from './brotli-c45-activation.mjs';
 import {validateAptC48Activation,couplePostgresC36WithKeycloakC48} from './apt-c48-activation.mjs';
+import {overlayForSet, overlayForManifest, overlayCompressedProofs} from './os-package-overlay-registry.mjs';
+import {validateOverlayActivation, coupleOverlayKeycloak} from './os-package-overlay.mjs';
 import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 import { validateDatabaseTransitionReadiness } from './mysql-c46-readiness.mjs';
@@ -74,6 +76,9 @@ const COMPRESSED_PROOFS = new Map([
   ['infrastructure/runtime-security/proofs/c30-grafana/publication/vulnerabilities.json',
     'c4662b60f0c7b187abab33af4ef7d3733ef3e6b29810f9cd9fb6f164f0d41fac'],
 ]);
+
+// Registered OS package overlays bind their compressed public payloads in their reviewed spec.
+for (const [path, digest] of overlayCompressedProofs(COMPRESSED_PROOFS)) COMPRESSED_PROOFS.set(path, digest);
 
 export async function validateAlloyReassessment(image, entry, publication, proof) {
   // The original C7 publication remains immutable. This later finding review is
@@ -532,6 +537,12 @@ export async function validateActivation(image, entry, manifestBytes, read) {
     await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read);
     await validateAptC48Activation('alloy', publication.value, entry, read, validateActivation);
   }
+  const overlay = overlayForSet(selected.manifestSet);
+  if (overlay) {
+    if (overlay.alloyAdjudication === 'c43') await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read);
+    assert.equal(overlay.status, 'accepted', 'overlay_runtime_and_data_acceptance_required');
+    await validateOverlayActivation(overlay, publication.value, entry, read, validateActivation);
+  }
   if (selected.manifestSet === 'c36-alloy') {
     await validateAlloyC36ActivationScan(publication.value, entry.publication.path, read);
   }
@@ -615,6 +626,8 @@ const SSL_REFRESH_KEYCLOAK_MANIFESTS = new Set([
 ]);
 
 export async function coupleRegisteredKeycloak(readiness, issuer, read) {
+  const overlay = overlayForManifest('keycloak', issuer?.manifest?.path);
+  if (overlay) return coupleOverlayKeycloak(overlay, readiness, issuer, read, validateActivation);
   if (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c48-keycloak.json')
     return couplePostgresC36WithKeycloakC48(readiness, issuer, read, validateActivation);
   if (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c45-keycloak.json')

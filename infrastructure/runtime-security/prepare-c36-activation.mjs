@@ -15,6 +15,7 @@ import { validateActivation } from './reviewed-image-defaults.mjs';
 import { validatePostgresC36ActivationScan } from './postgres-c36-activation.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
+import { overlayForSet } from './os-package-overlay-registry.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const PREFIX = 'infrastructure/runtime-security/';
@@ -106,8 +107,8 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
   const component = manifestSet?.replace(/^c[0-9]+-/, '');
   const selected = reviewedImageSet(manifestSet);
   assert.ok(manifestSet === 'c36-' + component && COMPONENTS.has(component) ||
-    manifestSet === 'c29-dozzle' || MYSQL_REFRESH_SETS.has(manifestSet) || LIBRARY_PATCH_SETS.has(manifestSet),
-  'c36_component_not_supported');
+    manifestSet === 'c29-dozzle' || MYSQL_REFRESH_SETS.has(manifestSet) || LIBRARY_PATCH_SETS.has(manifestSet)
+    || Boolean(overlayForSet(manifestSet)), 'c36_component_not_supported');
   const baselineBytes = await readFile(resolve(root, PREFIX + 'reviewed-images.json'));
   const manifestBytes = await readFile(resolve(root, selected.path));
   const manifest = validateReviewedImageSet(manifestSet, manifestBytes, baselineBytes);
@@ -181,6 +182,11 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
   if (manifestSet === 'c48-alloy') {
     return { entry, activationReady: false, remaining: 'Official apt overlay comparison binding the unchanged C43 Alloy binary review' };
   }
+  if (overlayForSet(manifestSet)) {
+    return { entry, activationReady: false, remaining: component === 'keycloak'
+      ? 'Official OS package overlay comparison and parent-issuer authentication/rollback acceptance'
+      : 'Official OS package overlay comparison binding the unchanged Alloy binary review' };
+  }
   if (component === 'postgres') {
     await validatePostgresC36ActivationScan(publication, entry.publication.path, read);
   } else {
@@ -210,8 +216,8 @@ export async function stageActivationPair({ manifestSet, publicationDirectory, a
   const anonymousFiles = await readArtifactDirectory(anonymousDirectory, 'anonymous');
   const result = await prepareActivationPair({ manifestSet, publicationFiles, anonymousFiles, expectedIdentity, root });
   if (!write) return { ...result, mode: 'DRY_RUN', proofDirectory: null };
-  assert.ok(manifestSet.startsWith('c36-') || MYSQL_REFRESH_SETS.has(manifestSet) || LIBRARY_PATCH_SETS.has(manifestSet),
-    'c36_write_requires_supported_set');
+  assert.ok(manifestSet.startsWith('c36-') || MYSQL_REFRESH_SETS.has(manifestSet) || LIBRARY_PATCH_SETS.has(manifestSet)
+    || Boolean(overlayForSet(manifestSet)), 'c36_write_requires_supported_set');
   assertReleaseUnlocked(root);
   const proofsRoot = resolve(root, PREFIX + 'proofs');
   const destination = resolve(proofsRoot, manifestSet);
@@ -241,8 +247,8 @@ function argumentsFrom(argv) {
   assert.ok(manifestSet && publicationDirectory && anonymousDirectory && commit && run && attempt,
     'usage: prepare-c36-activation.mjs c36-<component>|c37-mysql <publication-dir> <anonymous-dir> <commit> <run> <attempt> [--write]');
   assert.ok(rest.length === 0 || rest.length === 1 && rest[0] === '--write', 'c36_arguments_invalid');
-  assert.ok(manifestSet.startsWith('c36-') || MYSQL_REFRESH_SETS.has(manifestSet) || LIBRARY_PATCH_SETS.has(manifestSet),
-    'c36_cli_requires_supported_set');
+  assert.ok(manifestSet.startsWith('c36-') || MYSQL_REFRESH_SETS.has(manifestSet) || LIBRARY_PATCH_SETS.has(manifestSet)
+    || Boolean(overlayForSet(manifestSet)), 'c36_cli_requires_supported_set');
   return { manifestSet, publicationDirectory: resolve(publicationDirectory), anonymousDirectory: resolve(anonymousDirectory),
     expectedIdentity: { commit, run, attempt }, write: rest[0] === '--write' };
 }
