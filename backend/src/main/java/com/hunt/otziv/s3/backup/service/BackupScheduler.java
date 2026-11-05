@@ -140,7 +140,7 @@ public class BackupScheduler implements SchedulingConfigurer {
 
             boolean acquired = runWithLease(() -> {
                 if (requiresCatchUp(scheduledAt.get(), now)) {
-                    backupService.runCatchUpBackup();
+                    backupService.runCatchUpBackup(scheduledAt.get());
                 }
             });
             if (!acquired) {

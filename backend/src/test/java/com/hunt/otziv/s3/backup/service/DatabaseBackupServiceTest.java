@@ -24,9 +24,17 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.core.sync.ResponseTransformer;
+import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRetentionResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.ObjectLockMode;
 import software.amazon.awssdk.services.s3.model.ObjectLockRetention;
 import software.amazon.awssdk.services.s3.model.ObjectLockRetentionMode;
@@ -366,6 +374,7 @@ class DatabaseBackupServiceTest {
         service.writeEvidence(
                 evidenceFile,
                 new DatabaseBackupService.VerifiedBackup(
+                        DatabaseBackupService.DATABASE_MYSQL,
                         Instant.parse("2026-08-03T08:00:00Z"),
                         "independent-backup-bucket",
                         "backup/otziv/backup_run.enc",
@@ -490,6 +499,7 @@ class DatabaseBackupServiceTest {
         service.writeEvidence(
                 evidenceFile,
                 new DatabaseBackupService.VerifiedBackup(
+                        DatabaseBackupService.DATABASE_MYSQL,
                         verifiedAt,
                         "independent-backup-bucket",
                         "backup/otziv/backup_manual.enc",
@@ -530,6 +540,7 @@ class DatabaseBackupServiceTest {
         service.writeEvidence(
                 evidenceFile,
                 new DatabaseBackupService.VerifiedBackup(
+                        DatabaseBackupService.DATABASE_MYSQL,
                         verifiedAt,
                         "independent-backup-bucket",
                         "backup/otziv/backup_selectel.enc",
@@ -558,6 +569,7 @@ class DatabaseBackupServiceTest {
         service.writeEvidence(
                 evidenceFile,
                 new DatabaseBackupService.VerifiedBackup(
+                        DatabaseBackupService.DATABASE_MYSQL,
                         Instant.parse("2026-08-03T08:00:00Z"),
                         "independent-backup-bucket",
                         "backup/otziv/backup_legacy.enc",
@@ -644,17 +656,412 @@ class DatabaseBackupServiceTest {
         assertThat(nonEmptyDirectory).exists();
     }
 
+    @Test
+    void keycloakDatabaseIsBackedUpByDefaultAndFailsClosedWithoutItsConnection() throws Exception {
+        assertThat(new BackupProperties().getKeycloak().isEnabled()).isTrue();
+
+        BackupProperties properties = validPropertiesWithKeycloak();
+        properties.getKeycloak().setDb(" ");
+        assertThatThrownBy(() -> service(properties).validateAndPrepareConfiguration())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("backup.keycloak.db");
+
+        properties.getKeycloak().setDb("keycloak");
+        properties.getKeycloak().setPassword("");
+        assertThatThrownBy(() -> service(properties).validateAndPrepareConfiguration())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("backup.keycloak.password");
+
+        properties.getKeycloak().setPassword(credentialPlaceholder());
+        properties.getKeycloak().setEvidenceFileName("BACKUP-EVIDENCE.jsonl");
+        assertThatThrownBy(() -> service(properties).validateAndPrepareConfiguration())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("must differ from backup.evidence-file-name");
+
+        properties.getKeycloak().setEvidenceFileName("../keycloak.jsonl");
+        assertThatThrownBy(() -> service(properties).validateAndPrepareConfiguration())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("simple file name");
+
+        properties.getKeycloak().setEvidenceFileName("keycloak-backup-evidence.jsonl");
+        DatabaseBackupService.BackupRunConfiguration configuration =
+                service(properties).validateAndPrepareConfiguration();
+        assertThat(configuration.targets())
+                .extracting(DatabaseBackupService.BackupTarget::database)
+                .containsExactly(DatabaseBackupService.DATABASE_MYSQL, DatabaseBackupService.DATABASE_KEYCLOAK);
+        assertThat(configuration.targets())
+                .extracting(target -> target.evidenceFile().getFileName().toString())
+                .containsExactly("backup-evidence.jsonl", "keycloak-backup-evidence.jsonl");
+    }
+
+    @Test
+    void buildsPlainPortablePgDumpCommandWithoutTheCredential() {
+        BackupProperties.Keycloak keycloak = validPropertiesWithKeycloak().getKeycloak();
+
+        List<String> command = DatabaseBackupService.buildKeycloakDumpCommand(keycloak);
+
+        assertThat(command).containsExactly(
+                "/usr/lib/postgresql/17/bin/pg_dump",
+                "--host=keycloak-postgres",
+                "--port=5432",
+                "--username=keycloak",
+                "--dbname=keycloak",
+                "--format=plain",
+                "--encoding=UTF8",
+                "--no-owner",
+                "--no-privileges",
+                "--no-password",
+                "--lock-wait-timeout=60000"
+        );
+        assertThat(String.join(" ", command)).doesNotContain(credentialPlaceholder());
+    }
+
+    @Test
+    void acceptsOnlyCompleteKeycloakDumpsOfTheKeycloakSchema() throws Exception {
+        Path complete = temporaryDirectory.resolve("complete.sql");
+        Files.writeString(complete, keycloakDump(), StandardCharsets.UTF_8);
+        DatabaseBackupService.verifyPostgresDump(complete, DatabaseBackupService.REQUIRED_KEYCLOAK_TABLES);
+
+        Path truncated = temporaryDirectory.resolve("truncated.sql");
+        Files.writeString(
+                truncated,
+                keycloakDump().substring(0, keycloakDump().indexOf(DatabaseBackupService.POSTGRES_DUMP_COMPLETE_MARKER)),
+                StandardCharsets.UTF_8
+        );
+        assertThatThrownBy(() -> DatabaseBackupService.verifyPostgresDump(
+                truncated,
+                DatabaseBackupService.REQUIRED_KEYCLOAK_TABLES
+        )).hasMessageContaining("completion marker");
+
+        Path trailingStatement = temporaryDirectory.resolve("trailing.sql");
+        Files.writeString(trailingStatement, keycloakDump() + "DROP TABLE public.realm;\n", StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> DatabaseBackupService.verifyPostgresDump(
+                trailingStatement,
+                DatabaseBackupService.REQUIRED_KEYCLOAK_TABLES
+        )).hasMessageContaining("completion marker");
+
+        Path otherDatabase = temporaryDirectory.resolve("other.sql");
+        Files.writeString(otherDatabase, keycloakDump().replace("public.credential", "public.notes"), StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> DatabaseBackupService.verifyPostgresDump(
+                otherDatabase,
+                DatabaseBackupService.REQUIRED_KEYCLOAK_TABLES
+        )).hasMessageContaining("missing required tables: [credential]");
+    }
+
+    @Test
+    void keycloakEvidenceIsJournaledSeparatelyAndCombinedConservatively() throws Exception {
+        DatabaseBackupService service = service(validPropertiesWithKeycloak());
+        Path mysqlEvidence = temporaryDirectory.resolve("backup-evidence.jsonl");
+        Path keycloakEvidence = temporaryDirectory.resolve("keycloak-backup-evidence.jsonl");
+        Instant mysqlVerifiedAt = Instant.parse("2026-11-04T23:00:00Z");
+        Instant keycloakVerifiedAt = Instant.parse("2026-11-04T23:05:00Z");
+
+        service.writeEvidence(
+                mysqlEvidence,
+                verifiedBackup(mysqlVerifiedAt, "backup/otziv/backup_run.enc", "version-m"),
+                new DatabaseBackupService.BackupCleanupResult(true, true, true, true, true),
+                "manual",
+                "both-databases-1"
+        );
+        assertThat(service.readEvidenceSummary().latestVerifiedAt()).isEmpty();
+        assertThat(service.readEvidenceSummary().containsManualRequest("both-databases-1")).isFalse();
+
+        // A Keycloak receipt appended to the MySQL journal must not count for either database.
+        service.writeEvidence(
+                mysqlEvidence,
+                keycloakVerifiedBackup(keycloakVerifiedAt),
+                new DatabaseBackupService.BackupCleanupResult(true, true, true, true, true),
+                "manual",
+                "both-databases-1"
+        );
+        assertThat(service.readTargetEvidenceSummary(DatabaseBackupService.DATABASE_MYSQL).latestVerifiedAt())
+                .contains(mysqlVerifiedAt);
+        assertThat(service.readEvidenceSummary().latestVerifiedAt()).isEmpty();
+
+        service.writeEvidence(
+                keycloakEvidence,
+                keycloakVerifiedBackup(keycloakVerifiedAt),
+                new DatabaseBackupService.BackupCleanupResult(true, true, true, true, true),
+                "manual",
+                "both-databases-1"
+        );
+        var keycloakLine = new ObjectMapper().readTree(Files.readString(keycloakEvidence, StandardCharsets.UTF_8).trim());
+        assertThat(keycloakLine.path("database").asText()).isEqualTo("keycloak");
+        assertThat(keycloakLine.path("objectKey").asText()).contains("keycloak_");
+
+        DatabaseBackupService.BackupEvidenceSummary combined = service.readEvidenceSummary();
+        assertThat(combined.latestVerifiedAt()).contains(mysqlVerifiedAt);
+        assertThat(combined.containsManualRequest("both-databases-1")).isTrue();
+        assertThat(service.readTargetEvidenceSummary(DatabaseBackupService.DATABASE_KEYCLOAK).latestVerifiedAt())
+                .contains(keycloakVerifiedAt);
+    }
+
+    @Test
+    void removesStaleKeycloakTemporaryFilesAndKeepsBothJournals() throws Exception {
+        String runId = "2026-11-05_07-00-00-123_0123456789abcdef0123456789abcdef";
+        List<Path> owned = List.of(
+                temporaryDirectory.resolve("keycloak_" + runId + ".sql"),
+                temporaryDirectory.resolve("keycloak_" + runId + ".sql.gz"),
+                temporaryDirectory.resolve("keycloak_" + runId + ".sql.gz.enc"),
+                temporaryDirectory.resolve("keycloak_" + runId + ".sql.gz.enc.part1"),
+                temporaryDirectory.resolve(".verify_keycloak_" + runId + ".sql.gz.enc")
+        );
+        for (Path path : owned) {
+            Files.writeString(path, "sensitive");
+        }
+        Path mysqlEvidence = temporaryDirectory.resolve("backup-evidence.jsonl");
+        Path keycloakEvidence = temporaryDirectory.resolve("keycloak-backup-evidence.jsonl");
+        Path unrelated = temporaryDirectory.resolve("keycloak_export.sql");
+        Files.writeString(mysqlEvidence, "evidence");
+        Files.writeString(keycloakEvidence, "evidence");
+        Files.writeString(unrelated, "keep");
+
+        assertThat(DatabaseBackupService.cleanupStaleTemporaryFiles(temporaryDirectory, mysqlEvidence, keycloakEvidence))
+                .isEqualTo(owned.size());
+        assertThat(owned).allMatch(path -> !Files.exists(path));
+        assertThat(mysqlEvidence).exists();
+        assertThat(keycloakEvidence).exists();
+        assertThat(unrelated).exists();
+    }
+
+    @Test
+    void backsUpBothDatabasesIntoSeparateVerifiedObjectsAndJournals() throws Exception {
+        BackupProperties properties = validPropertiesWithKeycloak();
+        Path tools = Files.createDirectory(temporaryDirectory.resolve("tools"));
+        properties.getMysql().setDumpBinary(fakeDumpBinary(tools, "mysqldump", mysqlDump()).toString());
+        properties.getKeycloak().setDumpBinary(fakeDumpBinary(tools, "pg_dump", keycloakDump()).toString());
+        RecordingS3Client s3 = new RecordingS3Client();
+        DatabaseBackupService service = service(properties, s3);
+
+        service.runManualBackup("restore-drill-20261105");
+
+        assertThat(s3.objects.keySet()).hasSize(2);
+        String mysqlKey = s3.onlyKeyStartingWith("backup/otziv-prod/backup_");
+        String keycloakKey = s3.onlyKeyStartingWith("backup/otziv-prod/keycloak_");
+        assertThat(s3.metadata.get(mysqlKey)).containsEntry("database", "mysql");
+        assertThat(s3.metadata.get(keycloakKey)).containsEntry("database", "keycloak");
+        byte[] key = Base64.getDecoder().decode(encodedKey());
+        assertThat(gunzip(decrypt(s3.objects.get(keycloakKey), key))).isEqualTo(keycloakDump());
+        assertThat(gunzip(decrypt(s3.objects.get(mysqlKey), key))).isEqualTo(mysqlDump());
+
+        List<String> keycloakEvidence = Files.readAllLines(
+                temporaryDirectory.resolve("keycloak-backup-evidence.jsonl"),
+                StandardCharsets.UTF_8
+        );
+        assertThat(keycloakEvidence).hasSize(2);
+        for (String line : keycloakEvidence) {
+            var json = new ObjectMapper().readTree(line);
+            assertThat(json.path("database").asText()).isEqualTo("keycloak");
+            assertThat(json.path("objectKey").asText()).isEqualTo(keycloakKey);
+            assertThat(json.path("verification").path("download").asBoolean()).isTrue();
+            assertThat(json.path("verification").path("clientSideEnvelopeVerified").asBoolean()).isTrue();
+            assertThat(line).doesNotContain(credentialPlaceholder(), encodedKey());
+        }
+        assertThat(Files.readAllLines(temporaryDirectory.resolve("backup-evidence.jsonl"), StandardCharsets.UTF_8))
+                .hasSize(2)
+                .allMatch(line -> line.contains("\"database\":\"mysql\"") && line.contains(mysqlKey));
+        assertThat(service.readEvidenceSummary().containsManualRequest("restore-drill-20261105")).isTrue();
+        assertThat(workDirectoryFiles()).containsExactlyInAnyOrder(
+                ".database-backup-run.lock",
+                "backup-evidence.jsonl",
+                "keycloak-backup-evidence.jsonl",
+                "tools"
+        );
+
+        service.runManualBackup("restore-drill-20261105");
+        assertThat(s3.objects).hasSize(2);
+    }
+
+    @Test
+    void keycloakFailureKeepsTheMysqlBackupAndCatchUpRetriesOnlyKeycloak() throws Exception {
+        BackupProperties properties = validPropertiesWithKeycloak();
+        Path tools = Files.createDirectory(temporaryDirectory.resolve("tools"));
+        properties.getMysql().setDumpBinary(fakeDumpBinary(tools, "mysqldump", mysqlDump()).toString());
+        String incomplete = keycloakDump().substring(
+                0,
+                keycloakDump().indexOf(DatabaseBackupService.POSTGRES_DUMP_COMPLETE_MARKER)
+        );
+        properties.getKeycloak().setDumpBinary(fakeDumpBinary(tools, "pg_dump", incomplete).toString());
+        RecordingS3Client s3 = new RecordingS3Client();
+        DatabaseBackupService service = service(properties, s3);
+        Instant missedOccurrence = Instant.now().minus(Duration.ofHours(1));
+
+        assertThatThrownBy(service::runDailyBackup)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("database=keycloak")
+                .hasRootCauseMessage("pg_dump output does not end with its completion marker");
+
+        s3.onlyKeyStartingWith("backup/otziv-prod/backup_");
+        assertThat(s3.objects).hasSize(1);
+        assertThat(service.readTargetEvidenceSummary(DatabaseBackupService.DATABASE_MYSQL).latestVerifiedAt())
+                .isPresent();
+        assertThat(service.readEvidenceSummary().latestVerifiedAt()).isEmpty();
+        assertThat(workDirectoryFiles()).containsExactlyInAnyOrder(
+                ".database-backup-run.lock",
+                "backup-evidence.jsonl",
+                "tools"
+        );
+
+        Files.writeString(tools.resolve("pg_dump.sql"), keycloakDump(), StandardCharsets.UTF_8);
+        service.runCatchUpBackup(missedOccurrence);
+
+        assertThat(s3.objects).hasSize(2);
+        s3.onlyKeyStartingWith("backup/otziv-prod/keycloak_");
+        assertThat(service.readEvidenceSummary().latestVerifiedAt()).isPresent();
+
+        service.runCatchUpBackup(missedOccurrence);
+        assertThat(s3.objects).hasSize(2);
+    }
+
     private DatabaseBackupService service(BackupProperties properties) {
+        return service(properties, mock(S3Client.class));
+    }
+
+    private DatabaseBackupService service(BackupProperties properties, S3Client s3Client) {
         BackupS3Properties s3 = new BackupS3Properties();
         s3.setBucket("backup-bucket");
         s3.setProjectId("otziv-prod");
         return new DatabaseBackupService(
                 properties,
                 s3,
-                mock(S3Client.class),
+                s3Client,
                 mock(EmailService.class),
                 new ObjectMapper()
         );
+    }
+
+    private List<String> workDirectoryFiles() throws java.io.IOException {
+        try (var files = Files.list(temporaryDirectory)) {
+            return files.map(path -> path.getFileName().toString()).toList();
+        }
+    }
+
+    /** A stand-in dump tool that prints a fixed SQL file and ignores its arguments. */
+    private static Path fakeDumpBinary(Path tools, String name, String sql) throws java.io.IOException {
+        Path output = tools.resolve(name + ".sql");
+        Files.writeString(output, sql, StandardCharsets.UTF_8);
+        if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) {
+            Path script = tools.resolve(name + ".cmd");
+            Files.writeString(script, "@type \"" + output + "\"\r\n@exit /b 0\r\n", StandardCharsets.UTF_8);
+            return script;
+        }
+        Path script = tools.resolve(name + ".sh");
+        Files.writeString(script, "#!/bin/sh\ncat '" + output + "'\n", StandardCharsets.UTF_8);
+        assertThat(script.toFile().setExecutable(true)).isTrue();
+        return script;
+    }
+
+    private static String mysqlDump() {
+        return "-- MySQL dump\nCREATE TABLE `users` (`id` bigint NOT NULL);\n-- Dump completed\n";
+    }
+
+    private static String keycloakDump() {
+        return """
+                --
+                -- PostgreSQL database dump
+                --
+
+                \\restrict 7Hk2
+
+                SET statement_timeout = 0;
+                CREATE TABLE public.credential (
+                    id character varying(36) NOT NULL
+                );
+                CREATE TABLE public.realm (
+                    id character varying(36) NOT NULL
+                );
+                CREATE TABLE public.user_entity (
+                    id character varying(36) NOT NULL
+                );
+                COPY public.realm (id) FROM stdin;
+                otziv
+                \\.
+
+                --
+                -- PostgreSQL database dump complete
+                --
+
+                \\unrestrict 7Hk2
+
+                """;
+    }
+
+    private static String gunzip(byte[] compressed) throws java.io.IOException {
+        try (var input = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(compressed))) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private DatabaseBackupService.VerifiedBackup keycloakVerifiedBackup(Instant verifiedAt) {
+        return new DatabaseBackupService.VerifiedBackup(
+                DatabaseBackupService.DATABASE_KEYCLOAK,
+                verifiedAt,
+                "independent-backup-bucket",
+                "backup/otziv/keycloak_run.enc",
+                "version-k",
+                "033ea45728f0ba7ce7552bfc6ce49fff338e1269f45c72eded39cb3dc0371087",
+                1234L,
+                "OTZIVDB2_AES_256_GCM",
+                true,
+                "AES256",
+                true,
+                ObjectLockMode.GOVERNANCE,
+                Instant.parse("2026-12-04T08:00:00Z"),
+                Duration.ofSeconds(3)
+        );
+    }
+
+    /** Versioned in-memory bucket that answers exactly the calls the backup verification makes. */
+    private static final class RecordingS3Client implements S3Client {
+        private final Map<String, byte[]> objects = new java.util.LinkedHashMap<>();
+        private final Map<String, Map<String, String>> metadata = new java.util.LinkedHashMap<>();
+
+        @Override
+        public String serviceName() {
+            return "s3";
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public PutObjectResponse putObject(PutObjectRequest request, RequestBody body) {
+            try (var input = body.contentStreamProvider().newStream()) {
+                objects.put(request.key(), input.readAllBytes());
+            } catch (java.io.IOException exception) {
+                throw new java.io.UncheckedIOException(exception);
+            }
+            metadata.put(request.key(), request.metadata());
+            return PutObjectResponse.builder().versionId("version-" + objects.size()).build();
+        }
+
+        @Override
+        public HeadObjectResponse headObject(HeadObjectRequest request) {
+            return HeadObjectResponse.builder()
+                    .contentLength((long) objects.get(request.key()).length)
+                    .metadata(metadata.get(request.key()))
+                    .serverSideEncryption(ServerSideEncryption.AES256)
+                    .build();
+        }
+
+        @Override
+        public <T> T getObject(GetObjectRequest request, ResponseTransformer<GetObjectResponse, T> transformer) {
+            try {
+                return transformer.transform(
+                        GetObjectResponse.builder().build(),
+                        AbortableInputStream.create(new java.io.ByteArrayInputStream(objects.get(request.key())))
+                );
+            } catch (Exception exception) {
+                throw new IllegalStateException(exception);
+            }
+        }
+
+        private String onlyKeyStartingWith(String prefix) {
+            List<String> keys = objects.keySet().stream().filter(key -> key.startsWith(prefix)).toList();
+            assertThat(keys).hasSize(1);
+            return keys.get(0);
+        }
     }
 
     private BackupProperties validProperties() {
@@ -672,7 +1079,23 @@ class DatabaseBackupServiceTest {
         properties.getMysql().setDb("otziv");
         properties.getMysql().setUser("backup");
         properties.getMysql().setPassword("secret");
+        // MySQL-only by default here; the Keycloak tests opt in explicitly.
+        properties.getKeycloak().setEnabled(false);
         return properties;
+    }
+
+    private BackupProperties validPropertiesWithKeycloak() {
+        BackupProperties properties = validProperties();
+        BackupProperties.Keycloak keycloak = properties.getKeycloak();
+        keycloak.setEnabled(true);
+        keycloak.setDb("keycloak");
+        keycloak.setUser("keycloak");
+        keycloak.setPassword(credentialPlaceholder());
+        return properties;
+    }
+
+    private static String credentialPlaceholder() {
+        return "kc-" + "local-test-value";
     }
 
     private DatabaseBackupService.VerifiedBackup verifiedBackup(
@@ -681,6 +1104,7 @@ class DatabaseBackupServiceTest {
             String versionId
     ) {
         return new DatabaseBackupService.VerifiedBackup(
+                DatabaseBackupService.DATABASE_MYSQL,
                 verifiedAt,
                 "independent-backup-bucket",
                 objectKey,

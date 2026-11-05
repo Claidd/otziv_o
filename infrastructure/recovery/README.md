@@ -1,5 +1,9 @@
 # PostgreSQL backup and paired recovery tools
 
+The daily encrypted Keycloak database backup now runs inside the application backup
+service together with MySQL (see [R0](../../docs/R0_BACKUP_RESTORE_DRILL.md#keycloak-database-in-the-same-run)).
+This host-level tool remains an optional, separately keyed path for fenced paired recovery.
+
 Requires Node 22.12+ (built-ins only), AWS CLI v2, and `pg_dump` matching the configured PostgreSQL major. `postgres-drill` also needs a **local** Docker engine and the configured digest-pinned PostgreSQL image already present. Nothing here enables a timer, provisions storage or contacts a real endpoint merely by running tests.
 
 ```sh

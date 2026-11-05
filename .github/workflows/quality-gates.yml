@@ -1457,6 +1457,7 @@ jobs:
               test -s /app/app.jar
               java -XshowSettings:properties -version 2>&1 | grep "java.specification.version = 25"
               mysql --version
+              /usr/lib/postgresql/17/bin/pg_dump --version | grep -F "(PostgreSQL) 17."
               test -s /etc/ssl/certs/ca-certificates.crt
               for alias in russian-trusted-root-ca russian-trusted-sub-ca russian-trusted-sub-ca-2024; do
                 keytool -list -alias "$alias" -keystore "$JAVA_HOME/lib/security/cacerts" -storepass changeit >/dev/null

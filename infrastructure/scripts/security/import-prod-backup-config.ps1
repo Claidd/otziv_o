@@ -390,7 +390,8 @@ foreach ($name in @(
     'BACKUP_DESTINATION_PRIVATE_CONFIRMED', 'BACKUP_ENCRYPTION_AT_REST_CONFIRMED',
     'BACKUP_S3_OBJECT_LOCK_ENABLED', 'BACKUP_S3_OBJECT_LOCK_MODE', 'BACKUP_S3_RETENTION_DAYS',
     'BACKUP_MAIL_ENABLED', 'BACKUP_EMAIL_DELIVERY_CONFIRMED',
-    'BACKUP_MAIL_BODY', 'BACKUP_MAIL_FROM', 'BACKUP_MAIL_SUBJECT', 'BACKUP_MAIL_TO'
+    'BACKUP_MAIL_BODY', 'BACKUP_MAIL_FROM', 'BACKUP_MAIL_SUBJECT', 'BACKUP_MAIL_TO',
+    'BACKUP_KEYCLOAK_ENABLED', 'BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME'
 )) {
     [void]$allowedNames.Add($name)
 }
@@ -400,7 +401,8 @@ foreach ($name in @(
     'BACKUP_S3_INDEPENDENT_CONFIRMED',
     'BACKUP_DESTINATION_PRIVATE_CONFIRMED', 'BACKUP_ENCRYPTION_AT_REST_CONFIRMED',
     'BACKUP_S3_OBJECT_LOCK_ENABLED', 'BACKUP_MAIL_ENABLED', 'BACKUP_EMAIL_DELIVERY_CONFIRMED',
-    'BACKUP_SCHEDULE_ENABLED', 'BACKUP_SCHEDULE_CATCH_UP_ENABLED', 'BACKUP_RUN_ONCE_ENABLED'
+    'BACKUP_SCHEDULE_ENABLED', 'BACKUP_SCHEDULE_CATCH_UP_ENABLED', 'BACKUP_RUN_ONCE_ENABLED',
+    'BACKUP_KEYCLOAK_ENABLED'
 )) {
     [void]$booleanNames.Add($name)
 }
@@ -486,6 +488,9 @@ try {
                 if ($value -cnotin @('GOVERNANCE', 'COMPLIANCE')) { throw "$name must be GOVERNANCE or COMPLIANCE." }
             }
             'BACKUP_EVIDENCE_FILE_NAME' {
+                if ($value -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') { throw "$name must be a simple file name." }
+            }
+            'BACKUP_KEYCLOAK_EVIDENCE_FILE_NAME' {
                 if ($value -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') { throw "$name must be a simple file name." }
             }
             'BACKUP_SOURCE_COMMIT' {
@@ -577,6 +582,9 @@ try {
         }
         if (-not $catchUpEnabled) {
             throw 'BACKUP_ENABLED=true requires BACKUP_SCHEDULE_CATCH_UP_ENABLED=true.'
+        }
+        if ((Get-MergedSetting -Existing $existing -Updates $updates -Name 'BACKUP_KEYCLOAK_ENABLED') -ceq 'false') {
+            throw 'BACKUP_ENABLED=true requires the Keycloak database backup (BACKUP_KEYCLOAK_ENABLED must not be false).'
         }
         foreach ($name in @(
             'BACKUP_ENCRYPTION_KEY_BASE64', 'BACKUP_S3_ACCESS_KEY', 'BACKUP_S3_SECRET_KEY',

@@ -217,6 +217,27 @@ class BackupSchedulerTest {
     }
 
     @Test
+    void catchUpPassesTheMissedOccurrenceSoAlreadyVerifiedDatabasesAreSkipped() throws Exception {
+        properties.getSchedule().setCron("0 0 7 * * *");
+        properties.getSchedule().setZone("UTC");
+        scheduler.validateConfiguration();
+        Instant now = Instant.parse("2026-11-05T09:00:00Z");
+        Instant missedOccurrence = Instant.parse("2026-11-05T07:00:00Z");
+        Lease lease = new Lease("database-backup.daily", "owner", 4L);
+        // MySQL verified today, Keycloak never: the combined summary reports no complete backup.
+        when(backupService.readEvidenceSummary()).thenReturn(
+                new DatabaseBackupService.BackupEvidenceSummary(Optional.empty(), java.util.Set.of())
+        );
+        when(schedulerLeaseService.tryAcquire("database-backup.daily", Duration.ofHours(1)))
+                .thenReturn(Optional.of(lease));
+
+        scheduler.catchUpAt(now);
+
+        verify(backupService).runCatchUpBackup(missedOccurrence);
+        verify(schedulerLeaseService).release(lease);
+    }
+
+    @Test
     void manualRunIsIdempotentFromVerifiedEvidence() throws Exception {
         properties.getSchedule().setEnabled(false);
         properties.getSchedule().setCatchUpEnabled(false);
