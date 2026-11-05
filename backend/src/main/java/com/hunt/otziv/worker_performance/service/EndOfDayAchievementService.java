@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -269,6 +271,63 @@ public class EndOfDayAchievementService implements FinalWorkerDayResults {
         }
     }
 
+    /**
+     * Recomputes {@code streak_days} of {@code date} and of every later day of the same run with
+     * exactly the rule {@link #saveResult} applies: an achieved or load-free day carries
+     * {@link #calculateStreak}, a failed day with load is 0. The first later failed day with load
+     * ends the run; days after it do not depend on {@code date} and are left untouched.
+     * Sends nothing and records no gamification events; the caller owns the transaction.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<StreakChange> recalculateStreakRun(LocalDate date, String actorRole, Long actorId) {
+        if (date == null || actorId == null || actorRole == null || actorRole.isBlank()) {
+            return List.of();
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("date", date)
+                .addValue("actorRole", actorRole)
+                .addValue("actorId", actorId);
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT result_date, eligible_count, reached_100, streak_days
+                FROM end_of_day_achievement_results
+                WHERE actor_role = :actorRole
+                  AND actor_id = :actorId
+                  AND result_date >= :date
+                ORDER BY result_date
+                FOR UPDATE
+                """, params);
+        List<StreakChange> changes = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            LocalDate rowDate = localDateValue(row.get("result_date"));
+            if (rowDate == null) {
+                continue;
+            }
+            boolean eligible = longValue(row.get("eligible_count")) > 0;
+            boolean achieved = booleanValue(row.get("reached_100"));
+            if (rowDate.isAfter(date) && eligible && !achieved) {
+                break;
+            }
+            int streakDays = achieved || !eligible ? calculateStreak(rowDate, actorRole, actorId) : 0;
+            int previous = (int) longValue(row.get("streak_days"));
+            if (streakDays == previous) {
+                continue;
+            }
+            jdbc.update("""
+                    UPDATE end_of_day_achievement_results
+                    SET streak_days = :streakDays
+                    WHERE result_date = :rowDate
+                      AND actor_role = :actorRole
+                      AND actor_id = :actorId
+                    """, new MapSqlParameterSource()
+                    .addValue("streakDays", streakDays)
+                    .addValue("rowDate", rowDate)
+                    .addValue("actorRole", actorRole)
+                    .addValue("actorId", actorId));
+            changes.add(new StreakChange(rowDate, previous, streakDays));
+        }
+        return List.copyOf(changes);
+    }
+
     private int calculateStreak(LocalDate date, String actorRole, Long actorId) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("date", date)
@@ -492,6 +551,27 @@ public class EndOfDayAchievementService implements FinalWorkerDayResults {
 
     private static double round1(double value) {
         return Math.round(value * 10.0) / 10.0;
+    }
+
+    private static long longValue(Object value) {
+        if (value instanceof Number number) return number.longValue();
+        if (value == null) return 0L;
+        try {
+            return Long.parseLong(value.toString().trim());
+        } catch (NumberFormatException ignored) {
+            return 0L;
+        }
+    }
+
+    private static LocalDate localDateValue(Object value) {
+        if (value instanceof LocalDate date) return date;
+        if (value instanceof java.sql.Date date) return date.toLocalDate();
+        if (value instanceof LocalDateTime dateTime) return dateTime.toLocalDate();
+        return value == null ? null : LocalDate.parse(value.toString().substring(0, 10));
+    }
+
+    /** One streak value rewritten by {@link #recalculateStreakRun}. */
+    public record StreakChange(LocalDate date, int previousStreakDays, int streakDays) {
     }
 
     public record AchievementResult(

@@ -262,6 +262,39 @@
                 </div>
               }
 
+              @if (section.key === 'worker') {
+                @if (dayResult(member); as day) {
+                  <div
+                    class="day-result"
+                    [class.reached]="day.reached100 && !day.excused"
+                    [class.excused]="day.excused"
+                    [class.missed]="!day.reached100"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">
+                      {{ day.excused ? 'verified' : day.reached100 ? 'task_alt' : 'event_busy' }}
+                    </span>
+                    <div class="day-result-text">
+                      <strong>{{ dayResultTitle(day) }}</strong>
+                      <small>{{ dayResultSummary(day) }}</small>
+                      @if (day.excused) {
+                        <small class="day-result-reason" [attr.title]="day.excuseReason">
+                          {{ day.excuseReason }}@if (day.excusedBy) { · {{ day.excusedBy }} }
+                        </small>
+                      }
+                    </div>
+                    @if (day.canExcuse) {
+                      <button type="button" class="day-result-action" (click)="openDayExcuse(member, day, 'excuse')">
+                        Засчитать день
+                      </button>
+                    } @else if (day.canRevoke) {
+                      <button type="button" class="day-result-action secondary" (click)="openDayExcuse(member, day, 'revoke')">
+                        Отменить зачёт
+                      </button>
+                    }
+                  </div>
+                }
+              }
+
               @if (progressMode() === 'day' && section.key === 'worker') {
                 <div class="status-list-slot">
                   @if (statusRows(member).length) {
@@ -430,6 +463,65 @@
       <footer>
         Связь показателей не доказывает причину. Выводы используются только как сигнал для проверки.
       </footer>
+    </section>
+  }
+
+  @if (dayExcuseDialog(); as dialog) {
+    <div class="day-excuse-backdrop" (click)="closeDayExcuse()"></div>
+    <section
+      class="day-excuse-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="day-excuse-title"
+      (keydown.escape)="closeDayExcuse()"
+    >
+      <h2 id="day-excuse-title">
+        {{ dialog.mode === 'excuse' ? 'Засчитать день?' : 'Отменить зачёт дня?' }}
+      </h2>
+      <p class="day-excuse-subject">
+        <strong>{{ dialog.workerName }}</strong>
+        · {{ dialog.day.date | date:'dd.MM.yyyy' }}
+        · выполнено {{ dialog.day.completedCount }} из {{ dialog.day.eligibleCount }}
+      </p>
+      @if (dialog.mode === 'excuse') {
+        <p class="day-excuse-hint">
+          День будет засчитан как выполненный на 100%, серия продолжится, а последующие дни серии будут
+          пересчитаны. Реальные цифры дня останутся в истории. Сообщения в Telegram, очки и награды не
+          создаются. Решение записывается в журнал действий и его можно отменить.
+        </p>
+      } @else {
+        <p class="day-excuse-hint">
+          День вернётся к исходному итогу, серия этого и последующих дней будет пересчитана.
+          Отмена тоже записывается в журнал действий.
+        </p>
+      }
+      <label class="day-excuse-reason">
+        <span>Причина</span>
+        <textarea
+          rows="3"
+          maxlength="500"
+          [disabled]="dayExcuseSaving()"
+          [ngModel]="dayExcuseReason()"
+          (ngModelChange)="dayExcuseReason.set($event)"
+          [placeholder]="dialog.mode === 'excuse'
+            ? 'Например: задача восстановления другой фирмы без аккаунта, выполнить было невозможно'
+            : 'Почему зачёт отменяется'"
+        ></textarea>
+      </label>
+      @if (dayExcuseError()) {
+        <p class="day-excuse-error" role="alert">{{ dayExcuseError() }}</p>
+      }
+      <div class="day-excuse-actions">
+        <button type="button" (click)="closeDayExcuse()" [disabled]="dayExcuseSaving()">Отмена</button>
+        <button
+          type="button"
+          class="primary"
+          (click)="confirmDayExcuse()"
+          [disabled]="dayExcuseSaving() || !dayExcuseReason().trim()"
+        >
+          {{ dayExcuseSaving() ? 'Сохраняю' : dialog.mode === 'excuse' ? 'Засчитать день' : 'Отменить зачёт' }}
+        </button>
+      </div>
     </section>
   }
 </app-admin-layout>

@@ -769,6 +769,89 @@ class ReviewRecoveryTaskServiceImplTest {
     }
 
     @Test
+    void updateTaskAuditsMovedPlannedDateWithCommandActor() {
+        Worker worker = Worker.builder().id(6L).build();
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .id(1160L)
+                .status(ReviewRecoveryTaskStatus.PLANNED)
+                .recoveryText("старый текст")
+                .worker(worker)
+                .archiveOrderId(900L)
+                .archiveReviewId(901L)
+                .scheduledDate(LocalDate.of(2026, 11, 1))
+                .build();
+        LocalDate newDate = LocalDate.of(2026, 11, 2);
+        var auth = new org.springframework.security.authentication.TestingAuthenticationToken(
+                "manager-anna", "", "ROLE_MANAGER");
+        when(taskRepository.findByIdForMutation(1160L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+
+        service.updateTask(1160L, "текст", null, newDate, auth);
+
+        verify(businessAuditService).recordSafely(
+                eq(auth),
+                eq(ReviewRecoveryTaskServiceImpl.ACTION_TASK_DATE_CHANGED),
+                eq("review_recovery_task"),
+                eq(1160L),
+                eq(900L),
+                eq(901L),
+                eq(LocalDate.of(2026, 11, 1)),
+                eq(newDate),
+                eq("Плановая дата задачи восстановления изменена; специалист #6")
+        );
+    }
+
+    @Test
+    void updateTaskWithoutCapturedActorStillAuditsMovedDate() {
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .id(41L)
+                .status(ReviewRecoveryTaskStatus.PLANNED)
+                .recoveryText("старый текст")
+                .scheduledDate(LocalDate.of(2026, 5, 14))
+                .build();
+        when(taskRepository.findByIdForMutation(41L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+
+        service.updateTask(41L, "текст", null, LocalDate.of(2026, 5, 20));
+
+        verify(businessAuditService).recordSafely(
+                eq(ReviewRecoveryTaskServiceImpl.ACTION_TASK_DATE_CHANGED),
+                eq("review_recovery_task"),
+                eq(41L),
+                isNull(),
+                isNull(),
+                eq(LocalDate.of(2026, 5, 14)),
+                eq(LocalDate.of(2026, 5, 20)),
+                eq("Плановая дата задачи восстановления изменена")
+        );
+    }
+
+    @Test
+    void updateTaskWithUnchangedOrMissingDateWritesNoDateAudit() {
+        LocalDate date = LocalDate.of(2026, 5, 14);
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .id(42L)
+                .status(ReviewRecoveryTaskStatus.PLANNED)
+                .recoveryText("старый текст")
+                .scheduledDate(date)
+                .build();
+        when(taskRepository.findByIdForMutation(42L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+
+        service.updateTask(42L, "текст", null, date);
+        service.updateTask(42L, "текст 2", null, null);
+
+        assertEquals(date, task.getScheduledDate());
+        verify(businessAuditService, never()).recordSafely(
+                eq(ReviewRecoveryTaskServiceImpl.ACTION_TASK_DATE_CHANGED),
+                any(), any(), any(), any(), any(), any(), any());
+        verify(businessAuditService, never()).recordSafely(
+                any(org.springframework.security.core.Authentication.class),
+                eq(ReviewRecoveryTaskServiceImpl.ACTION_TASK_DATE_CHANGED),
+                any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void getTaskUsesReadOnlyLookupWithoutPessimisticWriteLock() {
         ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(40L).build();
         when(taskRepository.findById(40L)).thenReturn(Optional.of(task));

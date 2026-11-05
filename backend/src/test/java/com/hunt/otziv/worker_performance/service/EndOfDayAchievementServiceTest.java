@@ -348,4 +348,86 @@ class EndOfDayAchievementServiceTest {
 
         verify(telegramService, never()).sendMessage(anyLong(), anyString(), anyString());
     }
+
+    @Test
+    void recalculatesStreakOfCountedDayAndRestOfRunOnly() {
+        // 10-30 ✓, 10-31 ✓, 11-01 counted ✓ (was 0), 11-02 ✓, 11-03 ✓, 11-04 failed, 11-05 ✓
+        Map<LocalDate, Object[]> days = new java.util.TreeMap<>();
+        days.put(LocalDate.of(2026, 10, 30), new Object[]{20L, true, 1});
+        days.put(LocalDate.of(2026, 10, 31), new Object[]{29L, true, 2});
+        days.put(LocalDate.of(2026, 11, 1), new Object[]{29L, true, 0});
+        days.put(LocalDate.of(2026, 11, 2), new Object[]{33L, true, 1});
+        days.put(LocalDate.of(2026, 11, 3), new Object[]{39L, true, 2});
+        days.put(LocalDate.of(2026, 11, 4), new Object[]{30L, false, 0});
+        days.put(LocalDate.of(2026, 11, 5), new Object[]{46L, true, 1});
+        LocalDate counted = LocalDate.of(2026, 11, 1);
+        stubAchievementTable(days);
+
+        List<EndOfDayAchievementService.StreakChange> changes = service.recalculateStreakRun(
+                counted, EndOfDayAchievementService.ROLE_WORKER, 6L);
+
+        assertEquals(List.of(
+                new EndOfDayAchievementService.StreakChange(counted, 0, 3),
+                new EndOfDayAchievementService.StreakChange(LocalDate.of(2026, 11, 2), 1, 4),
+                new EndOfDayAchievementService.StreakChange(LocalDate.of(2026, 11, 3), 2, 5)
+        ), changes);
+        ArgumentCaptor<MapSqlParameterSource> updates = ArgumentCaptor.forClass(MapSqlParameterSource.class);
+        verify(jdbc, org.mockito.Mockito.times(3)).update(anyString(), updates.capture());
+        assertEquals(List.of(3, 4, 5), updates.getAllValues().stream()
+                .map(params -> params.getValue("streakDays")).toList());
+        org.mockito.Mockito.verifyNoInteractions(telegramService, notificationMediaDeliveryService, gamificationEventService);
+    }
+
+    @Test
+    void undoingCountedDayRestartsTheFollowingRun() {
+        Map<LocalDate, Object[]> days = new java.util.TreeMap<>();
+        days.put(LocalDate.of(2026, 10, 31), new Object[]{29L, true, 2});
+        days.put(LocalDate.of(2026, 11, 1), new Object[]{29L, false, 3});
+        days.put(LocalDate.of(2026, 11, 2), new Object[]{33L, true, 4});
+        days.put(LocalDate.of(2026, 11, 3), new Object[]{0L, false, 4});
+        days.put(LocalDate.of(2026, 11, 4), new Object[]{30L, true, 5});
+        stubAchievementTable(days);
+
+        List<EndOfDayAchievementService.StreakChange> changes = service.recalculateStreakRun(
+                LocalDate.of(2026, 11, 1), EndOfDayAchievementService.ROLE_WORKER, 6L);
+
+        // A load-free day carries the run without counting itself, exactly as saveResult does.
+        assertEquals(List.of(
+                new EndOfDayAchievementService.StreakChange(LocalDate.of(2026, 11, 1), 3, 0),
+                new EndOfDayAchievementService.StreakChange(LocalDate.of(2026, 11, 2), 4, 1),
+                new EndOfDayAchievementService.StreakChange(LocalDate.of(2026, 11, 3), 4, 1),
+                new EndOfDayAchievementService.StreakChange(LocalDate.of(2026, 11, 4), 5, 2)
+        ), changes);
+    }
+
+    /** Serves the run query and calculateStreak from an in-memory copy of the achievement rows. */
+    private void stubAchievementTable(Map<LocalDate, Object[]> days) {
+        when(jdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            MapSqlParameterSource params = invocation.getArgument(1);
+            LocalDate date = (LocalDate) params.getValue("date");
+            if (sql.contains("FOR UPDATE")) {
+                return days.entrySet().stream()
+                        .filter(entry -> !entry.getKey().isBefore(date))
+                        .map(entry -> Map.<String, Object>of(
+                                "result_date", java.sql.Date.valueOf(entry.getKey()),
+                                "eligible_count", entry.getValue()[0],
+                                "reached_100", entry.getValue()[1],
+                                "streak_days", entry.getValue()[2]))
+                        .toList();
+            }
+            List<Map<String, Object>> rows = new java.util.ArrayList<>();
+            days.entrySet().stream()
+                    .filter(entry -> !entry.getKey().isAfter(date) && (long) entry.getValue()[0] > 0)
+                    .sorted(Map.Entry.<LocalDate, Object[]>comparingByKey().reversed())
+                    .forEach(entry -> rows.add(Map.of("reached_100", entry.getValue()[1])));
+            return rows;
+        });
+        when(jdbc.update(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            MapSqlParameterSource params = invocation.getArgument(1);
+            Object[] day = days.get((LocalDate) params.getValue("rowDate"));
+            day[2] = params.getValue("streakDays");
+            return 1;
+        });
+    }
 }

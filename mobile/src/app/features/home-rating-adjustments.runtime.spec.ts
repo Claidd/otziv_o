@@ -9,6 +9,7 @@ import { ContractorAccrualHistoryApi } from '../core/contractor-accrual-history.
 import { DictionariesApi } from '../core/dictionaries.api';
 import { ManagerReportReviewAccessService } from '../core/manager-report-review-access.service';
 import { ManualPaymentTasksApi } from '../core/manual-payment-tasks.api';
+import { WorkerDayResultsApi } from '../core/worker-day-results.api';
 import { HomePage } from './home.page';
 
 const score: ScoreResponse = {
@@ -47,7 +48,8 @@ describe('mobile rating accrual shortcuts', () => {
       { provide: ToastController, useValue: {} },
       { provide: ManualPaymentTasksApi, useValue: {} },
       { provide: ContractorAccrualHistoryApi, useValue: {} },
-      { provide: DictionariesApi, useValue: {} }
+      { provide: DictionariesApi, useValue: {} },
+      { provide: WorkerDayResultsApi, useValue: {} }
     ] });
     TestBed.overrideComponent(HomePage, { set: { template: '', imports: [] } });
     fixture = TestBed.createComponent(HomePage);
