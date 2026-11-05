@@ -11,6 +11,11 @@ spec = importlib.util.spec_from_file_location('disk_maintenance', Path(__file__)
 maintenance = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(maintenance)
 
+PREPARED = '127.0.0.1:51738/otziv-prepared/ci-'
+CURRENT = 'sha256:' + 'a' * 64
+PREVIOUS = 'sha256:' + 'b' * 64
+LIVE_WEB = 'sha256:' + 'c' * 64
+
 
 class DiskMaintenanceTests(unittest.TestCase):
     def test_threshold_cooldown_and_emergency_escalation(self):
@@ -49,21 +54,95 @@ class DiskMaintenanceTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 maintenance.purge_mysql('my-mysql', 24)
 
+    @staticmethod
+    def deployment(folder, live=CURRENT, rollback=(PREVIOUS,)):
+        root = Path(folder)
+        (root / 'docker-compose.yaml').write_text(f'services:\n  app:\n    image: ${{APP_IMAGE:-{PREPARED}backend@{live}}}\n')
+        (root / '.env').write_text(f'WEB_IMAGE={PREPARED}web@{LIVE_WEB}\n')
+        for index, digest in enumerate(rollback):
+            point = root / '.deploy-backups' / f'release-{index}' / 'rollout-1'
+            point.mkdir(parents=True)
+            (point / 'docker-compose.yaml').write_text(f'image: ${{APP_IMAGE:-{PREPARED}backend@{digest}}}\n')
+        return root
+
+    def run_cleanup(self, root, images, containers=()):
+        responses = ['\n'.join(item['Id'] for item in images), json.dumps(images),
+                     '\n'.join('c' + str(index) for index, _ in enumerate(containers)),
+                     *([json.dumps([{'Image': image} for image in containers])] if containers else []),
+                     *[''] * 20]
+        with patch.object(maintenance, 'command', side_effect=responses) as run:
+            maintenance.remove_unreferenced_images(root)
+        return [call.args[0][3] for call in run.call_args_list if call.args[0][:3] == ['docker', 'image', 'rm']]
+
     def test_only_old_images_without_tags_digests_or_containers_are_removed(self):
         images = [
-            {'Id': 'old-cache', 'Created': '2020-01-01T00:00:00Z'},
+            {'Id': 'old-cache', 'Created': '2020-01-01T00:00:00.123456789Z'},
             {'Id': 'tagged', 'Created': '2020-01-01T00:00:00Z', 'RepoTags': ['rollback:old']},
             {'Id': 'digest', 'Created': '2020-01-01T00:00:00Z', 'RepoDigests': ['rollback@sha256:abc']},
             {'Id': 'stopped', 'Created': '2020-01-01T00:00:00Z'},
-            {'Id': 'new-cache', 'Created': '2099-01-01T00:00:00Z'},
+            {'Id': 'new-cache', 'Created': '2099-01-01T00:00:00.5+00:00'},
         ]
-        with patch.object(maintenance, 'command', side_effect=[
-            '\n'.join(item['Id'] for item in images), json.dumps(images), 'container1',
-            json.dumps([{'Image': 'stopped'}]), '',
-        ]) as run:
-            maintenance.remove_unreferenced_images()
-        self.assertEqual(run.call_args.args[0], ['docker', 'image', 'rm', 'old-cache'])
-        self.assertEqual(run.call_count, 5)
+        with tempfile.TemporaryDirectory() as folder:
+            removed = self.run_cleanup(self.deployment(folder), images, containers=['stopped'])
+        self.assertEqual(removed, ['old-cache'])
+
+    def test_superseded_release_images_are_removed_but_live_and_rollback_images_kept(self):
+        old_backend = 'sha256:' + 'd' * 64
+        old_security = 'sha256:' + 'e' * 64
+        images = [
+            {'Id': 'running', 'Created': '2020-01-01T00:00:00Z',
+             'RepoDigests': [f'{PREPARED}backend@sha256:' + '9' * 64]},
+            {'Id': 'live', 'Created': '2020-01-01T00:00:00Z', 'RepoDigests': [f'{PREPARED}backend@{CURRENT}']},
+            {'Id': 'live-env', 'Created': '2020-01-01T00:00:00Z',
+             'RepoDigests': [f'127.0.0.1:62289/otziv-prepared/ci-web@{LIVE_WEB}']},
+            {'Id': 'rollback', 'Created': '2020-01-01T00:00:00Z',
+             'RepoDigests': [f'127.0.0.1:62289/otziv-prepared/ci-backend@{PREVIOUS}']},
+            {'Id': 'old-backend', 'Created': '2020-01-01T00:00:00Z',
+             'RepoDigests': [f'{PREPARED}backend@{old_backend}', f'127.0.0.1:49154/otziv-prepared/ci-backend@{old_backend}']},
+            {'Id': 'old-security', 'Created': '2099-01-01T00:00:00Z',
+             'RepoDigests': [f'ghcr.io/claidd/otziv-security@{old_security}']},
+            {'Id': 'transport-registry', 'Created': '2020-01-01T00:00:00Z',
+             'RepoDigests': ['registry@sha256:' + '1' * 64]},
+            {'Id': 'tagged-release', 'Created': '2020-01-01T00:00:00Z', 'RepoTags': ['otziv-backend-ci:latest'],
+             'RepoDigests': [f'{PREPARED}backend@sha256:' + '2' * 64]},
+            {'Id': 'mixed', 'Created': '2020-01-01T00:00:00Z',
+             'RepoDigests': [f'{PREPARED}backend@sha256:' + '3' * 64, 'mysql@sha256:' + '3' * 64]},
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            removed = self.run_cleanup(self.deployment(folder), images, containers=['running'])
+        self.assertEqual(removed, [f'{PREPARED}backend@{old_backend}',
+                                   f'127.0.0.1:49154/otziv-prepared/ci-backend@{old_backend}',
+                                   f'ghcr.io/claidd/otziv-security@{old_security}'])
+
+    def test_large_dump_files_are_not_scanned_for_rollback_references(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.deployment(folder)
+            dump = root / '.deploy-backups' / 'release-0' / 'pre-deploy.sql.gz.enc'
+            dump.write_text(PREVIOUS + ' ' + 'x' * maintenance.REFERENCE_FILE_LIMIT)
+            (root / '.deploy-backups' / 'release-0' / 'rollout-1' / 'docker-compose.yaml').unlink()
+            self.assertNotIn(PREVIOUS, maintenance.rollback_digests(root))
+            self.assertIn(CURRENT, maintenance.rollback_digests(root))
+
+    def test_missing_live_compose_or_rollback_points_preserve_release_images(self):
+        old = {'Id': 'old-backend', 'Created': '2020-01-01T00:00:00Z',
+               'RepoDigests': [f'{PREPARED}backend@sha256:' + 'd' * 64]}
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.deployment(folder)
+            (root / 'docker-compose.yaml').write_text('services: {}\n')
+            with self.assertRaises(RuntimeError):
+                self.run_cleanup(root, [old])
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.deployment(folder, rollback=())
+            with self.assertRaises(RuntimeError):
+                self.run_cleanup(root, [old])
+
+    def test_docker_nanosecond_creation_times_parse_on_older_python(self):
+        self.assertEqual(maintenance.created_at('2026-11-05T00:39:12.123456789Z').isoformat(),
+                         '2026-11-05T00:39:12.123456+00:00')
+        self.assertEqual(maintenance.created_at('2026-11-05T00:39:12+08:00').isoformat(),
+                         '2026-11-05T00:39:12+08:00')
+        with self.assertRaises(ValueError):
+            maintenance.created_at('yesterday')
 
     def test_no_more_cleanup_after_target_reached(self):
         args = argparse.Namespace(root=Path('/docker'), target_percent=75,
