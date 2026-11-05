@@ -37,12 +37,15 @@ class TeamPatternSnapshotJobTest {
         order.verify(transactions).getTransaction(any());
         order.verify(leases).holdForTransaction(eq(lease), any());
         order.verify(leases).projectionCursor(eq(lease), any());
-        order.verify(analysis, times(2)).rebuildSnapshots(anyList(), any());
-        order.verify(snapshots).cleanup(any());
+        LocalDate month = LocalDate.now(ZoneId.of("Asia/Irkutsk")).withDayOfMonth(1);
+        order.verify(analysis).rebuildSnapshots(anyList(), eq(month));
+        order.verify(snapshots).cleanup(month);
         order.verify(leases).advanceProjectionCursor(eq(lease), any(), eq(0L));
         order.verify(transactions).commit(any());
         order.verify(leases).release(lease);
         assertThat(metrics.get("otziv.projection.refresh").tag("result", "success").counter().count()).isEqualTo(1);
+        // PERF-21: the closed previous month is not rebuilt on every pass.
+        verify(analysis, never()).rebuildSnapshots(anyList(), eq(month.minusMonths(1)));
     }
 
     @Test void failedRefreshRollsBackWithoutAdvancingCursorOrRecordingSuccess() {
