@@ -1817,6 +1817,29 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         refreshInvoiceAmounts(invoice, items, preparedAmounts, preparedRecovery, null);
     }
 
+    /**
+     * Read-model refresh of many invoices (account list) with the board's
+     * request-local batch inputs: order amounts, active recovery and payment
+     * facts are read once for all invoices instead of once per order/invoice.
+     * A missing prepared amount still falls back to the single fresh read.
+     */
+    void refreshInvoiceAmounts(Collection<CommonInvoice> invoices, Map<Long, List<CommonInvoiceOrder>> itemsByInvoiceId) {
+        if (invoices == null || invoices.isEmpty()) {
+            return;
+        }
+        List<Order> orders = invoices.stream()
+                .flatMap(invoice -> itemsByInvoiceId.getOrDefault(invoice.getId(), List.of()).stream())
+                .map(CommonInvoiceOrder::getOrder).filter(Objects::nonNull).toList();
+        Map<Long, BigDecimal> preparedAmounts = orders.isEmpty() ? Map.of() : badReviewTaskService.prepareOrderAmounts(orders).payableSums();
+        Map<Long, Boolean> preparedRecovery = prepareBoardRecoveryState(orders);
+        Map<Long, BoardPaymentState> preparedPayments = prepareBoardPaymentState(
+                invoices.stream().map(CommonInvoice::getId).filter(Objects::nonNull).distinct().toList());
+        for (CommonInvoice invoice : invoices) {
+            refreshInvoiceAmounts(invoice, itemsByInvoiceId.getOrDefault(invoice.getId(), List.of()),
+                    preparedAmounts, preparedRecovery, preparedPayments.get(invoice.getId()));
+        }
+    }
+
     void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items,
                                Map<Long, BigDecimal> preparedAmounts, Map<Long, Boolean> preparedRecovery,
                                BoardPaymentState preparedPayment) {
