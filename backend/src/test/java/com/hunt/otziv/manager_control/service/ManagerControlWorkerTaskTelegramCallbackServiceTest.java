@@ -85,7 +85,8 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
                 riskIncidentRepository,
                 userRepository,
                 telegramService,
-                notificationMediaDeliveryService
+                notificationMediaDeliveryService,
+                new ManagerControlTransactionRunner()
         );
     }
 
@@ -143,7 +144,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
 
         when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
         when(userRepository.findAllByWorkerTelegramGroupChatIdOrderById(-100123L)).thenReturn(List.of(worker));
-        when(concreteItemRepository.findById(31L)).thenReturn(Optional.of(item));
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(item));
         when(reviewRepository.findById(88L)).thenReturn(Optional.of(review));
         when(concreteItemRepository.save(any(ManagerDailyControlConcreteItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -242,6 +243,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         item.setWorkerExplanationRequestedAt(sentAt);
         item.setWorkerNotificationSentAt(sentAt);
 
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
         when(notificationMediaDeliveryService.send(
@@ -280,6 +282,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         item.setWorkerExplanationPromptedAt(sentAt.plusMinutes(5));
         item.setWorkerNotificationSentAt(sentAt);
 
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
         when(notificationMediaDeliveryService.send(
@@ -315,6 +318,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
         item.setWorkerExplanationRequestedAt(sentAt);
         item.setWorkerNotificationSentAt(sentAt);
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
 
         boolean sent = service.remindPendingExplanation(item, sentAt.plusHours(3));
 
@@ -322,6 +326,148 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         verify(telegramService, never()).sendMessage(anyLong(), any());
         verify(telegramService, never()).sendMessageWithInlineKeyboard(anyLong(), any(), any(), any());
         verify(notificationMediaDeliveryService, never()).send(any(), anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void pendingExplanationOfCardWaitingInFollowUpGetsRepeatReminderOnlyOncePerInterval() {
+        User worker = worker();
+        WorkerRiskIncident incident = riskIncident();
+        ManagerDailyControlConcreteItem item = riskConcreteItem();
+        LocalDateTime sentAt = LocalDateTime.of(2026, 7, 15, 10, 0);
+        item.setControl(control(sentAt.toLocalDate(), null));
+        item.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        item.setWorkerExplanationRequestedAt(sentAt);
+        item.setWorkerNotificationSentAt(sentAt);
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
+        when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
+        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(2L), any(), eq(null), any())).thenReturn(true);
+
+        assertTrue(service.remindPendingExplanation(30L, sentAt.plusHours(3)));
+        // A second pass right after (another instance or the next tick) sees the claim and does not resend.
+        assertFalse(service.remindPendingExplanation(30L, sentAt.plusHours(3).plusMinutes(5)));
+
+        verify(notificationMediaDeliveryService, org.mockito.Mockito.times(1)).send(any(), anyLong(), any(), any(), any(), any());
+        assertEquals(1, item.getWorkerReminderCount());
+        assertEquals(sentAt.plusHours(3), item.getWorkerReminderSentAt());
+        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, item.getStatus());
+    }
+
+    @Test
+    void failedReminderReleasesItsClaimSoTheNextPassRetries() {
+        User worker = worker();
+        WorkerRiskIncident incident = riskIncident();
+        ManagerDailyControlConcreteItem item = riskConcreteItem();
+        LocalDateTime sentAt = LocalDateTime.of(2026, 7, 15, 10, 0);
+        item.setWorkerExplanationRequestedAt(sentAt);
+        item.setWorkerNotificationSentAt(sentAt);
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
+        when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
+        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(2L), any(), eq(null), any())).thenReturn(false);
+
+        assertFalse(service.remindPendingExplanation(30L, sentAt.plusHours(3)));
+
+        assertEquals(0, item.getWorkerReminderCount());
+        assertEquals(null, item.getWorkerReminderSentAt());
+    }
+
+    @Test
+    void reminderSkipsCardsOfAnEarlierControlDayAndAnsweredRequests() {
+        ManagerDailyControlConcreteItem previousDay = riskConcreteItem();
+        LocalDateTime sentAt = LocalDateTime.of(2026, 7, 15, 22, 0);
+        previousDay.setControl(control(sentAt.toLocalDate(), null));
+        previousDay.setWorkerExplanationRequestedAt(sentAt);
+        previousDay.setWorkerNotificationSentAt(sentAt);
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(previousDay));
+        assertFalse(service.remindPendingExplanation(30L, sentAt.plusHours(3)));
+
+        ManagerDailyControlConcreteItem answered = generalConcreteItem();
+        answered.setWorkerExplanationRequestedAt(sentAt);
+        answered.setWorkerNotificationSentAt(sentAt);
+        answered.setWorkerExplanationAt(sentAt.plusHours(1));
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(answered));
+        assertFalse(service.remindPendingExplanation(31L, sentAt.plusHours(3)));
+
+        verify(notificationMediaDeliveryService, never()).send(any(), anyLong(), any(), any(), any(), any());
+        verify(concreteItemRepository, never()).save(any());
+    }
+
+    @Test
+    void lateExplanationIsRecordedWithoutReopeningResolvedOrPastDayCards() {
+        User worker = worker();
+        Worker reviewWorker = new Worker();
+        reviewWorker.setUser(worker);
+        Review review = new Review();
+        review.setWorker(reviewWorker);
+        com.hunt.otziv.manager_control.model.ManagerDailyControlItem parent = new com.hunt.otziv.manager_control.model.ManagerDailyControlItem();
+        parent.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        ManagerDailyControlConcreteItem item = generalConcreteItem();
+        item.setParentItem(parent);
+        item.setControl(control(java.time.LocalDate.now().minusDays(3), LocalDateTime.now().minusDays(3)));
+        item.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        item.setActionType(com.hunt.otziv.manager_control.model.ManagerDailyControlActionType.ACTION_TAKEN);
+        item.setWorkerExplanationRequestedAt(LocalDateTime.now().minusDays(3));
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
+        when(userRepository.findAllByWorkerTelegramGroupChatIdOrderById(-100123L)).thenReturn(List.of(worker));
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(item));
+        when(reviewRepository.findById(88L)).thenReturn(Optional.of(review));
+        when(concreteItemRepository.save(any(ManagerDailyControlConcreteItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertTrue(service.handleWorkerGroupTextMessage(-100123L, 444L, "Код запроса: task-31", true, "Опоздал с ответом"));
+
+        assertEquals("Опоздал с ответом", item.getWorkerExplanation());
+        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, item.getStatus());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, parent.getStatus());
+
+        ManagerDailyControlConcreteItem resolvedToday = generalConcreteItem();
+        resolvedToday.setParentItem(parent);
+        resolvedToday.setControl(control(java.time.LocalDate.now(), null));
+        resolvedToday.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        resolvedToday.setWorkerExplanationRequestedAt(LocalDateTime.now().minusHours(4));
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(resolvedToday));
+
+        assertTrue(service.handleWorkerGroupTextMessage(-100123L, 444L, "Код запроса: task-31", true, "Уже исправлено"));
+
+        assertEquals("Уже исправлено", resolvedToday.getWorkerExplanation());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, resolvedToday.getStatus());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, parent.getStatus());
+    }
+
+    @Test
+    void explanationReopensTodaysWaitingCardForManagerReview() {
+        User worker = worker();
+        Worker reviewWorker = new Worker();
+        reviewWorker.setUser(worker);
+        Review review = new Review();
+        review.setWorker(reviewWorker);
+        com.hunt.otziv.manager_control.model.ManagerDailyControlItem parent = new com.hunt.otziv.manager_control.model.ManagerDailyControlItem();
+        parent.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        ManagerDailyControlConcreteItem item = generalConcreteItem();
+        item.setParentItem(parent);
+        item.setControl(control(java.time.LocalDate.now(), null));
+        item.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        item.setFollowUpAt(LocalDateTime.now().plusHours(2));
+        item.setWorkerExplanationRequestedAt(LocalDateTime.now().minusHours(1));
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
+        when(userRepository.findAllByWorkerTelegramGroupChatIdOrderById(-100123L)).thenReturn(List.of(worker));
+        when(concreteItemRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(item));
+        when(reviewRepository.findById(88L)).thenReturn(Optional.of(review));
+        when(concreteItemRepository.save(any(ManagerDailyControlConcreteItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertTrue(service.handleWorkerGroupTextMessage(-100123L, 444L, "Код запроса: task-31", true, "Сделаю сегодня"));
+
+        assertEquals(ManagerDailyControlItemStatus.OPEN, item.getStatus());
+        assertEquals(null, item.getFollowUpAt());
+        assertEquals(ManagerDailyControlItemStatus.OPEN, parent.getStatus());
+    }
+
+    private com.hunt.otziv.manager_control.model.ManagerDailyControl control(java.time.LocalDate date, LocalDateTime closedAt) {
+        com.hunt.otziv.manager_control.model.ManagerDailyControl control = new com.hunt.otziv.manager_control.model.ManagerDailyControl();
+        control.setId(900L);
+        control.setControlDate(date);
+        control.setClosedAt(closedAt);
+        return control;
     }
 
     private CallbackQuery callbackFromGroup(long groupChatId, long actorTelegramId, String data) {

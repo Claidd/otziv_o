@@ -77,6 +77,30 @@ class MaxBotUpdateServiceTest {
     }
 
     @Test
+    void startCommandInsideAGroupBindsThatGroup() throws Exception {
+        MaxBotUpdateService service = service();
+        JsonNode update = MAPPER.readTree("""
+                {
+                  "update_type": "message_created",
+                  "message": {
+                    "sender": { "user_id": 303 },
+                    "recipient": { "chat_id": -74761808437879, "chat_type": "chat" },
+                    "body": { "text": "/start c235_Fvq8FSz2augL" }
+                  }
+                }
+                """);
+        when(maxGroupLinkService.handleGroupStartCommand(-74761808437879L, 303L, "c235_Fvq8FSz2augL"))
+                .thenReturn(Optional.of("bound"));
+
+        service.handleUpdate(update);
+
+        verify(maxGroupLinkService).handleGroupStartCommand(-74761808437879L, 303L, "c235_Fvq8FSz2augL");
+        verify(maxGroupLinkService, org.mockito.Mockito.never()).handleBotStarted(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(maxBotClient).sendMessageToChat(-74761808437879L, "bound");
+    }
+
+    @Test
     void ignoresMessageCreatedWithoutStartPayload() throws Exception {
         MaxBotUpdateService service = service();
         JsonNode update = MAPPER.readTree("""

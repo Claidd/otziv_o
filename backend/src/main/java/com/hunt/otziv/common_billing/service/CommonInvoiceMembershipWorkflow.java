@@ -156,10 +156,21 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         }
         CommonInvoiceOrder item = optionalItem.get();
         CommonInvoice invoice = item.getInvoice();
-        if (item.isPaid() || invoice.getStatus() == CommonInvoiceStatus.PAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED) {
+        // An archived cycle was never sent or paid; restoring it recalculates every amount, so a
+        // review edit on its restored orders must not turn it into a "supplement needed" invoice.
+        if (item.isPaid() || invoice.getStatus() == CommonInvoiceStatus.PAID || invoice.getStatus() == CommonInvoiceStatus.BAN
+                || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
             return true;
         }
         if (invoice.getStatus() != CommonInvoiceStatus.COLLECTING || invoice.getSentAt() != null || invoice.getClientReportedAt() != null || hasFrozenCommonPaymentRoute(invoice)) {
+            if (payableUnchanged(item)) {
+                // Re-created reviews with the same sum do not change what the client was billed.
+                return true;
+            }
+            if (invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION) {
+                // Keep the first recorded reason and the status to return to.
+                return true;
+            }
             CommonInvoiceStatus previous = invoice.getStatus();
             invoice.setPreviousStatus(previous == null ? null : previous.name());
             invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
@@ -936,6 +947,18 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
 
     void recalculateInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         settlementService.recalculateInvoice(invoice, items);
+    }
+
+    private boolean payableUnchanged(CommonInvoiceOrder item) {
+        if (item == null || item.getOrder() == null) {
+            return false;
+        }
+        try {
+            return amountKopecks(payableSum(item.getOrder())) == item.getAmountKopecks();
+        } catch (RuntimeException e) {
+            // Unknown amount: keep the conservative path (manual supplement check).
+            return false;
+        }
     }
 
     Long payableKopecksOrMarkAttention(CommonInvoice invoice, Order order) {

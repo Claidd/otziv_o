@@ -10,6 +10,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -62,6 +63,72 @@ class ManagerControlReminderWorkflowTest {
         verify(transactions, times(1)).rollback(any());
         verify(transactions, times(2)).commit(any());
         verifyNoInteractions(telegram);
+    }
+
+    @Test
+    void openPreviousDayIsRefreshedForItsAutomaticCloseBeforeFiveWithoutOwnerNotice() {
+        Manager only = manager(1L);
+        when(managers.findAllWithUserAndImage()).thenReturn(List.of(only));
+        when(transactions.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        LocalDateTime night = LocalDateTime.of(2026, 11, 5, 3, 30);
+        ManagerDailyControl yesterday = new ManagerDailyControl();
+        yesterday.setId(78L);
+        yesterday.setManager(only);
+        yesterday.setControlDate(night.toLocalDate().minusDays(1));
+        when(controls.findByControlDateAndManager(night.toLocalDate().minusDays(1), only)).thenReturn(Optional.of(yesterday));
+
+        workflow.runTestModeNotifications(night);
+
+        verify(dailySnapshot).managerControl(only, night.toLocalDate(), null, true, false);
+        // The synchronization of the open previous day ends with its automatic close when nothing blocks it.
+        verify(dailySnapshot).managerControl(only, night.toLocalDate().minusDays(1), null, true, false);
+        assertThat(yesterday.getEveningNotificationSentAt()).isNull();
+        verifyNoInteractions(telegram, reminders);
+    }
+
+    @Test
+    void closedPreviousDayIsNeitherRefreshedNorReported() {
+        Manager only = manager(1L);
+        when(managers.findAllWithUserAndImage()).thenReturn(List.of(only));
+        when(transactions.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        LocalDate day = LocalDate.of(2026, 11, 4);
+        ManagerDailyControl closed = new ManagerDailyControl();
+        closed.setId(79L);
+        closed.setManager(only);
+        closed.setControlDate(day);
+        closed.setClosedAt(day.atTime(21, 0));
+        when(controls.findByControlDateAndManager(day, only)).thenReturn(Optional.of(closed));
+
+        workflow.runTestModeNotifications(day.plusDays(1).atTime(3, 30));
+        workflow.runTestModeNotifications(day.plusDays(1).atTime(6, 0));
+
+        verify(dailySnapshot, never()).managerControl(eq(only), eq(day), any(), anyBoolean(), anyBoolean());
+        verify(controls, never()).save(closed);
+        verifyNoInteractions(telegram, reminders);
+    }
+
+    @Test
+    void unfinishedPreviousDayIsReportedOnceFromFive() {
+        Manager only = manager(1L);
+        when(managers.findAllWithUserAndImage()).thenReturn(List.of(only));
+        when(transactions.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        LocalDate day = LocalDate.of(2026, 11, 4);
+        ManagerDailyControl unfinished = new ManagerDailyControl();
+        unfinished.setId(80L);
+        unfinished.setManager(only);
+        unfinished.setControlDate(day);
+        when(controls.findByControlDateAndManager(day, only)).thenReturn(Optional.of(unfinished));
+        User owner = new User();
+        owner.setId(5L);
+        owner.setTelegramChatId(500L);
+        when(users.findAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
+        when(users.findAllOwners("ROLE_ADMIN")).thenReturn(List.of());
+
+        workflow.runTestModeNotifications(day.plusDays(1).atTime(5, 10));
+        workflow.runTestModeNotifications(day.plusDays(1).atTime(5, 20));
+
+        verify(telegram, times(1)).sendMessage(eq(500L), startsWith("Просрочен конец дня"));
+        verify(dailySnapshot, never()).managerControl(eq(only), eq(day), any(), anyBoolean(), anyBoolean());
     }
 
     @Test

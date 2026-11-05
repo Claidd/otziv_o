@@ -30,13 +30,17 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ManagerControlWorkerTaskTelegramCallbackService {
 
     public static final String CALLBACK_PREFIX = "mc-task-ack:";
@@ -57,6 +61,7 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
     private final UserRepository userRepository;
     private final TelegramService telegramService;
     private final NotificationMediaDeliveryService notificationMediaDeliveryService;
+    private final ManagerControlTransactionRunner transactions;
 
     public static InlineKeyboardButton acceptButton(Long concreteItemId) {
         InlineKeyboardButton button = new InlineKeyboardButton();
@@ -161,7 +166,8 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         if (itemId == null) {
             return false;
         }
-        ManagerDailyControlConcreteItem item = concreteItemRepository.findById(itemId).orElse(null);
+        // Locked: the repeat-reminder pass and manager actions write the same card.
+        ManagerDailyControlConcreteItem item = concreteItemRepository.findByIdForUpdate(itemId).orElse(null);
         if (item == null || isRiskTask(item)
                 || item.getWorkerExplanationRequestedAt() == null
                 || item.getWorkerExplanationAt() != null) {
@@ -171,22 +177,58 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         if (itemWorker == null || !Objects.equals(itemWorker.getId(), groupWorker.getId())) {
             return false;
         }
+        LocalDateTime now = LocalDateTime.now();
         item.setWorkerExplanation(limit(messageText, 1000));
-        item.setWorkerExplanationAt(LocalDateTime.now());
+        item.setWorkerExplanationAt(now);
         item.setWorkerExplanationByUserId(actor.getId());
         item.setWorkerNotificationFailureReason(null);
-        item.setStatus(ManagerDailyControlItemStatus.OPEN);
-        item.setActionType(null);
-        item.setResolvedAt(null);
-        item.setFollowUpAt(null);
-        reopenParentForManagerReview(item);
+        if (reopensForManagerReview(item, now)) {
+            item.setStatus(ManagerDailyControlItemStatus.OPEN);
+            item.setActionType(null);
+            item.setResolvedAt(null);
+            item.setFollowUpAt(null);
+            reopenParentForManagerReview(item);
+        }
         concreteItemRepository.save(item);
         personalReminderService.deleteSystemReminderBySource(groupWorker, SOURCE_WORKER_TASK_REQUEST, item.getId());
-        telegramService.sendMessage(chatId,
+        String title = withoutFinancialInfo(item.getTitle());
+        afterCommit(() -> telegramService.sendMessage(chatId,
                 "🟢 ОТВЕТ ПОЛУЧЕН"
                         + "\nПояснение принято. Менеджер увидит его в карточке контроля."
-                        + "\nКарточка: " + withoutFinancialInfo(item.getTitle()));
+                        + "\nКарточка: " + title));
         return true;
+    }
+
+    /**
+     * A late explanation is always recorded, but it reopens a card for the manager only while the
+     * card is still unresolved and its control day is current; a closed or past day stays closed.
+     */
+    private boolean reopensForManagerReview(ManagerDailyControlConcreteItem item, LocalDateTime now) {
+        if (item.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
+            return false;
+        }
+        return item.getControl() == null || ManagerControlDayLifecycle.isControlDayCurrent(item.getControl(), now);
+    }
+
+    /** Telegram only after the change is committed, so no card lock is held during the call. */
+    private void afterCommit(Runnable send) {
+        Runnable guarded = () -> {
+            try {
+                send.run();
+            } catch (RuntimeException failure) {
+                log.warn("Worker explanation confirmation was not sent", failure);
+            }
+        };
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            guarded.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                guarded.run();
+            }
+        });
     }
 
     private void reopenParentForManagerReview(ManagerDailyControlConcreteItem item) {
@@ -461,26 +503,61 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
                 default -> null;
             };
         } catch (RuntimeException exception) {
+            log.warn("Control card specialist lookup failed: cardId={}, type={}, entityId={}", item.getId(),
+                    item.getEntityType(), item.getEntityId(), exception);
             return null;
         }
     }
 
-    @Transactional
+    /** Scheduler entry point; see {@link #remindPendingExplanation(Long, LocalDateTime)}. */
     public boolean remindPendingExplanation(ManagerDailyControlConcreteItem item, LocalDateTime now) {
-        if (item == null || item.getId() == null
-                || item.getWorkerExplanationRequestedAt() == null
-                || item.getWorkerNotificationSentAt() == null
-                || item.getWorkerExplanationAt() != null
-                || item.getStatus() != ManagerDailyControlItemStatus.OPEN) {
+        return item != null && item.getId() != null && remindPendingExplanation(item.getId(), now);
+    }
+
+    /**
+     * Claim, send, then settle. The claim writes only the reminder time and count on the card
+     * re-read under lock, so a concurrent pass sees it and does not send twice, and an explanation
+     * committed meanwhile is never overwritten. Telegram is called without a transaction. A failed
+     * send releases the claim (if nothing changed since) so the next pass retries.
+     */
+    public boolean remindPendingExplanation(Long itemId, LocalDateTime now) {
+        LocalDateTime checkedAt = now == null ? LocalDateTime.now() : now;
+        ReminderClaim claim = transactions.required(() -> claimReminder(itemId, checkedAt));
+        if (claim == null) {
             return false;
+        }
+        boolean sent;
+        try {
+            sent = notificationMediaDeliveryService.send(claim.eventCode(), claim.chatId(), claim.workerUserId(),
+                    claim.text(), null, claim.keyboard());
+        } catch (RuntimeException failure) {
+            log.warn("Worker explanation reminder was not sent: cardId={}", itemId, failure);
+            sent = false;
+        }
+        if (!sent) {
+            transactions.required(() -> {
+                releaseReminderClaim(itemId, claim);
+                return null;
+            });
+        }
+        return sent;
+    }
+
+    private record ReminderClaim(String eventCode, long chatId, Long workerUserId, String text,
+                                 List<List<InlineKeyboardButton>> keyboard, LocalDateTime claimedAt,
+                                 LocalDateTime previousReminderAt, int previousCount) {
+    }
+
+    private ReminderClaim claimReminder(Long itemId, LocalDateTime checkedAt) {
+        ManagerDailyControlConcreteItem item = itemId == null ? null : concreteItemRepository.findByIdForUpdate(itemId).orElse(null);
+        if (!isReminderDue(item, checkedAt)) {
+            return null;
         }
         User worker = workerUserForTask(item);
-        if (worker == null || worker.getWorkerTelegramGroupChatId() == null) {
-            return false;
+        if (worker == null || worker.getId() == null || worker.getWorkerTelegramGroupChatId() == null) {
+            return null;
         }
-
         LocalDateTime sentAt = item.getWorkerNotificationSentAt();
-        LocalDateTime checkedAt = now == null ? LocalDateTime.now() : now;
         boolean overdue = !checkedAt.isBefore(sentAt.plusHours(3));
         long waitingMinutes = Math.max(0, Duration.between(sentAt, checkedAt).toMinutes());
         String status = overdue
@@ -490,41 +567,58 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
                 + "\nМенеджер ждёт пояснение."
                 + "\nКарточка: " + withoutFinancialInfo(item.getTitle())
                 + "\nПричина: " + withoutFinancialInfo(item.getReason());
-
-        long chatId = worker.getWorkerTelegramGroupChatId();
         String eventCode = item.getWorkerReminderCount() > 0
                 ? NotificationMediaEventCatalog.WORKER_TASK_OVERDUE.code()
                 : NotificationMediaEventCatalog.WORKER_TASK_REPEAT.code();
-        boolean sent;
+        List<List<InlineKeyboardButton>> keyboard;
         if (item.getWorkerExplanationPromptedAt() != null) {
             String marker = isRiskTask(item)
                     ? GROUP_RISK_EXPLANATION_MARKER + item.getEntityId()
                     : GROUP_TASK_EXPLANATION_MARKER + item.getId();
-            sent = notificationMediaDeliveryService.send(
-                    eventCode,
-                    chatId,
-                    worker.getId(),
-                    text + "\nТолько назначенный специалист: ответьте на это сообщение коротким пояснением.\n" + marker,
-                    null,
-                    List.of()
-            );
+            text = text + "\nТолько назначенный специалист: ответьте на это сообщение коротким пояснением.\n" + marker;
+            keyboard = List.of();
         } else {
-            sent = notificationMediaDeliveryService.send(
-                    eventCode,
-                    chatId,
-                    worker.getId(),
-                    text + "\nНажмите кнопку и отправьте короткое пояснение.",
-                    null,
-                    List.of(List.of(isRiskTask(item) ? riskExplanationButton(item.getId()) : explanationButton(item.getId())))
-            );
+            text = text + "\nНажмите кнопку и отправьте короткое пояснение.";
+            keyboard = List.of(List.of(isRiskTask(item) ? riskExplanationButton(item.getId()) : explanationButton(item.getId())));
         }
-        if (!sent) {
-            return false;
-        }
+        ReminderClaim claim = new ReminderClaim(eventCode, worker.getWorkerTelegramGroupChatId(), worker.getId(), text, keyboard,
+                checkedAt, item.getWorkerReminderSentAt(), item.getWorkerReminderCount());
         item.setWorkerReminderSentAt(checkedAt);
         item.setWorkerReminderCount(item.getWorkerReminderCount() + 1);
         concreteItemRepository.save(item);
-        return true;
+        return claim;
+    }
+
+    /**
+     * A pending explanation of a card that is not closed, on the current control day, whose last
+     * reminder (if any) is at least three hours old. Requests stay pending through the 3-hour
+     * follow-up (ACTION_TAKEN/DEFERRED), so they are not limited to OPEN cards.
+     */
+    private boolean isReminderDue(ManagerDailyControlConcreteItem item, LocalDateTime checkedAt) {
+        if (item == null || item.getId() == null
+                || item.getWorkerExplanationRequestedAt() == null
+                || item.getWorkerNotificationSentAt() == null
+                || item.getWorkerExplanationAt() != null
+                || item.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
+            return false;
+        }
+        if (item.getControl() != null && item.getControl().getControlDate() != null
+                && !item.getControl().getControlDate().equals(checkedAt.toLocalDate())) {
+            return false;
+        }
+        return item.getWorkerReminderSentAt() == null
+                || !item.getWorkerReminderSentAt().isAfter(checkedAt.minusHours(3));
+    }
+
+    private void releaseReminderClaim(Long itemId, ReminderClaim claim) {
+        ManagerDailyControlConcreteItem item = concreteItemRepository.findByIdForUpdate(itemId).orElse(null);
+        if (item == null || !Objects.equals(item.getWorkerReminderSentAt(), claim.claimedAt())
+                || item.getWorkerReminderCount() != claim.previousCount() + 1) {
+            return;
+        }
+        item.setWorkerReminderSentAt(claim.previousReminderAt());
+        item.setWorkerReminderCount(claim.previousCount());
+        concreteItemRepository.save(item);
     }
 
     private String waitingLabel(long minutes) {

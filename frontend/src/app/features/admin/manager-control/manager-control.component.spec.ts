@@ -14,7 +14,8 @@ import {
   ManagerControlComponent,
   needsManagerControlDetailSync,
   shouldHideClientChatUnansweredAfterAction,
-  telegramGroupLinkCommand
+  telegramGroupLinkCommand,
+  maxGroupLinkCommand
 } from './manager-control.component';
 
 describe('persistent repair result', () => {
@@ -389,6 +390,18 @@ describe('Telegram automation binding', () => {
   it.each(['', 'https://t.me/O_Company_Bot', 'https://example.com/O_Company_Bot?startgroup=token'])(
     'rejects an unusable invite URL: %s',
     (url) => expect(telegramGroupLinkCommand(url)).toBe('')
+  );
+});
+
+describe('MAX group link command', () => {
+  it('turns the MAX bot link into the one-time in-group command', () => {
+    expect(maxGroupLinkCommand('https://max.ru/id380124742639_bot?start=c235_Fvq8FSz2-augL'))
+      .toBe('/start c235_Fvq8FSz2-augL');
+  });
+
+  it.each(['', 'https://max.ru/id380124742639_bot', 'https://example.com/bot?start=c1', 'https://t.me/bot?start=c1'])(
+    'rejects an unusable MAX link: %s',
+    (url) => expect(maxGroupLinkCommand(url)).toBe('')
   );
 });
 describe('scheduled automation queue', () => {

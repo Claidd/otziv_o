@@ -44,6 +44,18 @@ public class ManagerControlClientConversationWorkflow {
     private final ManagerControlCardLifecycle cardLifecycle;
     private final ManagerControlConcretePresenter concretePresenter;
 
+    /**
+     * A manager closes or reviews a client message only while its chat is still assigned to them.
+     * Runs in the caller's card transaction; a missing message is left to the caller's own handling.
+     */
+    void requireOwnMessageSource(Long unansweredItemId, Principal principal, Authentication authentication) {
+        if (unansweredItemId == null || !accessPolicy.restrictedToOwnSources(authentication)) {
+            return;
+        }
+        clientChatUnansweredItemRepository.findById(unansweredItemId)
+                .ifPresent(item -> accessPolicy.requireOwnClientMessage(item, principal, authentication));
+    }
+
     @Transactional(readOnly = true)
     public ManagerControlClientReplySuggestionResponse suggestClientReply(
             Long concreteItemId,

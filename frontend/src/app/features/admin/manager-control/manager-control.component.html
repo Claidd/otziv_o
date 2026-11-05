@@ -260,7 +260,7 @@
                     <p><b>Чтение отчёта:</b> {{ reportReviewDuration(review.readSeconds) }} из расчётных {{ reportReviewDuration(review.minimumReadSeconds) }}</p>
                     <p><b>Вся проверка:</b> {{ reportReviewDuration(review.totalReviewSeconds) }}</p>
                     @if (review.aiVerificationPaused) {
-                      <p class="report-review-restriction"><b>Проверка приостановлена: ожидаются данные, ответ модели или сверка владельцем.</b> Трёхчасовой срок не идёт, доступ не ограничивается.</p>
+                      <p class="report-review-restriction"><b>Проверка приостановлена: ожидаются данные, ответ модели или сверка владельцем.</b> Срок прохождения не идёт, доступ не ограничивается.</p>
                     } @else if (review.aiUnavailableSeconds > 0) {
                       <p><b>Время ожидания данных или проверки:</b> {{ reportReviewDuration(review.aiUnavailableSeconds) }}</p>
                     }

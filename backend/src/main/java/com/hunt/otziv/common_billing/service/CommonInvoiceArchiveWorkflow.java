@@ -57,7 +57,7 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CommonInvoiceArchiveWorkflow {
+public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billing.api.ArchivedCommonInvoiceRevival {
 
     private final CommonInvoiceBoardWorkflow invoiceBoardWorkflow;
 
@@ -174,6 +174,75 @@ public class CommonInvoiceArchiveWorkflow {
         archiveAndClearCurrentPaymentRef(invoice, "manual_archive");
         closeInvoice(invoice, CommonInvoiceStatus.ARCHIVED, "MANUAL_ARCHIVE", principal);
         invoiceRepository.save(invoice);
+        return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    /** Field-injected so the existing constructor and its tests stay unchanged. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository paymentRefRepository;
+
+    /**
+     * A manually archived cycle whose orders were later returned to work from the order board (not
+     * through the invoice restore) used to switch to NEEDS_ATTENTION "payable changed" as soon as a
+     * review was edited, with no way back. Such a cycle can be returned to collecting only when it
+     * carries no money or delivery evidence at all.
+     */
+    public boolean archivedCycleRevivedByOrders(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        if (invoice == null || invoice.getId() == null
+                || invoice.getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION
+                || invoice.getLastError() == null
+                || !invoice.getLastError().startsWith(PAYABLE_CHANGE_REQUIRES_SUPPLEMENT)
+                || !"MANUAL_ARCHIVE".equals(invoice.getCloseReason()) || invoice.getClosedAt() == null
+                || invoice.getPaidKopecks() > 0 || invoice.getSentAt() != null || invoice.getClientReportedAt() != null
+                || invoice.getTbankOrderId() != null || invoice.getTbankPaymentId() != null
+                || (invoice.getPaymentUrl() != null && !invoice.getPaymentUrl().isBlank())) {
+            return false;
+        }
+        List<CommonInvoiceOrder> active = (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
+                .filter(item -> item != null && item.isActiveMembership()).toList();
+        if (active.isEmpty() || active.stream().anyMatch(CommonInvoiceOrder::isPaid)
+                || active.stream().anyMatch(item -> item.getOrder() == null
+                || "Архив".equals(OrderManualArchivePolicy.statusTitle(item.getOrder())))) {
+            return false;
+        }
+        if (paymentRefRepository == null || paymentRefRepository.existsByInvoice_Id(invoice.getId())) {
+            return false;
+        }
+        return !manualPaymentWorkflow.hasFrozenCommonPaymentRoute(invoice);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean revivable(Long invoiceId) {
+        if (invoiceId == null) {
+            return false;
+        }
+        return invoiceRepository.findById(invoiceId)
+                .map(invoice -> archivedCycleRevivedByOrders(invoice,
+                        invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId)))
+                .orElse(false);
+    }
+
+    /** Returns such a cycle to collecting, exactly like the live restore, without touching orders. */
+    @Transactional
+    public CommonInvoiceDetailsResponse reopenArchivedCycleRevivedByOrders(Long invoiceId) {
+        CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        if (!archivedCycleRevivedByOrders(invoice, items)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "По счёту уже есть оплата, отправка или платёжная ссылка: вернуть его в сбор автоматически нельзя. "
+                            + "Сверьте состав и сумму с администратором.");
+        }
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        invoice.setToken(randomToken());
+        invoice.setPreviousStatus(null);
+        invoice.setClosedAt(null);
+        invoice.setClosedBy(null);
+        invoice.setCloseReason(null);
+        invoice.setNextReminderAt(null);
+        invoice.setLastError(null);
+        invoiceRepository.save(invoice);
+        log.info("Common invoice {} returned to collecting after its archived orders were restored", invoiceId);
         return invoiceAfterOrderPrelude(invoiceId);
     }
 

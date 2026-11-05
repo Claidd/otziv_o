@@ -59,6 +59,14 @@ public class MaxBotUpdateService {
 
         if (TYPE_MESSAGE_CREATED.equals(updateType)) {
             String payload = startCommandPayload(update);
+            if (hasText(payload) && isGroupChat(update, chatId)) {
+                // The bot is already a member of the group (for example one group serves two branches):
+                // the one-time command sent in the group itself names the company and the chat.
+                log.info("MAX group /start received chatId={} userId={}", chatId, userId);
+                Optional<String> response = maxGroupLinkService.handleGroupStartCommand(chatId, userId, payload);
+                response.ifPresent(message -> maxBotClient.sendMessageToChat(chatId, message));
+                return;
+            }
             if (hasText(payload)) {
                 log.info("MAX /start fallback received chatId={} userId={} payloadPresent=true", chatId, userId);
                 Optional<String> response = maxGroupLinkService.handleBotStarted(userId, payload);
@@ -137,6 +145,17 @@ public class MaxBotUpdateService {
         }
 
         return longValue(update.path("recipient"), "user_id");
+    }
+
+    static boolean isGroupChat(JsonNode update, Long chatId) {
+        String chatType = text(update.path("message").path("recipient"), "chat_type");
+        if (!hasText(chatType)) {
+            chatType = text(update.path("recipient"), "chat_type");
+        }
+        if (hasText(chatType)) {
+            return "chat".equalsIgnoreCase(chatType.trim());
+        }
+        return chatId != null && chatId < 0;
     }
 
     private static String startCommandPayload(JsonNode update) {

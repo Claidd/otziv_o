@@ -120,6 +120,24 @@ export function isTelegramBindingAutomationIssue(
       || reason.includes('группа telegram не привязана к компании'));
 }
 
+/** MAX: the bot link `https://max.ru/<bot>?start=<payload>` becomes the in-group command `/start <payload>`. */
+export function maxGroupLinkCommand(inviteUrl: string): string {
+  try {
+    const url = new URL(inviteUrl);
+    const host = url.hostname.toLowerCase();
+    if (host !== 'max.ru' && !host.endsWith('.max.ru')) {
+      return '';
+    }
+    const payload = (url.searchParams.get('start') ?? '').trim();
+    if (!payload || !/^[A-Za-z0-9_-]+$/.test(payload)) {
+      return '';
+    }
+    return `/start ${payload}`;
+  } catch {
+    return '';
+  }
+}
+
 export function telegramGroupLinkCommand(inviteUrl: string): string {
   try {
     const url = new URL(inviteUrl);
@@ -615,7 +633,7 @@ export class ManagerControlComponent implements OnInit {
       case 'STARTED': return 'Разбор начат';
       case 'READING_STARTED': return 'Отчёт открыт для изучения';
       case 'READING_CONFIRMED': return 'Прочтение подтверждено';
-      case 'DEADLINE_STARTED': return 'Начат трёхчасовой срок';
+      case 'DEADLINE_STARTED': return 'Начат срок прохождения';
       case 'ANSWER_ACCEPTED': return 'Ответ принят';
       case 'ANSWER_REJECTED': return 'Запрошено уточнение';
       case 'ANSWER_EVIDENCE_SNAPSHOT': return 'Данные, использованные при проверке ответа';
@@ -1929,13 +1947,26 @@ export class ManagerControlComponent implements OnInit {
     }
 
     if (max && url) {
+      const command = maxGroupLinkCommand(url);
       this.toast.info(
         title,
-        'Откройте MAX-бота, запустите его и добавьте администратором в нужную группу. Затем нажмите «Привязать MAX» ещё раз.',
-        {
-          label: 'Открыть привязку',
-          callback: () => window.open(url, '_blank', 'noopener,noreferrer')
-        }
+        'Если бота ещё нет в группе — откройте привязку, запустите бота и добавьте его администратором. Если бот уже в группе (одна группа на несколько филиалов) — отправьте в ней одноразовую команду. Затем нажмите «Починить» ещё раз.',
+        [
+          {
+            label: 'Открыть привязку',
+            callback: () => window.open(url, '_blank', 'noopener,noreferrer')
+          },
+          ...(command ? [{
+            label: 'Скопировать команду',
+            callback: () => {
+              void copyTextToClipboard(command).then((copied) => {
+                if (copied) {
+                  this.toast.success('Команда скопирована', 'Отправьте её в нужной MAX-группе. Команда одноразовая: если открыли ссылку, нажмите «Починить» ещё раз.');
+                }
+              });
+            }
+          }] : [])
+        ]
       );
       return;
     }

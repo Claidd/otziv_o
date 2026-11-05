@@ -16,6 +16,7 @@ import java.security.Principal;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /** Manager/owner visibility and current order authorization shared by control workflows. */
@@ -119,6 +120,70 @@ public class ManagerControlAccessPolicy {
         }
 
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав");
+    }
+
+    /**
+     * A card belongs to the day's control of the manager who had the problem, but its source (order,
+     * company, chat, invoice) may since have been handed to another manager. A manager may change only
+     * sources currently assigned to them; ADMIN and OWNER keep their visibility scope unchanged.
+     */
+    boolean restrictedToOwnSources(Authentication authentication) {
+        if (managerPermissionService.hasRole(authentication, "ADMIN")
+                || managerPermissionService.hasRole(authentication, "OWNER")) {
+            return false;
+        }
+        return managerPermissionService.hasRole(authentication, "MANAGER");
+    }
+
+    void requireOwnOrder(Long orderId, Authentication authentication) {
+        if (orderId == null || !restrictedToOwnSources(authentication)) {
+            return;
+        }
+        if (!managerAccessService.canAccessOrder(orderId, authentication)) {
+            throw sourceReassigned();
+        }
+    }
+
+    void requireOwnCompany(Long companyId, Authentication authentication) {
+        if (companyId == null || !restrictedToOwnSources(authentication)) {
+            return;
+        }
+        if (!managerAccessService.canAccessCompany(companyId, authentication)) {
+            throw sourceReassigned();
+        }
+    }
+
+    /** The chat's current owner is its company's manager; the stored message manager is historical. */
+    void requireOwnClientMessage(com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem item,
+                                 Principal principal, Authentication authentication) {
+        if (item == null || !restrictedToOwnSources(authentication)) {
+            return;
+        }
+        if (item.getCompany() != null && item.getCompany().getId() != null) {
+            requireOwnCompany(item.getCompany().getId(), authentication);
+            return;
+        }
+        Long messageManagerId = item.getManager() == null ? null : item.getManager().getId();
+        requireOwnSource(ownManagerId -> ownManagerId.equals(messageManagerId), principal, authentication);
+    }
+
+    void requireOwnSource(Predicate<Long> assignedToManager, Principal principal, Authentication authentication) {
+        if (!restrictedToOwnSources(authentication)) {
+            return;
+        }
+        User user = currentUser(principal);
+        Long ownManagerId = user == null || user.getId() == null
+                ? null
+                : managerRepository.findByUserId(user.getId()).map(Manager::getId).orElse(null);
+        if (ownManagerId == null || !assignedToManager.test(ownManagerId)) {
+            throw sourceReassigned();
+        }
+    }
+
+    static ResponseStatusException sourceReassigned() {
+        return new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Источник этой карточки уже закреплён за другим менеджером: изменить его может только текущий ответственный. "
+                        + "Обновите контроль — устаревшая карточка закроется автоматически.");
     }
 
     Long actorUserId(Principal principal) {

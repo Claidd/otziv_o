@@ -39,7 +39,7 @@ public class ManagerProblemDiagnosisStore {
             // snapshot on a tie rather than letting a late older read roll current facts backwards.
             LocalDateTime observedAt = evidence.observedAt().truncatedTo(ChronoUnit.MICROS);
             String json = json(evidence.facts());
-            String hash = hash(json);
+            String hash = hash(withoutElapsedWaiting(json));
             jdbc.update("""
                     INSERT INTO manager_problem_cases(case_key,manager_id,source_task_id,current_version,episode,closed,created_at,updated_at)
                     VALUES(?,?,?,0,1,FALSE,?,?) ON DUPLICATE KEY UPDATE case_key=VALUES(case_key)
@@ -181,6 +181,19 @@ public class ManagerProblemDiagnosisStore {
         try { return mapper.writeValueAsString(value); }
         catch (Exception e) { throw new IllegalStateException("Cannot serialize diagnostic evidence", e); }
     }
+    /**
+     * Card texts such as "Клиент написал 2 ч. 15 мин. без ответа" change on every board refresh while
+     * the facts stay the same. The change check ignores that counter, so no new evidence version (and
+     * no new diagnosis) is queued for it; the stored snapshot keeps its observation time, and the
+     * prompt already treats such relative times as historical.
+     */
+    static String withoutElapsedWaiting(String json) {
+        return ELAPSED_WAITING.matcher(json).replaceAll("без ответа");
+    }
+
+    private static final java.util.regex.Pattern ELAPSED_WAITING = java.util.regex.Pattern.compile(
+            "(?:\\d+\\s*(?:дн|ч|мин)\\.\\s*)+без ответа");
+
     static String hash(String value) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch (Exception e) { throw new IllegalStateException(e); }

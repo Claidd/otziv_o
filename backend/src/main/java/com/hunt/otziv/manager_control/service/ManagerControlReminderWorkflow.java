@@ -76,15 +76,23 @@ public class ManagerControlReminderWorkflow {
      * calls inside it, and one failing manager rolled back all the others.
      */
     public void runTestModeNotifications() {
-        LocalDate today = LocalDate.now();
-        LocalDateTime now = LocalDateTime.now();
+        runTestModeNotifications(LocalDateTime.now());
+    }
+
+    /**
+     * The end-of-day stage lasts until 05:00. Until then the previous day's open control is
+     * refreshed and closed automatically once nothing blocks it; from 05:00 an unfinished previous
+     * day is reported to the owners once. A closed previous day is never touched again.
+     */
+    void runTestModeNotifications(LocalDateTime now) {
+        LocalDate today = now.toLocalDate();
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         List<Long> managerIds = transaction.execute(status -> managerRepository.findAllWithUserAndImage().stream()
                 .map(Manager::getId).filter(Objects::nonNull).toList());
         if (managerIds == null || managerIds.isEmpty()) {
             return;
         }
-        boolean previousDayDue = !now.toLocalTime().isBefore(MORNING_STAGE_START);
+        boolean previousDayClosingWindow = now.toLocalTime().isBefore(MORNING_STAGE_START);
         for (Long managerId : managerIds) {
             List<OwnerTelegramMessage> outgoing = new ArrayList<>();
             try {
@@ -101,19 +109,25 @@ public class ManagerControlReminderWorkflow {
                         sendOverdueStageNotifications(control, now, false, outgoing);
                         autoCloseControlIfReady(control, now);
                     });
-                    if (previousDayDue) {
-                        dailyControlRepository.findByControlDateAndManager(today.minusDays(1), manager).ifPresent(control -> {
+                    LocalDate yesterday = today.minusDays(1);
+                    dailyControlRepository.findByControlDateAndManager(yesterday, manager).ifPresent(control -> {
+                        if (control.getClosedAt() != null) {
+                            return;
+                        }
+                        if (previousDayClosingWindow) {
+                            // Refreshing an open previous day ends with its automatic close when nothing blocks it.
+                            managerControl(manager, yesterday, null, true, false);
+                        } else {
                             sendOverdueStageNotifications(control, now, true, outgoing);
-                            autoCloseControlIfReady(control, now);
-                        });
-                    }
+                        }
+                    });
                 });
             } catch (RuntimeException failure) {
                 outgoing.clear();
-                log.warn("Manager control pass failed: managerId={}, errorType={}", managerId, failure.getClass().getSimpleName(), failure);
+                log.warn("Manager control pass failed: managerId={}, error={}", managerId, failure.toString(), failure);
                 continue;
             }
-            outgoing.forEach(message -> telegramService.sendMessage(message.chatId(), message.text()));
+            sendOwnerMessages(outgoing);
         }
     }
 
@@ -122,7 +136,7 @@ public class ManagerControlReminderWorkflow {
         List<ManagerDailyControlItem> items = activeControlItems(dailyControlItemRepository.findByControl(control));
         long openAction = items.stream().filter(cardLifecycle::isOpenActionItem).count();
         boolean changed = false;
-        if ((previousDayOnly || control.getControlDate().isBefore(now.toLocalDate())) && !now.toLocalTime().isBefore(MORNING_STAGE_START) && control.getFinalCheckedAt() == null && control.getEveningNotificationSentAt() == null) {
+        if ((previousDayOnly || control.getControlDate().isBefore(now.toLocalDate())) && !now.toLocalTime().isBefore(MORNING_STAGE_START) && control.getClosedAt() == null && control.getFinalCheckedAt() == null && control.getEveningNotificationSentAt() == null) {
             control.setEveningNotificationSentAt(now);
             String text = overdueStageText(control, "конец дня", "05:00", openAction);
             cardLifecycle.saveEvent(control, null, null, ManagerDailyControlEventType.TEST_NOTIFICATION, null, text);
@@ -155,16 +169,36 @@ public class ManagerControlReminderWorkflow {
         });
     }
 
-    void notifyOwnersAboutDeferredConcreteItem(ManagerDailyControl control, ManagerDailyControlConcreteItem concreteItem, Principal principal) {
+    /**
+     * Builds the owners' deferral notice inside the card transaction; the caller sends it with
+     * {@link #sendOwnerMessages} after that transaction has committed.
+     */
+    List<OwnerTelegramMessage> deferredConcreteItemMessages(ManagerDailyControl control, ManagerDailyControlConcreteItem concreteItem, Principal principal) {
         if (control == null || concreteItem == null) {
-            return;
+            return List.of();
         }
         String title = "Карточка контроля отложена";
         String text = String.join("\n", title, "Менеджер контроля: " + managerName(control.getManager()), "Отложил: " + currentUserDisplayName(principal), "Карточка: " + safe(concreteItem.getTitle()), "Статус: " + safe(concreteItem.getStatusLabel()), "Проблема: " + safe(concreteItem.getReason()), "Комментарий: " + safe(concreteItem.getComment()), "Ссылка: " + deferredConcreteItemUrl(control, concreteItem));
         List<User> recipients = new ArrayList<>();
         recipients.addAll(userRepository.findAllOwners("ROLE_OWNER"));
         recipients.addAll(userRepository.findAllOwners("ROLE_ADMIN"));
-        recipients.stream().filter(Objects::nonNull).filter(user -> user.getId() != null && user.getTelegramChatId() != null).collect(Collectors.toMap(User::getId, Function.identity(), (left, right) -> left)).values().forEach(user -> telegramService.sendMessage(user.getTelegramChatId(), text));
+        return recipients.stream().filter(Objects::nonNull).filter(user -> user.getId() != null && user.getTelegramChatId() != null)
+                .collect(Collectors.toMap(User::getId, Function.identity(), (left, right) -> left)).values().stream()
+                .map(user -> new OwnerTelegramMessage(user.getTelegramChatId(), text)).toList();
+    }
+
+    /** Sends committed owner notices; one failed recipient does not stop the others. Call without a transaction. */
+    void sendOwnerMessages(List<OwnerTelegramMessage> messages) {
+        if (messages == null) {
+            return;
+        }
+        for (OwnerTelegramMessage message : messages) {
+            try {
+                telegramService.sendMessage(message.chatId(), message.text());
+            } catch (RuntimeException failure) {
+                log.warn("Owner control notice was not sent: chatId={}", message.chatId(), failure);
+            }
+        }
     }
 
     String deferredConcreteItemUrl(ManagerDailyControl control, ManagerDailyControlConcreteItem concreteItem) {

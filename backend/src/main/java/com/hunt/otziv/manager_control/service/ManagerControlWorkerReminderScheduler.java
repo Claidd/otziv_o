@@ -22,6 +22,11 @@ public class ManagerControlWorkerReminderScheduler {
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final ManagerControlWorkerTaskTelegramCallbackService callbackService;
 
+    /**
+     * A successful request leaves the card ACTION_TAKEN with a 3-hour follow-up, so pending
+     * explanations are selected among all unresolved cards, limited to today's controls: an older
+     * day's card is history and today's control has its own card for a problem that remains.
+     */
     @Scheduled(
             fixedDelayString = "${manager.worker-explanation-reminders.fixed-delay-ms:300000}",
             initialDelayString = "${manager.worker-explanation-reminders.initial-delay-ms:60000}"
@@ -31,15 +36,16 @@ public class ManagerControlWorkerReminderScheduler {
         List<ManagerDailyControlConcreteItem> pending = concreteItemRepository
                 .findPendingWorkerExplanationReminders(
                         now.minusHours(REMINDER_INTERVAL_HOURS),
-                        ManagerDailyControlItemStatus.OPEN,
+                        ManagerDailyControlItemStatus.RESOLVED,
+                        now.toLocalDate(),
                         PageRequest.of(0, BATCH_SIZE)
                 );
         for (ManagerDailyControlConcreteItem item : pending) {
+            Long itemId = item == null ? null : item.getId();
             try {
-                callbackService.remindPendingExplanation(item, now);
+                callbackService.remindPendingExplanation(itemId, now);
             } catch (RuntimeException exception) {
-                log.warn("Не удалось повторно напомнить специалисту по карточке {}: {}",
-                        item == null ? null : item.getId(), exception.getMessage());
+                log.warn("Не удалось повторно напомнить специалисту по карточке {}", itemId, exception);
             }
         }
     }
