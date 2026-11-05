@@ -65,6 +65,7 @@ public class DeepCompanyResearchJobService {
             String operation
     ) {
         ReputationResearchRequest safeRequest = withOperation(safeRequest(request), operation);
+        java.util.concurrent.atomic.AtomicBoolean created = new java.util.concurrent.atomic.AtomicBoolean();
         Long jobId = transactionTemplate.execute(status -> {
             Company company = companyRepository.findByIdForReputationAi(companyId)
                     .orElseThrow(() -> new UsernameNotFoundException(
@@ -87,9 +88,15 @@ public class DeepCompanyResearchJobService {
             entity.setStartedAt(null);
             entity.setCompletedAt(null);
             ReputationDeepReportJobEntity saved = jobRepository.save(entity);
+            created.set(true);
             return saved.getId();
         });
 
+        if (!created.get()) {
+            // The company already has an active report: return it instead of running it a second time.
+            return findById(jobId)
+                    .orElseThrow(() -> new IllegalStateException("Не удалось создать задачу глубокого отчета"));
+        }
         try {
             reputationDeepReportExecutor.execute(() -> run(jobId));
         } catch (RuntimeException exception) {
@@ -389,8 +396,10 @@ public class DeepCompanyResearchJobService {
             return false;
         }
 
+        // A report runs several web-search stages of up to 8 minutes each; a shorter window let a
+        // second copy start while the first was still working.
         LocalDateTime startedAt = entity.getStartedAt();
-        return startedAt != null && startedAt.isAfter(LocalDateTime.now().minusMinutes(20));
+        return startedAt != null && startedAt.isAfter(LocalDateTime.now().minusMinutes(45));
     }
 
     private Optional<ReputationDeepReportJobEntity> findActiveJob(Long companyId) {

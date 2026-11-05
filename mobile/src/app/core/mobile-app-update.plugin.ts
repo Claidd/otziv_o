@@ -12,6 +12,8 @@ export type AppUpdateDownloadStatus = {
   downloadedBytes?: number;
   totalBytes?: number;
   reason?: number;
+  /** versionCode of the finished APK (state 'successful', when readable). */
+  versionCode?: number;
 };
 
 export interface AppUpdaterPlugin {

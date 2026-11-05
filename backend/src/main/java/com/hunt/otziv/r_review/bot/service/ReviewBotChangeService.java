@@ -66,6 +66,14 @@ public class ReviewBotChangeService {
     }
 
     /** Automatic reassignment during an ordinary review edit is not a manual account button. */
+    /** True when the two filials are in different cities (account pools are per city). */
+    public static boolean cityDiffers(com.hunt.otziv.c_companies.model.Filial current,
+                                      com.hunt.otziv.c_companies.model.Filial next) {
+        Long currentCityId = current != null && current.getCity() != null ? current.getCity().getId() : null;
+        Long nextCityId = next != null && next.getCity() != null ? next.getCity().getId() : null;
+        return !java.util.Objects.equals(currentCityId, nextCityId);
+    }
+
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public void changeBotAfterReviewEdit(Long reviewId) {
         changeBot(reviewId, false);

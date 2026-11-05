@@ -763,7 +763,7 @@ public class CommonInvoiceDeliveryService {
             return null;
         }
         if (managerPermissionService.hasRole(authentication, "OWNER")) {
-            return userService.findManagersByUserName(authentication.getName()).stream().map(Manager::getId).filter(id -> id != null).collect(Collectors.toSet());
+            return userService.findManagerIdsByUserName(authentication.getName());
         }
         if (managerPermissionService.hasRole(authentication, "MANAGER")) {
             return userService.findByUserName(authentication.getName()).flatMap(user -> managerRepository.findByUserId(user.getId())).map(Manager::getId).map(Set::of).orElse(Set.of());

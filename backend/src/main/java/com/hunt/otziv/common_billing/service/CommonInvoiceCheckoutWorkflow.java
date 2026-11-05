@@ -86,7 +86,7 @@ public class CommonInvoiceCheckoutWorkflow {
         String manualRecipient = contractorRoute ? contractorRequisites == null ? "" : normalize(contractorRequisites.recipientName()) : normalize(invoice.getPaymentRouteManualRecipient());
         String manualBank = contractorRoute ? contractorRequisites == null ? "" : normalize(contractorRequisites.bankName()) : normalize(invoice.getPaymentRouteManualBankName());
         String manualComment = contractorRoute ? contractorRequisites == null ? "" : normalize(contractorRequisites.paymentComment()) : normalize(invoice.getPaymentRouteManualComment());
-        return new PublicCommonInvoiceResponse(invoice.getToken(), invoice.getTitle(), invoice.getAccount().getName(), effectiveInvoiceStatus(invoice, items).name(), amountRubles(invoice.getAmountKopecks()), amountRubles(invoice.getPaidKopecks()), amountRubles(remaining), invoice.getAmountKopecks(), invoice.getPaidKopecks(), remaining, payable, normalize(invoice.getPaymentRouteType()), invoice.getPaymentRouteManualType() == null ? "" : invoice.getPaymentRouteManualType().name(), contractorRequisitesVisible ? manualPhone : "", contractorRequisitesVisible ? manualRecipient : "", contractorRequisitesVisible ? manualBank : "", contractorRequisitesVisible && !contractorRoute ? safeCommonManualPaymentUrl(invoice) : "", normalize(invoice.getPaymentRouteManualButton()), contractorRequisitesVisible ? manualComment : "", contractorRequisitesVisible && !contractorRoute ? normalize(invoice.getPaymentRouteInstructionText()) : "", false, invoice.getClientReportedAt(), items.stream().map(this::toOrderResponse).toList());
+        return new PublicCommonInvoiceResponse(invoice.getToken(), invoice.getTitle(), invoice.getAccount().getName(), effectiveInvoiceStatus(invoice, items).name(), amountRubles(invoice.getAmountKopecks()), amountRubles(invoice.getPaidKopecks()), amountRubles(remaining), invoice.getAmountKopecks(), invoice.getPaidKopecks(), remaining, payable, normalize(invoice.getPaymentRouteType()), invoice.getPaymentRouteManualType() == null ? "" : invoice.getPaymentRouteManualType().name(), contractorRequisitesVisible ? manualPhone : "", contractorRequisitesVisible ? manualRecipient : "", contractorRequisitesVisible ? manualBank : "", contractorRequisitesVisible && !contractorRoute ? safeCommonManualPaymentUrl(invoice) : "", normalize(invoice.getPaymentRouteManualButton()), contractorRequisitesVisible ? manualComment : "", contractorRequisitesVisible && !contractorRoute ? normalize(invoice.getPaymentRouteInstructionText()) : "", false, invoice.getClientReportedAt(), items.stream().map(this::toPublicOrderResponse).toList());
     }
 
     /**
@@ -143,6 +143,19 @@ public class CommonInvoiceCheckoutWorkflow {
 
     CommonInvoiceStatus effectiveInvoiceStatus(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         return invoiceBoardWorkflow.effectiveInvoiceStatus(invoice, items);
+    }
+
+    /**
+     * Anyone holding the public link sees the order lines, so staff-only fields (who marked the
+     * payment, internal comments, receipt links, internal block reasons) are blanked. The shape
+     * stays the same so existing clients keep working.
+     */
+    private CommonInvoiceOrderResponse toPublicOrderResponse(CommonInvoiceOrder item) {
+        CommonInvoiceOrderResponse full = toOrderResponse(item);
+        return new CommonInvoiceOrderResponse(full.orderId(), full.companyId(), full.companyTitle(),
+                full.filialTitle(), full.orderStatus(), null, full.amount(), full.amountKopecks(),
+                full.ready(), full.paid(), full.unpaid(), full.detachable(), full.paidAt(),
+                full.paymentMethod(), null, null, null, null, full.ordinaryAfterPaperCancel());
     }
 
     CommonInvoiceOrderResponse toOrderResponse(CommonInvoiceOrder item) {

@@ -35,6 +35,43 @@ public class OrderArchiveRestoreRepository {
         return Boolean.TRUE.equals(restored);
     }
 
+    /** Payment evidence of an archived order: its status and whether an active payment check remains. */
+    public record ArchivePaymentState(String statusTitle, boolean activePaymentCheck) {
+    }
+
+    public ArchivePaymentState findPaymentState(Long orderId) {
+        List<ArchivePaymentState> states = jdbc.query("""
+                SELECT TRIM(COALESCE(os.order_status_title, '')) AS status_title,
+                       EXISTS (
+                           SELECT 1
+                           FROM archive_payment_check payment
+                           WHERE payment.check_order = ao.order_id
+                             AND COALESCE(payment.check_active, 0) = 1
+                       ) AS active_payment_check
+                FROM archive_orders ao
+                LEFT JOIN order_statuses os ON os.order_status_id = ao.order_status
+                WHERE ao.order_id = :orderId
+                """, Map.of("orderId", orderId), (rs, rowNum) -> new ArchivePaymentState(
+                rs.getString("status_title"),
+                rs.getBoolean("active_payment_check")
+        ));
+        return states.stream().findFirst().orElse(new ArchivePaymentState("", false));
+    }
+
+    /**
+     * A restored order without an active payment check is not paid. Clearing the completion
+     * markers keeps it movable through the normal state machine instead of leaving a
+     * "completed but new" order that every transition rejects.
+     */
+    public void clearCompletionMarkers(Long orderId) {
+        jdbc.update("""
+                UPDATE orders
+                SET order_complete = 0,
+                    order_pay_day = NULL
+                WHERE order_id = :orderId
+                """, Map.of("orderId", orderId));
+    }
+
     public Long findStatusId(String status) {
         List<Long> ids = jdbc.queryForList("""
                 SELECT order_status_id

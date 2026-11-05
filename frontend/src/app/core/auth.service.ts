@@ -2,6 +2,16 @@ import { Inject, Injectable, InjectionToken, signal } from '@angular/core';
 import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { apiErrorMessage } from '../shared/api-error-message';
 import { appEnvironment } from './app-environment';
+import { clearSessionScopedClientState } from './session-client-state';
+
+/**
+ * Delays between automatic refresh attempts while Keycloak is unreachable.
+ * The last value repeats, so a focused tab keeps probing once a minute and
+ * recovers by itself after a Keycloak restart instead of giving up.
+ */
+const REFRESH_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000, 60_000] as const;
+/** Minimum spacing of refresh attempts started by a request that needs a token. */
+const ON_DEMAND_REFRESH_MIN_INTERVAL_MS = 10_000;
 
 export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'refreshing' | 'temporarily-unavailable' | 'expired' | 'error';
 
@@ -26,6 +36,7 @@ export class AuthService {
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private retryAttempt = 0;
   private nextRetryAt = 0;
+  private lastRefreshAttemptAt = 0;
 
   readonly status = signal<AuthStatus>('initializing');
   readonly error = signal<string | null>(null);
@@ -98,6 +109,7 @@ export class AuthService {
     this.redirectingToLogin = true;
     this.stopRefreshLoop();
     this.clearSession('anonymous');
+    clearSessionScopedClientState();
 
     return this.keycloak.logout({
       redirectUri: window.location.origin
@@ -110,7 +122,7 @@ export class AuthService {
     }
 
     const generation = this.sessionGeneration;
-    await this.refreshToken(30);
+    await this.refreshToken(30, true);
     if (generation !== this.sessionGeneration || this.redirectingToLogin || !this.keycloak.authenticated) {
       return null;
     }
@@ -156,7 +168,13 @@ export class AuthService {
     return generation === this.sessionGeneration && !this.redirectingToLogin && (token === null || token === (this.keycloak.token ?? null));
   }
 
-  async refreshToken(minValiditySeconds = 60): Promise<boolean> {
+  /**
+   * @param onDemand the caller is a request that cannot be sent without a
+   *   usable token. It may skip the automatic backoff, at most once per
+   *   ON_DEMAND_REFRESH_MIN_INTERVAL_MS, so a user action recovers as soon as
+   *   Keycloak is back without letting request bursts hammer Keycloak.
+   */
+  async refreshToken(minValiditySeconds = 60, onDemand = false): Promise<boolean> {
     if (this.redirectingToLogin || !this.keycloak.authenticated) {
       return false;
     }
@@ -164,8 +182,9 @@ export class AuthService {
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
-    if (Date.now() < this.nextRetryAt) return false;
+    if (Date.now() < this.nextRetryAt && !this.canRetryOnDemand(onDemand)) return false;
 
+    this.lastRefreshAttemptAt = Date.now();
     this.status.set('refreshing');
     const generation = this.sessionGeneration;
     const pending = this.keycloak.updateToken(minValiditySeconds)
@@ -308,15 +327,23 @@ export class AuthService {
     }
     this.status.set('temporarily-unavailable');
     this.error.set(new AuthTemporarilyUnavailableError().message);
-    const delay = [2_000, 5_000, 15_000][this.retryAttempt++];
-    this.nextRetryAt = delay === undefined ? Number.POSITIVE_INFINITY : Date.now() + delay;
-    if (delay !== undefined) {
-      const generation = this.sessionGeneration;
-      this.retryTimer = setTimeout(() => {
-        this.retryTimer = undefined;
-        if (generation === this.sessionGeneration && !this.redirectingToLogin) void this.refreshToken(-1);
-      }, delay);
-    }
+    const delay = REFRESH_RETRY_DELAYS_MS[Math.min(this.retryAttempt, REFRESH_RETRY_DELAYS_MS.length - 1)];
+    this.retryAttempt += 1;
+    this.nextRetryAt = Date.now() + delay;
+    // An on-demand attempt can fail while an automatic retry is pending:
+    // keep exactly one scheduled retry.
+    if (this.retryTimer !== undefined) clearTimeout(this.retryTimer);
+    const generation = this.sessionGeneration;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      if (generation === this.sessionGeneration && !this.redirectingToLogin) void this.refreshToken(-1);
+    }, delay);
+  }
+
+  private canRetryOnDemand(onDemand: boolean): boolean {
+    return onDemand
+      && this.getOptionalToken(0) === null
+      && Date.now() - this.lastRefreshAttemptAt >= ON_DEMAND_REFRESH_MIN_INTERVAL_MS;
   }
 
   private resetRefreshRetry(): void {

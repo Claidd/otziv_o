@@ -90,7 +90,13 @@ for (const stage of ["create", "write", "fsync", "rename"]) {
     await ledger.close();
     const restarted = open();
     if (stage === "rename") assert.equal((await restarted.execute("new", envelope, assert.fail)).state, "UNKNOWN");
-    if (stage === "write") assert.equal(restarted.admission().acceptingNew, false);
+    if (stage === "write") {
+      // The empty claim was interrupted before its fsync. Restart keeps its
+      // identity as durable UNKNOWN instead of closing the whole ledger.
+      assert.equal(restarted.admission().acceptingNew, true);
+      assert.equal(restarted.metrics().repairedInterruptedClaims, 1);
+      assert.equal((await restarted.execute("new", envelope, assert.fail)).state, "UNKNOWN");
+    }
   });
 }
 

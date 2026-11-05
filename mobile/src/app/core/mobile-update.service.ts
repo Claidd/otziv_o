@@ -3,13 +3,16 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { firstValueFrom } from 'rxjs';
-import { AppUpdater } from './mobile-app-update.plugin';
+import { AppUpdater, type AppUpdateDownloadStatus } from './mobile-app-update.plugin';
 import {
   type MobileUpdateRelease,
+  isDownloadedRelease,
   isUpdateAvailable,
   isUpdateRequired,
   mobileUpdateReleaseUrl,
-  resolveUpdateUrl
+  mobileUpdateResumeAction,
+  resolveUpdateUrl,
+  shouldAutoInstallOnStartup
 } from './mobile-update.helpers';
 import { mobileEnvironment } from './mobile-environment';
 
@@ -72,9 +75,13 @@ export class MobileUpdateService {
         return;
       }
       this.releaseState.set(release);
-      this.state.set('available');
+      // A running download, the permission screen or an open installer keep
+      // their own state; the check only refreshes the release information.
+      if (!this.isBusy()) {
+        this.state.set('available');
+        this.error.set('');
+      }
       this.visible.set(true);
-      this.error.set('');
     } catch {
       // The updater must never block normal application startup when the server is unavailable.
     }
@@ -82,10 +89,16 @@ export class MobileUpdateService {
 
   async start(): Promise<void> {
     const release = this.releaseState();
-    if (!release) {
+    if (!release || this.isBusy()) {
       return;
     }
     this.error.set('');
+    if (await this.isReleaseDownloaded(release)) {
+      // The APK of this release is already on the device (for example the
+      // user closed the installer earlier). Android re-verifies it.
+      await this.installDownloaded();
+      return;
+    }
     this.progress.set(0);
     this.state.set('downloading');
     this.visible.set(true);
@@ -102,8 +115,13 @@ export class MobileUpdateService {
   }
 
   defer(): void {
-    if (!this.required()) {
-      this.visible.set(false);
+    if (this.required()) {
+      return;
+    }
+    this.visible.set(false);
+    if (this.state() === 'error' && this.releaseState()) {
+      this.state.set('available');
+      this.error.set('');
     }
   }
 
@@ -112,32 +130,84 @@ export class MobileUpdateService {
   }
 
   private async restoreAndCheck(): Promise<void> {
+    let status: AppUpdateDownloadStatus | null = null;
     try {
-      const status = await AppUpdater.getDownloadStatus();
+      // The native side discards an APK that is not newer than the installed
+      // app (the update was installed), so a finished download here is pending.
+      status = await AppUpdater.getDownloadStatus();
       if (status.state === 'running' || status.state === 'pending' || status.state === 'paused') {
         this.state.set('downloading');
         this.progress.set(status.progress ?? 0);
         this.visible.set(true);
         this.schedulePoll(500);
-      } else if (status.state === 'successful') {
-        await this.installDownloaded();
       }
     } catch {
       // A clean install has no pending native download.
     }
     await this.check(true);
+    if (status?.state === 'successful'
+      && !this.isBusy()
+      && shouldAutoInstallOnStartup(status, this.releaseState(), this.installedVersionCode())) {
+      await this.installDownloaded();
+    }
+    // An optional update waits in the dialog; "Обновить" reuses the APK.
   }
 
   private async handleResume(): Promise<void> {
-    if (this.state() === 'permission' || this.state() === 'installing') {
-      await this.installDownloaded();
+    switch (mobileUpdateResumeAction(this.state())) {
+      case 'recheck-permission':
+        await this.continueAfterPermission();
+        return;
+      case 'installer-closed':
+        this.returnFromInstaller();
+        return;
+      case 'poll-download':
+        await this.pollDownload();
+        return;
+      default:
+        await this.check();
+    }
+  }
+
+  private async continueAfterPermission(): Promise<void> {
+    try {
+      const info = await AppUpdater.getInfo();
+      if (info.canInstallPackages) {
+        await this.installDownloaded();
+        return;
+      }
+    } catch {
+      // Treated as a missing permission below.
+    }
+    // Do not reopen the settings screen by itself: the user decides.
+    this.fail('Установка обновлений не разрешена. Разрешите установку для «Компания О!» и нажмите «Повторить».');
+  }
+
+  private returnFromInstaller(): void {
+    // A successful install replaces this process, so the user is back from a
+    // cancelled or failed installer. Offer the update again instead of
+    // relaunching the installer.
+    if (!this.releaseState()) {
+      this.state.set('idle');
+      this.visible.set(false);
       return;
     }
-    if (this.state() === 'downloading') {
-      await this.pollDownload();
-      return;
+    this.state.set('available');
+    this.error.set('');
+    this.visible.set(true);
+  }
+
+  private async isReleaseDownloaded(release: MobileUpdateRelease): Promise<boolean> {
+    try {
+      return isDownloadedRelease(await AppUpdater.getDownloadStatus(), release);
+    } catch {
+      return false;
     }
-    await this.check();
+  }
+
+  private isBusy(): boolean {
+    const state = this.state();
+    return state === 'downloading' || state === 'permission' || state === 'installing';
   }
 
   private schedulePoll(delay: number): void {

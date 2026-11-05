@@ -46,7 +46,6 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     SELECT DISTINCT m
     FROM Manager m
     JOIN FETCH m.user u
-    LEFT JOIN FETCH u.image
     LEFT JOIN FETCH u.workers w
     LEFT JOIN FETCH w.user
     LEFT JOIN FETCH u.operators o

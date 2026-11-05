@@ -67,6 +67,18 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(new ApiErrorResponse(dataIntegrityMessage(ex)));
     }
 
+    /**
+     * Many services signal "record not found" with UsernameNotFoundException. It is an
+     * AuthenticationException, so without this mapping Spring Security answers 401 and the
+     * clients log the user out of Keycloak instead of showing "not found".
+     */
+    @ExceptionHandler(org.springframework.security.core.userdetails.UsernameNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleNotFound(
+            org.springframework.security.core.userdetails.UsernameNotFoundException ex) {
+        String message = ex.getMessage() == null || ex.getMessage().isBlank() ? "Запись не найдена" : ex.getMessage();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(message));
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ApiErrorResponse> handleOptimisticLocking(OptimisticLockingFailureException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(

@@ -26,7 +26,10 @@ for i,v in enumerate(a[:-1]):
   k,_,value=a[i+1].partition("=");settings[k]=value.strip('"')
 if a[0]=="get" and a[1]=="clients":
  query=a[a.index("-q")+1].split("=",1)[1];print({"otziv-frontend":"web","otziv-mobile":"mobile","otziv-backend":"backend"}[query])
+elif a[0]=="update" and a[1]=="realms/master":
+ s["master"]=settings
 elif a[0]=="update" and a[1].startswith("realms/"):
+ s["realm"]=settings
  s["idle"]=int(settings["ssoSessionIdleTimeout"]);s["max"]=int(settings["ssoSessionMaxLifespan"])
  s["offline"]=int(settings["offlineSessionIdleTimeout"]);s["offlineMax"]=int(settings["offlineSessionMaxLifespan"])
 elif a[0]=="update" and a[1]=="clients/mobile":
@@ -71,6 +74,27 @@ class KeycloakClientSessionPolicyTest(unittest.TestCase):
             self.assertEqual(stored["offlineMax"],offline_seconds)
             self.assertEqual(stored["scopes"],["offline_access"])
             self.assertTrue(all(v<=stored["idle"] for v in stored["mobile"].values()))
+            # Users must not rename themselves (the backend maps preferred_username).
+            self.assertEqual(stored["realm"]["editUsernameAllowed"],"false")
+            self.assertEqual(stored["realm"]["passwordPolicy"],"length(8) and notUsername and notEmail")
+            # The master realm is loopback-only and brute-force protected.
+            self.assertEqual(stored["master"]["bruteForceProtected"],"true")
+            self.assertEqual(stored["master"]["permanentLockout"],"false")
+            self.assertEqual(stored["master"]["attributes.frontendUrl"],"http://127.0.0.1:18180/keycloak")
+            self.assertNotIn("directAccessGrantsEnabled",stored["master"])
+
+    def test_admin_console_url_matches_the_loopback_compose_binding(self):
+        script=(HERE/"apply-keycloak-prod-settings.sh").read_text(encoding="utf-8")
+        compose=(ROOT/"docker-compose.yaml").read_text(encoding="utf-8")
+        url=re.search(r'ADMIN_CONSOLE_URL="\$\{ADMIN_CONSOLE_URL:-(http://127\.0\.0\.1:(\d+)/keycloak)\}"',script)
+        self.assertIsNotNone(url)
+        self.assertIn("KC_HOSTNAME_ADMIN: "+url.group(1),compose)
+        self.assertIn('- "127.0.0.1:%s:8080"'%url.group(2),compose)
+
+    def test_imported_realm_disallows_username_changes_and_weak_passwords(self):
+        realm=json.loads((ROOT/"infrastructure"/"keycloak"/"realm-config.prod.json").read_text(encoding="utf-8"))
+        self.assertIs(realm["editUsernameAllowed"],False)
+        self.assertEqual(realm["passwordPolicy"],"length(8) and notUsername and notEmail")
 
     def test_existing_invalid_online_overrides_are_repaired_before_other_client_edits(self):
         self.exercise(2592000)

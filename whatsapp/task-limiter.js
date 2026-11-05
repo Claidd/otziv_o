@@ -80,6 +80,14 @@ class TaskLimiter {
     }
   }
 
+  // Background work holds its own permit, so it counts against concurrency and
+  // drain like a request. Without free capacity it is skipped, not counted as
+  // a rejected client request. Returns null when skipped.
+  runInBackground(handler) {
+    if (!this.accepting || this.active >= this.limit) return null;
+    return this.run(handler);
+  }
+
   wrap(handler, status = "error") {
     return (req, res, next) => this.run(() => handler(req, res, next))
       .catch((error) => {

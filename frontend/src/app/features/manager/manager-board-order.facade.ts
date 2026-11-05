@@ -18,6 +18,7 @@ import {
   removeSessionDraft,
   writeSessionDraft
 } from '../../shared/session-draft-storage';
+import { describeFieldDraftConflicts, fieldDraftOf, restoreFieldDraft } from '../../shared/field-draft';
 import {
   managerCreateOrderDraft,
   managerCreateOrderTotal,
@@ -41,7 +42,18 @@ type ManagerBoardOrderApi = Pick<
   | 'markPaperInvoiceIssued'
 >;
 
-type ManagerBoardOrderToast = Pick<ToastService, 'success' | 'error'>;
+type ManagerBoardOrderToast = Pick<ToastService, 'success' | 'error'> & Partial<Pick<ToastService, 'warning'>>;
+
+const ORDER_EDIT_FIELD_LABELS: Partial<Record<keyof OrderUpdateRequest, string>> = {
+  filialId: 'Филиал',
+  workerId: 'Специалист',
+  managerId: 'Менеджер',
+  counter: 'Опубликовано',
+  orderComments: 'Комментарий заказа',
+  commentsCompany: 'Комментарий компании',
+  complete: 'Отметка о выполнении',
+  removePreviousWorkerFromCompany: 'Удалить прежнего специалиста из компании'
+};
 
 export type ManagerBoardOrderFacadeDeps = {
   openPaperInvoice?: (target: { kind: 'ORDER'; id: number }, fallback: () => void, refresh: () => void) => void;
@@ -396,11 +408,24 @@ export class ManagerBoardOrderFacade {
 
 
   private applyOrderEditPayload(payload: OrderEditPayload): void {
-    const sourceDraft = managerOrderEditDraft(payload);
-    const storedDraft = readSessionDraft<OrderUpdateRequest>(this.orderEditSessionDraftKey(payload.id));
+    // Only fields the user changed are restored over fresh server data, so a
+    // reload never reverts what other users saved in the untouched fields.
+    const { draft, conflicts } = restoreFieldDraft(
+      managerOrderEditDraft(payload),
+      readSessionDraft<unknown>(this.orderEditSessionDraftKey(payload.id))
+    );
     this.editOrder.set(payload);
-    this.orderDraft.set(storedDraft ?? sourceDraft);
+    this.orderDraft.set(draft);
     this.writeOrderEditSessionDraft();
+    if (conflicts.length > 0) {
+      this.deps.toastService.warning?.(
+        'Заказ изменил другой пользователь',
+        `После начала вашего редактирования изменены поля: ${describeFieldDraftConflicts(conflicts, ORDER_EDIT_FIELD_LABELS)}. `
+          + 'В форме оставлены ваши несохранённые значения — проверьте их перед сохранением.',
+        // An action keeps the warning on screen until the user closes it.
+        { label: 'Понятно', callback: () => undefined }
+      );
+    }
   }
 
   private applyCompanyOrderCreatePayload(payload: CompanyOrderCreatePayload): void {
@@ -419,12 +444,13 @@ export class ManagerBoardOrderFacade {
     }
 
     const key = this.orderEditSessionDraftKey(order.id);
-    if (!this.isOrderEditDraftChanged(order, draft)) {
+    const changes = fieldDraftOf(managerOrderEditDraft(order), draft);
+    if (!changes) {
       removeSessionDraft(key);
       return;
     }
 
-    writeSessionDraft(key, draft);
+    writeSessionDraft(key, changes);
   }
 
   private writeCreateOrderSessionDraft(): void {
@@ -461,11 +487,6 @@ export class ManagerBoardOrderFacade {
 
   private createOrderSessionDraftKey(companyId: number): string {
     return `manager-order-create:${companyId}`;
-  }
-
-  private isOrderEditDraftChanged(order: OrderEditPayload, draft: OrderUpdateRequest): boolean {
-    const source = managerOrderEditDraft(order);
-    return (Object.keys(source) as (keyof OrderUpdateRequest)[]).some((field) => source[field] !== draft[field]);
   }
 
   private isCreateOrderDraftChanged(

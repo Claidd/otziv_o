@@ -943,15 +943,20 @@ public class OrderStatusTransitionService {
 
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===", e);
-            try {
-                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
-                orderRepository.save(order);
-                log.warn("Статус заказа ID {} изменен на 'В проверку' без дополнительных действий из-за ошибки",
-                        order.getId());
-            } catch (Exception ex) {
-                log.error("Критическая ошибка при сохранении статуса: {}", ex.getMessage());
-            }
+            // No "fallback" status without audit, event and client scenario: the transition is
+            // either applied completely or not at all.
+            rollbackCurrentTransaction();
             return false;
+        }
+    }
+
+    private static void rollbackCurrentTransaction() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            try {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            } catch (org.springframework.transaction.NoTransactionException programmatic) {
+                // Programmatic transaction: the caller decides on the boolean result.
+            }
         }
     }
 
@@ -1011,16 +1016,7 @@ public class OrderStatusTransitionService {
 
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===", e);
-            try {
-                clearPublicationDatesForUnpublishedReviews(order);
-                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
-                orderRepository.save(order);
-                mobilePushBusinessNotificationService.notifyWorkerCorrection(order, clientCorrectionNote(order));
-                log.warn("Статус заказа ID {} изменен на 'Коррекция' без дополнительных действий из-за ошибки",
-                        order.getId());
-            } catch (Exception ex) {
-                log.error("Критическая ошибка при сохранении статуса: {}", ex.getMessage());
-            }
+            rollbackCurrentTransaction();
             return false;
         }
     }

@@ -2,6 +2,10 @@ import { Component, OnDestroy, signal } from '@angular/core';
 import { CabinetApi, WhatsAppClientStatus } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
+import { VisibilityAwarePoller, backoffDelayMs } from '../../shared/visibility-aware-poller';
+
+const WHATSAPP_STATUS_POLL_MS = 6000;
+const WHATSAPP_STATUS_MAX_BACKOFF_MS = 60_000;
 
 @Component({
   selector: 'app-whatsapp-bind',
@@ -14,23 +18,23 @@ export class WhatsAppBindComponent implements OnDestroy {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
-  private refreshTimer: number | null = null;
+  private failedLoads = 0;
+  // The QR code rotates, so it is re-read every 6 s while waiting for a scan;
+  // nothing is requested while the tab is hidden, and errors back off.
+  private readonly poller = new VisibilityAwarePoller(() => {
+    const current = this.status();
+    if (!current?.ready && current?.configured !== false) {
+      this.loadStatus(false);
+    }
+  }, () => backoffDelayMs(WHATSAPP_STATUS_POLL_MS, this.failedLoads, WHATSAPP_STATUS_MAX_BACKOFF_MS));
 
   constructor(private readonly cabinetApi: CabinetApi) {
     this.loadStatus();
-    this.refreshTimer = window.setInterval(() => {
-      const current = this.status();
-      if (!current?.ready && current?.configured !== false) {
-        this.loadStatus(false);
-      }
-    }, 6000);
+    this.poller.start();
   }
 
   ngOnDestroy(): void {
-    if (this.refreshTimer !== null) {
-      window.clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
+    this.poller.stop();
   }
 
   loadStatus(showLoading = true): void {
@@ -41,10 +45,13 @@ export class WhatsAppBindComponent implements OnDestroy {
 
     this.cabinetApi.getWhatsAppBindingStatus({ skipAuthRedirectOn401: true }).subscribe({
       next: (status) => {
+        this.failedLoads = 0;
         this.status.set(status);
         this.loading.set(false);
       },
       error: (err) => {
+        this.failedLoads += 1;
+        this.poller.reschedule();
         this.error.set(apiErrorDetail(err, 'Не удалось получить QR-код WhatsApp.'));
         this.loading.set(false);
       }

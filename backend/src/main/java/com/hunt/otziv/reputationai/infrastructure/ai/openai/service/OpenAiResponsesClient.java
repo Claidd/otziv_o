@@ -1306,6 +1306,7 @@ public class OpenAiResponsesClient {
 
         Duration effectiveTimeout = effectiveTimeout(body, timeout);
         int maxAttempts = 3;
+        boolean billedResponseReceived = false;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             if (!runtimeEnabled()) {
                 return disabledResult();
@@ -1340,6 +1341,9 @@ public class OpenAiResponsesClient {
                 }
 
                 rememberCheck("ok", response.statusCode(), "OpenAI Responses API вернул успешный ответ.");
+                // The provider has billed this generation: from here on a failure must not
+                // re-send the request (a second, paid generation), only be reported.
+                billedResponseReceived = true;
                 if (Boolean.TRUE.equals(body.get("stream"))) {
                     OpenAiResponseResult result = parseStreamResponse(response.body(), fallbackModel);
                     if (!result.errorMessage().isBlank() && attempt < maxAttempts && isRetryableOpenAiError(result.errorMessage())) {
@@ -1372,7 +1376,7 @@ public class OpenAiResponsesClient {
                         attempt,
                         maxAttempts,
                         exception.getMessage());
-                if (attempt < maxAttempts) {
+                if (attempt < maxAttempts && !billedResponseReceived) {
                     try {
                         if (!sleepBeforeRetry(null, attempt)) {
                             return disabledResult();
@@ -1805,7 +1809,37 @@ public class OpenAiResponsesClient {
         }
     }
 
+    private record CachedHttpClient(String key, HttpClient client) {
+    }
+
+    private volatile CachedHttpClient cachedHttpClient;
+    private static final HttpClient YANDEX_HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    /**
+     * One client per proxy configuration: a new java.net.http.HttpClient per call (every poll
+     * every 3 s for up to 8 minutes) kept its own selector thread and lost connection/TLS reuse.
+     */
     private HttpClient httpClient() {
+        ReputationAiProperties.OpenAi.Proxy proxy = properties.getOpenai().getProxy();
+        String key = proxy.isEnabled() + "|" + proxy.getHost() + "|" + proxy.getPort() + "|"
+                + proxy.getUsername() + "|" + Objects.hashCode(proxy.getPassword());
+        CachedHttpClient current = cachedHttpClient;
+        if (current != null && current.key().equals(key)) {
+            return current.client();
+        }
+        synchronized (this) {
+            current = cachedHttpClient;
+            if (current == null || !current.key().equals(key)) {
+                current = new CachedHttpClient(key, buildHttpClient());
+                cachedHttpClient = current;
+            }
+            return current.client();
+        }
+    }
+
+    private HttpClient buildHttpClient() {
         HttpClient.Builder builder = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10));
 
@@ -1826,9 +1860,7 @@ public class OpenAiResponsesClient {
     }
 
     private HttpClient yandexHttpClient() {
-        return HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
+        return YANDEX_HTTP_CLIENT;
     }
 
     private Map<String, Object> deepResearchSchema(OpenAiResearchReportOptions options) {

@@ -5,6 +5,7 @@ import { NavigationEnd, Router } from '@angular/router';
 import { AppDiagnostics, type PreviousProcessExit } from './app-diagnostics.plugin';
 import { mobileEnvironment } from './mobile-environment';
 import { MobileNativeService } from './mobile-native.service';
+import { sanitizeDiagnosticRoute } from './mobile-diagnostics-route';
 
 const DIAGNOSTIC_BUFFER_KEY = 'otziv.mobile.auth-diagnostics.v1';
 const MAX_BUFFERED_EVENTS = 160;
@@ -292,12 +293,8 @@ export class MobileAuthDiagnosticsService {
   }
 
   private sanitizeRoute(route: string): string {
-    const path = route.split(/[?#]/u, 1)[0] || '/';
-    return path
-      .replace(/\/[0-9a-f]{8}-[0-9a-f-]{27,}(?=\/|$)/giu, '/:id')
-      .replace(/\/\d+(?=\/|$)/gu, '/:id')
-      .replace(/[^a-z0-9_./:-]+/giu, '_')
-      .slice(0, 64) || '/';
+    // Payment and review capability segments are masked as well as ids.
+    return sanitizeDiagnosticRoute(route);
   }
 
   private sanitizeBreadcrumb(value: string, maxLength: number): string {

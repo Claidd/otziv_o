@@ -1,14 +1,22 @@
 import { Injectable, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
+import { AuthService } from './auth.service';
 import { DeepCompanyResearchJob, ReputationAiApi } from './reputation-ai.api';
+import {
+  ACTIVE_DEEP_REPORT_COMPANY_KEY,
+  ACTIVE_DEEP_REPORT_CONTEXT_KEY,
+  clearStoredDeepReportMonitor
+} from './session-client-state';
 import { deepReportErrorMessage } from '../shared/reputation/deep-report-error-message';
 import { ToastService } from '../shared/toast.service';
 
-const ACTIVE_DEEP_REPORT_COMPANY_KEY = 'otziv.reputationAi.activeDeepReportCompanyId';
-const ACTIVE_DEEP_REPORT_CONTEXT_KEY = 'otziv.reputationAi.activeDeepReportContext';
 const DEEP_REPORT_FAST_POLL_INTERVAL_MS = 30_000;
 const DEEP_REPORT_SLOW_POLL_INTERVAL_MS = 90_000;
 const DEEP_REPORT_FAST_POLL_WINDOW_MS = 3 * 60_000;
+const DEEP_REPORT_MAX_TRANSIENT_FAILURES = 3;
+
+/** Roles whose screens start and open company deep reports. */
+export const DEEP_REPORT_MONITOR_ROLES = ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] as const;
 
 export type DeepReportMonitorContext = {
   routerLink?: string;
@@ -25,17 +33,40 @@ export class ReputationDeepReportMonitorService {
   private activeCompanyId: number | null = null;
   private activeContext: DeepReportMonitorContext | null = null;
   private watchStartedAtMs = 0;
+  private transientFailures = 0;
 
   constructor(
     private readonly api: ReputationAiApi,
-    private readonly toastService: ToastService
+    private readonly toastService: ToastService,
+    private readonly auth: AuthService
   ) {}
 
   restore(): void {
-    const stored = Number(this.storage()?.getItem(ACTIVE_DEEP_REPORT_COMPANY_KEY));
-    if (Number.isFinite(stored) && stored > 0) {
-      this.watch(Math.trunc(stored), this.readStoredContext());
+    const raw = this.storage()?.getItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
+    if (!raw) {
+      return;
     }
+
+    const stored = Number(raw);
+    if (!Number.isFinite(stored) || stored <= 0) {
+      clearStoredDeepReportMonitor();
+      return;
+    }
+
+    // The key lives in localStorage and outlives the staff session. An
+    // anonymous visitor (for example a client opening /pay/<token> in a
+    // browser a manager used before) must never poll the staff API.
+    if (!this.auth.isAuthenticated()) {
+      return;
+    }
+
+    if (!this.auth.hasAnyRealmRole(DEEP_REPORT_MONITOR_ROLES)) {
+      // The account signed in now cannot read that report.
+      this.clear();
+      return;
+    }
+
+    this.watch(Math.trunc(stored), this.readStoredContext());
   }
 
   watch(companyId: number, context: DeepReportMonitorContext | null = null): void {
@@ -59,32 +90,58 @@ export class ReputationDeepReportMonitorService {
 
   private pollLatestJob(companyId: number): void {
     this.pollSubscription?.unsubscribe();
-    this.pollSubscription = this.api.latestDeepResearchJob(companyId)
+    // A background poll must never end the browser session: an expired login
+    // or a revoked role only ends this watch (see handlePollError).
+    this.pollSubscription = this.api.latestDeepResearchJob(companyId, { skipAuthRedirectOn401: true })
       .subscribe({
         next: (job) => {
+          this.transientFailures = 0;
           this.handleJob(job);
           if (this.activeCompanyId === companyId && this.isActiveJob(job)) {
             this.scheduleNextPoll(companyId);
           }
         },
-        error: () => this.stopPolling()
+        error: (error: unknown) => this.handlePollError(companyId, error)
       });
   }
 
   clear(): void {
-    this.storage()?.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
-    this.storage()?.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
-    this.stopPolling();
+    this.forgetWatch();
     this.currentJob.set(null);
   }
 
-  private handleJob(job: DeepCompanyResearchJob): void {
+  private handlePollError(companyId: number, error: unknown): void {
+    if (this.activeCompanyId !== companyId) {
+      return;
+    }
+
+    if (this.isTransientError(error) && this.transientFailures < DEEP_REPORT_MAX_TRANSIENT_FAILURES) {
+      this.transientFailures += 1;
+      this.pollSubscription = null;
+      this.scheduleNextPoll(companyId);
+      return;
+    }
+
+    // 401/403/404 and a lasting outage end the watch. Keeping the key would
+    // repeat the failing request on every application start.
+    this.forgetWatch();
+  }
+
+  private isTransientError(error: unknown): boolean {
+    const status = (error as { status?: unknown } | null | undefined)?.status;
+    return typeof status === 'number' && (status === 0 || status >= 500);
+  }
+
+  private forgetWatch(): void {
+    clearStoredDeepReportMonitor();
+    this.stopPolling();
+  }
+
+  private handleJob(job: DeepCompanyResearchJob | null): void {
     this.currentJob.set(job);
-    if (job.status === 'DONE') {
+    if (job?.status === 'DONE') {
       const context = this.activeContext;
-      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
-      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
-      this.stopPolling();
+      this.forgetWatch();
       this.toastService.success(
         this.doneTitle(job),
         context?.doneMessage ?? `${job.companyName || 'Компания #' + job.companyId}: можно открыть AI-помощник`,
@@ -93,11 +150,15 @@ export class ReputationDeepReportMonitorService {
       return;
     }
 
-    if (job.status === 'FAILED') {
-      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
-      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
-      this.stopPolling();
+    if (job?.status === 'FAILED') {
+      this.forgetWatch();
       this.toastService.error('Глубокий отчёт не собрался', deepReportErrorMessage(job.errorMessage));
+      return;
+    }
+
+    if (!this.isActiveJob(job)) {
+      // Any other outcome (no job, an unknown status) will not change by polling.
+      this.forgetWatch();
     }
   }
 
@@ -118,8 +179,8 @@ export class ReputationDeepReportMonitorService {
       : DEEP_REPORT_SLOW_POLL_INTERVAL_MS;
   }
 
-  private isActiveJob(job: DeepCompanyResearchJob): boolean {
-    return job.status === 'QUEUED' || job.status === 'RUNNING';
+  private isActiveJob(job: DeepCompanyResearchJob | null | undefined): boolean {
+    return job?.status === 'QUEUED' || job?.status === 'RUNNING';
   }
 
   private stopPolling(): void {
@@ -129,6 +190,7 @@ export class ReputationDeepReportMonitorService {
     this.activeCompanyId = null;
     this.activeContext = null;
     this.watchStartedAtMs = 0;
+    this.transientFailures = 0;
   }
 
   private clearPollTimeout(): void {

@@ -170,7 +170,9 @@ public class S3UploadServiceImpl implements S3UploadService {
             return baos.toByteArray();
         } catch (IOException e) {
             log.error("Ошибка при обработке изображения", e);
-            throw new RuntimeException("Не удалось обработать изображение", e);
+            // The upload check accepts WebP, but ImageIO cannot decode it here: answer 400, not 500.
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Не удалось прочитать изображение. Загрузите JPG или PNG.", e);
         }
     }
 

@@ -330,10 +330,19 @@ public class ApiAdminDictionaryController {
     @DeleteMapping("/cities/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public void deleteCity(@PathVariable Long id) {
         City city = cityRepository.findById(id);
         if (city == null) {
             throw notFound("Город не найден");
+        }
+        // City maps filials and bots with orphanRemoval, so deleting a used city would silently
+        // delete its whole account pool (with credentials) and its filials.
+        boolean hasFilials = city.getFilial() != null && !city.getFilial().isEmpty();
+        boolean hasBots = city.getBots() != null && !city.getBots().isEmpty();
+        if (hasFilials || hasBots) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.CONFLICT,
+                    "Город используется филиалами или аккаунтами. Сначала перенесите их в другой город.");
         }
         cityRepository.delete(city);
     }

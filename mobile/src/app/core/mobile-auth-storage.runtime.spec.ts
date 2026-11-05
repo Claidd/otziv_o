@@ -339,4 +339,70 @@ describe('native auth storage durability through the real services', () => {
     expect(Browser.open).not.toHaveBeenCalled();
     expect(disk.secure.has(TOKEN)).toBe(false);
   });
+
+  it('revokes the offline refresh token at Keycloak before clearing the local session', async () => {
+    const saved = tokens(); seed(TOKEN, saved);
+    const auth = createAuth(saved);
+    let tokensAtRevoke: StoredTokens | null | undefined;
+    bridge.post.mockImplementation(async () => {
+      tokensAtRevoke = auth.tokens();
+      return { status: 200, headers: {}, url: 'http://localhost/revoke', data: '' };
+    });
+
+    await auth.logout();
+
+    expect(bridge.post).toHaveBeenCalledTimes(1);
+    const request = bridge.post.mock.calls[0][0];
+    expect(request.url).toMatch(/\/realms\/otziv\/protocol\/openid-connect\/revoke$/);
+    const body = new URLSearchParams(String(request.data));
+    expect(body.get('token')).toBe('old-refresh');
+    expect(body.get('token_type_hint')).toBe('refresh_token');
+    expect(body.get('client_id')).toBe('otziv-mobile');
+    expect(tokensAtRevoke).toBe(saved);
+    expect(auth.tokens()).toBeNull();
+    expect(await restart().readTokens()).toBeNull();
+    expect(Browser.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('still signs out locally when the revocation request fails', async () => {
+    const saved = tokens(); seed(TOKEN, saved);
+    const auth = createAuth(saved);
+    bridge.post.mockRejectedValue(new Error('offline'));
+
+    await auth.logout();
+
+    expect(auth.tokens()).toBeNull();
+    expect(auth.status()).toBe('anonymous');
+    expect(await restart().readTokens()).toBeNull();
+    expect(Browser.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a forged native callback and keeps the pending login', async () => {
+    seed(PENDING, pending);
+    const auth = createAuth();
+
+    await auth.completeLoginFromCallback(
+      'otziv://auth/callback?error=access_denied&error_description=Call%20+7%20000&state=forged'
+    );
+    await auth.completeLoginFromCallback('otziv://auth/callback?error=server_error&error_description=x');
+
+    expect(auth.error()).toBeNull();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(await storage.readPendingLogin()).toEqual(pending);
+  });
+
+  it('shows a fixed message for an error answering the pending login', async () => {
+    seed(PENDING, pending);
+    const auth = createAuth();
+
+    await auth.completeLoginFromCallback(
+      `otziv://auth/callback?error=access_denied&error_description=Call%20+7%20000&state=${pending.state}`
+    );
+
+    expect(auth.error()).toMatch(/Вход отменён/);
+    expect(auth.error()).not.toContain('Call');
+    expect(auth.status()).toBe('error');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/login', { replaceUrl: true });
+    expect(await storage.readPendingLogin()).toBeNull();
+  });
 });

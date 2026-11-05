@@ -38,6 +38,12 @@ public interface WorkerService {
 
     void save(Worker worker);
 
+    /**
+     * Atomically records a nagul for the worker if the cooldown has passed. Returns false when a
+     * concurrent nagul already took the slot (two tabs clicking at once).
+     */
+    boolean claimNagulSlot(Long workerId, int cooldownMinutes);
+
     List<Long> findUserIdsByManagerIds(Set<Long> managerIds);
 
 //    List<WorkerDTO> getAllWorkersIsActiveByUser(User user);

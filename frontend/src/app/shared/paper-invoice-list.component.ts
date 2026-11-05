@@ -1,6 +1,7 @@
 import { Component, Input, OnChanges, OnDestroy, Output, EventEmitter, ChangeDetectorRef, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { openPaperInvoiceDialog, type Context, type PaperDocument, type PaperTarget } from './paper-invoice-dialog.component';
+import { isSettlingPaperDocument, openPaperInvoiceDialog, type Context, type PaperDocument, type PaperTarget } from './paper-invoice-dialog.component';
+import { VisibilityAwarePoller, backoffDelayMs } from './visibility-aware-poller';
 import type { PaperInvoiceListState } from './paper-invoice-workflow';
 @Component({
   selector:'app-paper-invoice-list',
@@ -33,8 +34,14 @@ export class PaperInvoiceListComponent implements OnChanges,OnDestroy {
   @Output() readonly updated=new EventEmitter<void>();
   @Output() readonly stateChanged=new EventEmitter<PaperInvoiceListState | null>();
   private readonly http=inject(HttpClient);private readonly view=inject(ChangeDetectorRef);documents:PaperDocument[]=[];ordinaryOrders:number[]=[];error='';private ticket=0;private loaded=false;
-  private timer:ReturnType<typeof setInterval>|null=null;
-  ngOnChanges():void{if(this.timer)clearInterval(this.timer);this.documents=[];this.ordinaryOrders=[];this.loaded=false;this.stateChanged.emit(null);this.load();this.timer=setInterval(()=>this.load(),10000);}
+  private quietPolls=0;private failedPolls=0;
+  // Every 10 s while a bank document is being prepared or sent; otherwise the
+  // interval doubles while nothing changes (up to a minute), and nothing is
+  // requested while the tab is hidden.
+  private readonly poller=new VisibilityAwarePoller(()=>this.load(),()=>this.failedPolls>0
+    ? backoffDelayMs(10_000,this.failedPolls,120_000)
+    : this.documents.some(isSettlingPaperDocument) ? 10_000 : backoffDelayMs(10_000,this.quietPolls,60_000));
+  ngOnChanges():void{this.poller.stop();this.documents=[];this.ordinaryOrders=[];this.loaded=false;this.quietPolls=0;this.failedPolls=0;this.stateChanged.emit(null);this.load();this.poller.start();}
   load():void{
     if(!this.invoiceId)return;
     const ticket=++this.ticket,invoiceId=this.invoiceId;
@@ -44,15 +51,17 @@ export class PaperInvoiceListComponent implements OnChanges,OnDestroy {
         const documents=context.documents ?? [];
         const signature=(rows:PaperDocument[])=>rows.map(v=>`${v.id}:${v.stage}:${v.paidAt}:${v.invoiceDelivery}:${v.actDelivery}`).join('|');
         const changed=this.loaded && signature(documents)!==signature(this.documents);
+        this.failedPolls=0;this.quietPolls=changed?0:this.quietPolls+1;
         this.documents=documents;this.ordinaryOrders=(context.positions ?? []).filter(p=>p.documentId==='ORDINARY').map(p=>p.orderId);this.loaded=true;this.error='';this.view.markForCheck();
         this.stateChanged.emit({invoiceId,context});
         if(changed)this.updated.emit();
+        this.poller.reschedule();
       },
-      error:e=>{if(ticket===this.ticket){this.error=e?.error?.detail || 'Не удалось загрузить банковские документы';this.stateChanged.emit(null);this.view.markForCheck();}}
+      error:e=>{if(ticket===this.ticket){this.error=e?.error?.detail || 'Не удалось загрузить банковские документы';this.failedPolls+=1;this.poller.reschedule();this.stateChanged.emit(null);this.view.markForCheck();}}
     });
   }
   issue():void{openPaperInvoiceDialog({kind:'COMMON_INVOICE',id:this.invoiceId},()=>{},()=>{this.load();this.updated.emit();});}
   open(d:PaperDocument):void{openPaperInvoiceDialog({kind:d.targetKind || 'COMMON_INVOICE',id:d.targetId || this.invoiceId} as PaperTarget,()=>{},()=>{this.load();this.updated.emit();});}
   status(stage:string):string{return ({PENDING:'Ожидает формирования',INVOICE_CREATING:'Создаётся счёт',INVOICE_CREATED:'Создаётся акт',ACT_CREATING:'Создаётся акт',ACT_CREATED:'Получаем PDF',FILES_READY:'Отправка документов',WAITING_PAYMENT:'Ожидает оплаты',PAID:'Оплачен',CANCEL_REQUESTED:'Отмена в процессе',CANCELLED:'Отменён',CANCEL_REVIEW:'Отмена требует сверки'} as Record<string,string>)[stage] || 'Требуется сверка';}
-  ngOnDestroy():void{++this.ticket;if(this.timer)clearInterval(this.timer);}
+  ngOnDestroy():void{++this.ticket;this.poller.stop();}
 }

@@ -154,19 +154,17 @@ class TelegramServiceUpdateHandlingTest {
     }
 
     @Test
-    void privateTextMessageCanStillStartUserLoginFlow() {
+    void privateTextFromUnlinkedChatNeverBindsByTypedLogin() {
         CapturingTelegramService service = service();
         when(telegramGroupLinkService.handleGroupStartCommand(anyLong(), anyString()))
                 .thenReturn(Optional.empty());
         when(userService.findByChatId(123L)).thenReturn(Optional.empty());
-        when(userService.findByUserName("unknown")).thenReturn(Optional.empty());
 
-        service.onUpdateReceived(textUpdate(123L, "private", "unknown"));
+        service.onUpdateReceived(textUpdate(123L, "private", "someone"));
 
         verify(userService).findByChatId(123L);
-        verify(userService).findByUserName("unknown");
-        assertEquals("Пользователь с таким username не найден. Введите свой логин:",
-                service.sentMessages.getFirst().getText());
+        verify(userService, never()).findByUserName(anyString());
+        assertTrue(service.sentMessages.getFirst().getText().contains("Привязать Telegram"));
     }
 
     @Test

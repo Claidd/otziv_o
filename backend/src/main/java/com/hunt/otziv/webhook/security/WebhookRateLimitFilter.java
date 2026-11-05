@@ -82,12 +82,8 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
     }
 
     private static String rateLimitGroup(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (hasText(contextPath) && path.startsWith(contextPath)) {
-            path = path.substring(contextPath.length());
-        }
-        String normalizedPath = path;
+        // Decoded and matrix-free, so encoded spellings of a limited path stay limited.
+        String normalizedPath = decodedPath(request);
         return RATE_LIMITED_PATHS.entrySet().stream()
                 .filter(entry -> !REGISTRATION_PUBLIC_GROUP.equals(entry.getKey())
                         || "POST".equalsIgnoreCase(request.getMethod()))
@@ -96,6 +92,26 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
                 .map(Map.Entry::getKey)
                 .findFirst()
                 .orElse(null);
+    }
+
+    /** Same per-segment decoding Spring routing uses; kept local to avoid a platform dependency cycle. */
+    private static String decodedPath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        try {
+            org.springframework.http.server.RequestPath path = org.springframework.http.server.RequestPath.parse(
+                    uri, hasText(contextPath) ? contextPath : null);
+            StringBuilder decoded = new StringBuilder();
+            for (org.springframework.http.server.PathContainer.Element element : path.pathWithinApplication().elements()) {
+                decoded.append(element instanceof org.springframework.http.server.PathContainer.PathSegment segment
+                        ? segment.valueToMatch() : element.value());
+            }
+            return decoded.toString();
+        } catch (IllegalArgumentException malformed) {
+            String path = hasText(contextPath) && uri.startsWith(contextPath) ? uri.substring(contextPath.length()) : uri;
+            int matrix = path.indexOf(';');
+            return matrix >= 0 ? path.substring(0, matrix) : path;
+        }
     }
 
     private static boolean matches(String group, String path, String prefix) {

@@ -11,6 +11,12 @@ class OperationLedgerIndex {
     this.records.set(key, { state, startedAt });
     if (state === "UNKNOWN") { this.unknown++; this.push({ key, startedAt }); }
   }
+  delete(key) {
+    const previous = this.records.get(key);
+    if (!previous) return;
+    if (previous.state === "UNKNOWN") { this.unknown--; this.remove(key); }
+    this.records.delete(key);
+  }
   oldestUnknown() {
     return this.heap[0]?.startedAt ?? null;
   }

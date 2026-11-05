@@ -272,6 +272,23 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
         assertThat(repository.countEligibleOrders(CUTOFF_DATE)).isEqualTo(1);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"review_external_checks", "workload_transfer_emergency_assignments"})
+    void reviewEvidenceWithRestrictForeignKeyKeepsTheOrderOutOfTheArchiveBatch(String evidenceTable) {
+        insertPaidOrder(1301L);
+        UUID detail = insertOrderDetail(1301L);
+        jdbc.update(
+                "INSERT INTO reviews (review_id, review_order_details, review_filial) VALUES (1302, UUID_TO_BIN(?), NULL)",
+                detail.toString()
+        );
+        jdbc.update("INSERT INTO " + evidenceTable + " (id, review_id) VALUES (1303, 1302)");
+
+        assertThat(repository.countEligibleOrders(CUTOFF_DATE)).isZero();
+
+        jdbc.update("DELETE FROM " + evidenceTable + " WHERE id = 1303");
+        assertThat(repository.countEligibleOrders(CUTOFF_DATE)).isEqualTo(1);
+    }
+
     @Test
     void terminalSuccessorArchivesTogetherWithItsImmutableUnpaidPredecessor() {
         insertPaidOrder(901L);
@@ -400,6 +417,8 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
         setup.execute("DROP TABLE IF EXISTS next_order_requests");
         setup.execute("DROP TABLE IF EXISTS bad_review_tasks");
         setup.execute("DROP TABLE IF EXISTS archive_reviews");
+        setup.execute("DROP TABLE IF EXISTS review_external_checks");
+        setup.execute("DROP TABLE IF EXISTS workload_transfer_emergency_assignments");
         setup.execute("DROP TABLE IF EXISTS reviews");
         setup.execute("DROP TABLE IF EXISTS archive_candidate_orders");
         setup.execute("DROP TABLE IF EXISTS order_details");
@@ -469,6 +488,21 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     review_filial BIGINT NULL,
                     review_bot BIGINT NULL,
                     PRIMARY KEY (review_id)
+                ) ENGINE=InnoDB
+                """);
+        // Review evidence with RESTRICT foreign keys: orders referenced here are never archive candidates.
+        setup.execute("""
+                CREATE TABLE review_external_checks (
+                    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    review_id BIGINT NOT NULL,
+                    FOREIGN KEY (review_id) REFERENCES reviews(review_id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE workload_transfer_emergency_assignments (
+                    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    review_id BIGINT NOT NULL,
+                    FOREIGN KEY (review_id) REFERENCES reviews(review_id)
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""

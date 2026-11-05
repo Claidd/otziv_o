@@ -22,6 +22,9 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
+// Only changed columns are written: a request working from an older snapshot (board and
+// account reads refresh amounts) must not overwrite status/payment columns committed meanwhile.
+@org.hibernate.annotations.DynamicUpdate
 @Entity
 @Getter
 @Setter

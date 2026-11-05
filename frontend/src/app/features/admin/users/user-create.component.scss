@@ -122,3 +122,24 @@ p {
     grid-template-columns: 1fr;
   }
 }
+
+.password-field {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+
+  .button {
+    flex: none;
+  }
+}
+
+.created-password {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  user-select: all;
+}

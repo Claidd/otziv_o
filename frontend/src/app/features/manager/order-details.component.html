@@ -1385,7 +1385,7 @@
           (click)="$event.stopPropagation()"
         >
           <header class="lead-edit-head">
-            @if (canDeleteReviews()) {
+            @if (canDeleteReviews() && !editReview()?.publish) {
               <button
                 type="button"
                 class="lead-edit-delete review-delete-action"

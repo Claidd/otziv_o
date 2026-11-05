@@ -331,3 +331,47 @@ test("a slow history scan blocks only its chat after discovery", async t => {
   await inbox.drain(async (_route, body) => { sent.push(body.messageId); return { status: 200 }; });
   assert.deepEqual(sent, ["live-first", "live-second"]);
 });
+
+test("a periodic rescan never holds a chat whose history was already covered", async t => {
+  const { inbox } = fixture(t);
+  await recoverHistory({ client: { getChats: async () => [chat([message(1)])] }, inbox, clientId: "client" });
+  inbox.enqueue(route, payload("live", 20));
+  let release;
+  const stalled = { ...chat([]), fetchMessages: () => new Promise(resolve => { release = () => resolve([]); }) };
+  const rescan = recoverHistory({ client: { getChats: async () => [stalled] }, inbox, clientId: "client" });
+  await new Promise(resolve => setImmediate(resolve));
+  const sent = [];
+  await inbox.drain(async (_route, body) => { sent.push(body.messageId); return { status: 200 }; });
+  assert.deepEqual(sent, ["m1", "live"]);
+  release(); await rescan;
+  inbox.resetHistoryCoverage();
+  assert.equal(inbox.snapshot().historyCoveredChats, 0);
+});
+
+test("a chat whose history keeps failing or hangs is released after the failure cap", async t => {
+  const { inbox } = fixture(t);
+  inbox.enqueue(route, payload("live", 20));
+  const hanging = { ...chat([]), fetchMessages: () => new Promise(() => {}) };
+  const logs = [];
+  const run = () => recoverHistory({ client: { getChats: async () => [hanging] }, inbox, clientId: "client",
+    chatTimeoutMs: 5, maxChatFailures: 2, log: (_level, _message, extra) => logs.push(extra.code) });
+  let sent = [];
+  await run();
+  await inbox.drain(async (_route, body) => { sent.push(body.messageId); return { status: 200 }; });
+  assert.deepEqual(sent, []);
+  assert.equal(inbox.snapshot().historyHeldChats, 1);
+  await run();
+  await inbox.drain(async (_route, body) => { sent.push(body.messageId); return { status: 200 }; });
+  assert.deepEqual(sent, ["live"]);
+  assert.equal(inbox.snapshot().historyGapChats, 1);
+  assert.ok(logs.includes("history_chat_timeout")); assert.ok(logs.includes("history_hold_released"));
+});
+
+test("a redirect response is not an acknowledgement and stays pending", async t => {
+  const { inbox } = fixture(t, { retryBaseMs: 0 }); inbox.enqueue(route, payload());
+  for (const status of [301, 302, 307, 308]) await inbox.drain(async () => ({ status }));
+  assert.equal(inbox.snapshot().pending, 1);
+  assert.equal(inbox.snapshot().dead, 0);
+  const [record] = inbox.records.values();
+  assert.equal(record.attempts, 4); assert.equal(record.lastStatus, 308);
+});

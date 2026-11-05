@@ -10,8 +10,12 @@ import { MobileAuthDiagnosticsService, type MobileAuthDiagnosticValue } from './
 import { MobileAuthStorageService } from './mobile-auth-storage.service';
 import { AuthStorageDurabilityError } from './auth-storage-durability.plugin';
 import { MobilePushService } from './mobile-push.service';
+import { oidcCallbackErrorCode, oidcCallbackErrorMessage } from './auth-callback-errors';
+import { sanitizeDiagnosticRoute } from './mobile-diagnostics-route';
 
 export type MobileLogoutSource = 'home_actions' | 'header_menu' | 'profile' | 'unknown';
+
+const LOGOUT_REVOKE_TIMEOUT_MS = 4000;
 
 class TokenEndpointHttpError extends Error {
   constructor(readonly statusCode: number) {
@@ -129,7 +133,7 @@ export class AuthService {
     const state = this.randomUrlSafeString(32);
     const codeVerifier = this.randomUrlSafeString(64);
 
-    void this.recordAuthDiagnostic('auth.login_started', { target: targetUrl });
+    void this.recordAuthDiagnostic('auth.login_started', { target: sanitizeDiagnosticRoute(targetUrl) });
     const codeChallenge = await this.codeChallenge(codeVerifier);
 
     await this.storage.writePendingLogin({
@@ -164,32 +168,46 @@ export class AuthService {
     try {
       const url = new URL(callbackUrl);
       const error = url.searchParams.get('error');
+      const code = url.searchParams.get('code');
+      const state = url.searchParams.get('state');
       void this.recordAuthDiagnostic('auth.callback_received', {
-        hasCode: url.searchParams.has('code'),
-        hasState: url.searchParams.has('state'),
+        hasCode: Boolean(code),
+        hasState: Boolean(state),
         hasError: Boolean(error)
       });
-      if (error) {
-        void this.recordAuthDiagnostic('auth.callback_oidc_error', { oidcError: error });
+      const pending = await this.storage.readPendingLogin();
+      if (generation !== this.sessionGeneration) return;
+      const stateMatched = Boolean(state && pending && state === pending.state);
+
+      if (!stateMatched && this.isNative) {
+        // Any app or web page can open otziv://auth/callback. A callback that
+        // does not answer this device's pending login is ignored: it must not
+        // cancel a real sign-in or put its own text on the login screen.
+        void this.recordAuthDiagnostic('auth.callback_ignored', {
+          hasCode: Boolean(code),
+          hasError: Boolean(error),
+          hasPendingLogin: Boolean(pending)
+        });
+        return;
+      }
+
+      if (error && stateMatched) {
+        void this.recordAuthDiagnostic('auth.callback_oidc_error', { oidcError: oidcCallbackErrorCode(error) });
         await this.storage.clearPendingLogin();
         if (generation !== this.sessionGeneration) return;
-        this.error.set(url.searchParams.get('error_description') ?? error);
+        this.error.set(oidcCallbackErrorMessage(error));
         this.status.set('error');
         await this.router.navigateByUrl('/login', { replaceUrl: true });
         return;
       }
 
-      const code = url.searchParams.get('code');
-      const state = url.searchParams.get('state');
-      const pending = await this.storage.readPendingLogin();
-      if (generation !== this.sessionGeneration) return;
-
-      if (!code || !state || !pending || state !== pending.state) {
+      if (!code || !state || !pending || !stateMatched) {
         void this.recordAuthDiagnostic('auth.callback_rejected', {
           hasCode: Boolean(code),
           hasState: Boolean(state),
+          hasError: Boolean(error),
           hasPendingLogin: Boolean(pending),
-          stateMatched: Boolean(state && pending && state === pending.state)
+          stateMatched
         });
         await this.storage.clearPendingLogin();
         if (generation !== this.sessionGeneration) return;
@@ -363,12 +381,14 @@ export class AuthService {
       void this.flushDiagnostics(accessToken);
     }
     const idToken = this.tokens()?.idToken;
+    const refreshToken = this.tokens()?.refreshToken;
     this.sessionGeneration += 1;
     if (this.refreshTimerId) {
       clearTimeout(this.refreshTimerId);
       this.refreshTimerId = undefined;
     }
     await this.revokeCurrentPushTokenBestEffort();
+    await this.revokeRefreshTokenBestEffort(refreshToken);
     await this.clearSession('anonymous');
     void this.recordAuthDiagnostic('auth.logout_local_session_cleared', { ...diagnosticDetails, source });
     await this.storage.clearPendingLogin().catch(error => {
@@ -389,6 +409,61 @@ export class AuthService {
     }
 
     window.location.assign(logoutUrl.toString());
+  }
+
+  /**
+   * The native login uses offline_access: its refresh token lives for weeks
+   * and the browser end-session request below does not end that offline
+   * session. Revoke it at Keycloak first (RFC 7009; Keycloak ends only the
+   * session this token belongs to). Best effort with a short timeout: an
+   * offline device must still be able to sign out locally.
+   */
+  private async revokeRefreshTokenBestEffort(refreshToken: string | undefined): Promise<void> {
+    if (!refreshToken) {
+      return;
+    }
+
+    const url = `${this.issuerUrl()}/protocol/openid-connect/revoke`;
+    const body = new URLSearchParams({
+      token: refreshToken,
+      token_type_hint: 'refresh_token',
+      client_id: mobileEnvironment.keycloak.clientId
+    }).toString();
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const request: Promise<number> = this.isNative
+        ? CapacitorHttp.post({
+            url,
+            headers,
+            data: body,
+            connectTimeout: LOGOUT_REVOKE_TIMEOUT_MS,
+            readTimeout: LOGOUT_REVOKE_TIMEOUT_MS
+          }).then((response) => response.status)
+        : fetch(url, {
+            method: 'POST',
+            headers,
+            body,
+            credentials: 'omit',
+            signal: AbortSignal.timeout(LOGOUT_REVOKE_TIMEOUT_MS)
+          }).then((response) => response.status);
+      const timeout = new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), LOGOUT_REVOKE_TIMEOUT_MS);
+      });
+      const outcome = await Promise.race([request, timeout]);
+      void this.recordAuthDiagnostic('auth.logout_refresh_revoke', {
+        outcome: outcome === 'timeout' ? 'timeout' : outcome >= 200 && outcome < 300 ? 'revoked' : `http_${outcome}`
+      });
+    } catch (error: unknown) {
+      void this.recordAuthDiagnostic('auth.logout_refresh_revoke', {
+        outcome: 'failed',
+        errorClass: error instanceof Error ? error.constructor.name : typeof error
+      });
+    } finally {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    }
   }
 
   private async revokeCurrentPushTokenBestEffort(): Promise<void> {

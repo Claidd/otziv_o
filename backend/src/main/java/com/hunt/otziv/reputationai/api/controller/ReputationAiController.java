@@ -103,7 +103,11 @@ public class ReputationAiController {
     private final ReputationAiProperties properties;
 
     @GetMapping("/status")
-    public ReputationAiStatus status() {
+    public ReputationAiStatus status(org.springframework.security.core.Authentication authentication) {
+        return statusFor(canSeeInfrastructure(authentication));
+    }
+
+    private ReputationAiStatus statusFor(boolean infrastructureDetails) {
         boolean enabled = runtimeSwitch.isEnabled();
         boolean aiAvailable = aiProviderRouter.activeProviderAvailable();
         boolean searchAvailable = searchProviderRouter.activeProviderAvailable();
@@ -159,7 +163,7 @@ public class ReputationAiController {
                 properties.getOpenai().getModel(),
                 properties.getOpenai().getResearchReport().getModel(),
                 ContentPackProfile.QUALITY.model(),
-                openAiDiagnostics(),
+                infrastructureDetails ? openAiDiagnostics() : redactedDiagnostics(openAiDiagnostics()),
                 deepResearchProfiles(),
                 contentPackProfiles(),
                 warnings,
@@ -168,6 +172,7 @@ public class ReputationAiController {
     }
 
     @PostMapping("/status/openai-check")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public OpenAiProviderDiagnostics checkOpenAiRoute() {
         openAiResponsesClient.checkConnection();
         return openAiDiagnostics();
@@ -181,7 +186,7 @@ public class ReputationAiController {
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
         }
-        return status();
+        return statusFor(true);
     }
 
     @PutMapping("/status/enabled")
@@ -191,7 +196,7 @@ public class ReputationAiController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не передано состояние AI");
         }
         runtimeSwitch.setEnabled(request.enabled());
-        return status();
+        return statusFor(true);
     }
 
     @GetMapping("/prompts")
@@ -600,6 +605,31 @@ public class ReputationAiController {
                                 .toString()
                 )
                 .body(export.bytes());
+    }
+
+    /** Proxy host/port, provider endpoints and raw provider errors are infrastructure details. */
+    private static boolean canSeeInfrastructure(org.springframework.security.core.Authentication authentication) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority) || "ROLE_OWNER".equals(authority));
+    }
+
+    private static OpenAiProviderDiagnostics redactedDiagnostics(OpenAiProviderDiagnostics diagnostics) {
+        return new OpenAiProviderDiagnostics(
+                "",
+                diagnostics.configured(),
+                diagnostics.proxyEnabled(),
+                diagnostics.proxyConfigured(),
+                false,
+                "",
+                0,
+                diagnostics.requestGoesThroughProxy(),
+                diagnostics.route(),
+                diagnostics.lastCheckStatus(),
+                diagnostics.lastHttpStatus(),
+                "",
+                diagnostics.lastCheckedAt()
+        );
     }
 
     private OpenAiProviderDiagnostics openAiDiagnostics() {

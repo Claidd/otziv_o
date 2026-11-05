@@ -37,6 +37,14 @@ public interface UserService extends UserDetailsService{
 
     Set<Manager> findManagersByUserName(String username);
 
+    /** Ids of the owner's active managers, without loading their teams and avatars. */
+    default Set<Long> findManagerIdsByUserName(String username) {
+        return findManagersByUserName(username).stream()
+                .map(Manager::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
     void deleteOperator(String username, Long operatorId);
 
     void deleteManager(String username, Long managerId);

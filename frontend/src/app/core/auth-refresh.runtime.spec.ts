@@ -114,12 +114,62 @@ describe('web refresh failures and session ownership through the real auth trans
     sdk.onAuthRefreshError?.(); pending.reject({ response: { status: 503 } });
     await Promise.all([first, second]);
     sdk.updateToken.mockRejectedValue({ response: { status: 503 } });
-    await vi.advanceTimersByTimeAsync(2_000 + 5_000 + 15_000 + 180_000);
+    await vi.advanceTimersByTimeAsync(2_000 + 5_000 + 15_000);
     expect(sdk.updateToken).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(30_000 + 60_000);
+    expect(sdk.updateToken).toHaveBeenCalledTimes(6);
+    // The backoff is capped: while Keycloak stays down a focused tab probes
+    // once a minute (the 60 s refresh loop shares the same gate).
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(sdk.updateToken).toHaveBeenCalledTimes(16);
     expect(sdk.logout).not.toHaveBeenCalled();
     sdk.updateToken.mockResolvedValue(false);
     window.dispatchEvent(new Event('online')); await settle();
-    expect(sdk.updateToken).toHaveBeenCalledTimes(5);
+    expect(sdk.updateToken).toHaveBeenCalledTimes(17);
+    expect(auth.status()).toBe('authenticated');
+  });
+
+  it('recovers by itself after a Keycloak restart without focus or network events', async () => {
+    sdk.updateToken.mockRejectedValue({ response: { status: 503 } });
+    await auth.refreshToken(-1);
+    await vi.advanceTimersByTimeAsync(2_000 + 5_000 + 15_000 + 30_000 + 60_000);
+    expect(auth.status()).toBe('temporarily-unavailable');
+    const attempts = sdk.updateToken.mock.calls.length;
+    sdk.updateToken.mockResolvedValue(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sdk.updateToken.mock.calls.length).toBe(attempts + 1);
+    expect(auth.status()).toBe('authenticated');
+    expect(auth.error()).toBeNull();
+    expect(sdk.logout).not.toHaveBeenCalled();
+  });
+
+  it('lets a request that needs a token retry during the backoff, at most once per 10 seconds', async () => {
+    sdk.tokenParsed.exp = Math.floor(Date.now() / 1000) - 1;
+    sdk.updateToken.mockRejectedValue({ response: { status: 503 } });
+    await auth.refreshToken(-1);
+    // Five failed attempts; the next automatic one is a minute away.
+    await vi.advanceTimersByTimeAsync(2_000 + 5_000 + 15_000 + 30_000 + 10_000);
+    const attempts = sdk.updateToken.mock.calls.length;
+    expect(attempts).toBe(5);
+
+    await expect(firstValueFrom(http.get('/api/manager/board'))).rejects.toBeInstanceOf(AuthTemporarilyUnavailableError);
+    expect(sdk.updateToken.mock.calls.length).toBe(attempts + 1);
+    // A burst of requests inside the rate limit does not reach Keycloak.
+    await expect(firstValueFrom(http.get('/api/manager/board'))).rejects.toBeInstanceOf(AuthTemporarilyUnavailableError);
+    expect(sdk.updateToken.mock.calls.length).toBe(attempts + 1);
+    requests.expectNone('/api/manager/board');
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    sdk.updateToken.mockImplementation(async () => {
+      sdk.token = 'token-2'; sdk.tokenParsed.exp = Math.floor(Date.now() / 1000) + 600; return true;
+    });
+    const response = firstValueFrom(http.get('/api/manager/board'));
+    await settle();
+    expect(sdk.updateToken.mock.calls.length).toBe(attempts + 2);
+    const request = requests.expectOne('/api/manager/board');
+    expect(request.request.headers.get('Authorization')).toBe('Bearer token-2');
+    request.flush({ ok: true });
+    await expect(response).resolves.toEqual({ ok: true });
     expect(auth.status()).toBe('authenticated');
   });
 

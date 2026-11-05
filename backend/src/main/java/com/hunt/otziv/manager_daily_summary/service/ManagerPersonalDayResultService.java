@@ -24,23 +24,53 @@ public class ManagerPersonalDayResultService {
     private final EndOfDayAchievementService achievementService;
     private final ManagerReportReviewTelegramService reportReviewService;
 
-    @Transactional
+    /** Field-injected so existing constructors and tests stay unchanged. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    /**
+     * One short transaction per manager instead of one for everybody: the delivery calls an AI
+     * service and Telegram, so a single transaction held connections and row locks for minutes,
+     * and a failure on the k-th manager rolled back results already sent to the others.
+     */
     public int send(LocalDate date, List<ManagerDailySummaryResponse> summaries) {
         if (date == null || summaries == null || summaries.isEmpty()) {
             return 0;
         }
-        Map<Long, Manager> managers = managerRepository.findAllWithUserAndImage().stream()
-                .filter(manager -> manager.getId() != null)
-                .collect(Collectors.toMap(Manager::getId, Function.identity(), (left, right) -> left));
         int sent = 0;
         for (ManagerDailySummaryResponse summary : summaries) {
             if (summary == null || summary.managerId() == null || !date.equals(summary.date())) {
                 continue;
             }
-            Manager manager = managers.get(summary.managerId());
-            if (manager == null) {
-                continue;
+            try {
+                Boolean delivered = inOwnTransaction(() -> sendOne(date, summary));
+                if (Boolean.TRUE.equals(delivered)) {
+                    sent++;
+                }
+            } catch (RuntimeException failure) {
+                org.slf4j.LoggerFactory.getLogger(ManagerPersonalDayResultService.class)
+                        .warn("Итог дня менеджера {} не отправлен", summary.managerId(), failure);
             }
+        }
+        return sent;
+    }
+
+    private <T> T inOwnTransaction(java.util.function.Supplier<T> work) {
+        if (transactionManager == null) {
+            return work.get();
+        }
+        org.springframework.transaction.support.TransactionTemplate template =
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template.execute(status -> work.get());
+    }
+
+    private boolean sendOne(LocalDate date, ManagerDailySummaryResponse summary) {
+        Manager manager = managerRepository.findByIdWithUser(summary.managerId()).orElse(null);
+        if (manager == null) {
+            return false;
+        }
+        {
             boolean reached100 = summary.taskTotal() > 0
                     && summary.taskOpen() <= 0
                     && summary.taskProgressPercent() != null
@@ -59,13 +89,12 @@ public class ManagerPersonalDayResultService {
             if (reportReviewService != null && reportReviewService.enabled()) {
                 if (reportReviewService.deliver(manager, summary)) {
                     achievementService.markManagerWorkdayNotified(result);
-                    sent++;
+                    return true;
                 }
-            } else if (achievementService.notifyManagerWorkday(manager, result, summary.confirmedActiveSeconds())) {
-                sent++;
+                return false;
             }
+            return achievementService.notifyManagerWorkday(manager, result, summary.confirmedActiveSeconds());
         }
-        return sent;
     }
 
     private double percent(BigDecimal value) {

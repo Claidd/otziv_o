@@ -1,5 +1,6 @@
 package com.hunt.otziv.outreach_bridge;
 
+import com.hunt.otziv.common.web.CanonicalRequestPath;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,7 +21,7 @@ import java.util.Enumeration;
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 @ConditionalOnProperty(prefix = "outreach-bridge", name = "enabled", havingValue = "true")
 public class OutreachBridgeAuthenticationFilter extends OncePerRequestFilter {
-    private static final String PATH_PREFIX = "/internal/outreach/v1/";
+    private static final String PATH_NAMESPACE = "/internal/outreach";
 
     private final byte[] expectedDigest;
 
@@ -30,12 +31,8 @@ public class OutreachBridgeAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (contextPath != null && !contextPath.isEmpty() && path.startsWith(contextPath)) {
-            path = path.substring(contextPath.length());
-        }
-        return !path.startsWith(PATH_PREFIX);
+        // Decoded path, the same one MVC routes by; fail closed for the whole bridge namespace.
+        return !CanonicalRequestPath.matchesPathOrDescendant(CanonicalRequestPath.of(request), PATH_NAMESPACE);
     }
 
     @Override

@@ -73,6 +73,12 @@ public interface OrderService {
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
     boolean changeStatusAndOrderCounter(Long reviewId) throws Exception;
 
+    /**
+     * Book-keeping for a review marked published outside the staff publication flow (performer
+     * claim): text archive, order counter and the client progress outbox. Idempotent per review.
+     */
+    void synchronizeExternalPublication(Long reviewId);
+
     boolean changeStatusAndOrderCounter(Long reviewId, Authentication authentication) throws Exception;
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize, String sortDirection);

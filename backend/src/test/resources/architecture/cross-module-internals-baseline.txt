@@ -1636,7 +1636,6 @@ com.hunt.otziv.manager_daily_summary.service.ManagerDailySummaryService -> com.h
 com.hunt.otziv.manager_daily_summary.service.ManagerDailySummaryService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.manager_daily_summary.service.ManagerDailySummaryService -> com.hunt.otziv.u_users.repository.ManagerRepository
 com.hunt.otziv.manager_daily_summary.service.ManagerDebtTaskDetailsService -> com.hunt.otziv.u_users.model.Manager
-com.hunt.otziv.manager_daily_summary.service.ManagerPersonalDayResultService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.manager_daily_summary.service.ManagerPersonalDayResultService -> com.hunt.otziv.u_users.repository.ManagerRepository
 com.hunt.otziv.manager_daily_summary.service.ManagerPersonalDayResultService -> com.hunt.otziv.worker_performance.service.EndOfDayAchievementService
 com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewAccessPolicy -> com.hunt.otziv.config.settings.service.AppSettingService

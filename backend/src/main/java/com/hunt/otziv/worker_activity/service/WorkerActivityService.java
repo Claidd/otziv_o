@@ -77,7 +77,33 @@ public class WorkerActivityService {
         if (!isPlainWorker(authentication)) {
             return;
         }
+        // Called from inside business transactions that hold the order lock (publication, account
+        // changes). Risk evaluation runs several queries, may create incidents and sends Telegram
+        // messages: do it after the business transaction commits, never under its locks, and
+        // never for a business change that rolled back.
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            recordNow(authentication, action, entityType, entityId, orderId, reviewId, section, details);
+                        }
+                    });
+            return;
+        }
+        recordNow(authentication, action, entityType, entityId, orderId, reviewId, section, details);
+    }
 
+    private void recordNow(
+            Authentication authentication,
+            WorkerActivityAction action,
+            String entityType,
+            Long entityId,
+            Long orderId,
+            Long reviewId,
+            String section,
+            String details
+    ) {
         try {
             String username = authentication.getName();
             User workerUser = userService.findByUserNameWithAssignments(username).orElse(null);
@@ -86,18 +112,22 @@ public class WorkerActivityService {
                 return;
             }
 
-            WorkerActivityEvent event = transactionTemplate.execute(status -> eventRepository.save(event(
-                    workerUser,
-                    action,
-                    entityType,
-                    entityId,
-                    orderId,
-                    reviewId,
-                    section,
-                    details
-            )));
+            WorkerActivityEvent event = transactionTemplate.execute(status -> {
+                WorkerActivityEvent saved = eventRepository.save(event(
+                        workerUser,
+                        action,
+                        entityType,
+                        entityId,
+                        orderId,
+                        reviewId,
+                        section,
+                        details
+                ));
+                // Published inside its own transaction so AFTER_COMMIT listeners fire on this commit.
+                publishMedia(saved);
+                return saved;
+            });
             if (event != null) {
-                publishMedia(event);
                 riskEvaluationService.evaluateSafely(event, workerUser);
             }
         } catch (RuntimeException e) {

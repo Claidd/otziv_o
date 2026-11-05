@@ -211,4 +211,16 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
 
     @Modifying
     long deleteByStatusNotAndCreatedAtBefore(WorkerRiskIncidentStatus status, LocalDateTime cutoff);
+
+    /** One bounded batch of closed incidents; response rows go with them via ON DELETE CASCADE. */
+    @Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Query(value = """
+        DELETE FROM worker_risk_incidents
+        WHERE status <> 'OPEN' AND created_at < :cutoff
+        ORDER BY created_at
+        LIMIT :batchSize
+        """, nativeQuery = true)
+    int deleteClosedBatchCreatedBefore(@org.springframework.data.repository.query.Param("cutoff") LocalDateTime cutoff,
+                                       @org.springframework.data.repository.query.Param("batchSize") int batchSize);
 }

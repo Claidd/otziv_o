@@ -73,12 +73,22 @@ def active(value, now, process=process_identity):
     return value['expiresAt'] > now
 
 
+def public_status(value, is_active):
+    # Every collaborating task reads status; printing the token would let any of
+    # them renew, advance or finish the coordinator's session. Only begin (and
+    # the owner's own token-bearing calls) return it.
+    view = {key: item for key, item in (value or {}).items() if key != 'token'}
+    if value and 'token' in value:
+        view['tokenRedacted'] = True
+    return {**view, 'active': is_active}
+
+
 def transition(value, action, revision, tree, owner, token=None, ttl=14400, pid=None, now=None, process=process_identity):
     now = time.time() if now is None else now
     require(60 <= ttl <= 86400, 'Release lease must be between one minute and one day')
     is_active = active(value, now, process)
     if action == 'status':
-        return {**(value or {}), 'active': is_active}
+        return public_status(value, is_active)
     if action == 'begin' and not is_active:
         birth = process(pid) if pid else None
         require(not pid or birth, 'Cannot identify the release process')

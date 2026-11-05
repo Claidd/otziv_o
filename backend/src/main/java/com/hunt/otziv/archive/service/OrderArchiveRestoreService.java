@@ -17,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderArchiveRestoreService {
 
     private static final String DEFAULT_TARGET_STATUS = "Новый";
+    private static final String PAID_STATUS = "Оплачено";
+    /** Statuses a person may choose when returning an archived order to work. */
+    public static final Set<String> MANUAL_WORK_TARGETS = Set.of("Новый", "В проверку", "На проверке", "Коррекция");
     private static final Set<String> ALLOWED_TARGET_STATUSES = Set.of(
             "Новый",
             "В проверку",
@@ -68,9 +71,28 @@ public class OrderArchiveRestoreService {
             throw new ArchiveRestoreConflictException("Live rows already exist for archive order " + orderId + ": " + conflicts);
         }
 
+        // Money follows the evidence, never the requested status: an order with an active payment
+        // check comes back only as paid, and "paid" is never granted without one. Otherwise a
+        // restore would either reactivate salary for an unpaid order or silently undo a payment.
+        OrderArchiveRestoreRepository.ArchivePaymentState payment = repository.findPaymentState(orderId);
+        boolean activePayment = payment != null && payment.activePaymentCheck();
+        boolean targetPaid = PAID_STATUS.equals(resolvedStatus);
+        if (targetPaid && !activePayment) {
+            throw new ArchiveRestoreConflictException(
+                    "В статус «Оплачено» можно восстановить только заказ с действующей оплатой");
+        }
+        if (!targetPaid && activePayment) {
+            throw new ArchiveRestoreConflictException(
+                    "Оплаченный архивный заказ восстанавливается только в статус «Оплачено». "
+                            + "Чтобы вернуть его в работу, сначала отмените оплату.");
+        }
+
         ArchiveCandidateCounts restored = repository.restoreOrder(orderId, targetStatusId);
         if (!selected.equals(restored)) {
             throw new IllegalStateException("Archive restore verification failed: selected=" + selected + ", restored=" + restored);
+        }
+        if (!targetPaid) {
+            repository.clearCompletionMarkers(orderId);
         }
 
         LocalDateTime restoredAt = LocalDateTime.now();

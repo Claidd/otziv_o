@@ -554,8 +554,13 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public Optional<Company> getCompanyByTelephonAndTitle(String telephoneNumber, String title) {
-        Optional<Company> companyOpt = companyRepository.getByTelephoneOrTitleIgnoreCase(telephoneNumber, title);
-        return companyOpt;
+        // Several filials may share a phone: an ambiguous match is not guessed (and no longer throws
+        // IncorrectResultSizeDataAccessException, which lost the inbound message with a 500).
+        List<Company> matches = companyRepository.getByTelephoneOrTitleIgnoreCase(telephoneNumber, title);
+        if (matches.size() > 1) {
+            log.warn("Неоднозначный поиск компании по телефону и названию: {} совпадений", matches.size());
+        }
+        return matches.size() == 1 ? Optional.of(matches.getFirst()) : Optional.empty();
     }
 
     @Override
@@ -1439,8 +1444,12 @@ public class CompanyServiceImpl implements CompanyService{
         }
         if (!Objects.equals(managerId(companyDTO.getManager()), managerId(saveCompany.getManager()))){ /*Проверка менеджера*/
             log.info("Обновляем менеджера");
+            Long previousManagerId = managerId(saveCompany.getManager());
             saveCompany.setManager(managerService.getManagerById(companyDTO.getManager().getManagerId()));
             isChanged = true;
+            // Open orders and future repeats follow the company to its new manager.
+            applicationEvents.publishEvent(new com.hunt.otziv.c_companies.api.CompanyManagerChanged(
+                    saveCompany.getId(), previousManagerId, managerId(saveCompany.getManager())));
         }
         if (newWorkerDTO.getWorkerId() != 0) { /* Добваление нового работника*/
             log.info("Обновляем список работников");

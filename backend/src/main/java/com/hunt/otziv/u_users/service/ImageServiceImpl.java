@@ -44,12 +44,18 @@ public class ImageServiceImpl implements ImageService {
         FileUploadGuard.ImageCheck imageCheck = fileUploadGuard.requireSupportedImage(file);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-        Thumbnails.of(new ByteArrayInputStream(imageCheck.bytes()))
-                .size(512, 512)
-                .crop(Positions.CENTER)
-                .outputFormat("jpg")
-                .outputQuality(0.7)
-                .toOutputStream(baos);
+        try {
+            Thumbnails.of(new ByteArrayInputStream(imageCheck.bytes()))
+                    .size(512, 512)
+                    .crop(Positions.CENTER)
+                    .outputFormat("jpg")
+                    .outputQuality(0.7)
+                    .toOutputStream(baos);
+        } catch (IOException unreadable) {
+            // WebP passes the upload check but ImageIO cannot decode it: answer 400, not 500.
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Не удалось прочитать изображение. Загрузите JPG или PNG.", unreadable);
+        }
 
         Image image = new Image();
         image.setName(file.getName());

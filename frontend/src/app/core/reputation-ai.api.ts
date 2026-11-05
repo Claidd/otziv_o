@@ -1,7 +1,8 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
+import { SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
 
 export interface ReputationResearchRequest {
   websiteOverride?: string | null;
@@ -496,8 +497,19 @@ export class ReputationAiApi {
     );
   }
 
-  latestDeepResearchJob(companyId: number): Observable<DeepCompanyResearchJob> {
-    return this.http.get<DeepCompanyResearchJob>(`${this.baseUrl}/companies/${companyId}/deep-research/jobs/latest`);
+  latestDeepResearchJob(
+    companyId: number,
+    options: { skipAuthRedirectOn401?: boolean } = {}
+  ): Observable<DeepCompanyResearchJob> {
+    // Background monitors pass skipAuthRedirectOn401: a stale poll must never
+    // end the browser session or redirect a visitor to the login page.
+    const context = options.skipAuthRedirectOn401
+      ? new HttpContext().set(SKIP_AUTH_REDIRECT_ON_401, true)
+      : undefined;
+    return this.http.get<DeepCompanyResearchJob>(
+      `${this.baseUrl}/companies/${companyId}/deep-research/jobs/latest`,
+      context ? { context } : {}
+    );
   }
 
   exportDeepResearchMarkdown(companyId: number, jobId?: number | null): Observable<string> {

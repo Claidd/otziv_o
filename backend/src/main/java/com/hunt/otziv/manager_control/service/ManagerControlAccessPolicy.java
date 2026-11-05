@@ -100,10 +100,7 @@ public class ManagerControlAccessPolicy {
             if (OWNER_CONTROL_ALL_MANAGERS.equalsIgnoreCase(safe(owner == null ? null : owner.getOwnerControlViewMode()))) {
                 return;
             }
-            Set<Long> managerIds = userService.findManagersByUserName(principal.getName()).stream()
-                    .map(Manager::getId)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
+            Set<Long> managerIds = userService.findManagerIdsByUserName(principal.getName());
             if (controlManagerId != null && managerIds.contains(controlManagerId)) {
                 return;
             }

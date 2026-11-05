@@ -521,6 +521,12 @@ public class WhatsAppServiceImpl implements WhatsAppService {
                     || !payload.path("messages").isArray()) {
                 throw new IllegalStateException("WhatsApp history result is incomplete");
             }
+            // The gateway reports whether the fetched history reaches back to the cursor. Silence is
+            // never inferred from a partial window (an auto-archive would tell the client "no answer").
+            JsonNode coverage = payload.path("coverageComplete");
+            if (coverage.isBoolean() && !coverage.asBoolean()) {
+                throw new IllegalStateException("WhatsApp history does not cover the requested period");
+            }
             List<WhatsAppReconciledMessage> messages = new ArrayList<>();
             for (JsonNode message : payload.path("messages")) {
                 messages.add(MAPPER.treeToValue(message, WhatsAppReconciledMessage.class));
@@ -620,6 +626,13 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             String code = firstText(node, "code");
             if (looksLikeAuthUnavailable(status) || looksLikeAuthUnavailable(code) || looksLikeAuthUnavailable(body)) {
                 return "whatsapp_not_ready";
+            }
+            JsonNode dispatched = node.path("dispatched");
+            if (hasText(code) && dispatched.isBoolean() && !dispatched.asBoolean()) {
+                // The gateway proves the provider was never called for this operation id
+                // (e.g. ledger unavailable before the claim): a known-unsent, retryable outcome
+                // instead of an UNKNOWN that needs manual reconciliation.
+                return "gateway_not_ready";
             }
             if (hasText(code)) {
                 return code;

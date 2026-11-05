@@ -516,13 +516,25 @@ public class KeycloakUserProvisioningService {
         if (normalizedRoles.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "At least one role is required");
         }
+        // Exact ASCII whitelist: the roles table uses an accent/case-insensitive collation, so a
+        // look-alike such as "ÀDMIN" must never reach the database lookup or the privilege check.
+        for (String role : normalizedRoles) {
+            if (!ASSIGNABLE_ROLES.contains(role)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Unknown role");
+            }
+        }
         return normalizedRoles;
     }
+
+    private static final Set<String> ASSIGNABLE_ROLES = Set.of(
+            "ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR", "MARKETOLOG", "PERFORMER", "CLIENT", "USER"
+    );
 
     private List<Role> findLocalRoles(Set<String> keycloakRoles) {
         return keycloakRoles.stream()
                 .map(this::toLocalRoleName)
                 .map(roleName -> roleRepository.findByName(roleName)
+                        .filter(role -> roleName.equals(role.getName()))
                         .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown local role: " + roleName)))
                 .collect(Collectors.toCollection(ArrayList::new));
     }
@@ -983,6 +995,17 @@ public class KeycloakUserProvisioningService {
             String repairedKeycloakId = keycloakAdminClient.findUserIdByUsername(oldUsername)
                     .orElse(null);
             if (!hasText(repairedKeycloakId)) {
+                throw new ResponseStatusException(
+                        CONFLICT,
+                        "Keycloak account binding is stale; manual repair is required."
+                );
+            }
+            // A username is mutable; never rebind to a Keycloak account that already belongs
+            // to another local user (for example a renamed self-registered account).
+            boolean ownedByAnotherUser = userRepository.findByKeycloakId(repairedKeycloakId)
+                    .filter(existing -> !Objects.equals(existing.getId(), user.getId()))
+                    .isPresent();
+            if (ownedByAnotherUser) {
                 throw new ResponseStatusException(
                         CONFLICT,
                         "Keycloak account binding is stale; manual repair is required."

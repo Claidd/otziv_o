@@ -22,6 +22,8 @@ class DurableInboundInbox {
     this.retryBaseMs = retryBaseMs; this.retryMaxMs = retryMaxMs;
     this.records = new Map(); this.acknowledged = new Map(); this.lastOrder = 0; this.healthy = true; this.persistFailures = 0;
     this.historyGaps = new Set(); this.blockedHistoryChats = new Set(); this.historyDiscoveryFailed = false; this.paused = false; this.stopped = false;
+    // Per client generation: chats whose history was covered once are never held again.
+    this.historyCoveredChats = new Set(); this.historyFailures = new Map();
     io.mkdirSync(directory, { recursive: true, mode: 0o700 });
     if (!io.lstatSync(directory).isDirectory() || io.lstatSync(directory).isSymbolicLink()) throw new Error("inbound_directory_not_regular");
     if (process.platform !== "win32") {
@@ -99,6 +101,10 @@ class DurableInboundInbox {
 
   cursor(chatId) { return this.metadata.cursors[chatId] ?? this.metadata.since; }
 
+  // A new WhatsApp session may have missed messages: hold each chat again
+  // until its first history scan in that session covers the gap.
+  resetHistoryCoverage() { this.historyCoveredChats.clear(); this.historyFailures.clear(); }
+
   checkpoint(chatId, timestamp) {
     if (!this.healthy) throw new Error("inbound_store_unhealthy");
     if (!Number.isFinite(timestamp)) throw new Error("inbound_cursor_invalid");
@@ -126,7 +132,8 @@ class DurableInboundInbox {
       dead: records.filter(r => r.status === "DEAD").length, capacity: this.maxRecords,
       oldestAgeSeconds: records.length ? Math.max(0, (this.now() - records.reduce((oldest, r) => Math.min(oldest, r.createdAt), this.now())) / 1000) : 0,
       persistenceFailures: this.persistFailures, historyGapChats: this.historyGaps.size,
-      historyDiscoveryFailed: this.historyDiscoveryFailed, historySince: this.metadata.since, historyPaused: this.paused };
+      historyDiscoveryFailed: this.historyDiscoveryFailed, historySince: this.metadata.since, historyPaused: this.paused,
+      historyHeldChats: this.blockedHistoryChats.size, historyCoveredChats: this.historyCoveredChats.size };
   }
 
   deadLetters() {
@@ -159,6 +166,8 @@ class DurableInboundInbox {
       let response;
       try { response = await send(record.route, record.payload); } catch (_) { response = { status: 0 }; }
       const status = Number(response && response.status) || 0;
+      // Only a final 2xx from the configured URL acknowledges; a 3xx redirect is
+      // never followed by the sender and stays pending for retry.
       if (status >= 200 && status < 300 && status !== 202) {
         try { this.io.unlinkSync(path.join(this.directory, `${record.key}.json`)); this.syncDirectory(); }
         catch (error) { this.healthy = false; this.persistFailures += 1; throw error; }

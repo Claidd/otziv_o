@@ -54,10 +54,35 @@ export function removeSessionDraft(key: string): void {
   }
 }
 
+/** Removes every form draft of this tab, e.g. when the user signs out. */
+export function clearAllSessionDrafts(): void {
+  const storage = sessionDraftStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(DRAFT_PREFIX)) {
+        keys.push(key);
+      }
+    }
+    keys.forEach((key) => storage.removeItem(key));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 function draftKey(key: string): string {
   return `${DRAFT_PREFIX}${key}`;
 }
 
 function sessionDraftStorage(): Storage | null {
-  return typeof window === 'undefined' ? null : window.sessionStorage;
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage;
+  } catch {
+    return null;
+  }
 }

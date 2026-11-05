@@ -269,6 +269,12 @@ public class MaxBotUpdateService {
     }
 
     private static String messageId(JsonNode update) {
+        // MAX puts the message id under message.body.mid (as the client and history code read it);
+        // keep the older top-level fields as fallbacks.
+        String bodyId = text(update.path("message").path("body"), "mid");
+        if (hasText(bodyId)) {
+            return bodyId;
+        }
         String textId = text(update.path("message"), "mid");
         if (hasText(textId)) {
             return textId;

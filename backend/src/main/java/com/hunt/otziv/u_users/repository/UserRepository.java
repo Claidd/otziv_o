@@ -73,6 +73,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByKeycloakId(String keycloakId);
 
+    boolean existsByKeycloakId(String keycloakId);
+
+    /** Binds an unlinked local account to its Keycloak subject exactly once. */
+    @Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query(value = """
+        UPDATE users
+        SET keycloak_id = :subject
+        WHERE id = :userId
+          AND (keycloak_id IS NULL OR keycloak_id = '')
+    """, nativeQuery = true)
+    int bindKeycloakIdIfUnlinked(@Param("userId") Long userId, @Param("subject") String subject);
+
     @Query("""
         SELECT DISTINCT u
         FROM User u
@@ -132,7 +145,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
         JOIN u.managers m
         JOIN FETCH m.user mu
         JOIN mu.roles mr
-        LEFT JOIN FETCH mu.image
         LEFT JOIN FETCH mu.workers w
         LEFT JOIN FETCH w.user
         LEFT JOIN FETCH mu.operators o
@@ -144,6 +156,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
           AND mr.name = 'ROLE_MANAGER'
     """)
     Set<Manager> findManagersWithTeamByUsername(@Param("username") String username);
+
+    /** Same owner→active managers relation as findManagersWithTeamByUsername, ids only (no team graph, no avatars). */
+    @Query("""
+        SELECT DISTINCT m.id
+        FROM User u
+        JOIN u.managers m
+        JOIN m.user mu
+        JOIN mu.roles mr
+        WHERE u.username = :username
+          AND mu.active = true
+          AND mr.name = 'ROLE_MANAGER'
+    """)
+    Set<Long> findActiveManagerIdsByOwnerUsername(@Param("username") String username);
 
     @Query("""
         SELECT DISTINCT u

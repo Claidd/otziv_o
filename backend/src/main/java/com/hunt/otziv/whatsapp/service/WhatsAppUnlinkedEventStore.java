@@ -30,19 +30,38 @@ public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
                 WhatsAppGroupWebhookDeduplicator.key(reply));
     }
     public List<String> due() {
-        return jdbc.queryForList("SELECT receipt_key FROM whatsapp_unlinked_events WHERE completed_at IS NULL AND next_attempt_at<=NOW(6) ORDER BY next_attempt_at,receipt_key LIMIT 20",String.class);
+        // Oldest message first: replaying out of order could reopen an already answered thread.
+        return jdbc.queryForList("SELECT receipt_key FROM whatsapp_unlinked_events WHERE completed_at IS NULL AND next_attempt_at<=NOW(6) ORDER BY created_at,receipt_key LIMIT 20",String.class);
     }
     public WhatsAppGroupReplyDTO lockDue(String key) {
         var payloads=jdbc.query("SELECT payload_json FROM whatsapp_unlinked_events WHERE receipt_key=? AND completed_at IS NULL AND next_attempt_at<=NOW(6) FOR UPDATE",
                 (rs,n)->rs.getString(1),key);
         if(payloads.isEmpty()) return null;
-        jdbc.update("UPDATE whatsapp_unlinked_events SET attempts=LEAST(attempts+1,1000000),next_attempt_at=DATE_ADD(NOW(6),INTERVAL 30 MINUTE) WHERE receipt_key=?",key);
+        // 30 min, 1 h, 2 h ... capped at a day: a group that never gets linked stops costing a full
+        // company scan every half hour.
+        jdbc.update("UPDATE whatsapp_unlinked_events SET attempts=LEAST(attempts+1,1000000),"
+                + "next_attempt_at=TIMESTAMPADD(MINUTE,LEAST(1440,30*POW(2,LEAST(attempts,6))),NOW(6)) WHERE receipt_key=?",key);
         try {return json.readValue(payloads.getFirst(),WhatsAppGroupReplyDTO.class);}
         catch(JsonProcessingException invalid) {throw new IllegalArgumentException("Invalid saved inbound message",invalid);}
     }
     public void postponeFailed(String key) {
         jdbc.update("UPDATE whatsapp_unlinked_events SET next_attempt_at=DATE_ADD(NOW(6),INTERVAL 30 MINUTE) WHERE receipt_key=? AND completed_at IS NULL AND next_attempt_at<=NOW(6)",key);
     }
+    /**
+     * Inbound messages from groups that were never linked are personal data kept only while they
+     * can still be attributed: after 30 days they are closed and their payload dropped; closed
+     * rows are deleted after 90 days.
+     */
+    public int expireStale() {
+        int expired=jdbc.update("""
+            UPDATE whatsapp_unlinked_events SET completed_at=NOW(6),payload_json='{}',reason='expired'
+            WHERE completed_at IS NULL AND created_at<DATE_SUB(NOW(6),INTERVAL 30 DAY)
+            ORDER BY created_at LIMIT 500
+            """);
+        jdbc.update("DELETE FROM whatsapp_unlinked_events WHERE completed_at<DATE_SUB(NOW(6),INTERVAL 90 DAY) ORDER BY completed_at LIMIT 500");
+        return expired;
+    }
+
     @Transactional(readOnly=true)
     public List<Map<String,Object>> unresolvedGroups() {
         return jdbc.queryForList("SELECT client_id,group_id,reason,COUNT(*) AS events,MIN(created_at) AS first_seen_at FROM whatsapp_unlinked_events WHERE completed_at IS NULL GROUP BY client_id,group_id,reason ORDER BY first_seen_at LIMIT 100");

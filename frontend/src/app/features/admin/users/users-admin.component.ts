@@ -319,7 +319,7 @@ export class UsersAdminComponent implements OnDestroy {
   });
 
   readonly passwordForm = this.fb.nonNullable.group({
-    password: ['', [Validators.required, Validators.minLength(6)]]
+    password: ['', [Validators.required, Validators.minLength(8)]]
   });
 
   readonly assignmentForm = this.fb.nonNullable.group({

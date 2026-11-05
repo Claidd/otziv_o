@@ -385,6 +385,11 @@ type CacheEntry<T> = {
   request$: Observable<T>;
 };
 
+export interface StaffTelegramLink {
+  url: string;
+  expiresAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class CabinetApi {
   private readonly profileCache = new Map<string, CacheEntry<CabinetProfile>>();
@@ -461,6 +466,11 @@ export class CabinetApi {
         params: this.paramsWithAnalyticsPeriod(date, options)
       })
     );
+  }
+
+  /** One-time deep link that binds the caller's private Telegram chat (valid ~15 minutes). */
+  issueTelegramLink(): Observable<StaffTelegramLink> {
+    return this.http.post<StaffTelegramLink>(`${appEnvironment.apiBaseUrl}/api/me/telegram-link`, null);
   }
 
   getWhatsAppBindingStatus(options: CacheOptions = {}): Observable<WhatsAppClientStatus> {

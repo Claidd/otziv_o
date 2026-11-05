@@ -132,7 +132,12 @@ public class ReviewArchiveNotifications {
             if (intent.isEmpty()) return null;
             var draft = intent.getFirst();
             if ("STAFF".equals(draft[2]) && "READY".equals(draft[3])
-                    && !automation.getObject().archiveNoticeDispatchEnabled((Long)draft[0])) return null;
+                    && !automation.getObject().archiveNoticeDispatchEnabled((Long)draft[0])) {
+                // Held rows must move back in the queue, otherwise 20 of them occupy the whole
+                // "ORDER BY next_attempt_at LIMIT 20" window and permitted notices never go out.
+                jdbc.update("UPDATE review_archive_notifications SET next_attempt_at=TIMESTAMPADD(MINUTE,15,CURRENT_TIMESTAMP(6)) WHERE operation_id=? AND state='READY'",id);
+                return null;
+            }
             if ("CLIENT".equals(draft[2]) && "READY".equals(draft[3])) {
                 Envelope envelope;
                 try { envelope=json.readValue(cipher.decrypt((String)draft[1]),Envelope.class); }
@@ -178,9 +183,12 @@ public class ReviewArchiveNotifications {
                         envelope.text(),null,id);
         } catch (Exception failure) { outcome = ClientMessageSendResult.failed("notification_unknown","Outcome unknown"); }
         ClientMessageSendResult result = outcome;
+        // An outcome still unknown is re-checked by receipt with growing pauses (5 min .. 6 h) instead
+        // of querying the gateway history every 5 minutes forever.
         transactions.runInNewTransaction(() -> jdbc.update("""
             UPDATE review_archive_notifications SET state=?,error_code=?,claim_token=NULL,
-              next_attempt_at=TIMESTAMPADD(MINUTE,5,CURRENT_TIMESTAMP(6)) WHERE operation_id=? AND claim_token=?
+              next_attempt_at=TIMESTAMPADD(MINUTE,LEAST(360,5*POW(2,LEAST(GREATEST(attempts-1,0),7))),CURRENT_TIMESTAMP(6))
+            WHERE operation_id=? AND claim_token=?
             """, result != null && result.sent() ? "SENT"
                 : !claim.receiptOnly() && "CLIENT".equals(claim.channel()) && ClientMessageDelivery.isKnownUnsent(result) ? "READY" : "UNKNOWN",
                 result == null ? "outcome_missing" : result.errorCode(),id,claim.token()));

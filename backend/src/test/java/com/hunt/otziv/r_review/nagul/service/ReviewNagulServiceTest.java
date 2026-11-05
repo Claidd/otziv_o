@@ -75,14 +75,37 @@ class ReviewNagulServiceTest {
         when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
         when(reviewRepository.findById(15L)).thenReturn(Optional.of(review));
         when(appSettingService.getInt(AppSettingService.NAGUL_COOLDOWN_MINUTES, 10)).thenReturn(10);
+        when(workerService.claimNagulSlot(any(), eq(10))).thenReturn(true);
 
         service.performNagulWithExceptions(15L, "worker");
 
         assertTrue(review.isVigul());
         assertEquals(LocalDate.of(2026, 7, 19), review.getPublishedDate());
-        assertTrue(worker.getLastNagulTime() != null);
-        verify(workerService).save(worker);
+        // The cooldown slot is taken by one conditional UPDATE; the worker row is not rewritten.
+        verify(workerService).claimNagulSlot(worker.getId(), 10);
+        verify(workerService, never()).save(any(Worker.class));
         verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void performNagulRejectsASecondRequestThatLostTheCooldownSlot() {
+        User user = workerUser();
+        Worker worker = new Worker();
+        Review review = reviewWithBotName("Иван Петров");
+
+        when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
+        when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
+        when(reviewRepository.findById(15L)).thenReturn(Optional.of(review));
+        when(appSettingService.getInt(AppSettingService.NAGUL_COOLDOWN_MINUTES, 10)).thenReturn(10);
+        when(workerService.claimNagulSlot(any(), eq(10))).thenReturn(false);
+
+        org.springframework.web.server.ResponseStatusException conflict = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.performNagulWithExceptions(15L, "worker"));
+
+        assertEquals(409, conflict.getStatusCode().value());
+        assertTrue(!review.isVigul());
+        verify(reviewRepository, never()).save(any());
     }
 
     @Test

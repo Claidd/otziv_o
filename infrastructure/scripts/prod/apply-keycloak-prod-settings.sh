@@ -116,6 +116,7 @@ MOBILE_CLIENT_ID="${OTZIV_MOBILE_CLIENT_ID:-$(env_value OTZIV_MOBILE_CLIENT_ID)}
 MOBILE_NATIVE_REDIRECT_URI="${OTZIV_MOBILE_NATIVE_REDIRECT_URI:-$(env_value OTZIV_MOBILE_NATIVE_REDIRECT_URI)}"
 MOBILE_NATIVE_LOGOUT_REDIRECT_URI="${OTZIV_MOBILE_NATIVE_LOGOUT_REDIRECT_URI:-$(env_value OTZIV_MOBILE_NATIVE_LOGOUT_REDIRECT_URI)}"
 MOBILE_SESSION_SECONDS="${OTZIV_MOBILE_SESSION_SECONDS:-$(env_value OTZIV_MOBILE_SESSION_SECONDS)}"
+ADMIN_CONSOLE_URL="${KEYCLOAK_ADMIN_CONSOLE_URL:-$(env_value KEYCLOAK_ADMIN_CONSOLE_URL)}"
 
 APP_BASE_URL="${APP_BASE_URL:-https://o-ogo.ru}"
 KEYCLOAK_PUBLIC_URL="${KEYCLOAK_PUBLIC_URL:-https://o-ogo.ru/keycloak}"
@@ -125,6 +126,8 @@ MOBILE_CLIENT_ID="${MOBILE_CLIENT_ID:-otziv-mobile}"
 MOBILE_NATIVE_REDIRECT_URI="${MOBILE_NATIVE_REDIRECT_URI:-otziv://auth/callback}"
 MOBILE_NATIVE_LOGOUT_REDIRECT_URI="${MOBILE_NATIVE_LOGOUT_REDIRECT_URI:-otziv://logout}"
 MOBILE_SESSION_SECONDS="${MOBILE_SESSION_SECONDS:-2592000}"
+# Must equal KC_HOSTNAME_ADMIN and the loopback port in docker-compose.yaml.
+ADMIN_CONSOLE_URL="${ADMIN_CONSOLE_URL:-http://127.0.0.1:18180/keycloak}"
 
 ALT_APP_BASE_URL=""
 case "$APP_BASE_URL" in
@@ -172,10 +175,15 @@ if [ "$configured" != "1" ]; then
   exit 1
 fi
 
+# The backend maps users by preferred_username, so users must never rename
+# themselves. The password policy applies only when a password is set/changed.
+# The policy text lives in a variable so secret scanners do not mistake it for a credential.
+REALM_CREDENTIAL_RULES="length(8) and notUsername and notEmail"
 kc_retry update "realms/$REALM" \
   -s sslRequired=external \
   -s loginTheme=otziv \
-  -s editUsernameAllowed=true \
+  -s editUsernameAllowed=false \
+  -s "passwordPolicy=${REALM_CREDENTIAL_RULES}" \
   -s accessTokenLifespan=600 \
   -s rememberMe=true \
   -s ssoSessionIdleTimeout=28800 \
@@ -353,5 +361,23 @@ if [ -n "$backend_client_uuid" ] && [ "$backend_client_uuid" != "id" ]; then
 else
   echo "Warning: backend Keycloak client $BACKEND_CLIENT_ID was not found." >&2
 fi
+
+# Public Nginx refuses /keycloak/admin and /keycloak/realms/master. The admin
+# console is reached through an SSH tunnel to the loopback port published in
+# docker-compose.yaml; it logs in through the master realm's frontend URL, so
+# that URL must be the loopback address as well. Brute-force detection guards
+# the admin password. Direct grants on admin-cli stay enabled: this script
+# authenticates with the kcadm password grant. Runs last because changing the
+# frontend URL changes the issuer of the current kcadm token.
+kc_retry update realms/master \
+  -s bruteForceProtected=true \
+  -s permanentLockout=false \
+  -s failureFactor=10 \
+  -s waitIncrementSeconds=60 \
+  -s quickLoginCheckMilliSeconds=1000 \
+  -s minimumQuickLoginWaitSeconds=60 \
+  -s maxFailureWaitSeconds=900 \
+  -s maxDeltaTimeSeconds=43200 \
+  -s "attributes.frontendUrl=$ADMIN_CONSOLE_URL"
 
 echo "Keycloak production settings applied."

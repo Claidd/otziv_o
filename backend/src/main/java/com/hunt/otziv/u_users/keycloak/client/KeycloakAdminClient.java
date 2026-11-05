@@ -494,6 +494,13 @@ public class KeycloakAdminClient {
     }
 
     private ResponseStatusException keycloakException(String message, RestClientResponseException e) {
+        // The realm password policy rejects weak passwords with 400 "invalidPassword...": that is a
+        // user input error, not a gateway failure.
+        String body = e.getResponseBodyAsString();
+        if (e.getStatusCode().value() == 400 && body != null && body.contains("invalidPassword")) {
+            return new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Пароль не подходит: нужно не менее 8 символов, и он не должен совпадать с логином или email", e);
+        }
         return new ResponseStatusException(BAD_GATEWAY, message + ": " + e.getStatusText(), e);
     }
 

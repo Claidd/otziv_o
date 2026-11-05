@@ -44,7 +44,9 @@ public class ContractorPaymentReconciliationDispatcher {
         stopping = true;
     }
 
-    @Value("${otziv.contractor-payments.terminal-recheck-seconds:3600}")
+    // Terminal allocations re-enter immediately when their payment source changes; the periodic
+    // re-check is only a safety net, so once a day instead of re-reconciling everything hourly.
+    @Value("${otziv.contractor-payments.terminal-recheck-seconds:86400}")
     private long terminalRecheckSeconds;
 
     @Scheduled(fixedDelayString = "${otziv.contractor-payments.reconcile-delay-ms:60000}")

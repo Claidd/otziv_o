@@ -19,6 +19,12 @@ public class WhatsAppUnlinkedEventRecovery {
     @Scheduled(fixedDelayString="${whatsapp.webhook.unlinked-recovery-delay-ms:60000}",initialDelay=60000)
     @Transactional(propagation=Propagation.NOT_SUPPORTED)
     public void recover() {
+        try {
+            int expired=store.expireStale();
+            if(expired>0) log.info("Expired {} unattributed WhatsApp inbound events",expired);
+        } catch(RuntimeException failure) {
+            log.warn("Unlinked WhatsApp event expiry failed: exceptionType={}",failure.getClass().getSimpleName());
+        }
         for(String key:store.due()) {
             try {new TransactionTemplate(transactions).executeWithoutResult(status->{
                 var reply=store.lockDue(key);

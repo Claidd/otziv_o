@@ -330,7 +330,9 @@ export class ManagerControlComponent implements OnInit {
   });
 
   constructor() {
-    const clockTimer = window.setInterval(() => this.clock.set(Date.now()), 1000);
+    // SLA timers show whole minutes. A per-second tick re-rendered the whole
+    // control template every second; 30 s keeps the minutes current (as in mobile).
+    const clockTimer = window.setInterval(() => this.clock.set(Date.now()), 30_000);
     this.destroyRef.onDestroy(() => {
       window.clearInterval(clockTimer);
       this.stopRepairResultWatch();

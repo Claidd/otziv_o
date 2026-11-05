@@ -173,9 +173,7 @@ public class ManagerAccessService implements PaymentReviewOrderAccess {
     }
 
     private Set<Long> ownerManagerIds(Authentication authentication) {
-        return userService.findManagersByUserName(authentication.getName()).stream()
-                .map(Manager::getId)
-                .collect(Collectors.toSet());
+        return userService.findManagerIdsByUserName(authentication.getName());
     }
 
     private boolean ownerCanAccessAllManagers(Authentication authentication) {

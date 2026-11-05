@@ -43,7 +43,7 @@ class ManagerPersonalDayResultServiceTest {
                         DATE, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY, 8L,
                         14, 14, 100, 0, true, 3, false
                 );
-        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(managerRepository.findByIdWithUser(manager.getId())).thenReturn(java.util.Optional.of(manager));
         when(achievementService.saveResult(
                 DATE, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY, 8L, 80L,
                 14, 14, 100, 0, true
@@ -64,7 +64,7 @@ class ManagerPersonalDayResultServiceTest {
                         DATE, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY, 8L,
                         14, 11, 78.6, 0, false, 0, false
                 );
-        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(managerRepository.findByIdWithUser(manager.getId())).thenReturn(java.util.Optional.of(manager));
         when(achievementService.saveResult(
                 eq(DATE), eq(EndOfDayAchievementService.ROLE_MANAGER_WORKDAY), eq(8L), eq(80L),
                 eq(14L), eq(11L), eq(78.57), eq(0L), eq(false)
@@ -84,7 +84,7 @@ class ManagerPersonalDayResultServiceTest {
                         DATE, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY, 8L,
                         15, 15, 100, 0, true, 3, false
                 );
-        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(managerRepository.findByIdWithUser(manager.getId())).thenReturn(java.util.Optional.of(manager));
         when(achievementService.saveResult(
                 eq(DATE), eq(EndOfDayAchievementService.ROLE_MANAGER_WORKDAY), eq(8L), eq(80L),
                 eq(15L), eq(15L), eq(100.0), eq(0L), eq(true)

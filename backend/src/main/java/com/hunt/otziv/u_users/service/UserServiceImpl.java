@@ -85,6 +85,12 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
+    public Set<Long> findManagerIdsByUserName(String username) {
+        return userRepository.findActiveManagerIdsByOwnerUsername(username);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Set<Manager> findManagersByUserName(String username) {
         return userRepository.findManagersWithTeamByUsername(username);
     }

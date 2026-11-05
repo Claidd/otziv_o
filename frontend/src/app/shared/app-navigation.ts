@@ -325,6 +325,16 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     roles: ['ADMIN', 'OWNER']
   },
   {
+    id: 'telegram',
+    label: 'Telegram',
+    description: 'Привязка личного Telegram',
+    icon: 'send',
+    active: 'telegram-bind',
+    group: 'home',
+    routerLink: '/cabinet/telegram',
+    roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
+  },
+  {
     id: 'whatsapp',
     label: 'WhatsApp',
     description: 'Привязка рабочего аккаунта',

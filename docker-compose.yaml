@@ -27,6 +27,10 @@ volumes:
   grafana_data:
   prometheus_data:
 
+# oom_score_adj: container memory limits add up to more than the host RAM, so under real
+# pressure the kernel OOM killer chooses the victim. Data and API services are protected
+# (negative), observability is sacrificed first (positive). Database services are left
+# unchanged on purpose: editing them would recreate the database containers on deploy.
 services:
   docker-observer:
     image: ${DOCKER_OBSERVER_IMAGE:-otziv-docker-observer:local}
@@ -97,6 +101,7 @@ services:
 
   phpmyadmin:
     image: ghcr.io/claidd/otziv-security@sha256:a28faa872c401b182e11021fc1cb2c20d10c4ade88dabf8d6be49c7a0660004b
+    oom_score_adj: 600
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -146,6 +151,7 @@ services:
 
   keycloak:
     image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e}
+    oom_score_adj: -300
     restart: unless-stopped
     logging: *default-logging
     mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}
@@ -162,7 +168,14 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /keycloak
       KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL}
-      KC_HOSTNAME_ADMIN: ${KEYCLOAK_PUBLIC_URL}
+      # Public Nginx refuses /keycloak/admin and /keycloak/realms/master. The
+      # admin console lives on the loopback port below (the settings script
+      # points the master realm frontend URL there too). From a workstation:
+      #   ssh -N -L 18180:127.0.0.1:18180 <user>@<vps>
+      #   open http://127.0.0.1:18180/keycloak/admin/master/console/
+      # Use exactly this origin; localhost or another local port breaks the
+      # console's redirect and CORS checks.
+      KC_HOSTNAME_ADMIN: http://127.0.0.1:18180/keycloak
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HOSTNAME_STRICT: "true"
       KC_PROXY_HEADERS: xforwarded
@@ -175,6 +188,9 @@ services:
     volumes:
       - ./infrastructure/keycloak/realm-config.prod.json:/opt/keycloak/data/import/otziv-realm.json:ro
       - ./infrastructure/keycloak/themes:/opt/keycloak/themes:ro
+    ports:
+      # Loopback only: admin console via SSH tunnel (see KC_HOSTNAME_ADMIN).
+      - "127.0.0.1:18180:8080"
     depends_on:
       keycloak-postgres:
         condition: service_healthy
@@ -195,6 +211,7 @@ services:
   app:
     stop_grace_period: 120s
     image: ${APP_IMAGE:?APP_IMAGE must be an immutable release tag or digest}
+    oom_score_adj: -500
     restart: unless-stopped
     init: true
     read_only: true
@@ -269,6 +286,9 @@ services:
       MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "false"
       DATABASE_URL: ${DATABASE_URL}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
+      OTZIV_DB_POOL_SIZE: ${OTZIV_DB_POOL_SIZE:-24}
+      OTZIV_DB_POOL_MIN_IDLE: ${OTZIV_DB_POOL_MIN_IDLE:-6}
+      OTZIV_DB_LEAK_DETECTION_MS: ${OTZIV_DB_LEAK_DETECTION_MS:-60000}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
@@ -691,6 +711,7 @@ services:
   whatsapp_lika:
     stop_grace_period: 330s
     image: ${WHATSAPP_IMAGE:?WHATSAPP_IMAGE must be an explicit deployment tag}
+    oom_score_adj: -100
     build:
       context: .
       dockerfile: Dockerfile.whatsapp
@@ -767,6 +788,7 @@ services:
   whatsapp_vika:
     stop_grace_period: 330s
     image: ${WHATSAPP_IMAGE:?WHATSAPP_IMAGE must be an explicit deployment tag}
+    oom_score_adj: -100
     build:
       context: .
       dockerfile: Dockerfile.whatsapp
@@ -839,6 +861,7 @@ services:
 
   nginx:
     image: ${WEB_IMAGE:?WEB_IMAGE must be an immutable release tag or digest}
+    oom_score_adj: -300
     container_name: frontend
     restart: unless-stopped
     logging: *default-logging
@@ -884,6 +907,7 @@ services:
 
   dozzle:
     image: ghcr.io/claidd/otziv-security@sha256:704cb4424920407d43d1eebd1782af56f3fd1b65648530aeae6f3ad6e34f3f92
+    oom_score_adj: 500
     container_name: log-viewer
     restart: unless-stopped
     logging: *default-logging
@@ -910,6 +934,7 @@ services:
 
   prometheus:
     image: ghcr.io/claidd/otziv-security@sha256:1b317647ec6d8a34e3041ca625a658da2c83c774bb43b125612a237fbed58aec
+    oom_score_adj: 300
     container_name: prometheus
     restart: unless-stopped
     logging: *default-logging
@@ -920,7 +945,8 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-7d}
-      - --web.enable-lifecycle
+      # No --web.enable-lifecycle: nothing reloads Prometheus over HTTP (deploys recreate the
+      # container), and the flag let any container on the network POST /-/quit.
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infrastructure/prometheus/delivery-rules.yml:/etc/prometheus/delivery-rules.yml:ro
@@ -941,6 +967,7 @@ services:
 
   loki:
     image: ghcr.io/claidd/otziv-security@sha256:87d426476ddadecd314b8c7e0064df618c84b6461be52d05c830be9095e3c14e
+    oom_score_adj: 500
     container_name: loki
     restart: unless-stopped
     logging: *default-logging
@@ -962,6 +989,7 @@ services:
 
   tempo:
     image: ghcr.io/claidd/otziv-security@sha256:4d64639afbe1d54b305ce72c1964141ec0cc63a1506eae5f70340d8b82b8d4b9
+    oom_score_adj: 500
     stop_grace_period: 30s
     container_name: tempo
     restart: unless-stopped
@@ -984,6 +1012,7 @@ services:
 
   alloy:
     image: ghcr.io/claidd/otziv-security@sha256:27905df1862decf6e9c2543cb476e70e83d68351f7a5bb17194a6a094764db32
+    oom_score_adj: 500
     container_name: alloy
     restart: unless-stopped
     logging: *default-logging
@@ -1016,6 +1045,7 @@ services:
 
   grafana:
     image: ghcr.io/claidd/otziv-security@sha256:07233e89f1964d967e516a7b97856011a502213194a27c941fc5cf5d052208fa
+    oom_score_adj: 400
     restart: unless-stopped
     logging: *default-logging
     pids_limit: ${GRAFANA_PIDS_LIMIT:-512}

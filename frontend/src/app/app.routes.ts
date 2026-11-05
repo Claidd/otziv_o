@@ -298,6 +298,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'cabinet/telegram',
+    loadComponent: () => import('./features/cabinet/telegram-bind.component')
+      .then((m) => m.TelegramBindComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
+    }
+  },
+  {
     path: 'cabinet/whatsapp',
     loadComponent: () => import('./features/cabinet/whatsapp-bind.component')
       .then((m) => m.WhatsAppBindComponent),
