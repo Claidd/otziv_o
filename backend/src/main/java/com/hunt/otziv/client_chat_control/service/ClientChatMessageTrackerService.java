@@ -45,6 +45,9 @@ public class ClientChatMessageTrackerService {
     private static final String WARNING_MINUTES = "manager-control.unanswered-client-messages.warning-minutes";
     private static final String EXAMPLE_LIMIT = "manager-control.unanswered-client-messages.example-limit";
 
+    /** {@code client_chat_unanswered_items.resolution_reason_code} of a manager's answer outside the chat. */
+    public static final String ANSWERED_OUTSIDE_CHAT = "ANSWERED_OUTSIDE_CHAT";
+
     private final ClientChatMessageRepository messageRepository;
     private final ClientChatUnansweredItemRepository unansweredRepository;
     private final ClientChatParticipantClassifier participantClassifier;
@@ -452,6 +455,76 @@ public class ClientChatMessageTrackerService {
         );
     }
 
+    /**
+     * The manager answered the client outside the tracked chat (personally, by phone), for example when the
+     * group's invite link no longer let them in. The chat cannot prove it, so the message closes as a manual
+     * override: it is not counted as ignored, and it stays on the existing check ({@code audit_required})
+     * until an owner or administrator confirms it or a later staff reply in the chat clears it.
+     */
+    @Transactional
+    public void markAnsweredOutsideChat(Long unansweredItemId, Long resolvedByUserId, String comment) {
+        ClientChatUnansweredItem item = unansweredRepository.findByIdForUpdate(unansweredItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Неотвеченное сообщение не найдено"));
+        if (item.getStatus() != ClientChatUnansweredStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Сообщение клиента уже закрыто. Обновите контроль");
+        }
+        if (!hasMeaningfulOverrideComment(comment)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Укажите в комментарии, где и когда вы ответили клиенту (не короче 10 символов)"
+            );
+        }
+        assertResolutionRateAllowed(item, resolvedByUserId);
+        close(
+                item,
+                ClientChatUnansweredStatus.ACTION_COMPLETED,
+                "Менеджер ответил клиенту вне чата",
+                ClientChatResolutionType.ACTION_COMPLETED,
+                null,
+                ANSWERED_OUTSIDE_CHAT,
+                comment,
+                resolvedByUserId,
+                true,
+                ClientChatReplyQuality.NOT_APPLICABLE,
+                "Ответ дан вне отслеживаемого чата: нужна проверка владельца"
+        );
+    }
+
+    /** True while a manager's answer outside the chat still waits for the owner's check. */
+    public static boolean ownerCheckPending(ClientChatUnansweredItem item) {
+        return item != null && item.isAuditRequired()
+                && ANSWERED_OUTSIDE_CHAT.equals(item.getResolutionReasonCode());
+    }
+
+    /** Scalars of a client message's chat; nothing here changes the company's bound group. */
+    public record ChatInviteContext(
+            Long itemId,
+            String platform,
+            String chatId,
+            Long companyId,
+            String companyTitle,
+            String companyChatUrl,
+            String whatsAppClientId
+    ) {
+    }
+
+    @Transactional(readOnly = true)
+    public ChatInviteContext chatInviteContext(Long unansweredItemId) {
+        ClientChatUnansweredItem item = unansweredRepository.findById(unansweredItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Неотвеченное сообщение не найдено"));
+        Company company = item.getCompany();
+        Manager manager = company != null && company.getManager() != null ? company.getManager() : item.getManager();
+        return new ChatInviteContext(
+                item.getId(),
+                item.getPlatform() == null ? null : item.getPlatform().name(),
+                item.getChatId(),
+                company == null ? null : company.getId(),
+                company == null ? null : company.getTitle(),
+                company == null ? null : company.getUrlChat(),
+                manager == null ? null : manager.getClientId()
+        );
+    }
+
     @Transactional
     public void markAuditReviewed(Long unansweredItemId, Long resolvedByUserId, String comment) {
         ClientChatUnansweredItem item = unansweredRepository.findById(unansweredItemId)
@@ -466,8 +539,13 @@ public class ClientChatMessageTrackerService {
             );
         }
         item.setAuditRequired(false);
-        item.setResolutionComment(limit(comment, 1000));
-        item.setResolvedByUserId(resolvedByUserId);
+        if (ANSWERED_OUTSIDE_CHAT.equals(item.getResolutionReasonCode())) {
+            // The manager's own words and authorship stay on record next to the owner's check result.
+            item.setResolutionComment(limit(safe(item.getResolutionComment()) + "\nПроверка: " + safe(comment), 1000));
+        } else {
+            item.setResolutionComment(limit(comment, 1000));
+            item.setResolvedByUserId(resolvedByUserId);
+        }
         unansweredRepository.save(item);
     }
 
@@ -703,7 +781,9 @@ public class ClientChatMessageTrackerService {
                 Math.max(0, ChronoUnit.MINUTES.between(item.getLastClientMessageAt(), now)),
                 targetUrl(company),
                 chatUrl(item),
-                specialistName(company)
+                specialistName(company),
+                item.getResolutionReasonCode(),
+                item.getResolutionComment()
         );
     }
 

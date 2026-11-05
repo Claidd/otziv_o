@@ -63,6 +63,28 @@ public class ClientChatMessageReconciliationService implements com.hunt.otziv.cl
                 });
     }
 
+    /**
+     * Read-only: the invite link that the connected WhatsApp account currently sees for a group (WhatsApp
+     * reveals it only to group administrators). It reads the gateway's group list; it never changes a
+     * company's bound group, never resets the invite and sends nothing.
+     */
+    public java.util.Optional<String> currentWhatsAppInviteLink(String clientId, String groupId) {
+        if (!hasText(clientId) || !hasText(groupId)) {
+            return java.util.Optional.empty();
+        }
+        String group = groupId.trim();
+        List<com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo> groups = whatsAppService.listGroups(clientId.trim());
+        return (groups == null ? List.<com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo>of() : groups).stream()
+                .filter(info -> info != null && info.groupId() != null && group.equals(info.groupId().trim()))
+                .map(com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo::inviteLink)
+                .filter(ClientChatMessageReconciliationService::hasText)
+                .map(String::trim)
+                .map(link -> link.toLowerCase(Locale.ROOT).contains("chat.whatsapp.com/")
+                        ? (link.startsWith("http") ? link : "https://" + link)
+                        : "https://chat.whatsapp.com/" + link)
+                .findFirst();
+    }
+
     public boolean hasOpenReply(String chatId) {
         return !unansweredRepository.findByPlatformAndChatIdAndStatus(ClientChatPlatform.WHATSAPP,
                 chatId, ClientChatUnansweredStatus.OPEN).isEmpty();

@@ -229,10 +229,46 @@
             <span class="material-icons-sharp">school</span>
             <h2>Ознакомление с аудитом</h2>
           </div>
+          @if (reportReviewLatestDate()) {
+            <div class="report-review-dates" role="group" aria-label="Дата отчёта аудита">
+              <button type="button" aria-label="Предыдущий день" (click)="shiftReportReviewDate(-1)">
+                <span class="material-icons-sharp" aria-hidden="true">chevron_left</span>
+              </button>
+              <input
+                type="date"
+                aria-label="Дата отчёта аудита"
+                [max]="reportReviewLatestDate()"
+                [ngModel]="reportReviewDate() ?? reportReviewLatestDate()"
+                (ngModelChange)="selectReportReviewDate($event)"
+              />
+              <button
+                type="button"
+                aria-label="Следующий день"
+                [disabled]="!canShowLaterReportReviews()"
+                (click)="shiftReportReviewDate(1)"
+              >
+                <span class="material-icons-sharp" aria-hidden="true">chevron_right</span>
+              </button>
+            </div>
+            <div class="report-review-recent" aria-label="Последние 7 дней">
+              @for (day of reportReviewRecentDates(); track day) {
+                <button
+                  type="button"
+                  [class.active]="isSelectedReportReviewDate(day)"
+                  [attr.aria-pressed]="isSelectedReportReviewDate(day)"
+                  (click)="selectReportReviewDate(day)"
+                >
+                  {{ day | date: 'dd.MM' }}
+                </button>
+              }
+            </div>
+          }
           @if (managerReportReviewsLoading()) {
             <p class="side-empty">Загружаю статусы…</p>
           } @else if (managerReportReviews().length === 0) {
-            <p class="side-empty">Персональные отчёты ещё не отправлялись</p>
+            <p class="side-empty">
+              {{ reportReviewDate() ? 'За выбранную дату аудитов не было' : 'Персональные отчёты ещё не отправлялись' }}
+            </p>
           } @else {
             <div class="report-review-list">
               @for (review of managerReportReviews(); track review.reviewId) {
@@ -1096,6 +1132,18 @@
                                   </span>
                                   <span class="client-audit-message-body">{{ clientAuditMessage(example) }}</span>
                                 </span>
+                                @if (isClientChatOwnerCheck(example)) {
+                                  <span class="client-audit-message client-audit-owner-claim">
+                                    <span class="client-audit-message-head">
+                                      <span class="material-icons-sharp">mark_chat_read</span>
+                                      <span>
+                                        <small>Менеджер ответил вне чата</small>
+                                        <strong>Проверяет владелец или администратор</strong>
+                                      </span>
+                                    </span>
+                                    <span class="client-audit-message-body">{{ clientAuditOwnerClaim(example) || 'Комментарий менеджера не сохранён' }}</span>
+                                  </span>
+                                }
                               } @else if (example.reason) {
                                 <em>{{ example.reason }}</em>
                               }
@@ -1138,11 +1186,24 @@
                               <span class="material-icons-sharp">fact_check</span>
                               <div>
                                 <strong>Что нужно сделать</strong>
-                                <ol>
-                                  <li>Откройте переписку и найдите это сообщение.</li>
-                                  <li>Проверьте, ответил ли менеджер клиенту по существу.</li>
-                                  <li>Ниже запишите найденный ответ или выполненное сейчас действие.</li>
-                                </ol>
+                                @if (isOwnerCheckHandoff(example)) {
+                                  <ol>
+                                    <li>Вы отметили, что ответили клиенту вне чата. Этот ответ проверит владелец или администратор.</li>
+                                    <li>Нажмите кнопку с галочкой, чтобы передать карточку на проверку: она перестанет блокировать закрытие дня.</li>
+                                  </ol>
+                                } @else if (isClientChatOwnerCheck(example)) {
+                                  <ol>
+                                    <li>Менеджер написал, что ответил клиенту вне чата (комментарий выше).</li>
+                                    <li>Подтвердите ответ у клиента или по скриншоту от менеджера.</li>
+                                    <li>Ниже запишите результат проверки.</li>
+                                  </ol>
+                                } @else {
+                                  <ol>
+                                    <li>Откройте переписку и найдите это сообщение.</li>
+                                    <li>Проверьте, ответил ли менеджер клиенту по существу.</li>
+                                    <li>Ниже запишите найденный ответ или выполненное сейчас действие.</li>
+                                  </ol>
+                                }
                               </div>
                               @if (chatUrl(example)) {
                                 <a
@@ -1507,8 +1568,40 @@
                                 <span class="material-icons-sharp">badge</span>
                                 Это сотрудник
                               </button>
+                              <button
+                                type="button"
+                                class="review-action secondary-action"
+                                (click)="markUnansweredAnsweredOutsideChat(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Вы ответили клиенту лично или в другом чате: опишите это в комментарии по карточке, владелец проверит"
+                              >
+                                <span class="material-icons-sharp">mark_chat_read</span>
+                                Ответил в другом мессенджере
+                              </button>
+                              <button
+                                type="button"
+                                class="review-action secondary-action"
+                                (click)="reportStaleChatInvite(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Ссылка на чат компании не открывает группу: получить актуальную ссылку, ничего не меняя и не отправляя"
+                              >
+                                <span class="material-icons-sharp">link_off</span>
+                                Ссылка-приглашение устарела
+                              </button>
                               <small>{{ example.contactText || 'Последнее сообщение клиента сохранено в карточке' }}</small>
                             </div>
+                            @if (staleChatInviteResult(example); as invite) {
+                              <div class="detail-example-text" role="status">
+                                <strong>Ссылка-приглашение</strong>
+                                <em class="manager-action-note">{{ invite.message }}</em>
+                                @if (invite.inviteUrl) {
+                                  <a class="review-action client-action" [href]="invite.inviteUrl" target="_blank" rel="noopener">
+                                    <span class="material-icons-sharp">link</span>
+                                    Открыть актуальную ссылку
+                                  </a>
+                                }
+                              </div>
+                            }
                           }
 
                           @if (canReplyToClientMessage(example)) {
@@ -1555,7 +1648,18 @@
                           }
 
                           <div class="detail-example-control" [class.client-audit-control]="isClientChatAudit(example)">
-                            @if (isClientChatAudit(example)) {
+                            @if (isOwnerCheckHandoff(example)) {
+                              <label class="client-audit-comment-field">
+                                <span>Комментарий для владельца</span>
+                                <textarea
+                                  rows="2"
+                                  [ngModel]="detailConcreteComment(example.controlEntityId)"
+                                  (ngModelChange)="updateConcreteComment(example.controlEntityId, $event)"
+                                  placeholder="Например: скриншот ответа отправлен владельцу в Telegram"
+                                ></textarea>
+                                <small>Необязательно. Подтверждает ответ владелец или администратор.</small>
+                              </label>
+                            } @else if (isClientChatAudit(example)) {
                               <label class="client-audit-comment-field">
                                 <span>Результат проверки <b>обязательно</b></span>
                                 <textarea

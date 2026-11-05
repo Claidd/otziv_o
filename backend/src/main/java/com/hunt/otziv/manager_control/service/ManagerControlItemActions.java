@@ -13,6 +13,7 @@ import com.hunt.otziv.client_messages.api.UncertainClientMessageDelivery;
 import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
+import com.hunt.otziv.manager_control.dto.ManagerControlStaleChatInviteResponse;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
@@ -70,6 +71,8 @@ public class ManagerControlItemActions {
     static final String ORDER_STATUS_TO_PAY = "Выставлен счет";
 
     static final String ORDER_STATUS_REMINDER = "Напоминание";
+
+    static final String OWNER_CHECK_HANDOFF_COMMENT = "Передано на проверку владельцу: ответ вне чата подтверждает владелец или администратор";
 
     private final ManagerPermissionService managerPermissionService;
 
@@ -141,6 +144,17 @@ public class ManagerControlItemActions {
     public ManagerControlConcreteItemResponse actionConcreteItem(Long concreteItemId, ManagerControlItemActionRequest request,
             Principal principal, Authentication authentication, PreparedNoResponseReview review) {
         return actionConcrete(concreteItemId, request, principal, authentication, review, true);
+    }
+
+    /**
+     * «Ссылка-приглашение устарела». The card and its chat are read first, the connected WhatsApp account's
+     * current invite is looked up without any transaction or lock, and the result is recorded on the card,
+     * which stays open. The company's bound group and link are never changed and nothing is sent.
+     */
+    public ManagerControlStaleChatInviteResponse reportStaleChatInvite(Long concreteItemId, Principal principal, Authentication authentication) {
+        var context = conversationWorkflow.staleChatInviteContext(concreteItemId, principal, authentication);
+        String currentInvite = conversationWorkflow.currentInviteLink(context);
+        return conversationWorkflow.recordStaleChatInvite(concreteItemId, context, currentInvite, principal, authentication);
     }
 
     record ConcreteActionOutcome(ManagerControlConcreteItemResponse response,
@@ -285,6 +299,14 @@ public class ManagerControlItemActions {
         // An unanswered chat stays OPEN when deferred, so the previous action marks an already reported deferral.
         boolean alreadyDeferred = concreteItem.getActionType() == ManagerDailyControlActionType.DEFERRED
                 || concreteItem.getStatus() == ManagerDailyControlItemStatus.DEFERRED;
+        // A manager cannot confirm their own answer given outside the chat: their action only hands the card
+        // to the owner (it stops blocking the day), the message stays on check until an owner or admin confirms it.
+        boolean ownerCheckHandoff = clientChatAuditConcrete && accessPolicy.restrictedToOwnSources(authentication)
+                && conversationWorkflow.ownerCheckPending(concreteItem.getEntityId());
+        if (ownerCheckHandoff) {
+            status = ManagerDailyControlItemStatus.ACTION_TAKEN;
+            actionType = ManagerDailyControlActionType.ACTION_TAKEN;
+        }
         cardLifecycle.recordConcreteEpisode(concreteItem, status, false);
         if (actionType == ManagerDailyControlActionType.DEFERRED && concreteItem.getDeferredAt() == null) {
             concreteItem.setDeferredAt(now);
@@ -300,6 +322,10 @@ public class ManagerControlItemActions {
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
                 movedToReminder = movePaymentOrderToReminderAfterManualSend(concreteItem, authentication);
             }
+        } else if (ownerCheckHandoff) {
+            concreteItem.setLastManualTouchAt(now);
+            concreteItem.setFollowUpAt(null);
+            concreteItem.setComment(limit(OWNER_CHECK_HANDOFF_COMMENT + (safe(comment).isBlank() ? "" : ". " + safe(comment)), 1000));
         } else if (clientChatAuditConcrete) {
             concreteItem.setLastManualTouchAt(now);
             concreteItem.setFollowUpAt(null);

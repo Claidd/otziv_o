@@ -136,6 +136,14 @@ public class ManagerControlService {
         return clientConversationWorkflow.markClientMessageMisclassified(concreteItemId, request, principal, authentication);
     }
 
+    public ManagerControlConcreteItemResponse markAnsweredOutsideChat(Long concreteItemId, ManagerControlItemActionRequest request, Principal principal, Authentication authentication) {
+        return clientConversationWorkflow.markAnsweredOutsideChat(concreteItemId, request, principal, authentication);
+    }
+
+    public com.hunt.otziv.manager_control.dto.ManagerControlStaleChatInviteResponse reportStaleChatInvite(Long concreteItemId, Principal principal, Authentication authentication) {
+        return itemActions.reportStaleChatInvite(concreteItemId, principal, authentication);
+    }
+
     public ManagerControlConcreteItemResponse repairConcreteItem(Long concreteItemId, Principal principal, Authentication authentication) {
         return repairWorkflow.repairConcreteItem(concreteItemId, principal, authentication);
     }

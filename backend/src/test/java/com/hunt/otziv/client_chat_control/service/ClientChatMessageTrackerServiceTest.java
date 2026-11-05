@@ -640,6 +640,85 @@ class ClientChatMessageTrackerServiceTest {
         assertEquals("[Нетекстовое сообщение]", captor.getValue().getMessageText());
     }
 
+    @Test
+    void answerOutsideTheChatClosesAsManualOverrideWaitingForTheOwnersCheck() {
+        ClientChatUnansweredItem item = openItem("Здравствуйте, когда будет счёт?");
+        item.setId(6914L);
+        when(unansweredRepository.findByIdForUpdate(6914L)).thenReturn(Optional.of(item));
+
+        service.markAnsweredOutsideChat(6914L, 30L, "Ответила клиенту лично в WhatsApp 05.11 в 22:10");
+
+        assertEquals(ClientChatUnansweredStatus.ACTION_COMPLETED, item.getStatus());
+        assertEquals(com.hunt.otziv.client_chat_control.model.ClientChatResolutionType.ACTION_COMPLETED, item.getResolutionType());
+        assertEquals(ClientChatMessageTrackerService.ANSWERED_OUTSIDE_CHAT, item.getResolutionReasonCode());
+        assertEquals("Ответила клиенту лично в WhatsApp 05.11 в 22:10", item.getResolutionComment());
+        assertEquals(30L, item.getResolvedByUserId());
+        assertTrue(item.isManualOverride());
+        assertTrue(item.isAuditRequired());
+        assertTrue(ClientChatMessageTrackerService.ownerCheckPending(item));
+        verify(unansweredRepository).save(item);
+        verify(gamificationEventService, never()).recordManagerClientReply(any(), any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void answerOutsideTheChatNeedsAMeaningfulCommentAndAnOpenMessage() {
+        ClientChatUnansweredItem item = openItem("Вопрос");
+        item.setId(1L);
+        when(unansweredRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
+
+        ResponseStatusException empty = assertThrows(ResponseStatusException.class,
+                () -> service.markAnsweredOutsideChat(1L, 30L, "  ок "));
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, empty.getStatusCode());
+        assertEquals(ClientChatUnansweredStatus.OPEN, item.getStatus());
+
+        item.setStatus(ClientChatUnansweredStatus.ANSWERED);
+        ResponseStatusException closed = assertThrows(ResponseStatusException.class,
+                () -> service.markAnsweredOutsideChat(1L, 30L, "Ответила лично по телефону"));
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, closed.getStatusCode());
+        verify(unansweredRepository, never()).save(any());
+    }
+
+    @Test
+    void answerOutsideTheChatKeepsTheFastClickGuard() {
+        Manager manager = new Manager();
+        ClientChatUnansweredItem item = openItem("Вопрос");
+        item.setId(2L);
+        item.setManager(manager);
+        when(unansweredRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(item));
+        when(appSettingService.getBoolean(AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_GUARD_ENABLED, false))
+                .thenReturn(true);
+        lenient().when(appSettingService.getInt(any(), org.mockito.ArgumentMatchers.anyInt())).thenAnswer(call -> call.getArgument(1));
+        when(unansweredRepository.countByManagerAndResolvedByUserIdAndClosedAtAfter(eq(manager), eq(30L), any()))
+                .thenReturn(5L);
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.markAnsweredOutsideChat(2L, 30L, "Ответила лично по телефону"));
+
+        assertEquals(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, failure.getStatusCode());
+        assertEquals(ClientChatUnansweredStatus.OPEN, item.getStatus());
+    }
+
+    @Test
+    void ownersCheckKeepsTheManagersClaimAndAuthorship() {
+        ClientChatUnansweredItem item = openItem("Вопрос");
+        item.setId(3L);
+        item.setStatus(ClientChatUnansweredStatus.ACTION_COMPLETED);
+        item.setResolutionReasonCode(ClientChatMessageTrackerService.ANSWERED_OUTSIDE_CHAT);
+        item.setResolutionComment("Ответила лично по телефону");
+        item.setResolvedByUserId(30L);
+        item.setManualOverride(true);
+        item.setAuditRequired(true);
+        when(unansweredRepository.findById(3L)).thenReturn(Optional.of(item));
+
+        service.markAuditReviewed(3L, 9L, "Клиент подтвердил ответ по телефону");
+
+        assertFalse(item.isAuditRequired());
+        assertEquals(ClientChatMessageTrackerService.ANSWERED_OUTSIDE_CHAT, item.getResolutionReasonCode());
+        assertEquals("Ответила лично по телефону\nПроверка: Клиент подтвердил ответ по телефону", item.getResolutionComment());
+        assertEquals(30L, item.getResolvedByUserId());
+        assertFalse(ClientChatMessageTrackerService.ownerCheckPending(item));
+    }
+
     private static ClientChatMessageCommand command(String messageId) {
         return new ClientChatMessageCommand(
                 ClientChatPlatform.WHATSAPP,

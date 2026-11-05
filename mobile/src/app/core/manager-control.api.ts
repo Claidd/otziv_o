@@ -97,6 +97,24 @@ export class ManagerControlApi {
     );
   }
 
+  /** «Ответил в другом мессенджере»: the required comment is the claim the owner checks. */
+  markManagerControlAnsweredOutsideChat(concreteItemId: number, comment: string): Observable<ManagerControlConcreteItem> {
+    return this.http.post<ManagerControlConcreteItem>(
+      this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/answered-outside-chat`),
+      { actionType: null, comment, manualWorkerNotification: null }
+    );
+  }
+
+  /** «Ссылка-приглашение устарела»: the card stays open; nothing is changed or sent. */
+  reportManagerControlStaleChatInvite(
+    concreteItemId: number
+  ): Observable<{ item: ManagerControlConcreteItem; message: string; inviteUrl: string | null }> {
+    return this.http.post<{ item: ManagerControlConcreteItem; message: string; inviteUrl: string | null }>(
+      this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/stale-chat-invite`),
+      {}
+    );
+  }
+
   repairManagerControlConcreteItem(concreteItemId: number): Observable<ManagerControlConcreteItem> {
     return this.http.post<ManagerControlConcreteItem>(
       this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/repair`),

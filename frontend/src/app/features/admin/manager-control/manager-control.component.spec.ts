@@ -347,6 +347,85 @@ describe('shouldHideClientChatUnansweredAfterAction', () => {
   });
 });
 
+describe('unanswered client card outcomes outside the chat', () => {
+  const card = { controlEntityId: 6914, type: 'CLIENT_CHAT_UNANSWERED', title: 'Toyama motors', itemStatus: 'OPEN',
+    status: '27 мин. без ответа', reason: 'Арсен написал', delivery: null } as any;
+
+  function createPage(api: Record<string, unknown>, owner = false) {
+    const toast = { warning: vi.fn(), error: vi.fn(), success: vi.fn(), info: vi.fn() };
+    TestBed.configureTestingModule({ providers: [
+      { provide: ManagerControlApi, useValue: { today: () => of({ managers: [] }), ...api } },
+      { provide: ManagerApi, useValue: {} }, { provide: ToastService, useValue: toast },
+      { provide: AuthService, useValue: { hasAnyRealmRole: () => owner } },
+      { provide: ActivatedRoute, useValue: { snapshot: { data: {} }, paramMap: new Subject() } },
+      { provide: Router, useValue: {} }
+    ] });
+    TestBed.overrideComponent(ManagerControlComponent, { set: { template: '', imports: [] } });
+    const page = TestBed.createComponent(ManagerControlComponent).componentInstance;
+    page.detail.set({ managerId: 3, dailyControlId: 1, items: [{ itemId: 1, examples: [card] }] } as any);
+    return { page, toast };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('requires a comment and a confirmation before recording an answer outside the chat', () => {
+    const mark = vi.fn().mockReturnValue(of({ ...card, itemStatus: 'RESOLVED', comment: 'Ответил вне чата: лично' }));
+    const { page, toast } = createPage({ markClientMessageAnsweredOutsideChat: mark });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    page.markUnansweredAnsweredOutsideChat(card);
+    expect(toast.warning).toHaveBeenCalledWith('Нужен комментарий', expect.stringContaining('где и когда'));
+    expect(confirm).not.toHaveBeenCalled();
+
+    page.updateConcreteComment(6914, 'Ответила лично в WhatsApp в 22:10');
+    page.markUnansweredAnsweredOutsideChat(card);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(mark).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    page.markUnansweredAnsweredOutsideChat(card);
+    expect(mark).toHaveBeenCalledWith(6914, 'Ответила лично в WhatsApp в 22:10');
+    expect(toast.success).toHaveBeenCalledWith('Ответ вне чата записан', expect.any(String));
+  });
+
+  it('shows the current invite after a confirmed stale-link report and keeps the card open', () => {
+    const report = vi.fn().mockReturnValue(of({ item: { ...card, comment: 'Ссылка-приглашение устарела.' },
+      message: 'Подключённый WhatsApp-аккаунт видит актуальную ссылку-приглашение', inviteUrl: 'https://chat.whatsapp.com/NewInviteCode12345' }));
+    const { page, toast } = createPage({ reportStaleChatInvite: report });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    page.reportStaleChatInvite(card);
+    expect(report).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    page.reportStaleChatInvite(card);
+    expect(report).toHaveBeenCalledWith(6914);
+    expect(page.staleChatInviteResult(card)).toEqual({
+      message: 'Подключённый WhatsApp-аккаунт видит актуальную ссылку-приглашение',
+      inviteUrl: 'https://chat.whatsapp.com/NewInviteCode12345'
+    });
+    expect(toast.info).toHaveBeenCalledWith('Найдена актуальная ссылка', expect.any(String));
+    expect(page.isConcreteUpdating(6914)).toBe(false);
+  });
+
+  it('lets a manager hand an owner-check audit card over without a comment, while the owner must write one', () => {
+    const audit = { controlEntityId: 7001, type: 'CLIENT_CHAT_AUDIT', status: 'Проверка владельца', itemStatus: 'OPEN',
+      reason: 'Арсен: Здравствуйте. Менеджер ответил вне чата: «Ответила лично в 22:10». Проверяет владелец или администратор.' } as any;
+    const manager = createPage({}).page;
+    expect(manager.isClientChatOwnerCheck(audit)).toBe(true);
+    expect(manager.clientAuditOwnerClaim(audit)).toBe('Ответила лично в 22:10');
+    expect(manager.isOwnerCheckHandoff(audit)).toBe(true);
+    expect(manager.isConcreteActionDisabled(audit, 'ACTION_TAKEN')).toBe(false);
+
+    TestBed.resetTestingModule();
+    const owner = createPage({}, true).page;
+    expect(owner.isOwnerCheckHandoff(audit)).toBe(false);
+    expect(owner.isConcreteActionDisabled(audit, 'ACTION_TAKEN')).toBe(true);
+    owner.updateConcreteComment(7001, 'Клиент подтвердил ответ');
+    expect(owner.isConcreteActionDisabled(audit, 'ACTION_TAKEN')).toBe(false);
+  });
+});
+
 describe('Telegram automation binding', () => {
   it('keeps the binding action for the manager-friendly description', () => {
     expect(isTelegramBindingAutomationIssue({
@@ -461,5 +540,45 @@ describe('needsManagerControlDetailSync', () => {
       dailyControlId: null,
       items: []
     } as any)).toBe(true);
+  });
+});
+
+describe('audit remarks history', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('loads the latest audit date first and then earlier dates without moving past the latest', () => {
+    const reviews = vi.fn().mockImplementation((date?: string) => of(date
+      ? [{ reviewId: 2, summaryDate: date, issues: [] }]
+      : [{ reviewId: 1, summaryDate: '2026-11-05', issues: [] }]));
+    TestBed.configureTestingModule({ providers: [
+      { provide: ManagerControlApi, useValue: { managerReportReviews: reviews, today: () => of({ managers: [] }) } },
+      { provide: ManagerApi, useValue: {} },
+      { provide: ToastService, useValue: { warning: vi.fn(), error: vi.fn(), success: vi.fn() } },
+      { provide: AuthService, useValue: { hasAnyRealmRole: () => false } },
+      { provide: ActivatedRoute, useValue: { snapshot: { data: {} }, paramMap: new Subject() } },
+      { provide: Router, useValue: {} }
+    ] });
+    TestBed.overrideComponent(ManagerControlComponent, { set: { template: '', imports: [] } });
+    const page = TestBed.createComponent(ManagerControlComponent).componentInstance;
+
+    page.loadManagerReportReviews();
+    expect(reviews).toHaveBeenLastCalledWith(undefined);
+    expect(page.reportReviewLatestDate()).toBe('2026-11-05');
+    expect(page.reportReviewRecentDates()).toEqual(['2026-11-05', '2026-11-04', '2026-11-03', '2026-11-02',
+      '2026-11-01', '2026-10-31', '2026-10-30']);
+
+    page.shiftReportReviewDate(-1);
+    expect(reviews).toHaveBeenLastCalledWith('2026-11-04');
+    expect(page.managerReportReviews()[0].summaryDate).toBe('2026-11-04');
+    expect(page.isSelectedReportReviewDate('2026-11-04')).toBe(true);
+    expect(page.canShowLaterReportReviews()).toBe(true);
+
+    page.selectReportReviewDate('2026-10-30');
+    expect(reviews).toHaveBeenLastCalledWith('2026-10-30');
+
+    page.shiftReportReviewDate(7);
+    expect(page.reportReviewDate()).toBeNull();
+    expect(reviews).toHaveBeenLastCalledWith(undefined);
+    expect(page.canShowLaterReportReviews()).toBe(false);
   });
 });

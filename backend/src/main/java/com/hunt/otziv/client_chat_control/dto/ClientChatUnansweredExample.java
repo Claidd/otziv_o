@@ -16,6 +16,8 @@ public record ClientChatUnansweredExample(
         long waitingMinutes,
         String targetUrl,
         String chatUrl,
-        String specialistName
+        String specialistName,
+        String resolutionReasonCode,
+        String resolutionComment
 ) {
 }

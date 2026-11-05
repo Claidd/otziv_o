@@ -10,16 +10,20 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class ClientChatParticipantClassifier {
+
+    private static final String CLIENT_ROLE = "ROLE_CLIENT";
 
     private final UserRepository userRepository;
     private final AppSettingService appSettingService;
@@ -150,7 +154,25 @@ public class ClientChatParticipantClassifier {
         return uniqueUser(matchingPhoneUsers(
                 userRepository.findAllActiveUsersWithPhoneNumbers(),
                 senderPhone
-        ));
+        ).stream().filter(user -> !isClientAccount(user)).toList());
+    }
+
+    /** A client's cabinet account carries the client's own phone; it never makes the client staff. */
+    private static boolean isClientAccount(User user) {
+        Collection<? extends GrantedAuthority> roles = user == null ? null : user.getRoles();
+        if (roles == null || roles.isEmpty()) {
+            return false;
+        }
+        boolean client = false;
+        for (GrantedAuthority role : roles) {
+            String name = role == null || role.getAuthority() == null ? "" : role.getAuthority().trim();
+            if (CLIENT_ROLE.equalsIgnoreCase(name)) {
+                client = true;
+            } else if (!name.isEmpty()) {
+                return false;
+            }
+        }
+        return client;
     }
 
     private List<User> matchingPhoneUsers(List<User> users, String senderPhone) {
@@ -164,6 +186,11 @@ public class ClientChatParticipantClassifier {
                 .toList();
     }
 
+    /**
+     * Owners, administrators and managers are recognised everywhere only by a full name or a configured
+     * alias: a bare first name or a one-word login (for example a client "Иван" against the owner
+     * "Иван Хант", or "Alex ..." against the login "alex") is shared by too many clients.
+     */
     private boolean isKnownGlobalControlStaffName(String senderName) {
         String sender = normalizedName(senderName);
         if (sender.isBlank()) {
@@ -171,14 +198,19 @@ public class ClientChatParticipantClassifier {
         }
         List<User> staff = userRepository.findAllActiveManagerControlStaff();
         for (User user : staff) {
-            if (matchesFullName(sender, normalizedName(user == null ? null : user.getFio()))
-                    || matchesFullName(sender, normalizedName(user == null ? null : user.getUsername()))) {
+            if (matchesStaffFullName(sender, user)) {
                 return true;
             }
         }
         return matchesConfiguredStaffAlias(sender, staff);
     }
 
+    /**
+     * Company staff are recognised by a full name or a configured alias. A bare first name identifies only
+     * the company's own manager, who is expected in this chat; a specialist needs a linked id (identity,
+     * Telegram id, phone) or a full name, otherwise a client who shares the specialist's first name would
+     * be counted as staff and her questions would never open a card.
+     */
     private boolean isKnownCompanyStaffName(String senderName, Company company) {
         String sender = normalizedName(senderName);
         if (sender.isBlank() || company == null) {
@@ -187,24 +219,40 @@ public class ClientChatParticipantClassifier {
 
         List<User> staff = companyStaff(company);
         for (User user : staff) {
-            if (matchesFullName(sender, normalizedName(user == null ? null : user.getFio()))
-                    || matchesFullName(sender, normalizedName(user == null ? null : user.getUsername()))) {
+            if (matchesStaffFullName(sender, user)) {
                 return true;
             }
         }
         if (matchesConfiguredStaffAlias(sender, staff)) {
             return true;
         }
+        return responsibleFirstNameUser(sender, company).isPresent();
+    }
 
+    private Optional<User> responsibleFirstNameUser(String sender, Company company) {
         String senderFirstName = firstToken(sender);
         if (senderFirstName.length() < 3) {
+            return Optional.empty();
+        }
+        return uniqueUser(responsibleStaff(company).stream()
+                .filter(User::isActive)
+                .filter(user -> senderFirstName.equals(firstStaffNameToken(user))
+                        || senderFirstName.equals(normalizedName(user.getUsername())))
+                .toList());
+    }
+
+    private static boolean matchesStaffFullName(String sender, User user) {
+        return user != null
+                && (isFullNameOf(sender, normalizedName(user.getFio()))
+                || isFullNameOf(sender, normalizedName(user.getUsername())));
+    }
+
+    /** Both sides carry at least two words (a first name plus a surname or an initial). */
+    private static boolean isFullNameOf(String sender, String staffName) {
+        if (!sender.contains(" ") || !staffName.contains(" ")) {
             return false;
         }
-        long sameFirstNameStaff = staff.stream()
-                .map(ClientChatParticipantClassifier::firstStaffNameToken)
-                .filter(senderFirstName::equals)
-                .count();
-        return sameFirstNameStaff == 1;
+        return matchesFullName(sender, staffName);
     }
 
     private Optional<User> namedStaffUser(String senderName, Company company) {
@@ -321,7 +369,8 @@ public class ClientChatParticipantClassifier {
         return false;
     }
 
-    private List<User> companyStaff(Company company) {
+    /** The company's own manager (the company's user and its manager account). */
+    private List<User> responsibleStaff(Company company) {
         if (company == null) {
             return List.of();
         }
@@ -333,6 +382,14 @@ public class ClientChatParticipantClassifier {
         if (manager != null && manager.getUser() != null) {
             users.add(manager.getUser());
         }
+        return users.stream().distinct().toList();
+    }
+
+    private List<User> companyStaff(Company company) {
+        if (company == null) {
+            return List.of();
+        }
+        List<User> users = new ArrayList<>(responsibleStaff(company));
         if (company.getWorkers() != null) {
             company.getWorkers().stream()
                     .map(Worker::getUser)
