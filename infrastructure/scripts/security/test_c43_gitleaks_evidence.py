@@ -284,5 +284,118 @@ class C45PublicMavenCoordinateGuardTest(unittest.TestCase):
                                         for item in findings))
 
 
+class C48PublicHashGuardTest(unittest.TestCase):
+    """The C48 Alloy SBOM repeats public advisory and revision hashes like C43."""
+    FIXTURE = Path(__file__).with_name("fixtures") / "c48-alloy-public-hashes.json"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fixture = json.loads(cls.FIXTURE.read_text(encoding="utf-8"))
+        for item in cls.fixture["files"]:
+            item["publicValues"] = public_values(item)
+        cls.blocks = [item for item in tomllib.loads((ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))["allowlists"]
+                      if item.get("description", "").startswith("C48 reviewed public ")]
+
+    def allowed(self, path, value, rule=RULE):
+        return any(rule in block["targetRules"]
+                   and any(re.search(pattern, path) for pattern in block["paths"])
+                   and any(re.search(pattern, value) for pattern in block["regexes"])
+                   for block in self.blocks)
+
+    def test_exact_public_evidence_and_allowlist_cover_only_reviewed_values(self):
+        self.assertEqual(RULE, self.fixture["rule"])
+        self.assertEqual(39, sum(item["findings"] for item in self.fixture["files"]))
+        self.assertEqual(len(self.fixture["files"]), len(self.blocks))
+        expected = {("(^|/)" + re.escape(item["path"]) + "$", "^" + value + "$")
+                    for item in self.fixture["files"] for value in item["publicValues"]}
+        actual = set()
+        for block in self.blocks:
+            self.assertEqual([RULE], block["targetRules"])
+            self.assertEqual("AND", block["condition"])
+            self.assertEqual("secret", block["regexTarget"])
+            self.assertEqual(1, len(block["paths"]))
+            for value in block["regexes"]:
+                self.assertRegex(value, r"^\^[a-f0-9]{40}\$$")
+                actual.add((block["paths"][0], value))
+        self.assertEqual(expected, actual)
+
+    def test_changed_values_paths_rules_and_token_prefixes_remain_blocked(self):
+        for item in self.fixture["files"]:
+            value = item["publicValues"][0]
+            self.assertTrue(self.allowed(item["path"], value))
+            for wrong_path in [item["path"] + ".copy", item["path"].replace("c48-", "c47-"),
+                               item["path"].replace("vulnerabilities.sbom.cdx", "vulnerabilities"),
+                               "application/settings.json"]:
+                self.assertFalse(self.allowed(wrong_path, value))
+            for wrong_value in ["0123456789abcdef" * 2 + "01234567", "sgp_" + value,
+                                "sgp_local_" + value, value + "0", "0" + value]:
+                self.assertFalse(self.allowed(item["path"], wrong_value))
+            self.assertFalse(self.allowed(item["path"], value, "generic-api-key"))
+
+    def test_real_scanner_preserves_positive_and_negative_controls(self):
+        scanner = os.environ.get("GITLEAKS_BIN") or shutil.which("gitleaks")
+        docker = shutil.which("docker") if os.environ.get("CI") == "true" else None
+        if not scanner and not docker:
+            if os.environ.get("CI") == "true":
+                self.fail("CI requires Gitleaks or Docker for scanner controls")
+            self.skipTest("Set GITLEAKS_BIN to the verified Gitleaks 8.30.1 executable")
+        image = re.search(r"ghcr\.io/gitleaks/gitleaks@sha256:[a-f0-9]{64}",
+                          (ROOT / ".github/workflows/secret-scan.yml").read_text(encoding="utf-8")).group()
+        identity = ["--user", str(os.getuid()) + ":" + str(os.getgid())] if not scanner else []
+        command = [scanner] if scanner else [docker, "run", "--rm", "--network", "none", *identity, image]
+        self.assertEqual("8.30.1", subprocess.check_output(command + ["version"], text=True).strip().lstrip("v"))
+        item = self.fixture["files"][0]
+        with tempfile.TemporaryDirectory(prefix="otziv-c48-secret-guard-") as directory:
+            base = Path(directory)
+            source = base / "source"
+            path = source / item["path"]
+            path.parent.mkdir(parents=True)
+            encoded = ["".join("%%%02X" % ord(c) for c in value) for value in item["publicValues"]]
+            path.write_text("sourcegraph public metadata\n" + "\n".join(item["publicValues"] + encoded) + "\n",
+                            encoding="utf-8")
+
+            def scan(mode):
+                report = base / "report.json"
+                command = [scanner] if scanner else [
+                    docker, "run", "--rm", "--network", "none", *identity, "--read-only", "--cap-drop", "ALL",
+                    "--security-opt", "no-new-privileges:true",
+                    "--mount", "type=bind,source=" + str(base) + ",target=/fixture",
+                    "--mount", "type=bind,source=" + str(ROOT / ".gitleaks.toml") + ",target=/config.toml,readonly", image]
+                result = subprocess.run(command + [mode, str(source) if scanner else "/fixture/source",
+                                         "--config", str(ROOT / ".gitleaks.toml") if scanner else "/config.toml",
+                                         "--enable-rule", RULE, "--no-banner", "--report-format", "json",
+                                         "--report-path", str(report) if scanner else "/fixture/report.json"]
+                                        + (["--log-opts=HEAD"] if mode == "git" else []),
+                                        capture_output=True, text=True, timeout=120)
+                self.assertIn(result.returncode, (0, 1), result.stderr)
+                return json.loads(report.read_text(encoding="utf-8"))
+
+            def commit():
+                for arguments in (["init", "--quiet"], ["add", "."],
+                                  ["-c", "user.name=Scanner fixture", "-c", "user.email=fixture@example.invalid",
+                                   "-c", "commit.gpgsign=false", "commit", "--quiet", "--allow-empty",
+                                   "-m", "Synthetic scanner controls"]):
+                    subprocess.run(["git", "-C", str(source), *arguments], check=True,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
+
+            self.assertEqual([], scan("dir"))
+            commit()
+            self.assertEqual([], scan("git"))
+            value = item["publicValues"][0]
+            unknown = "0123456789abcdef" * 2 + "01234567"
+            with path.open("a", encoding="utf-8") as stream:
+                stream.write(unknown + "\nsgp_" + value + "\n")
+            wrong_path = item["path"] + ".copy"
+            (source / wrong_path).write_text("sourcegraph\n" + value + "\n", encoding="utf-8")
+            commit()
+            for mode in ("dir", "git"):
+                with self.subTest(mode=mode):
+                    findings = scan(mode)
+                    self.assertEqual({RULE}, {finding["RuleID"] for finding in findings})
+                    self.assertEqual({unknown, "sgp_" + value, value}, {finding["Secret"] for finding in findings})
+                    self.assertTrue(any(finding["File"].replace("\\", "/").endswith(wrong_path)
+                                        and finding["Secret"] == value for finding in findings))
+
+
 if __name__ == "__main__":
     unittest.main()
