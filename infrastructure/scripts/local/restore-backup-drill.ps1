@@ -527,6 +527,7 @@ $restoreSeconds = $null
 $validationSeconds = $null
 $rtoSeconds = $null
 $tableCount = $null
+$createdDefiners = $null
 $flywayAppliedCount = $null
 $flywayLatestVersion = "NOT_CHECKED"
 $totalWatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -606,6 +607,42 @@ try {
     $restoreCommand = 'set -eu; gzip -t /tmp/restore.sql.gz; gzip -dc /tmp/restore.sql.gz | MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=socket -uroot "$MYSQL_DATABASE"'
     Invoke-Docker -Arguments @("exec", $containerName, "sh", "-lc", $restoreCommand) `
         -Operation "Restore backup" | Out-Null
+    # Views, triggers, routines and events keep the DEFINER of the production application
+    # account. The production MySQL container creates that account from MYSQL_USER before any
+    # restore, so a real recovery has it; the blank drill instance does not, and CHECK TABLE
+    # then reports such views as corrupt. Recreate every missing definer the same way: a
+    # locked account with a random password and all privileges on the restored schema only.
+    $definersText = Invoke-MysqlQuery -ContainerName $containerName -Sql (
+        "SELECT DISTINCT definer FROM (" +
+        "SELECT DEFINER AS definer FROM information_schema.VIEWS WHERE TABLE_SCHEMA = DATABASE() " +
+        "UNION SELECT DEFINER FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() " +
+        "UNION SELECT DEFINER FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = DATABASE() " +
+        "UNION SELECT DEFINER FROM information_schema.EVENTS WHERE EVENT_SCHEMA = DATABASE()" +
+        ") definers WHERE definer IS NOT NULL AND definer <> ''")
+    $createdDefiners = [System.Collections.Generic.List[string]]::new()
+    foreach ($definer in @($definersText -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+        $separator = $definer.LastIndexOf('@')
+        if ($separator -le 0 -or $separator -eq ($definer.Length - 1)) {
+            throw "Unexpected DEFINER format in the restored schema: '$definer'."
+        }
+        $definerUser = $definer.Substring(0, $separator)
+        $definerHost = $definer.Substring($separator + 1)
+        if ($definerUser -notmatch '^[A-Za-z0-9_.$-]{1,32}$' -or $definerHost -notmatch '^[A-Za-z0-9_.%:-]{1,255}$') {
+            throw "Refusing to recreate an unusual DEFINER account: '$definer'."
+        }
+        $exists = Get-IntegerQueryResult -ContainerName $containerName `
+            -Sql "SELECT COUNT(*) FROM mysql.user WHERE User = '$definerUser' AND Host = '$definerHost'" `
+            -Description "DEFINER account lookup"
+        if ($exists -gt 0) {
+            continue
+        }
+        $definerPassword = New-RandomHex
+        Invoke-MysqlQuery -ContainerName $containerName -Sql (
+            "CREATE USER '$definerUser'@'$definerHost' IDENTIFIED BY '$definerPassword' ACCOUNT LOCK; " +
+            "GRANT ALL PRIVILEGES ON ``$DatabaseName``.* TO '$definerUser'@'$definerHost'") | Out-Null
+        $definerPassword = $null
+        $createdDefiners.Add("$definerUser@$definerHost")
+    }
     $restoreWatch.Stop()
     $restoreSeconds = $restoreWatch.Elapsed.TotalSeconds
 
@@ -744,6 +781,7 @@ try {
     Write-Host "RTO_SECONDS=$(Format-Seconds -Value $rtoSeconds)"
     Write-Host "ELAPSED_SECONDS=$(Format-Seconds -Value $totalWatch.Elapsed.TotalSeconds)"
     Write-Host "TABLE_COUNT=$(if ($null -eq $tableCount) { 'NOT_CHECKED' } else { $tableCount })"
+    Write-Host "DEFINER_ACCOUNTS_RECREATED=$(if ($null -eq $createdDefiners) { 'NOT_CHECKED' } elseif ($createdDefiners.Count -eq 0) { 'NONE' } else { $createdDefiners -join ',' })"
     Write-Host "FLYWAY_APPLIED_COUNT=$(if ($null -eq $flywayAppliedCount) { 'NOT_CHECKED' } else { $flywayAppliedCount })"
     Write-Host "FLYWAY_LATEST_VERSION=$flywayLatestVersion"
     Write-Host "CLEANUP_RESULT=$cleanupResult"
