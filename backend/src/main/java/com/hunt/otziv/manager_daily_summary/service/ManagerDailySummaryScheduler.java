@@ -20,6 +20,8 @@ public class ManagerDailySummaryScheduler {
     private final ManagerSummaryNotificationService notificationService;
     private final ManagerPersonalDayResultService personalDayResultService;
     private final ReentrantLock calculationLock = new ReentrantLock();
+    /** The 22:05 delivery and its retries must never deliver to the same manager concurrently. */
+    private final ReentrantLock personalDeliveryLock = new ReentrantLock();
 
     @Scheduled(cron = "${manager.summary.snapshot-cron:0 55 21 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
     public void calculateSnapshot() {
@@ -52,6 +54,7 @@ public class ManagerDailySummaryScheduler {
     )
     public void calculateCurrentDayAndSendPersonalResults() {
         LocalDate date = LocalDate.now(SUMMARY_ZONE);
+        personalDeliveryLock.lock();
         try {
             var summaries = withCalculationLock(() -> summaryService.calculate(date, false));
             int sent = personalDayResultService.send(date, summaries);
@@ -59,6 +62,40 @@ public class ManagerDailySummaryScheduler {
                     date, summaries.size(), sent);
         } catch (RuntimeException exception) {
             log.error("Manager personal day result delivery failed for {}", date, exception);
+        } finally {
+            personalDeliveryLock.unlock();
+        }
+    }
+
+    /**
+     * A Telegram or provider failure at 22:05 used to lose the personal audit for the day.
+     * Later passes deliver only to managers whose result is still not delivered.
+     */
+    @Scheduled(
+            cron = "${manager.summary.personal-retry-cron:0 25/20 22-23 * * *}",
+            zone = "${manager.summary.zone:Asia/Irkutsk}"
+    )
+    public void retryUndeliveredPersonalResults() {
+        LocalDate date = LocalDate.now(SUMMARY_ZONE);
+        if (!personalDeliveryLock.tryLock()) {
+            log.info("Manager personal day result retry skipped: the delivery for {} is still running", date);
+            return;
+        }
+        try {
+            var pending = personalDayResultService.undeliveredManagerIds(date);
+            if (pending.isEmpty()) {
+                return;
+            }
+            var summaries = withCalculationLock(() -> summaryService.calculate(date, false)).stream()
+                    .filter(summary -> summary != null && pending.contains(summary.managerId()))
+                    .toList();
+            int sent = personalDayResultService.send(date, summaries);
+            log.info("Manager personal day results retried: date={}, pending={}, recipients={}",
+                    date, pending.size(), sent);
+        } catch (RuntimeException exception) {
+            log.error("Manager personal day result retry failed for {}", date, exception);
+        } finally {
+            personalDeliveryLock.unlock();
         }
     }
 

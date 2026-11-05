@@ -155,6 +155,8 @@ public interface ManagerReportReviewSessionRepository extends JpaRepository<Mana
 
     List<ManagerReportReviewSession> findByCompletedAtIsNull();
 
+    boolean existsByRecipientChatIdAndCompletedAtIsNull(Long recipientChatId);
+
     List<ManagerReportReviewSession> findByManager_IdAndCompletedAtIsNull(Long managerId);
 
     Optional<ManagerReportReviewSession> findTopByOrderBySummaryDateDesc();

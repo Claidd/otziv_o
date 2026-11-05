@@ -48,12 +48,9 @@ public class ManagerReportReviewAccessPolicy {
         if (cached != null && cached.expiresAt().isAfter(now)) {
             return cached.state();
         }
-        int deadlineMinutes = Math.max(30, Math.min(1440, appSettingService.getInt(
-                "manager.report-review.reminder-three-minutes",
-                180
-        )));
-        boolean restrictionEnabled =
-                appSettingService.getBoolean("manager.report-review.restriction-enabled", true);
+        int deadlineMinutes = ManagerReportReviewDeadline.deadlineMinutes(appSettingService.getInt(
+                ManagerReportReviewDeadline.DEADLINE_KEY, ManagerReportReviewDeadline.DEFAULT_DEADLINE_MINUTES));
+        boolean restrictionEnabled = appSettingService.getBoolean(ManagerReportReviewDeadline.RESTRICTION_KEY, true);
         boolean aiAvailable = qualityService.aiAvailable();
         Optional<ManagerReportReviewSession> overdue = restrictionEnabled && aiAvailable
                 ? repository.findFirstByManagerUserIdAndTestModeFalseAndDeadlineStartedAtLessThanEqualAndAiUnavailableStartedAtIsNullAndStatusNotInAndCompletedAtIsNullOrderByDeadlineStartedAtAsc(

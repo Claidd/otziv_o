@@ -37,6 +37,7 @@ class ManagerReportReviewAdminServiceTest {
     private ManagerReportReviewIssueService issueService;
     private ManagerReportReviewIssueRepository issueRepository;
     private ManagerReportReviewDisputeRepository disputeRepository;
+    private ManagerReportReviewAiAvailabilityService aiAvailabilityService;
     private ManagerReportReviewAdminService service;
 
     @BeforeEach
@@ -48,6 +49,7 @@ class ManagerReportReviewAdminServiceTest {
         issueService = mock(ManagerReportReviewIssueService.class);
         issueRepository = mock(ManagerReportReviewIssueRepository.class);
         disputeRepository = mock(ManagerReportReviewDisputeRepository.class);
+        aiAvailabilityService = mock(ManagerReportReviewAiAvailabilityService.class);
         service = new ManagerReportReviewAdminService(
                 sessionRepository,
                 eventRepository,
@@ -56,8 +58,128 @@ class ManagerReportReviewAdminServiceTest {
                 issueService,
                 issueRepository,
                 disputeRepository,
-                mock(ManagerReportReviewCommitmentService.class)
+                mock(ManagerReportReviewCommitmentService.class),
+                aiAvailabilityService
         );
+    }
+
+    @Test
+    void ownerDecisionOnSystemVerificationEndsTheTechnicalPause() {
+        LocalDateTime pausedAt = LocalDateTime.now().minusHours(2);
+        ManagerReportReviewSession review = review();
+        review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        review.setReadingConfirmedAt(pausedAt.minusMinutes(30));
+        review.setDeadlineStartedAt(pausedAt.minusMinutes(40));
+        review.setAiUnavailableStartedAt(pausedAt);
+        review.setRecoveryAwaitingContext(true);
+        ManagerReportReviewDispute dispute = dispute(review, ManagerReportReviewDisputeStatus.DRAFT);
+        dispute.setVerificationRequestedBySystem(true);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(dispute));
+        when(issueService.validIssueCount(review)).thenReturn(2L);
+        when(issueService.hasPendingQuestions(review)).thenReturn(true);
+        when(issueService.nextPending(review, 0)).thenReturn(Optional.of(dispute.getIssue()));
+
+        service.resolveDispute(2L, 20L, ManagerReportReviewAdminService.REPORT_CONFIRMED,
+                "", User.builder().id(1L).build());
+
+        verify(aiAvailabilityService).resume(eq(review), any(LocalDateTime.class), eq("owner-decision"));
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.QUESTION_PENDING);
+    }
+
+    @Test
+    void managerDisputeDecisionKeepsAnUnrelatedPauseForTheSavedAnswerRecheck() {
+        ManagerReportReviewSession review = review();
+        review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        review.setReadingConfirmedAt(LocalDateTime.now().minusHours(1));
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusMinutes(20));
+        ManagerReportReviewDispute dispute = dispute(review, ManagerReportReviewDisputeStatus.OPEN);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(dispute));
+        when(issueService.validIssueCount(review)).thenReturn(2L);
+        when(issueService.hasPendingQuestions(review)).thenReturn(true);
+        when(issueService.nextPending(review, 0)).thenReturn(Optional.of(dispute.getIssue()));
+
+        service.resolveDispute(2L, 20L, ManagerReportReviewAdminService.REPORT_INCORRECT,
+                "", User.builder().id(1L).build());
+
+        verify(aiAvailabilityService, never()).resume(any(), any(), any());
+    }
+
+    @Test
+    void confirmingRemarkAfterOwnerWaitRestartsTheDeadlineInsteadOfLockingAtOnce() {
+        LocalDateTime openedAt = LocalDateTime.now().minusHours(6);
+        ManagerReportReviewSession review = review();
+        review.setStatus(ManagerReportReviewStatus.DISPUTED);
+        review.setReadingConfirmedAt(openedAt.plusMinutes(10));
+        review.setDeadlineStartedAt(openedAt);
+        review.setReminderOneSentAt(openedAt.plusHours(1));
+        review.setReminderThreeSentAt(openedAt.plusHours(3));
+        review.setRestrictedAt(openedAt.plusHours(3));
+        review.setRestrictionReleasedAt(openedAt.plusHours(3).plusMinutes(5));
+        ManagerReportReviewDispute dispute = dispute(review, ManagerReportReviewDisputeStatus.OPEN);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(dispute));
+        when(issueService.validIssueCount(review)).thenReturn(1L);
+        when(issueService.hasPendingQuestions(review)).thenReturn(true);
+        when(issueService.nextPending(review, 0)).thenReturn(Optional.of(dispute.getIssue()));
+
+        service.resolveDispute(2L, 20L, ManagerReportReviewAdminService.REPORT_CONFIRMED,
+                "", User.builder().id(1L).build());
+
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.QUESTION_PENDING);
+        assertThat(review.getDeadlineStartedAt()).isAfter(LocalDateTime.now().minusMinutes(1));
+        assertThat(review.getReminderOneSentAt()).isNull();
+        assertThat(review.getReminderThreeSentAt()).isNull();
+        assertThat(review.getRestrictedAt()).isNull();
+        assertThat(review.getRestrictionReleasedAt()).isNull();
+        verify(eventRepository).save(org.mockito.ArgumentMatchers.argThat(event ->
+                "DEADLINE_RESTARTED_AFTER_OWNER_DECISION".equals(event.getEventType())));
+        verify(telegramService).sendMessageWithInlineKeyboard(
+                eq(-100500L),
+                contains("срок прохождения отсчитывается заново"),
+                eq("HTML"),
+                eq(ManagerReportReviewTelegramService.continueKeyboard(2L))
+        );
+    }
+
+    @Test
+    void ownerRequestForContextAfterWaitRestartsTheDeadlineForTheClarification() {
+        LocalDateTime openedAt = LocalDateTime.now().minusHours(5);
+        ManagerReportReviewSession review = review();
+        review.setStatus(ManagerReportReviewStatus.DISPUTED);
+        review.setReadingConfirmedAt(openedAt.plusMinutes(10));
+        review.setDeadlineStartedAt(openedAt);
+        ManagerReportReviewDispute dispute = dispute(review, ManagerReportReviewDisputeStatus.OPEN);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(dispute));
+        when(issueService.hasPendingQuestions(review)).thenReturn(false);
+
+        service.resolveDispute(2L, 20L, ManagerReportReviewAdminService.REPORT_NEEDS_CONTEXT,
+                "", User.builder().id(1L).build());
+
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.DISPUTED);
+        assertThat(review.getDeadlineStartedAt()).isAfter(LocalDateTime.now().minusMinutes(1));
+    }
+
+    @Test
+    void decisionWhileManagerStillAnswersKeepsTheRunningDeadline() {
+        LocalDateTime openedAt = LocalDateTime.now().minusHours(1);
+        ManagerReportReviewSession review = review();
+        review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        review.setReadingConfirmedAt(openedAt.plusMinutes(10));
+        review.setDeadlineStartedAt(openedAt);
+        ManagerReportReviewDispute dispute = dispute(review, ManagerReportReviewDisputeStatus.OPEN);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(dispute));
+        when(issueService.validIssueCount(review)).thenReturn(2L);
+        when(issueService.hasPendingQuestions(review)).thenReturn(true);
+        when(issueService.nextPending(review, 0)).thenReturn(Optional.of(dispute.getIssue()));
+
+        service.resolveDispute(2L, 20L, ManagerReportReviewAdminService.REPORT_CONFIRMED,
+                "", User.builder().id(1L).build());
+
+        assertThat(review.getDeadlineStartedAt()).isEqualTo(openedAt);
     }
 
     @Test

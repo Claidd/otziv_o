@@ -248,6 +248,21 @@ public class EndOfDayAchievementService implements FinalWorkerDayResults {
         return true;
     }
 
+    public List<Long> unnotifiedActorIds(LocalDate date, String actorRole) {
+        if (date == null || actorRole == null || actorRole.isBlank()) {
+            return List.of();
+        }
+        return jdbc.queryForList("""
+                SELECT actor_id
+                FROM end_of_day_achievement_results
+                WHERE result_date = :date
+                  AND actor_role = :actorRole
+                  AND telegram_notified_at IS NULL
+                """, new MapSqlParameterSource()
+                .addValue("date", date)
+                .addValue("actorRole", actorRole), Long.class);
+    }
+
     public void markManagerWorkdayNotified(AchievementResult result) {
         if (result != null) {
             markNotified(result);

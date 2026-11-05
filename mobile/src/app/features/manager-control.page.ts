@@ -176,7 +176,7 @@ import {
                           <p><b>Прочтение подтверждено:</b> {{ review.readingConfirmedAt | date: 'dd.MM, HH:mm' }}</p>
                         }
                         @if (review.deadlineStartedAt && !review.completedAt) {
-                          <p><b>Трёхчасовой срок начат:</b> {{ review.deadlineStartedAt | date: 'dd.MM, HH:mm' }}</p>
+                          <p><b>Срок прохождения начат:</b> {{ review.deadlineStartedAt | date: 'dd.MM, HH:mm' }}</p>
                         }
                         @if (review.answerQualityReason) {
                           <p><b>Оценка ответов:</b> {{ review.answerQualityReason }}</p>

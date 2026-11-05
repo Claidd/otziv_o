@@ -36,6 +36,7 @@ public class ManagerReportReviewAdminService {
     private final ManagerReportReviewIssueRepository issueRepository;
     private final ManagerReportReviewDisputeRepository disputeRepository;
     private final ManagerReportReviewCommitmentService commitmentService;
+    private final ManagerReportReviewAiAvailabilityService aiAvailabilityService;
 
     @Transactional
     public void resolveDispute(Long reviewId, String action, String comment, User actor) {
@@ -188,6 +189,7 @@ public class ManagerReportReviewAdminService {
     ) {
         String normalizedAction = action == null ? "" : action.trim().toUpperCase();
         LocalDateTime now = LocalDateTime.now();
+        ManagerReportReviewStatus statusBefore = review.getStatus();
         ManagerReportReviewIssue issue = dispute.getIssue();
         dispute.setOwnerComment(limit(clean(comment), 2000));
         dispute.setResolvedAt(now);
@@ -201,7 +203,8 @@ public class ManagerReportReviewAdminService {
             review.setAuditRequired(issueService.hasUnresolvedDisputes(review));
             event(review, actor, "ISSUE_DISPUTE_ACCEPTED",
                     issue.getTitle() + "\n" + clean(comment));
-            continueAfterIssueDecision(review, now, true);
+            finishSystemVerificationPause(review, dispute, now);
+            continueAfterIssueDecision(review, now, true, statusBefore, actor);
             return;
         }
 
@@ -214,7 +217,8 @@ public class ManagerReportReviewAdminService {
             review.setAuditRequired(issueService.hasUnresolvedDisputes(review));
             event(review, actor, "ISSUE_DISPUTE_REJECTED",
                     issue.getTitle() + "\n" + clean(comment));
-            continueAfterIssueDecision(review, now, false);
+            finishSystemVerificationPause(review, dispute, now);
+            continueAfterIssueDecision(review, now, false, statusBefore, actor);
             return;
         }
 
@@ -233,6 +237,7 @@ public class ManagerReportReviewAdminService {
                 review.setStatus(ManagerReportReviewStatus.DISPUTED);
             }
             review.setCompletedAt(null);
+            restartDeadlineAfterOwnerWait(review, statusBefore, now, actor);
             sessionRepository.save(review);
             event(review, actor, "ISSUE_DISPUTE_CONTEXT_REQUESTED",
                     issue.getTitle() + "\n" + clean(comment));
@@ -266,10 +271,54 @@ public class ManagerReportReviewAdminService {
         disputeRepository.save(dispute);
     }
 
+    /**
+     * A system verification request hands the paused item to the owner. Once the owner decides it,
+     * the technical pause is over; otherwise the recovery job would escalate the same pause again.
+     */
+    private void finishSystemVerificationPause(
+            ManagerReportReviewSession review,
+            ManagerReportReviewDispute dispute,
+            LocalDateTime now
+    ) {
+        if (!dispute.isVerificationRequestedBySystem() || review.getAiUnavailableStartedAt() == null) return;
+        aiAvailabilityService.resume(review, now, "owner-decision");
+    }
+
+    /**
+     * While the audit only waits for the owner (DISPUTED) neither reminders nor restrictions run,
+     * but the deadline keeps its original start. Without a restart the owner's thinking time would
+     * be charged to the manager and the access would be locked at once, silently.
+     */
+    private boolean restartDeadlineAfterOwnerWait(
+            ManagerReportReviewSession review,
+            ManagerReportReviewStatus statusBefore,
+            LocalDateTime now,
+            User actor
+    ) {
+        if (statusBefore != ManagerReportReviewStatus.DISPUTED
+                || review.getStatus() == ManagerReportReviewStatus.COMPLETED
+                || review.getCompletedAt() != null
+                || review.getDeadlineStartedAt() == null) {
+            return false;
+        }
+        event(review, actor, "DEADLINE_RESTARTED_AFTER_OWNER_DECISION",
+                "previousDeadlineStartedAt=" + review.getDeadlineStartedAt()
+                        + "; restrictedAt=" + review.getRestrictedAt()
+                        + "; ожидание решения владельца не засчитано в срок");
+        review.setDeadlineStartedAt(now);
+        review.setReminderOneSentAt(null);
+        review.setReminderThreeSentAt(null);
+        review.setRestrictedAt(null);
+        review.setRestrictionReleasedAt(null);
+        return true;
+    }
+
     private void continueAfterIssueDecision(
             ManagerReportReviewSession review,
             LocalDateTime now,
-            boolean managerRight
+            boolean managerRight,
+            ManagerReportReviewStatus statusBefore,
+            User actor
     ) {
         boolean hasPending = issueService.hasPendingQuestions(review);
         boolean hasUnresolved = issueService.hasUnresolvedDisputes(review);
@@ -319,6 +368,7 @@ public class ManagerReportReviewAdminService {
                     : "Замечание подтверждено; все действующие вопросы уже пройдены");
             review.setRestrictionReleasedAt(now);
         }
+        boolean deadlineRestarted = restartDeadlineAfterOwnerWait(review, statusBefore, now, actor);
         sessionRepository.save(review);
         accessPolicy.invalidate(review.getManagerUserId());
 
@@ -344,6 +394,9 @@ public class ManagerReportReviewAdminService {
                         ? "Осталось действующих вопросов: "
                         + Math.max(1, validIssues - answered) + ". Продолжите проверку."
                         : "Других вопросов нет; ожидается решение по оставшемуся спору.";
+        if (deadlineRestarted) {
+            text += "\n\nВремя ожидания решения владельца не засчитано: срок прохождения отсчитывается заново.";
+        }
         telegramService.sendMessageWithInlineKeyboard(
                 review.getRecipientChatId(),
                 text,

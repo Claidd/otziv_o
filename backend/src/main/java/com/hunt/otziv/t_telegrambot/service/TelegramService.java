@@ -101,6 +101,9 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
     private final ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerReportReviewTelegramService> managerReportReviewTelegramServiceProvider;
+    /** Field-injected; without it (tests) updates are handled inline as before. */
+    @Autowired(required = false)
+    private TelegramChatSerialExecutor chatExecutor;
     private ObjectProvider<WorkloadTransferTelegramCallbackService>
             workloadTransferTelegramCallbackServiceProvider;
     private ObjectProvider<OwnerManualCardPaymentApprovalTelegramCallbackService>
@@ -243,6 +246,30 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         return botUsername;
     }
 
+    /**
+     * The polling session hands over a whole batch; one failing update used to drop the rest of it.
+     */
+    @Override
+    public void onUpdatesReceived(List<Update> updates) {
+        if (updates == null) {
+            return;
+        }
+        for (Update update : updates) {
+            try {
+                onUpdateReceived(update);
+            } catch (RuntimeException failure) {
+                log.error("Telegram update {} failed: {}",
+                        update == null ? null : update.getUpdateId(), failure.getMessage(), failure);
+            }
+        }
+    }
+
+    private void dispatchForChat(long chatId, Runnable work) {
+        if (chatExecutor == null || !chatExecutor.submit(chatId, work)) {
+            work.run();
+        }
+    }
+
     @Override
     public void onUpdateReceived(Update update) {
         long startTime = System.nanoTime();
@@ -312,7 +339,6 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
                     ? null
                     : update.getMessage().getFrom().getId();
             Message replyToMessage = update.getMessage().getReplyToMessage();
-            Integer replyToMessageId = replyToMessage == null ? null : replyToMessage.getMessageId();
             ManagerReportReviewTelegramService managerReportReviewTelegramService =
                     managerReportReviewTelegramServiceProvider == null
                             ? null
@@ -328,45 +354,15 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
                     sendMessage(chatId, groupCommandResponse.get(), "HTML");
                     return;
                 }
-                if (managerReportReviewTelegramService.handleGroupTextMessage(
-                        chatId,
-                        actorTelegramId,
-                        messageText,
-                        replyToMessageId
-                )) {
+                if (chatExecutor != null && managerReportReviewTelegramService.hasOpenAuditInChat(chatId)) {
+                    // An audit answer can wait minutes for the AI check; other chats must not wait for it.
+                    dispatchForChat(chatId, () -> handleGroupText(update, chatId, actorTelegramId,
+                            messageText, replyToMessage, managerReportReviewTelegramService));
                     return;
                 }
             }
-
-            WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService =
-                    workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();
-            String replyToMessageText = telegramMessageText(replyToMessage);
-            boolean replyToBotMessage = replyToMessage != null
-                    && replyToMessage.getFrom() != null
-                    && Boolean.TRUE.equals(replyToMessage.getFrom().getIsBot());
-            if (workerRiskTelegramCallbackService != null
-                    && workerRiskTelegramCallbackService.handleWorkerGroupTextMessage(
-                    chatId, actorTelegramId, replyToMessageText, replyToBotMessage, messageText)) {
-                return;
-            }
-
-            ManagerControlWorkerTaskTelegramCallbackService managerControlWorkerTaskTelegramCallbackService =
-                    managerControlWorkerTaskTelegramCallbackServiceProvider == null
-                            ? null
-                            : managerControlWorkerTaskTelegramCallbackServiceProvider.getIfAvailable();
-            if (managerControlWorkerTaskTelegramCallbackService != null
-                    && managerControlWorkerTaskTelegramCallbackService.handleWorkerGroupTextMessage(
-                    chatId, actorTelegramId, replyToMessageText, replyToBotMessage, messageText)) {
-                return;
-            }
-
-            Optional<PublicationProgressPreferenceService.PreferenceUpdate> preferenceUpdate =
-                    handlePublicationPreferenceCommand(chatId, messageText);
-            if (preferenceUpdate.isPresent()) {
-                sendPreferenceResponse(chatId, preferenceUpdate.get());
-                return;
-            }
-            trackTelegramGroupMessage(update);
+            handleGroupText(update, chatId, actorTelegramId, messageText, replyToMessage,
+                    managerReportReviewTelegramService);
             return;
         }
 
@@ -389,6 +385,69 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         Message managerReplyTo = update.getMessage().getReplyToMessage();
         Integer managerReplyToMessageId =
                 managerReplyTo == null ? null : managerReplyTo.getMessageId();
+        // The audit check and the menu run per chat in order, off the polling thread.
+        dispatchForChat(chatId, () -> handlePrivateText(chatId, user, messageText, managerReplyToMessageId,
+                managerReportReviewTelegramService, startTime));
+    }
+
+    private void handleGroupText(
+            Update update,
+            long chatId,
+            Long actorTelegramId,
+            String messageText,
+            Message replyToMessage,
+            ManagerReportReviewTelegramService managerReportReviewTelegramService
+    ) {
+        Integer replyToMessageId = replyToMessage == null ? null : replyToMessage.getMessageId();
+        if (managerReportReviewTelegramService != null
+                && managerReportReviewTelegramService.handleGroupTextMessage(
+                chatId,
+                actorTelegramId,
+                messageText,
+                replyToMessageId
+        )) {
+            return;
+        }
+
+        WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService =
+                workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();
+        String replyToMessageText = telegramMessageText(replyToMessage);
+        boolean replyToBotMessage = replyToMessage != null
+                && replyToMessage.getFrom() != null
+                && Boolean.TRUE.equals(replyToMessage.getFrom().getIsBot());
+        if (workerRiskTelegramCallbackService != null
+                && workerRiskTelegramCallbackService.handleWorkerGroupTextMessage(
+                chatId, actorTelegramId, replyToMessageText, replyToBotMessage, messageText)) {
+            return;
+        }
+
+        ManagerControlWorkerTaskTelegramCallbackService managerControlWorkerTaskTelegramCallbackService =
+                managerControlWorkerTaskTelegramCallbackServiceProvider == null
+                        ? null
+                        : managerControlWorkerTaskTelegramCallbackServiceProvider.getIfAvailable();
+        if (managerControlWorkerTaskTelegramCallbackService != null
+                && managerControlWorkerTaskTelegramCallbackService.handleWorkerGroupTextMessage(
+                chatId, actorTelegramId, replyToMessageText, replyToBotMessage, messageText)) {
+            return;
+        }
+
+        Optional<PublicationProgressPreferenceService.PreferenceUpdate> preferenceUpdate =
+                handlePublicationPreferenceCommand(chatId, messageText);
+        if (preferenceUpdate.isPresent()) {
+            sendPreferenceResponse(chatId, preferenceUpdate.get());
+            return;
+        }
+        trackTelegramGroupMessage(update);
+    }
+
+    private void handlePrivateText(
+            long chatId,
+            User user,
+            String messageText,
+            Integer managerReplyToMessageId,
+            ManagerReportReviewTelegramService managerReportReviewTelegramService,
+            long startTime
+    ) {
         if (managerReportReviewTelegramService != null
                 && managerReportReviewTelegramService.handleTextMessage(
                 chatId,
@@ -439,11 +498,58 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         checkTimeMethod("Время выполнения запроса для Telegram: ", startTime);
     }
 
+    private boolean handleReviewCallback(
+            CallbackQuery callbackQuery,
+            ManagerReportReviewTelegramService managerReportReviewTelegramService
+    ) {
+        Optional<String> reviewAnswer;
+        try {
+            reviewAnswer = managerReportReviewTelegramService.handle(callbackQuery);
+        } catch (org.springframework.web.server.ResponseStatusException exception) {
+            if (!exception.getStatusCode().is4xxClientError()) throw exception;
+            answerCallback(callbackQuery.getId(), exception.getReason() == null
+                    ? "Не удалось применить решение. Откройте актуальную карточку спора"
+                    : exception.getReason());
+            return true;
+        }
+        if (reviewAnswer.isPresent()) {
+            log.info("Manager report review Telegram callback handled answer='{}'", reviewAnswer.get());
+            answerCallback(callbackQuery.getId(), reviewAnswer.get());
+            return true;
+        }
+        return false;
+    }
+
     private void handleCallbackQuery(CallbackQuery callbackQuery) {
         log.info("Telegram callback received data='{}' from={} chat={}",
                 callbackDataForLog(callbackQuery == null ? null : callbackQuery.getData()),
                 callbackQuery == null || callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId(),
                 callbackQuery == null || callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId());
+
+        ManagerReportReviewTelegramService reviewService =
+                managerReportReviewTelegramServiceProvider == null
+                        ? null
+                        : managerReportReviewTelegramServiceProvider.getIfAvailable();
+        if (chatExecutor != null && reviewService != null && callbackQuery != null
+                && ManagerReportReviewTelegramService.isReviewCallback(callbackQuery.getData())) {
+            long chatKey = callbackQuery.getMessage() != null
+                    ? callbackQuery.getMessage().getChatId()
+                    : callbackQuery.getFrom() == null ? 0L : callbackQuery.getFrom().getId();
+            dispatchForChat(chatKey, () -> {
+                try {
+                    if (!handleReviewCallback(callbackQuery, reviewService)) {
+                        answerCallback(callbackQuery.getId(), "Команда не распознана");
+                    }
+                } catch (org.springframework.dao.PessimisticLockingFailureException busy) {
+                    // Another chat (the manager or the recovery job) is checking this audit right now.
+                    answerCallback(callbackQuery.getId(), "Разбор сейчас проверяется. Повторите через минуту");
+                } catch (RuntimeException failure) {
+                    answerCallback(callbackQuery.getId(), "Не удалось обработать нажатие. Повторите позже");
+                    throw failure;
+                }
+            });
+            return;
+        }
 
         PerformerTelegramCallbackService performerTelegramCallbackService =
                 performerTelegramCallbackServiceProvider == null ? null : performerTelegramCallbackServiceProvider.getIfAvailable();
@@ -483,22 +589,9 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
                 managerReportReviewTelegramServiceProvider == null
                         ? null
                         : managerReportReviewTelegramServiceProvider.getIfAvailable();
-        if (managerReportReviewTelegramService != null) {
-            Optional<String> reviewAnswer;
-            try {
-                reviewAnswer = managerReportReviewTelegramService.handle(callbackQuery);
-            } catch (org.springframework.web.server.ResponseStatusException exception) {
-                if (!exception.getStatusCode().is4xxClientError()) throw exception;
-                answerCallback(callbackQuery.getId(), exception.getReason() == null
-                        ? "Не удалось применить решение. Откройте актуальную карточку спора"
-                        : exception.getReason());
-                return;
-            }
-            if (reviewAnswer.isPresent()) {
-                log.info("Manager report review Telegram callback handled answer='{}'", reviewAnswer.get());
-                answerCallback(callbackQuery.getId(), reviewAnswer.get());
-                return;
-            }
+        if (managerReportReviewTelegramService != null
+                && handleReviewCallback(callbackQuery, managerReportReviewTelegramService)) {
+            return;
         }
 
         OwnerManualCardPaymentApprovalTelegramCallbackService ownerPaymentApprovalService =

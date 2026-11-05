@@ -1135,4 +1135,58 @@ class ManagerReportReviewTelegramServiceTest {
         when(summary.problemCount()).thenReturn(problems);
         return summary;
     }
+
+    @Test
+    void strayTextToAnAbandonedDisputeIsNotSentToOwners() {
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(41L);
+        review.setManagerUserId(17L);
+        review.setRecipientChatId(700L);
+        review.setStatus(ManagerReportReviewStatus.DISPUTE_PENDING);
+        review.setReplyPromptMessageId(555);
+        when(sessionRepository.findFirstByManagerUserIdAndRecipientChatIdAndStatusInOrderByCreatedAtDesc(
+                eq(17L), eq(700L), any()
+        )).thenReturn(Optional.of(review));
+
+        assertThat(service.handleTextMessage(700L, user,
+                "Через неделю пишу боту совсем про другое дело", null)).isTrue();
+
+        verify(issueService, never()).submitDispute(any(), any());
+        verify(ownerNotificationService, never()).notifyDispute(any(), any());
+        verify(telegramService).sendMessageWithInlineKeyboard(
+                eq(700L), org.mockito.ArgumentMatchers.contains("«Ответить»"), eq("HTML"), any());
+    }
+
+    @Test
+    void menuCommandPassesAnUnfinishedAuditInPrivateChat() {
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(41L);
+        review.setManagerUserId(17L);
+        review.setRecipientChatId(700L);
+        review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        review.setReplyPromptMessageId(555);
+        when(sessionRepository.findFirstByManagerUserIdAndRecipientChatIdAndStatusInOrderByCreatedAtDesc(
+                eq(17L), eq(700L), any()
+        )).thenReturn(Optional.of(review));
+
+        assertThat(service.handleTextMessage(700L, user, "1", null)).isFalse();
+
+        verify(telegramService, never()).sendMessageWithInlineKeyboard(
+                org.mockito.ArgumentMatchers.anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void clientCompanyGroupCannotBecomeTheAuditGroup() {
+        var groups = mock(com.hunt.otziv.c_companies.api.CompanyTelegramGroups.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "companyTelegramGroups", groups);
+        when(groups.isCompanyGroup(-100777L)).thenReturn(true);
+        when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
+        when(managerRepository.findByUserId(17L)).thenReturn(Optional.of(manager));
+
+        assertThat(service.handleGroupCommand(-100777L, 700L, "/auditgroup"))
+                .hasValueSatisfying(answer -> assertThat(answer).contains("группа компании-клиента"));
+
+        verify(managerRepository, never()).save(any());
+        assertThat(manager.getAuditTelegramGroupChatId()).isNull();
+    }
 }

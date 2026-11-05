@@ -33,7 +33,7 @@ public class ManagerReportReviewCheckInService {
             event.setActorUserId(user.getId());
             event.setActorRole("MANAGER");
             event.setSource("personal-cabinet");
-            event.setPayloadText("Трёхчасовой срок начат при входе в личный кабинет");
+            event.setPayloadText("Срок прохождения начат при входе в личный кабинет");
             eventRepository.save(event);
         }
         accessPolicy.invalidate(user.getId());

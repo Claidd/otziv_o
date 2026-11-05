@@ -83,11 +83,23 @@ public class ManagerReportReviewTelegramService {
     private final ManagerReportReviewTaskContextService taskContextService;
     private final ManagerReportReviewCommitmentService commitmentService;
     private final ManagerReportReviewRolloutPolicy rolloutPolicy;
+    /** Field-injected so the constructor and its tests stay unchanged. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.c_companies.api.CompanyTelegramGroups companyTelegramGroups;
     private final ManagerReportReviewEvidenceSnapshotService evidenceSnapshots =
             new ManagerReportReviewEvidenceSnapshotService(new com.fasterxml.jackson.databind.ObjectMapper());
 
     public boolean enabled() {
         return appSettingService.getBoolean("manager.report-review.enabled", true);
+    }
+
+    public static boolean isReviewCallback(String callbackData) {
+        return callbackData != null && callbackData.startsWith(CALLBACK_PREFIX);
+    }
+
+    /** Cheap, non-locking check whether a group can receive audit answers at all. */
+    public boolean hasOpenAuditInChat(long chatId) {
+        return sessionRepository.existsByRecipientChatIdAndCompletedAtIsNull(chatId);
     }
 
     public boolean enabledFor(Manager manager) {
@@ -484,6 +496,10 @@ public class ManagerReportReviewTelegramService {
                 )
                 .orElse(null);
         if (review == null) return false;
+        boolean replyToPrompt = review.getReplyPromptMessageId() != null
+                && review.getReplyPromptMessageId().equals(replyToMessageId);
+        // An unfinished (possibly days old) audit must not swallow the bot menu in a private chat.
+        if (!replyToPrompt && !isGroupChat(chatId) && isMenuCommand(messageText)) return false;
         if (review.getStatus() == ManagerReportReviewStatus.READING) {
             telegramService.sendMessageWithInlineKeyboard(
                     review.getRecipientChatId(),
@@ -494,15 +510,16 @@ public class ManagerReportReviewTelegramService {
             );
             return true;
         }
-        if ((review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING || isGroupChat(chatId))
-                && (review.getReplyPromptMessageId() == null
-                || !review.getReplyPromptMessageId().equals(replyToMessageId))) {
+        // Plans and dispute texts, like answers, count only as a reply to the current prompt:
+        // a stray message to an abandoned dispute used to reach the owners as a dispute.
+        if (!replyToPrompt) {
             telegramService.sendMessageWithInlineKeyboard(
                     review.getRecipientChatId(),
                     "Чтобы ответ засчитался именно этому менеджеру и текущему шагу, "
                             + "используйте кнопку <b>«Ответить»</b> или ответьте на последнее сообщение бота.",
                     "HTML",
                     review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING
+                            || review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING
                             ? answerKeyboard(review.getId(), false)
                             : review.getStatus() == ManagerReportReviewStatus.DISPUTE_PENDING
                                     ? disputeKeyboard(review.getId())
@@ -532,6 +549,11 @@ public class ManagerReportReviewTelegramService {
         Manager manager = managerRepository.findByUserId(actor.getId()).orElse(null);
         if (manager == null) {
             return Optional.of("Привязать группу может только менеджер, для которого формируется аудит.");
+        }
+        // The audit shows the manager's internal report; a client company's chat must never receive it.
+        if (companyTelegramGroups != null && companyTelegramGroups.isCompanyGroup(chatId)) {
+            return Optional.of("Это группа компании-клиента. Для аудита создайте отдельную служебную группу "
+                    + "с ботом и отправьте команду там.");
         }
         Manager occupied = managerRepository.findByAuditTelegramGroupChatId(chatId).orElse(null);
         if (occupied != null && !occupied.getId().equals(manager.getId())) {
@@ -604,7 +626,8 @@ public class ManagerReportReviewTelegramService {
             event(review, "DEADLINE_STARTED", actor.getId(), actorRole(review), "telegram",
                     review.isTestMode()
                             ? "Тестовый таймер прохождения запущен без ограничений доступа"
-                            : "Трёхчасовой срок начат при открытии отчёта");
+                            : ManagerReportReviewDeadline.deadlineLabel(appSettingService.getInt(
+                                    ManagerReportReviewDeadline.DEADLINE_KEY, ManagerReportReviewDeadline.DEFAULT_DEADLINE_MINUTES)) + " начат при открытии отчёта");
         }
         review.setStatus(ManagerReportReviewStatus.READING);
         sessionRepository.save(review);
@@ -615,7 +638,9 @@ public class ManagerReportReviewTelegramService {
             telegramService.sendMessage(
                     review.getRecipientChatId(),
                     "👀 <b>" + escape(review.getManagerName()) + " начал(а) изучение отчёта.</b>\n"
-                            + "С этого момента идёт трёхчасовой срок на прохождение проверки.",
+                            + "С этого момента идёт срок на прохождение проверки: "
+                                    + ManagerReportReviewDeadline.duration(ManagerReportReviewDeadline.deadlineMinutes(appSettingService.getInt(
+                ManagerReportReviewDeadline.DEADLINE_KEY, ManagerReportReviewDeadline.DEFAULT_DEADLINE_MINUTES))) + ".",
                     "HTML"
             );
         }
@@ -677,7 +702,7 @@ public class ManagerReportReviewTelegramService {
         if (questions.isEmpty()) {
             if (questionsPendingAi(review)) {
                 sendAiUnavailable(review);
-                return "DeepSeek временно недоступен. Проверка сохранена, трёхчасовой срок приостановлен";
+                return "DeepSeek временно недоступен. Проверка сохранена, срок прохождения приостановлен";
             }
             completeReview(review, actor, "Проблемы для проверки отсутствуют");
             return "Отчёт принят";
@@ -2065,7 +2090,7 @@ public class ManagerReportReviewTelegramService {
                             + "Это техническая остановка проверки; ответ не оценён как неправильный. "
                         : "⏸ <b>Для проверки нужны дополнительные данные</b>\n\n")
                         + (preparingQuestions ? "Ваш прогресс сохранён. " : "Ваш ответ и прогресс сохранены. ")
-                        + "Трёхчасовой срок приостановлен, доступ не будет ограничен. "
+                        + "Срок прохождения приостановлен, доступ не будет ограничен. "
                         + (awaitingContext
                             ? escape(missingAnswerContextReason(review)) + "\n\n"
                                 + "Добавьте уточнение ответом на последний вопрос аудита. Если он недоступен, нажмите «Ответить заново». "
@@ -2371,6 +2396,11 @@ public class ManagerReportReviewTelegramService {
 
     private String deliverySource(Long chatId) {
         return isGroupChat(chatId) ? "telegram-group" : "telegram-private";
+    }
+
+    private boolean isMenuCommand(String messageText) {
+        String value = clean(messageText);
+        return value.startsWith("/") || value.matches("[0-9]{1,2}");
     }
 
     private boolean isAuditGroupCommand(String messageText) {

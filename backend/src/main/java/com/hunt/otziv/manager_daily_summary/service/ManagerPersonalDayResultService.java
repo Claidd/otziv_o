@@ -55,6 +55,12 @@ public class ManagerPersonalDayResultService {
         return sent;
     }
 
+    /** Managers whose day result (or audit that replaces it) is not delivered yet. */
+    public java.util.Set<Long> undeliveredManagerIds(LocalDate date) {
+        return date == null ? java.util.Set.of() : new java.util.HashSet<>(
+                achievementService.unnotifiedActorIds(date, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY));
+    }
+
     private <T> T inOwnTransaction(java.util.function.Supplier<T> work) {
         if (transactionManager == null) {
             return work.get();
@@ -86,11 +92,20 @@ public class ManagerPersonalDayResultService {
                     0,
                     reached100
             );
-            if (reportReviewService != null && reportReviewService.enabled()) {
+            if (result.notified()) {
+                // A retry pass must not deliver the audit or the day result twice.
+                return false;
+            }
+            // The audit replaces the day result only for managers it is enabled for; switching the
+            // audit off for one manager must not leave them without the day result.
+            if (reportReviewService != null && reportReviewService.enabledFor(manager)) {
                 if (reportReviewService.deliver(manager, summary)) {
                     achievementService.markManagerWorkdayNotified(result);
                     return true;
                 }
+                org.slf4j.LoggerFactory.getLogger(ManagerPersonalDayResultService.class)
+                        .warn("Персональный разбор менеджера {} за {} не доставлен; повтор в следующем проходе",
+                                summary.managerId(), date);
                 return false;
             }
             return achievementService.notifyManagerWorkday(manager, result, summary.confirmedActiveSeconds());

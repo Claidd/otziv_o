@@ -95,6 +95,80 @@ class ManagerPersonalDayResultServiceTest {
         verify(achievementService).notifyManagerWorkday(manager, result, 600);
     }
 
+    @Test
+    void managerWithAuditSwitchedOffStillReceivesTheDayResult() {
+        ManagerReportReviewTelegramService audit = org.mockito.Mockito.mock(ManagerReportReviewTelegramService.class);
+        ManagerPersonalDayResultService withAudit =
+                new ManagerPersonalDayResultService(managerRepository, achievementService, audit);
+        Manager manager = Manager.builder().id(8L).user(User.builder().id(80L).build()).build();
+        ManagerDailySummaryResponse summary = summary(8L, 80L, 14, 14, 0, 0, 100, 600);
+        EndOfDayAchievementService.AchievementResult result = result(false);
+        when(managerRepository.findByIdWithUser(8L)).thenReturn(java.util.Optional.of(manager));
+        when(achievementService.saveResult(
+                eq(DATE), eq(EndOfDayAchievementService.ROLE_MANAGER_WORKDAY), eq(8L), eq(80L),
+                eq(14L), eq(14L), eq(100.0), eq(0L), eq(true)
+        )).thenReturn(result);
+        when(audit.enabledFor(manager)).thenReturn(false);
+        when(achievementService.notifyManagerWorkday(manager, result, 600)).thenReturn(true);
+
+        assertEquals(1, withAudit.send(DATE, List.of(summary)));
+
+        verify(audit, org.mockito.Mockito.never()).deliver(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void retryDoesNotDeliverAnAlreadyDeliveredAuditAgain() {
+        ManagerReportReviewTelegramService audit = org.mockito.Mockito.mock(ManagerReportReviewTelegramService.class);
+        ManagerPersonalDayResultService withAudit =
+                new ManagerPersonalDayResultService(managerRepository, achievementService, audit);
+        Manager manager = Manager.builder().id(8L).user(User.builder().id(80L).build()).build();
+        when(managerRepository.findByIdWithUser(8L)).thenReturn(java.util.Optional.of(manager));
+        when(achievementService.saveResult(
+                eq(DATE), eq(EndOfDayAchievementService.ROLE_MANAGER_WORKDAY), eq(8L), eq(80L),
+                eq(14L), eq(14L), eq(100.0), eq(0L), eq(true)
+        )).thenReturn(result(true));
+
+        assertEquals(0, withAudit.send(DATE, List.of(summary(8L, 80L, 14, 14, 0, 0, 100, 600))));
+
+        verify(audit, org.mockito.Mockito.never()).deliver(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+        verify(achievementService, org.mockito.Mockito.never()).notifyManagerWorkday(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void failedAuditDeliveryStaysUndeliveredForTheRetry() {
+        ManagerReportReviewTelegramService audit = org.mockito.Mockito.mock(ManagerReportReviewTelegramService.class);
+        ManagerPersonalDayResultService withAudit =
+                new ManagerPersonalDayResultService(managerRepository, achievementService, audit);
+        Manager manager = Manager.builder().id(8L).user(User.builder().id(80L).build()).build();
+        ManagerDailySummaryResponse summary = summary(8L, 80L, 14, 14, 0, 0, 100, 600);
+        when(managerRepository.findByIdWithUser(8L)).thenReturn(java.util.Optional.of(manager));
+        when(achievementService.saveResult(
+                eq(DATE), eq(EndOfDayAchievementService.ROLE_MANAGER_WORKDAY), eq(8L), eq(80L),
+                eq(14L), eq(14L), eq(100.0), eq(0L), eq(true)
+        )).thenReturn(result(false));
+        when(audit.enabledFor(manager)).thenReturn(true);
+        when(audit.deliver(manager, summary)).thenReturn(false);
+
+        assertEquals(0, withAudit.send(DATE, List.of(summary)));
+
+        verify(achievementService, org.mockito.Mockito.never()).markManagerWorkdayNotified(
+                org.mockito.ArgumentMatchers.any());
+        verify(achievementService, org.mockito.Mockito.never()).notifyManagerWorkday(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    private EndOfDayAchievementService.AchievementResult result(boolean notified) {
+        return new EndOfDayAchievementService.AchievementResult(
+                DATE, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY, 8L,
+                14, 14, 100, 0, true, 3, notified
+        );
+    }
+
     private ManagerDailySummaryResponse summary(
             Long managerId,
             Long userId,

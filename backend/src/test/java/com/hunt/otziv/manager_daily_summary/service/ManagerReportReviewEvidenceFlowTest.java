@@ -881,7 +881,7 @@ class ManagerReportReviewEvidenceFlowTest {
 
         var text = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(telegram).sendMessageWithInlineKeyboard(eq(700L), text.capture(), eq("HTML"), any());
-        assertThat(text.getValue()).contains("1 заказ &lt;5 текстов&gt;", "Добавьте уточнение", "срок приостановлен")
+        assertThat(text.getValue()).contains("1 заказ &lt;5 текстов&gt;", "Добавьте уточнение", "Срок прохождения приостановлен")
                 .doesNotContain("Система автоматически повторит проверку и пришлёт результат");
         assertThat(review.getAnswersJson()).isEqualTo(savedAnswer);
         assertThat(review.isRecoveryAwaitingContext()).isEqualTo(waiting);
