@@ -96,7 +96,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:2f4863a2cca459beb732b9081588cec9f411ac68e83d2cddf2609b16cd708c27
+    image: ghcr.io/claidd/otziv-security@sha256:374430936cad1fcc6ea665ce93aa12314d980f35f623938b4d9c821a720322e5
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -183,7 +183,7 @@ services:
 
   minio:
     # Retain the service alias used by local S3 clients; keep old MinIO data separately.
-    image: ghcr.io/claidd/otziv-security@sha256:860e028744b41222a75dce94ce5c31572364a90787ccf478be95f575da6ad9a3
+    image: ghcr.io/claidd/otziv-security@sha256:5209b4ef86d3c35dd1696bbc5b9aaf2414105c8872a932ebe71dea802a8bb21d
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 768m
@@ -212,7 +212,7 @@ services:
       - internal_net
 
   minio-init:
-    image: ghcr.io/claidd/otziv-security@sha256:7f151ac5485610079a5243d91c28f2681691083ac6c22e92d53f9a5a1e4ace58
+    image: ghcr.io/claidd/otziv-security@sha256:e14ca80eab665beb2d68c8fdce19fcc98e799844c34c7a104895d133a55ca567
     restart: "no"
     logging: *default-logging
     mem_limit: 384m
@@ -752,7 +752,7 @@ services:
       - internal_net
 
   dozzle:
-    image: ghcr.io/claidd/otziv-security@sha256:704cb4424920407d43d1eebd1782af56f3fd1b65648530aeae6f3ad6e34f3f92
+    image: ghcr.io/claidd/otziv-security@sha256:200bb7e67947397b154106e962fcb7e73883624229ee876a9ef644a5a0090cc7
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -772,7 +772,7 @@ services:
       - internal_net
 
   prometheus:
-    image: ghcr.io/claidd/otziv-security@sha256:1b317647ec6d8a34e3041ca625a658da2c83c774bb43b125612a237fbed58aec
+    image: ghcr.io/claidd/otziv-security@sha256:3631f3ba94633e919ffdd1f581d6a4164b9057259bfcdc09a2e00b773c42fe8c
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -800,7 +800,7 @@ services:
       - observer_metrics_net
 
   loki:
-    image: ghcr.io/claidd/otziv-security@sha256:87d426476ddadecd314b8c7e0064df618c84b6461be52d05c830be9095e3c14e
+    image: ghcr.io/claidd/otziv-security@sha256:9a0dcfd9845f89e1bbc282b32eb9b62122fbe7f43d01a633fe88690f8e86a531
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -818,7 +818,7 @@ services:
       - internal_net
 
   tempo:
-    image: ghcr.io/claidd/otziv-security@sha256:4d64639afbe1d54b305ce72c1964141ec0cc63a1506eae5f70340d8b82b8d4b9
+    image: ghcr.io/claidd/otziv-security@sha256:32eb442b4b2f0cb86c7bc2d4254d46011e472eed228232ae6404d39c67a0e974
     stop_grace_period: 30s
     profiles: ["observability"]
     restart: unless-stopped
@@ -837,7 +837,7 @@ services:
       - internal_net
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:6010376795977db1a66670feab760e710f70a330f16aa8b2c088367f7ef5861d
+    image: ghcr.io/claidd/otziv-security@sha256:c706f8a2e448bef0ec1cd92749967ed7accccb2b53fe21de9b5ca53694ce12f3
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -864,7 +864,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:a9eb6567dc0fceb41dbe6225f49e80a39db9e1b9d5f82abb5003ee69fe4a5688
+    image: ghcr.io/claidd/otziv-security@sha256:b6b50b514ad8af7881deb8d0f0a764be651bb95f155900fd6f57324e1e2c6892
     # Builds the Telegram contact point for the alert rules, then runs the image entrypoint.
     entrypoint: ["/bin/sh", "/etc/otziv/grafana-alerting-entrypoint.sh"]
     profiles: ["observability"]
