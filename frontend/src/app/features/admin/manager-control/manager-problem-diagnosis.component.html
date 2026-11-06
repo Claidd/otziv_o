@@ -1,8 +1,10 @@
 <section class="problem-diagnosis" aria-label="Разбор замечания">
-  <header>
+  <!-- Collapsed by default: the card's own reason and the client's message stay in view. -->
+  <details class="diagnosis-toggle">
+  <summary>
     <strong>Разбор замечания</strong>
     <small>Данные на {{ view().observedAt | date: 'dd.MM.yyyy HH:mm' }}</small>
-  </header>
+  </summary>
   <p class="diagnosis-status" role="status">{{ statusText() }}</p>
   @if (analysis(); as result) {
     <div class="business-diagnosis">
@@ -103,4 +105,5 @@
       }
     </details>
   }
+  </details>
 </section>

@@ -517,15 +517,15 @@ class ManagerControlServiceTest {
     @Test
     void commonInvoiceControlPassesStatusesThatRequireAllOrdersReady() throws Exception {
         Manager manager = new Manager();
-        when(commonInvoiceRepository.countManagerControlInvoices(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(0L);
+        when(commonInvoiceRepository.findManagerControlInvoices(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(List.of());
 
         Method method = ManagerControlInvoiceDiagnostics.class.getDeclaredMethod("countActions", Manager.class);
         method.setAccessible(true);
 
         assertEquals(0L, method.invoke(invoiceDiagnostics, manager));
-        verify(commonInvoiceRepository).countManagerControlInvoices(
+        verify(commonInvoiceRepository).findManagerControlInvoices(
                 eq(manager),
                 any(),
                 any(),
@@ -534,6 +534,7 @@ class ManagerControlServiceTest {
                 any(),
                 any(),
                 eq(InvoicePaymentMode.OWNER_PAPER_INVOICE),
+                any(),
                 any(),
                 any()
         );

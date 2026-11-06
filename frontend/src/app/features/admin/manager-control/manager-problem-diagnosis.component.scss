@@ -9,7 +9,15 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-header { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; }
+.problem-diagnosis { padding: 10px 14px; }
+details.diagnosis-toggle { margin-top: 0; border-top: 0; padding-top: 0; }
+.diagnosis-toggle > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.diagnosis-toggle > summary::before { content: '▸'; color: var(--text-muted, #617087); }
+.diagnosis-toggle[open] > summary::before { content: '▾'; }
+.diagnosis-toggle > summary::-webkit-details-marker { display: none; }
+.diagnosis-toggle > summary { list-style: none; }
+.diagnosis-toggle > summary small { margin-left: auto; font-weight: normal; }
+.diagnosis-toggle[open] > summary { margin-bottom: 4px; }
 small, .diagnosis-status, .diagnosis-note { color: var(--text-muted, #617087); }
 p { margin: 8px 0; }
 h4 { margin: 14px 0 5px; font-size: 13px; }

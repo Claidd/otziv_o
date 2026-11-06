@@ -49,8 +49,19 @@ public class ManagerControlInvoiceDiagnostics {
     /** Field-injected so the constructor and its tests stay unchanged. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hunt.otziv.common_billing.api.ArchivedCommonInvoiceRevival archivedInvoiceRevival;
+    /** Field-injected like the revival seam; absent in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.payments.api.PaperInvoiceReminderProgress paperReminderProgress;
 
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
+    /** A due reminder may wait for business windows and the shared limit; a day late means stalled. */
+    private static final int PAYMENT_REMINDER_GRACE_HOURS = 24;
+    private static final int DEFAULT_PAYMENT_OVERDUE_DAYS = 30;
+    private static final Set<CommonInvoiceStatus> PAYMENT_REMINDER_STATUSES = Set.of(
+            CommonInvoiceStatus.INVOICED,
+            CommonInvoiceStatus.REMINDER,
+            CommonInvoiceStatus.PARTIALLY_PAID
+    );
     private static final Pattern HISTORICAL_REVIEW_ID = Pattern.compile(
             "(?iu)(?:отзыв\\s*#|\\breview\\s+#?)\\s*([1-9][0-9]{0,18})(?![0-9])");
 
@@ -141,21 +152,18 @@ public class ManagerControlInvoiceDiagnostics {
     }
 
     long countActions(Manager manager) {
-        return commonInvoiceRepository.countManagerControlInvoices(
-                manager,
-                COMMON_INVOICE_CRITICAL_STATUSES,
-                effectiveCommonInvoiceStaleStatuses(),
-                CommonInvoiceStatus.PARTIALLY_PAID,
-                CommonInvoiceStatus.COLLECTING,
-                LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS),
-                LocalDateTime.now().minusHours(COMMON_INVOICE_PUBLICATION_BLOCKER_HOURS),
-                InvoicePaymentMode.OWNER_PAPER_INVOICE,
-                PAPER_INVOICE_DELIVERY_OPEN_STATUSES,
-                LocalDateTime.now().minusHours(PAPER_INVOICE_DELIVERY_SLA_HOURS)
-        );
+        // The query is a superset: reminder progress of bank paper documents is checked in Java.
+        return findActionInvoices(manager).size();
     }
 
     private List<CommonInvoice> findActionInvoices(Manager manager) {
+        LocalDateTime now = LocalDateTime.now();
+        return findActionInvoiceCandidates(manager).stream()
+                .filter(invoice -> !paymentRemindersOnSchedule(invoice, now))
+                .toList();
+    }
+
+    private List<CommonInvoice> findActionInvoiceCandidates(Manager manager) {
         return commonInvoiceRepository.findManagerControlInvoices(
                 manager,
                 COMMON_INVOICE_CRITICAL_STATUSES,
@@ -216,6 +224,9 @@ public class ManagerControlInvoiceDiagnostics {
         if (COMMON_INVOICE_CRITICAL_STATUSES.contains(status)) {
             return true;
         }
+        if (paymentRemindersOnSchedule(invoice, now)) {
+            return false;
+        }
         if (status == CommonInvoiceStatus.PARTIALLY_PAID
                 && (invoice.getSentAt() == null || invoice.getNextReminderAt() == null)) {
             return true;
@@ -243,6 +254,51 @@ public class ManagerControlInvoiceDiagnostics {
         }
         return invoiceItems.stream()
                 .noneMatch(item -> item != null && !item.isReady());
+    }
+
+    /**
+     * An issued, unpaid invoice whose automatic payment reminders run on schedule is the
+     * autoresponder's work, as for single orders with a healthy payment queue. It returns to the
+     * board when reminders finish or stall, or when the payment overdue period has passed.
+     */
+    boolean paymentRemindersOnSchedule(CommonInvoice invoice, LocalDateTime now) {
+        if (invoice == null || invoice.getId() == null
+                || !PAYMENT_REMINDER_STATUSES.contains(invoice.getStatus())
+                || hasText(invoice.getLastError())
+                || hasText(invoice.getPaymentSuccessNotificationError())
+                || invoice.getSentAt() == null) {
+            return false;
+        }
+        LocalDateTime checkTime = now == null ? LocalDateTime.now() : now;
+        if (!invoice.getSentAt().isAfter(checkTime.minusDays(paymentOverdueDays()))) {
+            return false;
+        }
+        boolean paperInvoice = invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE;
+        if (paperInvoice && invoice.getPaperInvoiceIssuedAt() == null) {
+            return false;
+        }
+        LocalDateTime staleReminderBefore = checkTime.minusHours(PAYMENT_REMINDER_GRACE_HOURS);
+        if (invoice.isPaperInvoiceAutomationHold()) {
+            // Bank paper documents own the reminder clock while the invoice clock is paused.
+            return paperInvoice
+                    && !invoice.isPaperInvoiceReviewHold()
+                    && paperReminderProgress != null
+                    && paperReminderProgress.remindersOnSchedule(invoice.getId(), staleReminderBefore);
+        }
+        return invoice.getNextReminderAt() != null && invoice.getNextReminderAt().isAfter(staleReminderBefore);
+    }
+
+    private int paymentOverdueDays() {
+        int configured = appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, DEFAULT_PAYMENT_OVERDUE_DAYS);
+        return Math.max(1, Math.min(365, configured));
+    }
+
+    private boolean pausedForBankPaperDocuments(CommonInvoice invoice) {
+        return invoice != null
+                && invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE
+                && invoice.isPaperInvoiceAutomationHold()
+                && invoice.getPaperInvoiceIssuedAt() != null;
     }
 
     private boolean isPaperInvoiceDeliveryOverdue(CommonInvoice invoice, LocalDateTime now) {
@@ -423,6 +479,13 @@ public class ManagerControlInvoiceDiagnostics {
                     + ready + "/" + items.size()
                     + (waitingStatuses.isBlank() ? "" : "; не готовы статусы: " + waitingStatuses)
                     + ". Нажмите «Починить»: система пересчитает позиции и отправит счет, если все заказы действительно готовы.";
+        }
+        if (pausedForBankPaperDocuments(invoice)) {
+            long sentDays = invoice.getSentAt() == null ? ageDays : daysSince(invoice.getSentAt().toLocalDate(), today);
+            return "Почему в замечаниях: банковский счёт выставлен " + sentDays + " дн. назад, оплата не поступила, "
+                    + "а напоминания по нему завершены, остановлены или их результат неизвестен. "
+                    + "Откройте «Детали» счёта, проверьте поступление в банке и состояние напоминаний; "
+                    + "повторную отправку делайте только после этой проверки.";
         }
         return "Счет завис в статусе «" + commonInvoiceStatusLabel(status) + "» " + ageDays
                 + " дн. Нажмите «Починить»: система проверит текущий шаг и выполнит безопасное продолжение.";

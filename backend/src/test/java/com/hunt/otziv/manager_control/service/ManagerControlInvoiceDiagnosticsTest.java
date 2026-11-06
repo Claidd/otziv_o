@@ -27,9 +27,10 @@ import static org.mockito.Mockito.*;
 class ManagerControlInvoiceDiagnosticsTest {
     private final CommonInvoiceRepository invoices = mock(CommonInvoiceRepository.class);
     private final CommonInvoiceOrderRepository positions = mock(CommonInvoiceOrderRepository.class);
+    private final AppSettingService settings = mock(AppSettingService.class);
     private final ManagerControlInvoiceDiagnostics diagnostics = new ManagerControlInvoiceDiagnostics(
             invoices, positions, mock(CommonInvoicePublicationBlockerService.class),
-            mock(PaymentLinkRepository.class), mock(AppSettingService.class));
+            mock(PaymentLinkRepository.class), settings);
 
     @Test
     void historicalAuditUsesCurrentInvoiceProblemRuleRatherThanItsDeferredCard() {
@@ -197,6 +198,86 @@ class ManagerControlInvoiceDiagnosticsTest {
                 .doesNotContain("JDBC", "select", "invoice_order", "HTTP", "409");
         invoice.setLastError("review_approval_failed: problem=не хватает дат публикации; solution=проверьте график специалиста");
         assertThat(reason(invoice, List.of())).contains("не хватает дат публикации", "проверьте график специалиста");
+    }
+
+    @Test
+    void bankPaperInvoiceWhoseDocumentRemindersRunOnScheduleIsNotARemark() {
+        var progress = paperProgress(true);
+        var invoice = issuedBankPaperInvoice(CommonInvoiceStatus.INVOICED, 5);
+        given(invoice, List.of(position("Выставлен счет", false, true)));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isTrue();
+        verify(progress).remindersOnSchedule(eq(invoice.getId()), any(LocalDateTime.class));
+    }
+
+    @Test
+    void bankPaperInvoiceWithFinishedOrStalledRemindersIsARemarkWithBankCheckAdvice() {
+        paperProgress(false);
+        var invoice = issuedBankPaperInvoice(CommonInvoiceStatus.INVOICED, 20);
+        given(invoice, List.of(position("Выставлен счет", false, true)));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(reason(invoice, List.of())).contains("банковский счёт выставлен 20 дн. назад", "проверьте поступление в банке")
+                .doesNotContain("Нажмите «Починить»");
+    }
+
+    @Test
+    void partlyPaidBankPaperInvoiceIsNotARemarkWhileItsDocumentsAreReminded() {
+        paperProgress(true);
+        var invoice = issuedBankPaperInvoice(CommonInvoiceStatus.PARTIALLY_PAID, 6);
+        invoice.setPaidKopecks(640000);
+        given(invoice, List.of(position("Выставлен счет", false, true)));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isTrue();
+    }
+
+    @Test
+    void scheduledRemindersStopShieldingTheInvoiceOnceThePaymentOverduePeriodPasses() {
+        paperProgress(true);
+        var invoice = issuedBankPaperInvoice(CommonInvoiceStatus.REMINDER, 31);
+        given(invoice, List.of(position("Напоминание", false, true)));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+    }
+
+    @Test
+    void ordinaryInvoiceKeepsItsOwnReminderClock() {
+        overdueDays(30);
+        var invoice = invoice(CommonInvoiceStatus.INVOICED, null);
+        invoice.setUpdatedAt(LocalDateTime.now().minusDays(4));
+        invoice.setSentAt(LocalDateTime.now().minusDays(4));
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        given(invoice, List.of(position("Выставлен счет", false, true)));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isTrue();
+
+        invoice.setNextReminderAt(LocalDateTime.now().minusDays(2));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).as("a reminder two days late is stalled").isFalse();
+        invoice.setNextReminderAt(null);
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+    }
+
+    private com.hunt.otziv.payments.api.PaperInvoiceReminderProgress paperProgress(boolean onSchedule) {
+        overdueDays(30);
+        var progress = mock(com.hunt.otziv.payments.api.PaperInvoiceReminderProgress.class);
+        when(progress.remindersOnSchedule(anyLong(), any(LocalDateTime.class))).thenReturn(onSchedule);
+        ReflectionTestUtils.setField(diagnostics, "paperReminderProgress", progress);
+        return progress;
+    }
+
+    private void overdueDays(int days) {
+        when(settings.getInt(eq(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS), anyInt())).thenReturn(days);
+    }
+
+    private CommonInvoice issuedBankPaperInvoice(CommonInvoiceStatus status, int sentDaysAgo) {
+        var invoice = invoice(status, null);
+        invoice.setInvoicePaymentMode(com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        invoice.setSentAt(LocalDateTime.now().minusDays(sentDaysAgo));
+        invoice.setPaperInvoiceIssuedAt(LocalDateTime.now().minusDays(Math.max(0, sentDaysAgo - 2)));
+        invoice.setPaperInvoiceAutomationHold(true);
+        invoice.setNextReminderAt(null);
+        invoice.setUpdatedAt(invoice.getPaperInvoiceIssuedAt());
+        invoice.setAmountKopecks(1280000);
+        return invoice;
     }
 
     private void given(CommonInvoice invoice, List<CommonInvoiceOrder> items) {

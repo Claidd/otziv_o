@@ -136,7 +136,11 @@ public class MaxGroupLinkService {
 
         String title = companyTitle(company);
         log.info("MAX group link prepared for company id={} title='{}' by userId={}", company.getId(), title, userId);
-        return Optional.of("Привязка MAX начата для компании \"" + title + "\". Добавьте этого MAX-бота в группу администратором, чтобы я получил событие добавления и сохранил chatId автоматически.");
+        // MAX reports "bot added" only once per group, so a group the bot already serves (one group
+        // for two branches) can be bound only by the command sent in it by this same MAX account.
+        return Optional.of("Привязка MAX начата для компании \"" + title + "\". Добавьте этого MAX-бота в группу администратором, чтобы я получил событие добавления и сохранил chatId автоматически.\n\n"
+                + "Если бот уже состоит в этой группе (например, одна группа на два филиала), в течение "
+                + tokenStore.ttl().toMinutes() + " минут отправьте в группе с этого же аккаунта MAX команду:\n/start " + payload.trim());
     }
 
     /**
