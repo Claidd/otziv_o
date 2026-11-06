@@ -777,6 +777,27 @@ SET @sanitize_actual_attribution_encrypted_snapshots = IF(
 PREPARE sanitize_actual_attribution_encrypted_snapshots_statement FROM @sanitize_actual_attribution_encrypted_snapshots;
 EXECUTE sanitize_actual_attribution_encrypted_snapshots_statement;
 DEALLOCATE PREPARE sanitize_actual_attribution_encrypted_snapshots_statement;
+
+-- Manager control reads every queued manual message of an order to place it in
+-- the order's cycle. Production envelopes need the production key, so one such
+-- row made the whole board synchronization of its manager fail locally. They
+-- carry client message text and cannot be re-encrypted here; drop them. Locally
+-- this only forgets earlier manual sends (their cards may reopen); external
+-- messaging stays disabled on the stand.
+SET @has_manager_client_message_queue = (
+    SELECT COUNT(*)
+    FROM information_schema.tables
+    WHERE table_schema = DATABASE()
+      AND table_name = 'manager_client_message_queue'
+);
+SET @sanitize_manager_client_message_queue = IF(
+    @has_manager_client_message_queue = 1,
+    'DELETE FROM manager_client_message_queue',
+    'SELECT 1'
+);
+PREPARE sanitize_manager_client_message_queue_statement FROM @sanitize_manager_client_message_queue;
+EXECUTE sanitize_manager_client_message_queue_statement;
+DEALLOCATE PREPARE sanitize_manager_client_message_queue_statement;
 "@
 
     Invoke-External -FilePath 'docker' -Arguments ($ComposeArguments + @(
