@@ -8,7 +8,8 @@ param(
 
     [string]$KeystorePropertiesPath = "",
 
-    [string]$ExpectedSignerSha256 = "A15A162AFE1F808F9586DD3F129F9E61F4BE49CCFF708CA99C6A0714004251D5",
+    # The 2026 signer of the standalone /android-new channel; the legacy key is lost.
+    [string]$ExpectedSignerSha256 = "00E249AB3D6A15F051C70F66B726047FCC534FC358E409A2099B4C4C461F9218",
 
     [string]$OutputDirectory = "",
 
@@ -73,8 +74,16 @@ if ($VersionName -notmatch '^[0-9A-Za-z._-]{1,40}$') {
 $mobileDirectory = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $androidDirectory = Join-Path $mobileDirectory "android"
 $defaultKeystoreProperties = Join-Path $androidDirectory "keystore.properties"
+# Project secrets live beside the repository (the same root deploy.ps1 uses for
+# .otziv and .ssh); a checkout-local keystore.properties is only a fallback.
+$projectFilesRoot = Split-Path -Parent (Split-Path -Parent $mobileDirectory)
+$sharedKeystoreProperties = Join-Path $projectFilesRoot ".otziv/env/android-signing-2026.properties"
 $selectedKeystoreProperties = if ([string]::IsNullOrWhiteSpace($KeystorePropertiesPath)) {
-    $defaultKeystoreProperties
+    if (Test-Path -LiteralPath $sharedKeystoreProperties -PathType Leaf) {
+        $sharedKeystoreProperties
+    } else {
+        $defaultKeystoreProperties
+    }
 } elseif ([System.IO.Path]::IsPathRooted($KeystorePropertiesPath)) {
     $KeystorePropertiesPath
 } else {

@@ -61,6 +61,12 @@ test('release build verifies both Gradle output and immutable copied artifact', 
   assert.match(releaseBuilder, /version artifacts are immutable/);
 });
 
+test('release build defaults to the shared 2026 signing settings and signer', () => {
+  assert.match(releaseBuilder, /"\.otziv\/env\/android-signing-2026\.properties"/);
+  assert.match(releaseBuilder, /ExpectedSignerSha256 = "00E249AB3D6A15F051C70F66B726047FCC534FC358E409A2099B4C4C461F9218"/);
+  assert.doesNotMatch(releaseBuilder, /A15A162AFE1F808F9586DD3F129F9E61F4BE49CCFF708CA99C6A0714004251D5/);
+});
+
 test('production deploy verifies selected APK before build and VPS access', () => {
   const verifierCall = deploy.indexOf('$mobileRelease = Confirm-MobileReleaseArtifact');
   const buildStart = deploy.indexOf('Write-Host "Building and pushing:"');
