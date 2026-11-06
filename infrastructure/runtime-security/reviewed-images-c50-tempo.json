@@ -29,7 +29,7 @@
       "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:4d64639afbe1d54b305ce72c1964141ec0cc63a1506eae5f70340d8b82b8d4b9",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/c50-tempo/Dockerfile",
-      "dockerfileSha256": "867bfee6ce16bda02d342576b34d4e46cd9ef9a127bfebb8e294f3727b7301ed",
+      "dockerfileSha256": "6b1f6b0162b60f2313f62c6aa7e2f4b16638f9d5fd6721c9ce02bae1fc758058",
       "version": "2.10.8-otziv.5"
     }
   ]

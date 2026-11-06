@@ -29,7 +29,7 @@
       "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:1b317647ec6d8a34e3041ca625a658da2c83c774bb43b125612a237fbed58aec",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/c50-prometheus/Dockerfile",
-      "dockerfileSha256": "4c841a4fce8c3002b632e37f896b2f21df0641ed871b433ddc533a44e8aa35e9",
+      "dockerfileSha256": "01ff129fa3fc3dddd24ebf03c7f8660b2a5ddba414d399129bc5c6bce705404a",
       "version": "3.13.3-otziv.3"
     }
   ]

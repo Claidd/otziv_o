@@ -29,7 +29,7 @@
       "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:a9eb6567dc0fceb41dbe6225f49e80a39db9e1b9d5f82abb5003ee69fe4a5688",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/c50-grafana/Dockerfile",
-      "dockerfileSha256": "6fd5e5b141c1f7f8ffd2725a53b537a7806f492045d612850c8bede688a6d69a",
+      "dockerfileSha256": "ad70db95088bd9600bf96688a635a40e99b37b6a86b47df7caec98a8d959143d",
       "version": "12.4.10+otziv.6"
     }
   ]

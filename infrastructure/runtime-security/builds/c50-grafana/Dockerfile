@@ -33,12 +33,12 @@ RUN sed -e 's|github.com/go-jose/go-jose/v4 v4.1.4|github.com/go-jose/go-jose/v4
        -e 's|golang.org/x/net v0.57.0|golang.org/x/net v0.62.0|' \
       -e 's|golang.org/x/crypto v0.55.0|golang.org/x/crypto v0.58.0|' \
       -e 's|golang.org/x/mod v0.38.0|golang.org/x/mod v0.41.0|' \
-      -e 's|golang.org/x/sync v0.22.0|golang.org/x/sync v0.23.0|' \
+      -e 's|golang.org/x/sync v0.22.0|golang.org/x/sync v0.24.0|' \
       -e 's|golang.org/x/sys v0.47.0|golang.org/x/sys v0.49.0|' \
-      -e 's|golang.org/x/telemetry v0.0.0-20260708182218-49f421fb7959|golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5|' \
+      -e 's|golang.org/x/telemetry v0.0.0-20260708182218-49f421fb7959|golang.org/x/telemetry v0.0.0-20260924152758-ed294f943157|' \
       -e 's|golang.org/x/term v0.45.0|golang.org/x/term v0.47.0|' \
       -e 's|golang.org/x/text v0.41.0|golang.org/x/text v0.43.0|' \
-      -e 's|golang.org/x/tools v0.48.0|golang.org/x/tools v0.49.0|' \
+      -e 's|golang.org/x/tools v0.48.0|golang.org/x/tools v0.51.0|' \
       -e 's|github.com/apache/thrift v0.23.1-0.20260429145742-d2acd3c49e58|github.com/apache/thrift v0.24.0|' \
       -e 's|github.com/getkin/kin-openapi v0.147.0|github.com/getkin/kin-openapi v0.149.0|' \
       -e 's|github.com/santhosh-tekuri/jsonschema/v6 v6.0.2|github.com/santhosh-tekuri/jsonschema/v6 v6.0.3|' \

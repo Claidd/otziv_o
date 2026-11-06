@@ -20,9 +20,9 @@ RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=loc
        -e 's|golang.org/x/sys v0.46.0|golang.org/x/sys v0.49.0|' \
        -e 's|golang.org/x/term v0.44.0|golang.org/x/term v0.47.0|' \
        -e 's|golang.org/x/text v0.39.0|golang.org/x/text v0.43.0|' \
-       -e 's|golang.org/x/tools v0.47.0|golang.org/x/tools v0.49.0|' \
+       -e 's|golang.org/x/tools v0.47.0|golang.org/x/tools v0.51.0|' \
        -e 's|golang.org/x/mod v0.37.0|golang.org/x/mod v0.41.0|' \
-       -e 's|golang.org/x/sync v0.21.0|golang.org/x/sync v0.23.0|' \
+       -e 's|golang.org/x/sync v0.21.0|golang.org/x/sync v0.24.0|' \
        -e 's|cel.dev/expr v0.25.1|cel.dev/expr v0.25.2|' \
        -e 's|go.opentelemetry.io/otel/sdk v1.43.0|go.opentelemetry.io/otel/sdk v1.44.0|' \
        -e 's|go.opentelemetry.io/otel/sdk/metric v1.43.0|go.opentelemetry.io/otel/sdk/metric v1.44.0|' \

@@ -15,11 +15,13 @@ RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=loc
        -e 's|go.opentelemetry.io/contrib/detectors/gcp v1.43.0|go.opentelemetry.io/contrib/detectors/gcp v1.44.0|' \
        -e 's|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.32.0|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0|' \
        -e 's|golang.org/x/crypto v0.55.0|golang.org/x/crypto v0.58.0|' \
-       -e 's|golang.org/x/sync v0.22.0|golang.org/x/sync v0.23.0|' \
+       -e 's|golang.org/x/sync v0.22.0|golang.org/x/sync v0.24.0|' \
        -e 's|golang.org/x/sys v0.47.0|golang.org/x/sys v0.49.0|' \
        -e 's|golang.org/x/text v0.41.0|golang.org/x/text v0.43.0|' \
        -e 's|golang.org/x/mod v0.40.0|golang.org/x/mod v0.41.0|' \
        -e 's|golang.org/x/term v0.45.0|golang.org/x/term v0.47.0|' \
+       -e 's|golang.org/x/tools v0.49.0|golang.org/x/tools v0.51.0|' \
+       -e 's|golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5|golang.org/x/telemetry v0.0.0-20260924152758-ed294f943157|' \
        /out/go.mod.before.txt > /tmp/expected && cmp /tmp/expected go.mod \
     && go mod verify \
     && go build -p 2 -trimpath -tags netgo \

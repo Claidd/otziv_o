@@ -29,7 +29,7 @@
       "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:87d426476ddadecd314b8c7e0064df618c84b6461be52d05c830be9095e3c14e",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/c50-loki/Dockerfile",
-      "dockerfileSha256": "b9565a123c3619c75e19256db3892091ceb083332a36f98286d5fd2e05bb96f0",
+      "dockerfileSha256": "8a65cdd22ed9b49b7b6c1f54737ffb20659967cec34ec498631becf0afec445c",
       "version": "3.7.7-otziv.4"
     }
   ]
