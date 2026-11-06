@@ -18,6 +18,7 @@ import {validateBrotliC45Activation,couplePostgresC36WithKeycloakC45} from './br
 import {validateAptC48Activation,couplePostgresC36WithKeycloakC48} from './apt-c48-activation.mjs';
 import {overlayForSet, overlayForManifest, overlayCompressedProofs} from './os-package-overlay-registry.mjs';
 import {validateOverlayActivation, coupleOverlayKeycloak} from './os-package-overlay.mjs';
+import {validateC50ActivationScan} from './c50-refresh.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 import { validateDatabaseTransitionReadiness } from './mysql-c46-readiness.mjs';
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
@@ -183,13 +184,14 @@ export function assertGrafanaC30KinOpenApi(raw) {
   assert.equal(modules[0].Version, 'v0.149.0', 'activation_grafana_c30_kin_openapi_version');
 }
 
-export async function validateGrafanaC43ActivationScan(publication, publicationPath, read) {
+export async function validateGrafanaC43ActivationScan(publication, publicationPath, read, generation = 'c43') {
+  assert.ok(['c43', 'c50'].includes(generation), 'activation_grafana_review_generation');
   assert.equal(publication.component, 'grafana', 'activation_grafana_c43_component');
   const directory = dirname(publicationPath).replaceAll('\\', '/');
   const [rawBytes, receiptBytes] = await Promise.all([
     read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
   const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
-  const { review, reviewSha256 } = await loadReviewedProof('c43');
+  const { review, reviewSha256 } = await loadReviewedProof(generation);
   assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c43_report_image');
   assertGrafanaC30KinOpenApi(raw);
   assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c43_schema');
@@ -249,6 +251,15 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if (['c43-grafana', 'c44-grafana', 'c49-grafana'].includes(selected.manifestSet)) {
     await validateGrafanaC43ActivationScan(publication.value, entry.publication.path, read);
+  }
+  if (selected.manifestSet === 'c50-grafana') {
+    await validateGrafanaC43ActivationScan(publication.value, entry.publication.path, read, 'c50');
+  }
+  if (selected.manifestSet === 'c50-alloy') {
+    await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read);
+  }
+  if (selected.manifestSet.startsWith('c50-')) {
+    await validateC50ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet === 'c43-keycloak') {
     await validateGuavaC43Activation(publication.value, entry, read, validateActivation);

@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c50-tempo",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "tempo",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "grafana/tempo@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 331,
+          "service": "tempo"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 774,
+          "service": "tempo"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 933,
+          "service": "tempo"
+        }
+      ],
+      "buildArgs": {},
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:4d64639afbe1d54b305ce72c1964141ec0cc63a1506eae5f70340d8b82b8d4b9",
+      "context": "infrastructure/runtime-security",
+      "dockerfile": "infrastructure/runtime-security/builds/c50-tempo/Dockerfile",
+      "dockerfileSha256": "867bfee6ce16bda02d342576b34d4e46cd9ef9a127bfebb8e294f3727b7301ed",
+      "version": "2.10.8-otziv.5"
+    }
+  ]
+}
