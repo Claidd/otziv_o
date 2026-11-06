@@ -16,10 +16,15 @@ const {
   reconciliationPayloads,
 } = require("./message-webhook");
 const {
+  classifyInviteLookup,
+  failedInviteLookup,
   findGroupByInviteCode,
   groupFromInviteInfo,
   normalizeInviteCode,
+  pageEnsureGroupInviteModule,
+  pageLookupGroupInvite,
   serializedGroupId,
+  summarizeInviteStatuses,
 } = require("./group-invite");
 const { selectGroupsCache } = require("./groups-cache");
 const {
@@ -88,7 +93,7 @@ if (REMOTE_BROWSER_ENABLED && WHATSAPP_PROXY_ENABLED) {
 }
 const WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS, 25000);
 const WHATSAPP_GROUPS_CACHE_TTL_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_CACHE_TTL_MS, 600000);
-const WHATSAPP_GROUP_INVITE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_TIMEOUT_MS, 2000);
+const WHATSAPP_GROUP_INVITE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_TIMEOUT_MS, 4000);
 const WHATSAPP_GROUP_INVITE_CONCURRENCY = Math.min(parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_CONCURRENCY, 16), 32);
 const WHATSAPP_RECONCILE_CONCURRENCY = Math.min(parsePositiveInt(process.env.WHATSAPP_RECONCILE_CONCURRENCY, 4), 8);
 const WHATSAPP_PUPPETEER_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_PUPPETEER_TIMEOUT_MS, 300000);
@@ -761,67 +766,67 @@ const lookupLastSeen = createLastSeenLookup({
   log,
 });
 
-async function inviteInfo(groupChat) {
-  const groupId = groupChat.id && groupChat.id._serialized ? groupChat.id._serialized : null;
-  if (typeof groupChat.getInviteCode !== "function") {
-    return { inviteCode: null, inviteLink: null };
-  }
+// The invite-code job lives in a lazily loaded WhatsApp Web bundle: load it once per refresh before
+// the per-group lookups (a no-op once registered). Failure is logged; lookups then say unsupported.
+const GROUP_INVITE_MODULE_LOAD_TIMEOUT_MS = 15000;
+const GROUP_INVITE_MODULE_RETRY_AFTER_MS = 300000;
 
+async function ensureGroupInviteModule() {
   try {
-    const inviteCode = await withTimeout(
-      () => groupChat.getInviteCode(),
-      WHATSAPP_GROUP_INVITE_TIMEOUT_MS,
-      "Invite code lookup"
+    const state = await withTimeout(
+      () => client.pupPage.evaluate(
+        pageEnsureGroupInviteModule,
+        GROUP_INVITE_MODULE_LOAD_TIMEOUT_MS,
+        GROUP_INVITE_MODULE_RETRY_AFTER_MS
+      ),
+      GROUP_INVITE_MODULE_LOAD_TIMEOUT_MS * 3 + 5000,
+      "Invite module load"
     );
-    return {
-      inviteCode,
-      inviteLink: inviteCode ? `https://chat.whatsapp.com/${inviteCode}` : null,
-    };
+    if (state && state.registered && state.loadedBy && !state.reused) {
+      log("info", "WhatsApp invite link bundle loaded", { loadedBy: state.loadedBy, errors: state.errors });
+    } else if (state && !state.registered && !state.reused) {
+      log("warn", "WhatsApp invite link bundle unavailable; invite codes cannot be read", { errors: state.errors });
+    }
+    return state;
   } catch (error) {
-    const level = error.message.includes("timed out") ? "warn" : "debug";
-    log(level, "Invite code unavailable", {
-      groupId,
-      error: error.message,
-    });
-    return { inviteCode: null, inviteLink: null };
+    log("warn", "WhatsApp invite link bundle load failed", { error: error && error.message ? error.message : String(error) });
+    return null;
   }
 }
 
-async function inviteInfoByGroupId(groupId) {
+// One lookup for both group list paths. Failures are not logged per group: the refresh logs the
+// status counts and the most frequent reasons (see summarizeInviteStatuses).
+async function lookupGroupInvite(groupId) {
   if (!groupId) {
-    return { inviteCode: null, inviteLink: null };
+    return failedInviteLookup(new Error("group id is missing"));
   }
 
   try {
-    const inviteCode = await withTimeout(
-      () => client.pupPage.evaluate(async (chatId) => {
-        try {
-          const result = await window
-            .require("WAWebMexFetchGroupInviteCodeJob")
-            .fetchMexGroupInviteCode(chatId);
-          return result && result.code ? result.code : result;
-        } catch (error) {
-          if (error && error.name === "ServerStatusCodeError") {
-            return null;
-          }
-          throw error;
-        }
-      }, groupId),
+    const lookup = await withTimeout(
+      () => client.pupPage.evaluate(pageLookupGroupInvite, groupId),
       WHATSAPP_GROUP_INVITE_TIMEOUT_MS,
       "Invite code lookup"
     );
-    return {
-      inviteCode,
-      inviteLink: inviteCode ? `https://chat.whatsapp.com/${inviteCode}` : null,
-    };
+    return classifyInviteLookup(lookup);
   } catch (error) {
-    const level = error.message.includes("timed out") ? "warn" : "debug";
-    log(level, "Invite code unavailable through minimal group fallback", {
-      groupId,
-      error: error.message,
-    });
-    return { inviteCode: null, inviteLink: null };
+    return failedInviteLookup(error);
   }
+}
+
+function groupWithInvite(groupId, name, invite) {
+  return {
+    groupId,
+    id: groupId,
+    chatId: groupId,
+    name,
+    title: name,
+    subject: name,
+    inviteCode: invite.inviteCode,
+    inviteLink: invite.inviteLink,
+    link: invite.inviteLink,
+    inviteStatus: invite.inviteStatus,
+    inviteError: invite.inviteError,
+  };
 }
 
 async function loadMinimalGroupsSnapshot() {
@@ -865,20 +870,7 @@ async function loadMinimalGroupsSnapshot() {
   const groups = await mapWithConcurrency(
     snapshot.groups,
     WHATSAPP_GROUP_INVITE_CONCURRENCY,
-    async (chat) => {
-      const invite = await inviteInfoByGroupId(chat.groupId);
-      return {
-        groupId: chat.groupId,
-        id: chat.groupId,
-        chatId: chat.groupId,
-        name: chat.name,
-        title: chat.name,
-        subject: chat.name,
-        inviteCode: invite.inviteCode,
-        inviteLink: invite.inviteLink,
-        link: invite.inviteLink,
-      };
-    }
+    async (chat) => groupWithInvite(chat.groupId, chat.name, await lookupGroupInvite(chat.groupId))
   );
 
   return {
@@ -896,12 +888,14 @@ function groupsPayload(snapshot, extra = {}) {
     totalChats: snapshot ? snapshot.totalChats : 0,
     groupCount: groups.length,
     inviteCount: groups.filter((group) => Boolean(group.inviteLink)).length,
+    inviteStatusCounts: summarizeInviteStatuses(groups).counts,
     groupsCachedAt: groupsCacheAt,
     ...extra,
   };
 }
 
 async function loadGroupsSnapshot() {
+  await ensureGroupInviteModule();
   let chats;
   try {
     chats = await withTimeout(
@@ -918,18 +912,7 @@ async function loadGroupsSnapshot() {
   const groupChats = chats.filter((item) => item.isGroup);
   const groups = await mapWithConcurrency(groupChats, WHATSAPP_GROUP_INVITE_CONCURRENCY, async (chat) => {
     const groupId = chat.id && chat.id._serialized ? chat.id._serialized : null;
-    const invite = await inviteInfo(chat);
-    return {
-      groupId,
-      id: groupId,
-      chatId: groupId,
-      name: chat.name || "",
-      title: chat.name || "",
-      subject: chat.name || "",
-      inviteCode: invite.inviteCode,
-      inviteLink: invite.inviteLink,
-      link: invite.inviteLink,
-    };
+    return groupWithInvite(groupId, chat.name || "", await lookupGroupInvite(groupId));
   });
 
   return {
@@ -959,11 +942,22 @@ function startGroupsRefresh() {
       lastGroupsSuccessAt = groupsCacheAt;
       lastGroupsError = null;
       lastGroupsErrorAt = null;
+      const inviteCount = snapshot.groups.filter((group) => Boolean(group.inviteLink)).length;
+      const invites = summarizeInviteStatuses(snapshot.groups);
       log("info", "WhatsApp groups cache refreshed", {
         totalChats: snapshot.totalChats,
         groupCount: snapshot.groups.length,
-        inviteCount: snapshot.groups.filter((group) => Boolean(group.inviteLink)).length,
+        inviteCount,
+        inviteStatusCounts: invites.counts,
+        inviteFailures: invites.topFailures,
       });
+      if (snapshot.groups.length > 0 && inviteCount === 0) {
+        log("warn", "No WhatsApp group invite code was readable", {
+          groupCount: snapshot.groups.length,
+          inviteStatusCounts: invites.counts,
+          inviteFailures: invites.topFailures,
+        });
+      }
       return snapshot;
     })
     .catch((error) => {

@@ -112,7 +112,21 @@ class ManagerControlStaleWhatsAppInviteTest {
         assertTrue(stale.getReason().contains("Привязка группы автоматически не меняется"));
 
         when(health.recheck(191L)).thenReturn(new WhatsAppInviteLinkHealth.Recheck(WhatsAppInviteLinkHealth.RecheckResult.UNKNOWN, null));
-        assertThrows(ResponseStatusException.class, () -> repair.requireWorkingWhatsAppInvite(staleCard, company));
+        ResponseStatusException unknown = assertThrows(ResponseStatusException.class,
+                () -> repair.requireWorkingWhatsAppInvite(staleCard, company));
+        assertTrue(unknown.getReason().contains("подключённый аккаунт сейчас не видит ссылку группы. Сохраните"));
+
+        // The gateway's reason tells the manager what to do about it.
+        when(health.recheck(191L)).thenReturn(new WhatsAppInviteLinkHealth.Recheck(WhatsAppInviteLinkHealth.RecheckResult.UNKNOWN,
+                null, WhatsAppInviteLinkHealth.UNREADABLE_NOT_MEMBER));
+        ResponseStatusException removed = assertThrows(ResponseStatusException.class,
+                () -> repair.requireWorkingWhatsAppInvite(staleCard, company));
+        assertTrue(removed.getReason().contains("больше не состоит в этой группе"));
+        when(health.recheck(191L)).thenReturn(new WhatsAppInviteLinkHealth.Recheck(WhatsAppInviteLinkHealth.RecheckResult.UNKNOWN,
+                null, WhatsAppInviteLinkHealth.UNREADABLE_NOT_ADMIN));
+        ResponseStatusException notAdmin = assertThrows(ResponseStatusException.class,
+                () -> repair.requireWorkingWhatsAppInvite(staleCard, company));
+        assertTrue(notAdmin.getReason().contains("не администратор группы"));
         ManagerDailyControlConcreteItem unboundCard = new ManagerDailyControlConcreteItem();
         unboundCard.setEntityType("COMPANY_CHAT_BINDING");
         unboundCard.setReason("Почему в контроле: WhatsApp-группа не привязана к компании.");

@@ -189,11 +189,25 @@ public class ManagerControlChatRepairWorkflow {
             String current = safe(recheck.currentInviteLink());
             throw new ResponseStatusException(HttpStatus.CONFLICT, (result == com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.RecheckResult.STALE
                     ? "Ссылка-приглашение WhatsApp в карточке компании больше не открывает привязанную группу. "
-                    : "Не удалось подтвердить, что ссылка-приглашение WhatsApp открывает группу: подключённый аккаунт сейчас не видит ссылку группы. ")
+                    : "Не удалось подтвердить, что ссылка-приглашение WhatsApp открывает группу: подключённый аккаунт сейчас не видит ссылку группы. "
+                            + unreadableInviteExplanation(recheck.unreadableReason()))
                     + (current.isBlank() ? "" : "Актуальная ссылка: " + current + ". ")
                     + "Сохраните правильную ссылку на чат в карточке компании и нажмите «Починить» ещё раз. "
                     + "Привязка группы автоматически не меняется, клиентам ничего не отправляется.");
         }
+    }
+
+    /** The gateway's reason why the connected number cannot read the group's invite, for the manager. */
+    static String unreadableInviteExplanation(String reason) {
+        if (com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.UNREADABLE_NOT_MEMBER.equals(reason)) {
+            return "Подключённый номер WhatsApp больше не состоит в этой группе: попросите клиента снова добавить номер "
+                    + "или прислать действующую ссылку. ";
+        }
+        if (com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.UNREADABLE_NOT_ADMIN.equals(reason)) {
+            return "Подключённый номер WhatsApp не администратор группы, поэтому WhatsApp не показывает ему ссылку: "
+                    + "проверьте ссылку у клиента или попросите назначить номер администратором. ";
+        }
+        return "";
     }
 
     ManagerControlConcreteItemResponse resolveRepairedConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, String comment, Principal principal, String eventComment) {

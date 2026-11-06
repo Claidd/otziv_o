@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,8 +26,11 @@ import org.springframework.stereotype.Service;
  * per-company provider call). When the account administers a company's bound group, WhatsApp shows
  * the group's one current invite: a different stored invite no longer opens the group. A mismatch is
  * first SUSPECTED and becomes STALE only on a later, different snapshot, so a stale gateway cache or a
- * link the manager has just replaced is never reported. Nothing changes a company's link or bound
- * group, nothing fires the link-changed flow and nothing is sent.
+ * link the manager has just replaced is never reported. A bound group whose invite no account can
+ * read is counted by the gateway's reason (not a member, not an admin, refused, timeout, ...), logged
+ * every run and given to the manager's re-check, so an unreadable list never looks like a clean one.
+ * Nothing changes a company's link or bound group, nothing fires the link-changed flow and nothing is
+ * sent.
  */
 @Service
 @Slf4j
@@ -36,6 +40,13 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
     private final WhatsAppService whatsAppService;
     private final WhatsAppGroupCompanyLinker groupCompanyLinker;
     private final WhatsAppInviteLinkCheckStore store;
+    /** No connected account lists the bound group at all. */
+    static final String NOT_LISTED = "not_listed";
+    /** The gateway listed the group without an invite and without saying why (older gateway). */
+    static final String UNREPORTED = "unreported";
+    /** Two accounts report different invites for the group: one cache is outdated. */
+    static final String CONFLICTING = "conflicting";
+
     private final boolean enabled;
     private final Duration confirmAfter;
 
@@ -64,8 +75,14 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
             return;
         }
         try {
-            int stale = runCheck(LocalDateTime.now());
-            log.info("WhatsApp invite link check finished: stale={}", stale);
+            CheckSummary summary = check(LocalDateTime.now());
+            log.info("WhatsApp invite link check finished: stale={}, targets={}, readable={}, unreadable={}",
+                    summary.stale(), summary.targets(), summary.readable(), summary.unreadable());
+            if (summary.observed() && summary.targets() > 0 && summary.readable() == 0) {
+                // Nothing can become stale while no invite is readable: say why instead of a silent zero.
+                log.warn("WhatsApp invite link check read no invite for any of {} bound companies: {}",
+                        summary.targets(), summary.unreadable());
+            }
         } catch (RuntimeException failure) {
             log.warn("WhatsApp invite link check failed: {}", failure.getMessage(), failure);
         }
@@ -73,14 +90,29 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
 
     /** One observation of all bound companies; returns the number of confirmed stale links. */
     int runCheck(LocalDateTime now) {
+        return check(now).stale();
+    }
+
+    /**
+     * Outcome of one check over bound companies (targets; several may share a group). unreadable counts
+     * the companies whose group's invite no account could read, by the
+     * gateway's reason ({@code not_member}, {@code not_admin}, {@code refused}, {@code timeout}, ...),
+     * {@code not_listed} when no account lists the group and {@code unreported} from an older gateway.
+     */
+    record CheckSummary(boolean observed, int stale, int targets, int readable, Map<String, Integer> unreadable) {
+    }
+
+    CheckSummary check(LocalDateTime now) {
         Observation observation = observe(false);
         if (!observation.anyAvailable()) {
             // No account's group list is readable now (gateway down or not ready): keep every recorded state.
-            return store.stale().size();
+            return new CheckSummary(false, store.stale().size(), 0, 0, Map.of());
         }
         Map<Long, WhatsAppInviteLinkCheckStore.Row> rows = store.all();
         Set<Long> eligible = new HashSet<>();
+        Map<String, Integer> unreadable = new TreeMap<>();
         int stale = 0;
+        int readable = 0;
         for (WhatsAppGroupCompanyLinker.InviteTarget target : groupCompanyLinker.inviteTargets()) {
             eligible.add(target.companyId());
             WhatsAppInviteLinkCheckStore.Row row = rows.get(target.companyId());
@@ -91,9 +123,11 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
             }
             String current = observation.inviteCodes().get(target.groupId());
             if (current == null) {
+                unreadable.merge(observation.unreadableReason(target.groupId()), 1, Integer::sum);
                 if (row != null && WhatsAppInviteLinkCheckStore.STALE.equals(row.status())) stale++;
                 continue;
             }
+            readable++;
             if (current.equals(target.inviteCode())) {
                 if (row != null) store.delete(target.companyId());
                 continue;
@@ -115,7 +149,7 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
         }
         // Banned, inactive, unbound or relinked companies no longer need the check.
         rows.keySet().stream().filter(companyId -> !eligible.contains(companyId)).forEach(store::delete);
-        return stale;
+        return new CheckSummary(true, stale, eligible.size(), readable, java.util.Collections.unmodifiableMap(unreadable));
     }
 
     @Override
@@ -163,7 +197,8 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
                 .map(WhatsAppInviteLinkCheckStore.Row::currentInviteLink)
                 .filter(Objects::nonNull)
                 .findFirst().orElse(null);
-        return new Recheck(RecheckResult.UNKNOWN, known);
+        String reason = observation.anyAvailable() ? observation.unreadableReason(target.groupId()) : null;
+        return new Recheck(RecheckResult.UNKNOWN, known, reason);
     }
 
     /**
@@ -173,6 +208,7 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
      */
     private Observation observe(boolean freshOnly) {
         Map<String, String> codes = new HashMap<>();
+        Map<String, String> unreadable = new HashMap<>();
         Set<String> conflicting = new HashSet<>();
         List<String> snapshotTimes = new ArrayList<>();
         for (String clientId : clientIds()) {
@@ -184,20 +220,42 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
             snapshotTimes.add(clientId + "@" + (snapshot.cachedAt() == null ? "" : snapshot.cachedAt()));
             for (WhatsAppGroupInfo group : snapshot.groups()) {
                 if (group == null || !hasText(group.groupId())) continue;
-                Optional<String> code = WhatsAppGroupCompanyLinker.whatsAppInviteCode(group.inviteLink());
-                if (code.isEmpty()) continue;
                 String groupId = group.groupId().trim();
+                Optional<String> code = WhatsAppGroupCompanyLinker.whatsAppInviteCode(group.inviteLink());
+                if (code.isEmpty()) {
+                    unreadable.merge(groupId, unreadableStatus(group), WhatsAppInviteLinkHealthService::closerReason);
+                    continue;
+                }
                 String previous = codes.putIfAbsent(groupId, code.get());
                 if (previous != null && !previous.equals(code.get())) conflicting.add(groupId);
             }
         }
         // Two accounts reporting different invites for one group means one cache is outdated.
-        conflicting.forEach(codes::remove);
+        conflicting.forEach(groupId -> {
+            codes.remove(groupId);
+            unreadable.put(groupId, CONFLICTING);
+        });
         String snapshotAt = snapshotTimes.isEmpty() ? null : String.join(",", snapshotTimes);
         if (snapshotAt != null && snapshotAt.length() > 40) {
             snapshotAt = Integer.toHexString(snapshotAt.hashCode()) + ":" + snapshotAt.substring(snapshotAt.length() - 30);
         }
-        return new Observation(!snapshotTimes.isEmpty(), Map.copyOf(codes), snapshotAt);
+        return new Observation(!snapshotTimes.isEmpty(), Map.copyOf(codes), Map.copyOf(unreadable), snapshotAt);
+    }
+
+    private static String unreadableStatus(WhatsAppGroupInfo group) {
+        String status = group.inviteStatus();
+        // "ok" without a parsable link is a gateway/backend disagreement, not a reason of the account.
+        if (!hasText(status) || "ok".equalsIgnoreCase(status.trim())) return UNREPORTED;
+        return status.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * Two accounts list the same group without its invite: the account still in the group explains it
+     * better than the one that left, and any reported reason beats an older gateway's silence.
+     */
+    private static String closerReason(String previous, String next) {
+        if (UNREPORTED.equals(previous) || UNREADABLE_NOT_MEMBER.equals(previous)) return next;
+        return previous;
     }
 
     private List<String> clientIds() {
@@ -220,6 +278,12 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
         return value != null && !value.trim().isEmpty();
     }
 
-    private record Observation(boolean anyAvailable, Map<String, String> inviteCodes, String snapshotAt) {
+    private record Observation(boolean anyAvailable, Map<String, String> inviteCodes,
+                               Map<String, String> unreadable, String snapshotAt) {
+        /** Why no account could read this group's invite; null codes are never silently "nothing". */
+        String unreadableReason(String groupId) {
+            String reason = unreadable.get(groupId);
+            return reason == null ? NOT_LISTED : reason;
+        }
     }
 }
