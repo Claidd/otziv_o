@@ -247,7 +247,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (selected.manifestSet === 'c43-alloy') {
     await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read);
   }
-  if (['c43-grafana', 'c44-grafana'].includes(selected.manifestSet)) {
+  if (['c43-grafana', 'c44-grafana', 'c49-grafana'].includes(selected.manifestSet)) {
     await validateGrafanaC43ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet === 'c43-keycloak') {

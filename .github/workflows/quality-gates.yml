@@ -68,6 +68,11 @@ on:
           - c41-phpmyadmin
           - c47-nginx
           - c47-phpmyadmin
+          - c49-nginx
+          - c49-phpmyadmin
+          - c49-grafana
+          - c49-minio
+          - c49-certbot
           - c41-grafana
           - c29-dozzle
           - c29-prometheus
