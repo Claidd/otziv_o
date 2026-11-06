@@ -17,8 +17,6 @@ public interface WorkerService {
     List<Long> getActiveWorkerIds();
     List<Long> getActiveWorkerIdsByManagerIds(java.util.Collection<Long> managerIds);
 
-    Worker getWorkerByUserIdToDelete(Long id);
-
     void deleteWorker(User user);
 
     void saveNewWorker(User user);
@@ -31,7 +29,6 @@ public interface WorkerService {
 
     Set<WorkerDTO> getAllWorkersByManagerId(Long managerId);
 
-    Worker getWorkerByUsername(String login);
     List<Worker> getAllWorkersToManager(Manager manager);
 
     Set<Worker> getAllWorkersToManagerList(List<Manager> managerList);

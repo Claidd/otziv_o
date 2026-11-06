@@ -50,13 +50,6 @@ public class WorkloadShadowProgressReadService {
         }
     }
 
-    public Map<Long, Progress> findCurrentProgress(
-            Collection<Long> workerIds,
-            LocalDate progressDate
-    ) {
-        return findCurrentProgressWithState(workerIds, progressDate).progress();
-    }
-
     public Map<Long, Progress> findFinalizedProgress(
             Collection<Long> workerIds,
             LocalDate progressDate

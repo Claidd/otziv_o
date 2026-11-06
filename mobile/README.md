@@ -1,6 +1,6 @@
 # Компания О! Mobile
 
-Ionic Angular + Capacitor приложение для Android и iOS. Приложение использует тот же Spring API и Keycloak realm `otziv`, но отдельный public client `otziv-mobile` с Authorization Code + PKCE.
+Ionic Angular + Capacitor приложение для Android. Приложение использует тот же Spring API и Keycloak realm `otziv`, но отдельный public client `otziv-mobile` с Authorization Code + PKCE.
 
 ## Web Preview
 
@@ -124,21 +124,12 @@ OTZIV_MOBILE_PUSH_FIREBASE_SERVICE_ACCOUNT_PATH=/run/secrets/firebase-service-ac
 
 Проверочный endpoint для авторизованного пользователя: `POST /api/mobile/push-token/test`.
 
-## iOS
-
-iOS-проект создан в `ios\App`. Код и Capacitor-конфиг уже готовы, но финальная сборка iOS требует macOS и Xcode:
-
-```powershell
-npm run cap:sync
-npx cap open ios
-```
-
 ## Keycloak
 
 Клиент `otziv-mobile` добавлен в локальный и production realm config. Основные redirect URI:
 
 - `http://localhost:4300/auth/callback` для web-preview
-- `otziv://auth/callback` для Android/iOS
+- `otziv://auth/callback` для Android
 
 Для локального prod-like окружения применяйте:
 

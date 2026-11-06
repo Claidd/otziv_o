@@ -180,24 +180,6 @@ public class BotServiceImpl implements BotService {
     } // Найти бота по id
 
     @Override
-    public BotDTO findByWorker(Principal principal) { // Найти бота по Работнику
-        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        log.info("вошли в поиск бота по работнику");
-        if (worker != null){
-            log.info("работник не нулл");
-            Bot bot = botsRepository.findFirstByWorkerOrderByIdDesc(worker).orElse(null);
-            if(bot != null){
-                log.info("бот не нулл");
-                BotDTO botDTO = new BotDTO();
-                botDTO.setPassword(bot.getPassword());
-                return botDTO;
-            }
-            else throw new UsernameNotFoundException("User not found with name: " + bot.getLogin());
-        }
-        else return new BotDTO();
-    } // Найти бота по Работнику
-
-    @Override
     public Bot findBotById(Long id) { // Найти бота по id
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
         Bot saveBot = botsRepository.findByIdWithAdminDetails(id).orElseThrow(() -> new UsernameNotFoundException(
@@ -216,22 +198,11 @@ public class BotServiceImpl implements BotService {
                 .collect(Collectors.toList());
     } // Найти всех ботов
 
-    public List<Bot> getAllBotsByWorkerId(Long id){ // Взять всех ботов по id работника
-        return botsRepository.findAllByWorkerId(id);
-    } // Взять всех ботов по id работника
-    public List<Bot> getAllBotsByWorker(Principal principal){ // Взять всех ботов по работнику
-        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        return botsRepository.findAllByWorker(worker);
-    } // Взять всех ботов по работнику
 
     @Override
     public StatusBot changeStatus(String status) { // взять статус бота по строке
         return statusBotService.findByTitle(status);
     } // взять статус бота по строке
-
-    public List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id){ // Взять всех ботов по id работнику и активности
-        return botsRepository.findAllByWorkerIdAndActiveIsTrue(id);
-    } // Взять всех ботов по id работнику и активности
 
     @Transactional
     public List<BotDTO> getAllBotsByWorkerActiveIsTrue(Authentication authentication){ // Взять всех ботов по работнику и активности

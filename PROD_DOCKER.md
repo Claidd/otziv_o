@@ -469,5 +469,5 @@ curl -k https://o-ogo.ru/actuator/health
 
 - Keycloak импортирует prod realm только при первом создании realm. Если realm уже существует, меняй настройки через админку или пересоздавай Keycloak volume осознанно.
 - `/actuator/prometheus` закрыт снаружи Nginx, но Prometheus скрейпит его внутри Docker-сети.
-- `LEAD_SYNC_OUTBOUND_ENABLED=false` в шаблоне защищает от случайной исходящей синхронизации на тот же домен. Включай только когда точно нужен outbound sync.
+- `LEAD_SYNC_OUTBOUND_ENABLED` и `LEAD_SYNCHRONY_URL` больше не читаются: выключенный контур синхронизации лидов по этому флагу удалён 2026-11-06 (есть в истории Git). Отправка лидов на VPS идёт через `LEAD_VPS_URL` и очередь команд.
 - Если нужен сертификат еще и для `www.o-ogo.ru`, сначала настрой DNS, затем добавь `CERTBOT_EXTRA_DOMAINS=www.o-ogo.ru` в `.env.prod`.

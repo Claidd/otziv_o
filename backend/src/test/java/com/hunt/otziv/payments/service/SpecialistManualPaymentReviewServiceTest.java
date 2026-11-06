@@ -155,6 +155,54 @@ class SpecialistManualPaymentReviewServiceTest {
     }
 
     @Test
+    void ownerTransferWithoutRecipientUserIsNoticedInTheMarkingManagersGroup() {
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now());
+        review.setId(101L); review.setRecipientType("OWNER"); review.setRecipientUserId(null);
+        review.setRequestedByUserId(55L);
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        when(users.activeOwnerReceiptGroupChatId(55L)).thenReturn(Optional.of(-100555L));
+        when(telegram.sendPaymentReviewNoticeOnce(eq(-100555L), any(), any(), any())).thenReturn(true);
+        service.deliver(101L);
+        assertEquals(SpecialistManualPaymentReviewStatus.WAITING, review.getStatus());
+        verify(telegram).sendPaymentReviewNoticeOnce(eq(-100555L),
+                org.mockito.ArgumentMatchers.argThat(text -> text.contains("о переводе владельцу")
+                        && text.contains("владелец или администратор")),
+                any(), eq("specialist-payment-dispute:101"));
+        verify(users, never()).activePersonalTelegramChatId(any());
+    }
+
+    @Test
+    void ownerTransferWithoutManagerGroupIsReportedInsteadOfLookingForAPersonalChat() {
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now());
+        review.setId(101L); review.setRecipientType("OWNER"); review.setRecipientUserId(null);
+        review.setRequestedByUserId(55L);
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        when(users.activeOwnerReceiptGroupChatId(55L)).thenReturn(Optional.empty());
+        service.deliver(101L);
+        assertTrue(review.getLastError().contains("отметившего перевод владельцу"));
+        verify(telegram, never()).sendPaymentReviewNoticeOnce(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void onlyAnOwnerOrAdministratorDisputesAnOwnerTransferInTheManagersGroup() {
+        SpecialistManualPaymentReview review = pending(); review.setId(101L);
+        review.setRecipientType("OWNER"); review.setRecipientUserId(null); review.setRequestedByUserId(55L);
+        review.setStatus(SpecialistManualPaymentReviewStatus.WAITING);
+        review.setNotifiedAt(LocalDateTime.now());
+        review.setCreditedAt(LocalDateTime.now());
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        org.mockito.Mockito.lenient().when(users.activeOwnerReceiptGroupChatId(55L)).thenReturn(Optional.of(-100555L));
+        when(users.activeOwnerOrAdminTelegramUser(998L)).thenReturn(false);
+        when(users.activeOwnerOrAdminTelegramUser(777L)).thenReturn(true);
+        assertThrows(ResponseStatusException.class, () -> service.dispute(101L, 998L, -100555L));
+        assertThrows(ResponseStatusException.class, () -> service.dispute(101L, 777L, -100999L));
+        assertEquals(SpecialistManualPaymentReviewStatus.WAITING, review.getStatus());
+        service.dispute(101L, 777L, -100555L);
+        assertEquals(SpecialistManualPaymentReviewStatus.DISPUTED, review.getStatus());
+        verify(users, never()).activePersonalTelegramChatId(any());
+    }
+
+    @Test
     void telegramAcceptanceSurvivesMySqlMicrosecondRoundTrip() {
         SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now());
         review.setId(101L);

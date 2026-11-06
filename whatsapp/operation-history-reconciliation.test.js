@@ -11,7 +11,7 @@ async function fixture(t, options = {}) {
   const kind = options.kind || "send-group", destination = kind === "send" ? "12345678901@c.us" : "12345678@g.us";
   const envelope = { clientId: "fixture", kind, destination, message: "saved body" };
   let sends = 0, reads = 0;
-  await ledger.execute("saved", envelope, async () => { sends++; return null; });
+  await ledger.execute("saved", envelope, async () => { sends++; return options.sendResult ?? null; });
   const message = (id, seconds = 0, overrides = {}) => ({ id: { _serialized: `true_${destination}_${id}`, remote: destination },
     fromMe: true, body: envelope.message, timestamp: now / 1000 + seconds, ack: 1, ...overrides });
   const found = message("MATCH");
@@ -70,6 +70,49 @@ for (const [name, mutation] of Object.entries({ "incoming": { fromMe: false }, "
 test("provider ACK is read back and required", async t => {
   const f = await fixture(t); f.setMessages([{ ...f.found, ack: 0 }]);
   await assert.rejects(f.invoke(), error => error.code === "operation_evidence_mismatch");
+  assert.equal(f.ledger.lookup("saved").state, "UNKNOWN");
+});
+
+const SETTLED = { now: () => 1800000000000 + 11 * 60 * 1000 };
+
+test("settled WhatsApp refusal (ACK -1) of the group message is reported without binding", async t => {
+  const f = await fixture(t, SETTLED); f.setMessages([{ ...f.found, ack: -1 }]);
+  const result = await f.invoke();
+  assert.equal(result.recoveryCode, "history_provider_rejected"); assert.equal(result.providerAck, -1);
+  assert.equal(result.state, "UNKNOWN"); assert.equal(result.messageId, null);
+  assert.equal(f.ledger.lookup("saved").state, "UNKNOWN"); assert.equal(f.sends(), 1);
+});
+
+test("a refused provider receipt captured at send time is reported without binding", async t => {
+  const f = await fixture(t, { ...SETTLED, sendResult: { messageId: "true_12345678@g.us_MATCH", ack: -1 } });
+  assert.equal(f.ledger.lookup("saved").state, "UNKNOWN");
+  f.setMessages([{ ...f.found, ack: -1 }]);
+  const result = await f.invoke();
+  assert.equal(result.recoveryCode, "history_provider_rejected");
+  assert.equal(f.ledger.lookup("saved").state, "UNKNOWN");
+});
+
+test("a fresh ACK -1 inside the settle window stays unresolved", async t => {
+  const f = await fixture(t, { now: () => 1800000000000 + 60 * 1000 }); f.setMessages([{ ...f.found, ack: -1 }]);
+  await assert.rejects(f.invoke(), error => error.code === "operation_evidence_mismatch");
+  assert.equal(f.ledger.lookup("saved").state, "UNKNOWN");
+});
+
+test("ACK -1 of a direct message is never reported as a group refusal", async t => {
+  const f = await fixture(t, { ...SETTLED, kind: "send" }); f.setMessages([{ ...f.found, ack: -1 }]);
+  await assert.rejects(f.invoke(), error => error.code === "operation_evidence_mismatch");
+});
+
+test("a refusal whose fresh read shows another ACK is not reported", async t => {
+  const f = await fixture(t, { ...SETTLED, getMessage: async id => ({ ...f.found, ack: 0 }) });
+  f.setMessages([{ ...f.found, ack: -1 }]);
+  await assert.rejects(f.invoke(), error => error.code === "operation_evidence_mismatch");
+});
+
+test("a refusal inside a competing operation window stays ambiguous", async t => {
+  const f = await fixture(t, SETTLED); f.setMessages([{ ...f.found, ack: -1 }]);
+  await f.ledger.execute("competing", f.envelope, async () => null);
+  await assert.rejects(f.invoke(), error => error.code === "operation_evidence_ambiguous");
   assert.equal(f.ledger.lookup("saved").state, "UNKNOWN");
 });
 

@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class ClientChatMessageReconciliationServiceTest {
@@ -93,6 +94,37 @@ class ClientChatMessageReconciliationServiceTest {
                 open.getLastClientMessageAt().minusSeconds(1).atZone(ZoneId.systemDefault()).toEpochSecond(),
                 cursors.getValue().getFirst().afterTimestamp()
         );
+    }
+
+    @Test
+    void checkReplyClosesCardsAnsweredInStoredHistoryEvenWithoutAConnectedAccount() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        when(trackerService.closeOpenItemsAnsweredInHistory(manager)).thenReturn(1);
+
+        ClientChatReconciliationResult result = service.reconcileOpenWhatsAppMessages(manager);
+
+        assertEquals(1, result.closedItems());
+        verifyNoInteractions(whatsAppService);
+    }
+
+    @Test
+    void unavailableGatewayStillLetsStoredHistoryCloseTheCardAndIsReportedOtherwise() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        manager.setClientId("whatsapp_lika");
+        ClientChatUnansweredItem open = new ClientChatUnansweredItem();
+        open.setChatId("toyama@g.us");
+        open.setLastClientMessageAt(LocalDateTime.of(2026, 11, 5, 23, 21, 23));
+        when(unansweredRepository.findByManagerAndPlatformAndStatus(
+                manager, ClientChatPlatform.WHATSAPP, ClientChatUnansweredStatus.OPEN)).thenReturn(List.of(open));
+        when(whatsAppService.reconcileGroupMessages(eq("whatsapp_lika"), anyList()))
+                .thenThrow(new IllegalStateException("gateway unavailable"));
+        when(trackerService.closeOpenItemsAnsweredInHistory(manager)).thenReturn(1, 0);
+
+        assertEquals(1, service.reconcileOpenWhatsAppMessages(manager).closedItems());
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> service.reconcileOpenWhatsAppMessages(manager));
     }
 
     @Test

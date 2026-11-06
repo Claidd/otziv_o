@@ -27,8 +27,6 @@ public interface UserService extends UserDetailsService{
 
     RegistrationUserDTO findById(Long id);
 
-    List<String> getAllUsersByFio(String roleName);
-
     Optional<User> findByFio(String operator);
 
     Optional<User> findByUserName(String username);

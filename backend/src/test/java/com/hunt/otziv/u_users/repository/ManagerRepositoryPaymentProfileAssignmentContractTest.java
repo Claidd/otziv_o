@@ -18,15 +18,6 @@ class ManagerRepositoryPaymentProfileAssignmentContractTest {
     }
 
     @Test
-    void ownerManagerExpansionCannotReintroduceHistoricalManagerIdentities() throws Exception {
-        assertCurrentManagerQuery(query(
-                ManagerRepository.class,
-                "findAllManagersToOwner",
-                List.class
-        ));
-    }
-
-    @Test
     void workerManagerExpansionCannotReintroduceHistoricalManagerIdentities() throws Exception {
         assertCurrentManagerQuery(query(
                 ManagerRepository.class,

@@ -1,6 +1,5 @@
 package com.hunt.otziv.z_zp.service;
 
-import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionService;
@@ -9,7 +8,6 @@ import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardSourceCodes;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.*;
-import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.u_users.service.WorkerService;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
 import com.hunt.otziv.z_zp.dto.ZpStatView;
@@ -20,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.hunt.otziv.admin.model.Quadruple;
 
 import java.math.BigDecimal;
 import java.security.Principal;
@@ -33,25 +30,11 @@ import java.util.stream.Stream;
 @Slf4j
 @RequiredArgsConstructor
 public class ZpServiceImpl implements ZpService{
-    private static final BigDecimal LEAD_BONUS = new BigDecimal("1000.00");
 
     private final ZpRepository zpRepository;
-    private final UserService userService;
     private final ContractorRewardAttributionService contractorRewardAttributionService;
     private final ContractorPaymentRuntimeSwitch contractorPaymentRuntimeSwitch;
     private final ContractorRewardLedgerService contractorRewardLedgerService;
-
-    public List<Zp> getAllWorkerZp(String login){
-        LocalDate localDate = LocalDate.now();
-        Long userId = userService.findByUserName(login).orElseThrow().getId();
-        LocalDate start = localDate.withDayOfMonth(1);
-        return zpRepository.getAllWorkerZpInPeriod(userId, start, start.plusMonths(1));
-    }
-
-    public List<Zp> getAllWorkerZpToDate(String login, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth){
-        Long userId = userService.findByUserName(login).orElseThrow().getId();
-        return zpRepository.getAllWorkerZp(userId, firstDayOfMonth, lastDayOfMonth);
-    }
 
     public List<Zp> findAll(){
         return zpRepository.findAll();
@@ -91,54 +74,6 @@ public class ZpServiceImpl implements ZpService{
         return zpRepository.countByUserAndCreated(userId, created);
     }
 
-    /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте для телеграмма**/
-    @Override
-    public Map<String, Pair<String, Long>> getAllZpToMonthToTelegram(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
-                .stream()
-                .filter(obj -> {
-                    String role = (String) obj[2];
-                    // Фильтруем только по ролям
-                    return "ROLE_MANAGER".equals(role) || "ROLE_WORKER".equals(role) || "ROLE_MARKETOLOG".equals(role);
-                })
-                .sorted(Comparator.comparing((Object[] obj) -> {
-                                    String role = (String) obj[2];
-                                    return rolePriority(role); // Сортируем сначала по приоритету роли
-                                })
-                                .thenComparing(obj -> ((Number) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
-                )
-                .collect(Collectors.toMap(
-                        obj -> (String) obj[0],   // ФИО
-                        obj -> Pair.of((String) obj[2], ((Number) obj[1]).longValue()), // Роль + Сумма
-                        (e1, e2) -> e1,
-                        LinkedHashMap::new // Сохраняем порядок сортировки
-                ));
-    }
-    /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте и распределяем в мапу (фио, роль, сумма зп, кол-во заказов, кол-во отзывов **/
-    @Override
-    public Map<String, Quadruple<String, Long, Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        Map<String, Quadruple<String, Long, Long, Long>> results = zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
-                .stream()
-                .sorted(Comparator.comparing((Object[] obj) -> {
-                                    String role = (String) obj[2];
-                                    return rolePriority(role);
-                                })
-                                .thenComparing(obj -> ((Number) obj[1]).longValue(), Comparator.reverseOrder()) // Сортировка по зарплате
-                )
-                .collect(Collectors.toMap(
-                        obj -> (String) obj[0], // ФИО
-                        obj -> Quadruple.of(
-                                (String) obj[2], // Роль
-                                ((Number) obj[1]).longValue(), // Сумма зарплаты
-                                ((Number) obj[3]).longValue(), // Сумма выплат (amount)
-                                ((Number) obj[4]).longValue() // Количество отзывов
-                        ),
-                        (e1, e2) -> e1,
-                        LinkedHashMap::new // Сохранение порядка сортировки
-                ));
-//        System.out.println(results);
-        return results;
-    }
 
 
 //    @Override
@@ -159,15 +94,6 @@ public class ZpServiceImpl implements ZpService{
 //                ));
 //    }
 
-
-    // Метод для присваивания приоритета ролям
-    private int rolePriority(String role) {
-        if ("ROLE_MANAGER".equals(role)) return 1; // Менеджеры первыми
-        if ("ROLE_WORKER".equals(role)) return 2;  // Потом воркеры
-        if ("ROLE_OPERATOR".equals(role)) return 3;  // Потом воркеры
-        if ("ROLE_MARKETOLOG".equals(role)) return 4;  // Потом воркеры
-        return 5; // Все остальные в конце
-    }
 
 
 
@@ -245,18 +171,6 @@ public class ZpServiceImpl implements ZpService{
             throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
     }// Сохранить ЗП и Чек в БД
-
-    @Transactional
-    public boolean saveLeadZp(Lead lead){ // Сохранить ЗП за Лида
-        try {
-            saveZpMarketolog(lead);
-            saveZpOperator(lead);
-            return true;
-        }
-        catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
-        }
-    } // Сохранить ЗП за Лида
 
     @Transactional
     protected void saveZpManager(Order order){ // Сохранить ЗП Менеджера в БД
@@ -417,55 +331,6 @@ public class ZpServiceImpl implements ZpService{
                 ? ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST
                 : ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST;
     }
-    @Transactional
-    protected void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД
-        if (lead == null || lead.getMarketolog() == null || lead.getMarketolog().getUser() == null) {
-            log.debug("Вознаграждение маркетолога за лид не начислено: у лида не указан маркетолог");
-            return;
-        }
-
-        try {
-            Marketolog marketolog = lead.getMarketolog();
-            User user = marketolog.getUser();
-            Zp marketologZp = new Zp();
-            marketologZp.setFio(user.getFio());
-            marketologZp.setSum(LEAD_BONUS.multiply(user.getCoefficient()));
-            marketologZp.setUserId(user.getId());
-            marketologZp.setOrderId(0L);
-            marketologZp.setProfessionId(marketolog.getId());
-            marketologZp.setAmount(1);
-            marketologZp.setActive(true);
-            zpRepository.save(marketologZp);
-        } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
-        }
-
-    } // Сохранить ЗП Маркетолога в БД
-
-    @Transactional
-    protected void saveZpOperator(Lead lead){ // Сохранить ЗП Оператора в БД
-        if (lead == null || lead.getOperator() == null || lead.getOperator().getUser() == null) {
-            log.debug("Вознаграждение оператора за лид не начислено: у лида не указан оператор");
-            return;
-        }
-
-        try {
-            Operator operator = lead.getOperator();
-            User user = operator.getUser();
-            Zp operatorZp = new Zp();
-            operatorZp.setFio(user.getFio());
-            operatorZp.setSum(LEAD_BONUS.multiply(user.getCoefficient()));
-            operatorZp.setUserId(user.getId());
-            operatorZp.setProfessionId(operator.getId());
-            operatorZp.setOrderId(0L);
-            operatorZp.setAmount(1);
-            operatorZp.setActive(true);
-            zpRepository.save(operatorZp);
-        } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
-        }
-
-    } // Сохранить ЗП Оператора в БД
 
     private List<ZpDTO> toDTOList(List<Zp> zpList) { // Метод для преобразования из сущности Zp в ZpDTO
         return zpList.stream().map(this::toDTO).collect(Collectors.toList());

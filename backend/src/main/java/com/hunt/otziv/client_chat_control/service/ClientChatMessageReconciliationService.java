@@ -90,10 +90,42 @@ public class ClientChatMessageReconciliationService implements com.hunt.otziv.cl
                 chatId, ClientChatUnansweredStatus.OPEN).isEmpty();
     }
 
+    /**
+     * «Проверить ответ»: synchronizes the manager's open WhatsApp chats, then closes every open card
+     * (any messenger) whose reply is already stored, for example a reply recorded before its late
+     * question arrived. A reply that was never received keeps the card open.
+     */
     public ClientChatReconciliationResult reconcileOpenWhatsAppMessages(Manager manager) {
-        if (manager == null || manager.getId() == null || !hasText(manager.getClientId())) {
+        if (manager == null || manager.getId() == null) {
             return new ClientChatReconciliationResult(0, 0, 0, 0, 0);
         }
+        ClientChatReconciliationResult synced = new ClientChatReconciliationResult(0, 0, 0, 0, 0);
+        RuntimeException syncFailure = null;
+        if (hasText(manager.getClientId())) {
+            try {
+                synced = synchronizeOpenWhatsAppChats(manager);
+            } catch (RuntimeException failure) {
+                // The stored history is still checked; the failure is reported only if it found nothing.
+                syncFailure = failure;
+            }
+        }
+        int closedFromHistory = trackerService.closeOpenItemsAnsweredInHistory(manager);
+        if (closedFromHistory == 0) {
+            if (syncFailure != null) {
+                throw syncFailure;
+            }
+            return synced;
+        }
+        return new ClientChatReconciliationResult(
+                synced.requestedChats(),
+                synced.receivedMessages(),
+                synced.openBefore(),
+                Math.max(0, synced.openAfter() - closedFromHistory),
+                synced.closedItems() + closedFromHistory
+        );
+    }
+
+    private ClientChatReconciliationResult synchronizeOpenWhatsAppChats(Manager manager) {
 
         List<ClientChatUnansweredItem> openBefore = openItems(manager);
         Map<String, LocalDateTime> earliestOpenMessageByChat = new LinkedHashMap<>();

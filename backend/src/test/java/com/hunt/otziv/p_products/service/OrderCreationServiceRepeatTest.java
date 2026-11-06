@@ -17,7 +17,6 @@ import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -59,7 +58,6 @@ class OrderCreationServiceRepeatTest {
     @Mock private SubCategoryService subCategoryService;
     @Mock private CategoryService categoryService;
     @Mock private FilialService filialService;
-    @Mock private ReviewRepository reviewRepository;
     @Mock private BotAssignmentService botAssignmentService;
     @Mock private NextOrderRequestService nextOrderRequestService;
     @Mock private ApplicationEventPublisher eventPublisher;
@@ -153,7 +151,6 @@ class OrderCreationServiceRepeatTest {
                 subCategoryService,
                 categoryService,
                 filialService,
-                reviewRepository,
                 botAssignmentService,
                 nextOrderRequestService,
                 eventPublisher,

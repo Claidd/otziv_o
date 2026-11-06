@@ -32,6 +32,8 @@ public class ClientMessageOrderStatusService {
     private static final String COMPANY_STATUS_BAN = "Бан";
     public static final int DEFAULT_MANUAL_CONTROL_FAILURE_THRESHOLD = 3;
     public static final int DEFAULT_MANUAL_CONTROL_AFTER_MINUTES = 60;
+    /** The manager already messaged the client in this cycle; the scheduled reminder is deliberately held. */
+    private static final String MANUAL_CONTACT_RESERVED = "manual_contact_reserved";
 
     private final ScheduledClientMessageStateRepository stateRepository;
     private final AppSettingService appSettingService;
@@ -164,6 +166,10 @@ public class ClientMessageOrderStatusService {
             statusState = "scheduled";
             tone = "wait";
             label = "Ожидает отправки";
+        } else if (isManualContactHold(state)) {
+            statusState = "scheduled";
+            tone = "wait";
+            label = "Отправлено вручную, автоответчик ждёт";
         } else if (requiresManualControl(state)) {
             statusState = "manual_control";
             tone = "danger";
@@ -307,7 +313,14 @@ public class ClientMessageOrderStatusService {
                 || code.contains("status_change")
                 || code.contains("auto_archive")
                 || code.contains("auto_ban")
-                || code.contains("client_message_state_auto_recovered");
+                || code.contains("client_message_state_auto_recovered")
+                || code.equals(MANUAL_CONTACT_RESERVED);
+    }
+
+    private boolean isManualContactHold(ScheduledClientMessageState state) {
+        return state != null
+                && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && normalize(state.getLastErrorCode()).equals(MANUAL_CONTACT_RESERVED);
     }
 
     private String manualControlLabel(String errorCode) {

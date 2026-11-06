@@ -139,7 +139,8 @@ class ContractorActualPaymentAttributionServiceTest {
         when(attributionRepository.findAllBySourceForUpdate(
                 ContractorActualPaymentSourceKind.PAYMENT_LINK, SOURCE_ID)).thenReturn(List.of());
 
-        service.clearRevokedPaymentLinkRecipientIntent(link);
+        service.requireNoFinalAttributionForPaymentLink(link.getId());
+        link.clearManualActualRecipientIntent();
 
         for (var field : fields) {
             assertThat(ReflectionTestUtils.getField(link, field.getName()))
@@ -156,7 +157,7 @@ class ContractorActualPaymentAttributionServiceTest {
                 ContractorActualPaymentSourceKind.PAYMENT_LINK, SOURCE_ID))
                 .thenReturn(List.of(org.mockito.Mockito.mock(ContractorActualPaymentAttribution.class)));
 
-        assertThatThrownBy(() -> service.clearRevokedPaymentLinkRecipientIntent(link))
+        assertThatThrownBy(() -> service.requireNoFinalAttributionForPaymentLink(link.getId()))
                 .isInstanceOf(ResponseStatusException.class);
         assertThat(link.getManualActualRecipientFrozenAt()).isNotNull();
     }

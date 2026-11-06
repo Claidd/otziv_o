@@ -48,7 +48,6 @@ import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.data.util.Pair;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -65,7 +64,6 @@ class ReviewServiceImplTest {
     @org.mockito.Mock
     private com.hunt.otziv.r_review.photo.ReviewPhotoReferencePolicy photoReferences;
 
-    private static final String PHOTO_URL = "https://storage.example/reviews/17-photo.jpg";
 
     @Mock
     private ReviewRepository reviewRepository;
@@ -143,33 +141,6 @@ class ReviewServiceImplTest {
     private ReviewServiceImpl reviewService;
 
     @Test
-    void updateOrderDetailAndReviewRejectsReviewFromAnotherOrderBeforeAnyWrite() {
-        UUID requestedDetailsId = UUID.randomUUID();
-        OrderDetails requestedDetails = new OrderDetails();
-        requestedDetails.setId(requestedDetailsId);
-        OrderDetails foreignDetails = new OrderDetails();
-        foreignDetails.setId(UUID.randomUUID());
-        Review review = new Review();
-        review.setId(77L);
-        review.setOrderDetails(foreignDetails);
-        when(reviewRepository.findById(77L)).thenReturn(Optional.of(review));
-        when(orderDetailsService.getOrderDetailById(requestedDetailsId)).thenReturn(requestedDetails);
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> reviewService.updateOrderDetailAndReview(
-                        OrderDetailsDTO.builder().id(requestedDetailsId).comment("tampered").build(),
-                        ReviewDTO.builder().id(77L).text("tampered").build(),
-                        77L
-                )
-        );
-
-        assertEquals(400, exception.getStatusCode().value());
-        verify(reviewRepository, never()).save(org.mockito.ArgumentMatchers.any());
-        verify(orderDetailsService, never()).save(org.mockito.ArgumentMatchers.any());
-    }
-
-    @Test
     void sharedFormBatchUsesOneCanonicalDetailFetchForManyReviews() {
         UUID detailsId = UUID.randomUUID();
         OrderDetails details = new OrderDetails();
@@ -232,31 +203,6 @@ class ReviewServiceImplTest {
         verify(orderDetailsService, never()).save(org.mockito.ArgumentMatchers.any());
         verify(reviewRepository, never()).saveAll(org.mockito.ArgumentMatchers.any());
         verify(reviewRepository, never()).findById(org.mockito.ArgumentMatchers.any());
-    }
-
-    @Test
-    void updateReviewPhotoSavesUrlWithoutDuplicateTextCheck() {
-        Review review = new Review();
-        review.setId(17L);
-        review.setText("Уже существующий текст");
-
-        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
-        when(reviewRepository.save(review)).thenReturn(review);
-
-        Review updated = reviewService.updateReviewPhoto(17L, PHOTO_URL);
-
-        assertSame(review, updated);
-        assertEquals(PHOTO_URL, review.getUrl());
-        verify(reviewRepository).save(review);
-        verify(reviewRepository, never()).existsByText(review.getText());
-    }
-
-    @Test
-    void updateReviewPhotoThrowsWhenReviewMissing() {
-        when(reviewRepository.findById(404L)).thenReturn(Optional.empty());
-
-        assertThrows(UsernameNotFoundException.class, () -> reviewService.updateReviewPhoto(404L, PHOTO_URL));
-        verify(reviewRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

@@ -147,7 +147,6 @@ class OrderPaymentCancellationServiceTest {
         verify(contractorRewardLedgerService).lockActiveOrderRewardsAndRequireCancellationRepresentable(14L);
         verify(contractorCompletionRewardService)
                 .deactivateOrderPaymentAccruals(14L, "manual_payment_cancellation");
-        verify(contractorCompletionRewardService, never()).migrateLegacyRewardsBeforePaymentCancellation(14L);
     }
 
     @Test
@@ -214,7 +213,6 @@ class OrderPaymentCancellationServiceTest {
         verify(contractorRewardLedgerService).lockActiveOrderRewardsAndRequireCancellationRepresentable(15L);
         verify(contractorCompletionRewardService)
                 .deactivateOrderPaymentAccruals(15L, "manual_payment_cancellation");
-        verify(contractorCompletionRewardService, never()).migrateLegacyRewardsBeforePaymentCancellation(15L);
     }
 
     @Test

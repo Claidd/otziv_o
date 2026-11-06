@@ -2,7 +2,6 @@ package com.hunt.otziv.u_users.repository;
 
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -49,17 +48,6 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
     Set<Worker> findAll();
 
     @Query("""
-    SELECT DISTINCT w
-    FROM Worker w
-    JOIN FETCH w.user u
-    JOIN u.roles r
-    LEFT JOIN FETCH u.image
-    WHERE u.active = true
-      AND r.name = 'ROLE_WORKER'
-""")
-    Set<Worker> findAllWithUserAndImageSet();
-
-    @Query("""
             SELECT w
             FROM Worker w
             JOIN FETCH w.user u
@@ -71,21 +59,7 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
             """)
     List<Worker> findAllToManager(Manager manager);
 
-    @Query("""
-            SELECT w
-            FROM Worker w
-            JOIN FETCH w.user u
-            JOIN u.roles r
-            LEFT JOIN FETCH u.image
-            WHERE w IN (:workers)
-              AND u.active = true
-              AND r.name = 'ROLE_WORKER'
-            """)
-    List<Worker> findAllToManagerWorkers(Set<Worker> workers);
-
     Set<Worker> findAllByUserId(Long id);
-
-    List<Worker> findAllByUser(User user);
 
     @Query("""
     SELECT w

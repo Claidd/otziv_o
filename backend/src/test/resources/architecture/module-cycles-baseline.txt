@@ -160,11 +160,9 @@ payments -> orders
 payments -> payroll
 payments -> platform
 payments -> review-quality
-payroll -> administration
 payroll -> companies
 payroll -> contractor-ledger
 payroll -> identity
-payroll -> leads
 payroll -> orders
 payroll -> platform
 performers -> catalog

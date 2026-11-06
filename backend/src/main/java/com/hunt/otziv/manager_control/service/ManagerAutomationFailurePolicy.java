@@ -28,6 +28,8 @@ public class ManagerAutomationFailurePolicy {
             "company_missing"
     );
 
+    private static final String MANUAL_CONTACT_RESERVED = "manual_contact_reserved";
+
     private static final Set<String> TRANSIENT_ERROR_CODES = Set.of(
             "rate_limited",
             "daily_limit",
@@ -93,7 +95,9 @@ public class ManagerAutomationFailurePolicy {
     }
 
     private boolean isExpectedControlState(String code) {
+        // The manager's own message covers this cycle; the reminder waits on purpose and the order card owns it.
         return code.isBlank()
+                || MANUAL_CONTACT_RESERVED.equals(code)
                 || code.contains("dry_run")
                 || code.contains("review_recovery_active")
                 || code.contains("order_status_changed")

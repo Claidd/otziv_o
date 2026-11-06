@@ -5,14 +5,6 @@ export interface ManualPaymentConfirmationEvidence {
   receiptUrl: string;
 }
 
-export interface ManualCardPaymentConfirmationEvidence {
-  recipientStatementChecked: true;
-  paymentReceived: true;
-  receivedAmountKopecks: number;
-  note: string;
-  receiptUrl?: string;
-}
-
 export const UNFINISHED_PROVIDER_PAYMENT_MESSAGE =
   'У заказа есть незавершенный банковский/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
 const LEGACY_UNFINISHED_PROVIDER_PAYMENT_MESSAGE =
@@ -33,12 +25,6 @@ export interface ManualCardPaymentFallbackDecision {
   userMessage: string | null;
 }
 
-export interface ManualCardPaymentConfirmationPrompt {
-  title: string;
-  message: string;
-  confirmText: string;
-}
-
 export function buildManualPaymentConfirmationRequest(
   commentValue: string | null | undefined,
   receiptUrlValue: string | null | undefined
@@ -49,60 +35,6 @@ export function buildManualPaymentConfirmationRequest(
     return null;
   }
   return { comment, receiptUrl };
-}
-
-export function buildManualCardPaymentConfirmationRequest(
-  receivedAmountKopecks: number,
-  noteValue: string | null | undefined,
-  receiptUrlValue?: string | null
-): ManualCardPaymentConfirmationEvidence | null {
-  const note = noteValue?.trim() ?? '';
-  const receiptUrl = receiptUrlValue?.trim() ?? '';
-  if (!Number.isSafeInteger(receivedAmountKopecks) || receivedAmountKopecks <= 0 || !note) {
-    return null;
-  }
-  return {
-    recipientStatementChecked: true,
-    paymentReceived: true,
-    receivedAmountKopecks,
-    note,
-    ...(receiptUrl ? { receiptUrl } : {})
-  };
-}
-
-export function exactPaymentAmountKopecks(amountRubles: number | null | undefined): number | null {
-  if (!Number.isFinite(amountRubles) || (amountRubles ?? 0) <= 0) {
-    return null;
-  }
-  const rawKopecks = (amountRubles as number) * 100;
-  const amountKopecks = Math.round(rawKopecks);
-  if (!Number.isSafeInteger(amountKopecks)
-      || amountKopecks <= 0
-      || Math.abs(rawKopecks - amountKopecks) > 1e-6) {
-    return null;
-  }
-  return amountKopecks;
-}
-
-export function manualCardPaymentFallbackDecision(
-  error: unknown,
-  roles: readonly string[] | null | undefined,
-  orderId: number | null | undefined,
-  amountKopecks: number | null | undefined
-): ManualCardPaymentFallbackDecision {
-  const accessDecision = manualCardPaymentFallbackAccessDecision(error, roles, orderId);
-  if (!accessDecision.allowed) {
-    return accessDecision;
-  }
-  if (!Number.isSafeInteger(amountKopecks) || (amountKopecks ?? 0) <= 0) {
-    return decision(
-      false,
-      true,
-      'invalid-amount',
-      'Не удалось определить точную положительную сумму заказа. Оплата не отмечена, банковская/СБП ссылка не закрыта.'
-    );
-  }
-  return decision(true, true, 'allowed');
 }
 
 export function manualCardPaymentFallbackAccessDecision(
@@ -146,34 +78,6 @@ function isUnfinishedProviderPaymentMessage(message: string): boolean {
   return normalized.includes('незавершенн')
     && normalized.includes('платеж')
     && normalized.includes('журнал');
-}
-
-export function shouldSubmitManualCardPaymentFallback(
-  fallbackDecision: ManualCardPaymentFallbackDecision,
-  explicitlyConfirmed: boolean
-): boolean {
-  return fallbackDecision.allowed && explicitlyConfirmed;
-}
-
-export function manualCardPaymentConfirmationPrompt(
-  orderId: number,
-  amountKopecks: number
-): ManualCardPaymentConfirmationPrompt | null {
-  if (!Number.isSafeInteger(orderId) || orderId <= 0
-      || !Number.isSafeInteger(amountKopecks) || amountKopecks <= 0) {
-    return null;
-  }
-  const amountLabel = `${new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amountKopecks / 100)} ₽`;
-  return {
-    title: 'Подтвердить ручную оплату',
-    message: `Заказ #${orderId}: подтвердите, что вы проверили выписку счёта или карты получателя, `
-      + `полная сумма ${amountLabel} фактически поступила. `
-      + 'Незавершённая неоплаченная банковская/СБП ссылка будет безопасно закрыта, а заказ отмечен оплаченным.',
-    confirmText: 'Деньги получены, закрыть ссылку'
-  };
 }
 
 function decision(

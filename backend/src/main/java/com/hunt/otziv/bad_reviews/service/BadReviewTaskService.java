@@ -60,12 +60,7 @@ public interface BadReviewTaskService {
 
     Map<Long, BadReviewTaskSummary> getSummaryByOrderIds(Collection<Long> orderIds);
 
-    String buildBadReviewInvoiceMessage(Order order);
-
     BigDecimal getPayableSum(Order order);
-
-    /** One database read for a selected board page; invalid amounts use the existing strict single-order path. */
-    Map<Long, BigDecimal> getPayableSums(Collection<Order> orders);
 
     /** Amounts and task counters from the same fresh read; scoped to this assembly. */
     OrderAmounts prepareOrderAmounts(Collection<Order> orders);
@@ -76,8 +71,6 @@ public interface BadReviewTaskService {
             summaries = Map.copyOf(summaries);
         }
     }
-
-    int getPayableAmount(Order order);
 
     void enrichOrderList(List<OrderDTOList> orders);
 

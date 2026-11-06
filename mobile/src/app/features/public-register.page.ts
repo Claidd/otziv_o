@@ -12,7 +12,7 @@ import {
 import { AuthService } from '../core/auth.service';
 import { safeHttpsExternalUrl } from '../shared/external-navigation';
 
-type RegisterMode = 'client' | 'performer' | 'legacy';
+type RegisterMode = 'client' | 'performer';
 
 const STRONG_PASSWORD_PATTERN = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{N})(?=.*[^\p{L}\p{N}\s])[^\r\n]{12,128}$/u;
 
@@ -26,7 +26,7 @@ const STRONG_PASSWORD_PATTERN = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{N})(?=.*[^\p{L
         <main class="register-page">
           <header class="register-hero">
             <a routerLink="/" class="brand">Компания <strong>О!</strong></a>
-            <p>{{ kicker() }}</p>
+            <p>Публичная форма</p>
             <h1>{{ title() }}</h1>
           </header>
 
@@ -76,12 +76,6 @@ const STRONG_PASSWORD_PATTERN = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{N})(?=.*[^\p{L
               </fieldset>
               <button class="primary" type="submit" [disabled]="saving() || loadingCities()">{{ saving() ? 'Создаем...' : 'Зарегистрироваться' }}</button>
             </form>
-          } @else {
-            <form class="register-form" (ngSubmit)="submitLegacy()">
-              <label><span>Старый логин</span><input name="legacyUsername" required [ngModel]="legacy.username" (ngModelChange)="legacy.username = $event"></label>
-              <label><span>Старый пароль</span><input name="legacyPassword" type="password" required [ngModel]="legacy.password" (ngModelChange)="legacy.password = $event"></label>
-              <button class="primary" type="submit" [disabled]="saving()">{{ saving() ? 'Переносим...' : 'Перенести аккаунт' }}</button>
-            </form>
           }
         </main>
       </ion-content>
@@ -98,7 +92,7 @@ const STRONG_PASSWORD_PATTERN = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{N})(?=.*[^\p{L
 export class PublicRegisterPage implements OnInit {
   readonly mode = computed<RegisterMode>(() => {
     const mode = this.route.snapshot.data['mode'];
-    return mode === 'performer' || mode === 'legacy' ? mode : 'client';
+    return mode === 'performer' ? mode : 'client';
   });
   readonly saving = signal(false);
   readonly loadingCities = signal(false);
@@ -119,14 +113,11 @@ export class PublicRegisterPage implements OnInit {
     rulesConsentAccepted: false,
     honestReviewConsentAccepted: false
   };
-  readonly legacy = { username: '', password: '' };
 
   readonly title = computed(() => ({
     client: 'Регистрация клиента',
-    performer: 'Регистрация исполнителя',
-    legacy: 'Перенос аккаунта'
+    performer: 'Регистрация исполнителя'
   })[this.mode()]);
-  readonly kicker = computed(() => this.mode() === 'legacy' ? 'Миграция' : 'Публичная форма');
 
   safeExternalUrl(value: unknown): string {
     return safeHttpsExternalUrl(value) ?? '';
@@ -208,26 +199,6 @@ export class PublicRegisterPage implements OnInit {
       },
       error: (error) => {
         this.error.set(this.errorMessage(error, 'Не удалось зарегистрировать исполнителя.'));
-        this.saving.set(false);
-      }
-    });
-  }
-
-  submitLegacy(): void {
-    this.error.set(null);
-    this.createdUser.set(null);
-    if (!this.legacy.username.trim() || !this.legacy.password) {
-      this.error.set('Введите старый логин и пароль.');
-      return;
-    }
-    this.saving.set(true);
-    this.api.migrateLegacyUser({ username: this.legacy.username.trim(), password: this.legacy.password }).subscribe({
-      next: (user) => {
-        this.createdUser.set(user);
-        this.saving.set(false);
-      },
-      error: (error) => {
-        this.error.set(this.errorMessage(error, 'Не удалось перенести пользователя.'));
         this.saving.set(false);
       }
     });

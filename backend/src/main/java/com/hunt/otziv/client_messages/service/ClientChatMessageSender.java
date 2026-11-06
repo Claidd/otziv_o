@@ -37,6 +37,24 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
     private final ClientMessageOperationFence operationFence;
     private final PublicationProgressPreferenceService progressPreferences;
     private final com.hunt.otziv.whatsapp.service.WhatsAppDeliveryRouteRecovery routeRecovery;
+    /** Optional so the sender keeps working without it (local stand, focused tests): nothing is held then. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks groupDeliveryBlocks;
+
+    void useGroupDeliveryBlocks(com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks blocks) {
+        this.groupDeliveryBlocks = blocks;
+    }
+
+    /** A refused group delivery holds new operations only; a store failure keeps the previous behaviour. */
+    private boolean groupDeliveryHeld(String clientId, String groupId) {
+        if (groupDeliveryBlocks == null || !hasText(clientId) || !hasText(groupId)) return false;
+        try {
+            return groupDeliveryBlocks.isBlocked(clientId, groupId);
+        } catch (RuntimeException unavailable) {
+            log.warn("WhatsApp group delivery hold unavailable: groupId={}, errorType={}", groupId, unavailable.getClass().getSimpleName());
+            return false;
+        }
+    }
 
     @Override public String recoverMissingWhatsAppGroup(com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target,
             String clientId, String groupId, String operationId) {
@@ -105,6 +123,12 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
             // backend preparedAt is not a substitute for a missing dispatch window.
             var recovered = whatsAppService.recoverOperationFromHistory(frozen.clientId(), operationId,
                     frozen.kind(), frozen.destination(), frozen.message());
+            if (com.hunt.otziv.client_messages.api.ClientMessageDelivery.isDeliveryRejected(recovered)) {
+                // Hold new messages to this group before the refusal is reported to any caller. Without the
+                // hold a caller could prepare a new operation and repeat the refused message.
+                if (!"send-group".equals(frozen.kind()) || groupDeliveryBlocks == null) return current;
+                groupDeliveryBlocks.recordRejected(frozen.clientId(), frozen.destination(), operationId);
+            }
             return recovered == null ? current : recovered;
         } catch (RuntimeException unavailable) {
             log.warn("WhatsApp history unavailable for saved operation: operationId={}", operationId);
@@ -133,6 +157,9 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
                         ? unavailableRoute(platform, "whatsapp_client_missing",
                             "У менеджера не подключён WhatsApp-аккаунт для отправки. "
                                     + "Подключите аккаунт и повторите отправку.")
+                        : groupDeliveryHeld(clientId, groupId)
+                        ? unavailableRoute(platform, com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_CODE,
+                            com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_MESSAGE + ".")
                         : availableRoute(platform);
             case TELEGRAM -> target.telegramChatId() == null
                     ? unavailableRoute(platform, "telegram_group_missing",
@@ -206,6 +233,7 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
         }
 
         ChatPlatform activePlatform = activeChatPlatform(company);
+        boolean frozenReplay = false;
         if (operationId != null) {
             try {
                 var nonIdempotentAttempt = operationFence.lookup(operationId);
@@ -221,6 +249,7 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
                     }
                     // A company may change its active chat while a previous WhatsApp attempt is unresolved.
                     activePlatform = ChatPlatform.WHATSAPP;
+                    frozenReplay = true;
                     clientId = frozen.clientId();
                     groupId = frozen.destination();
                     message = frozen.message();
@@ -248,9 +277,13 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
         );
 
         ClientMessageSendResult primaryResult = switch (activePlatform) {
-            case WHATSAPP -> hasText(groupId)
-                    ? sendToWhatsApp(clientId, groupId, message, operationId)
-                    : missingActiveChannel("whatsapp_group_missing", "Для WhatsApp-группы не задан groupId");
+            // A replay of a saved operation is answered by the gateway ledger: a hold must never mask it.
+            case WHATSAPP -> !hasText(groupId)
+                    ? missingActiveChannel("whatsapp_group_missing", "Для WhatsApp-группы не задан groupId")
+                    : !frozenReplay && groupDeliveryHeld(clientId, groupId)
+                    ? missingActiveChannel(com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_CODE,
+                        com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_MESSAGE)
+                    : sendToWhatsApp(clientId, groupId, message, operationId);
             case TELEGRAM -> company.getTelegramGroupChatId() != null
                     ? operationId == null
                         ? sendToTelegram(company.getTelegramGroupChatId(), message, telegramCopyButton)

@@ -36,8 +36,8 @@ release имеет ту же подпись/package и больший versionCod
 не подменяется под прежним номером.
 
 Опора: [rollout](ARCHITECTURE_ROLLOUT.md), [CI runbook](R10_CI_AND_REPOSITORY_CLEANUP.md),
-[recovery CLI](RECOVERY_CLI_LOCAL_VERIFICATION_2026-09-07.md),
-[native verification](NATIVE_ANDROID_VERIFICATION_2026-09-07.md).
+recovery CLI (`RECOVERY_CLI_LOCAL_VERIFICATION_2026-09-07.md`, удалён 2026-11-06, есть в истории Git),
+native verification (`NATIVE_ANDROID_VERIFICATION_2026-09-07.md`, удалён 2026-11-06, есть в истории Git).
 Отвергнуты: ручное обходное принятие Flyway history, обязательный отсутствующий CI
 status, восстановление только одной БД как «полный DR» и предположение о независимости
 backup/alerting по различающимся DNS-именам.

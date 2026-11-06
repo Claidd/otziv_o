@@ -171,7 +171,6 @@ class CompanyServiceImplTest {
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("updateStatus").getDirection());
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
         verify(companyRepository, never()).findPageToAdminWithFetchWithKeyWord(any(), any(), any());
-        verify(companyRepository, never()).findPageToAdminWithFetchWithKeyWordLive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -271,7 +270,6 @@ class CompanyServiceImplTest {
                 companyRepository,
                 companyInfoRepository,
                 new CompanyRecordService(companyRepository, companyInfoRepository),
-                new CompanyStatisticsService(companyRepository),
                 leadService,
                 userService,
                 managerService,

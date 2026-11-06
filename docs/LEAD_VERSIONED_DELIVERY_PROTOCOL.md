@@ -3,7 +3,7 @@
 P03/P14 передают **полный снимок текущего состояния** источника, а не неизменяемое
 историческое событие каждого редактирования. Snapshot фиксируется в текущей
 business transaction после flush и canonical Lead lock. `LeadCommandWorker` —
-единственный HTTP sender; ручной `/api/leads/sendToServer`, outreach bridge и
+единственный HTTP sender; ручная постановка, outreach bridge и
 BEFORE_COMMIT listener только записывают команды.
 
 ## Идентичность и порядок
@@ -67,8 +67,8 @@ Receipt/entity high-water/telephone fences и manual-request identity не им�
 
 ## Повтор ручной кнопки
 
-`POST /api/leads/sendToServer?leadId=…` сохраняет прежний body, возвращая также
-`X-Lead-Command-Id`. Новый caller передаёт UUID `Idempotency-Key` одной пользовательской
+Ручная постановка IMPORT (`LeadCommandService.enqueueImport`) возвращает ID команды;
+HTTP-эндпоинт `/api/leads/sendToServer` удалён. Новый caller передаёт UUID `Idempotency-Key` одной пользовательской
 операции; таблица manual requests сохраняет binding lead→command. Повтор ключа
 возвращает прежнюю команду, другой Lead с тем же ключом получает 409.
 

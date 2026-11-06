@@ -103,14 +103,10 @@ class CommonInvoiceManagerControlMySqlIntegrationTest {
         var stale = Set.of(CommonInvoiceStatus.COLLECTING, CommonInvoiceStatus.READY, CommonInvoiceStatus.INVOICED,
                 CommonInvoiceStatus.REMINDER, CommonInvoiceStatus.PARTIALLY_PAID);
         var paper = Set.of(CommonInvoiceStatus.INVOICED, CommonInvoiceStatus.REMINDER, CommonInvoiceStatus.PARTIALLY_PAID);
-        long count = tx.execute(status -> invoices.countManagerControlInvoices(manager, critical, stale,
-                CommonInvoiceStatus.PARTIALLY_PAID, CommonInvoiceStatus.COLLECTING, now.minusDays(3), now.minusHours(48),
-                InvoicePaymentMode.OWNER_PAPER_INVOICE, paper, now.minusHours(24)));
         var selected = tx.execute(status -> invoices.findManagerControlInvoices(manager, critical, stale,
                 CommonInvoiceStatus.PARTIALLY_PAID, CommonInvoiceStatus.COLLECTING, now.minusDays(3), now.minusHours(48),
                 InvoicePaymentMode.OWNER_PAPER_INVOICE, paper, now.minusHours(24), PageRequest.of(0, 100))
                 .stream().map(CommonInvoice::getId).toList());
-        assertThat(count).isEqualTo(expected.size());
         assertThat(selected).containsExactlyInAnyOrderElementsOf(expected);
     }
 

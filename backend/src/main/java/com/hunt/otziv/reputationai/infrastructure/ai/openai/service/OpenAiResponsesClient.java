@@ -152,13 +152,6 @@ public class OpenAiResponsesClient {
         return useYandex() ? (useYandexResponsesApi() ? "YandexGPT Responses" : "YandexGPT") : "OpenAI";
     }
 
-    public String activeModel() {
-        if (useDeepSeek()) {
-            return properties.getDeepseek().getModel();
-        }
-        return useYandex() ? properties.getYandex().getModel() : properties.getOpenai().getModel();
-    }
-
     public boolean usesExternalSearchContext() {
         return useYandex() || useDeepSeek();
     }
@@ -517,54 +510,6 @@ public class OpenAiResponsesClient {
         }
 
         return postResponse(body, options.timeout());
-    }
-
-    public OpenAiResponseResult createDeepResearchResponse(String instructions, String input) {
-        if (!runtimeEnabled()) {
-            return disabledResult();
-        }
-        ReputationAiProperties.OpenAi openai = properties.getOpenai();
-        ReputationAiProperties.OpenAi.DeepResearch deep = openai.getDeepResearch();
-        if (useDeepSeek()) {
-            return createDeepSeekResearchResponse(
-                    "company-deep-research-report", instructions, input,
-                    deepSeekMaxTokens(deep.getMaxOutputTokens()), deep.getTimeout()
-            );
-        }
-        if (useYandex()) {
-            return createYandexResponse(
-                    "company-deep-research-report",
-                    yandexResearchInstructions(instructions, useYandexResponsesApi()),
-                    input,
-                    0.2,
-                    true,
-                    yandexMaxTokens(deep.getMaxOutputTokens()),
-                    deep.getTimeout(),
-                    useYandexResponsesApi(),
-                    properties.getYandex().getSearchContextSize(),
-                    "company_deep_research_report",
-                    deepResearchSchema(12, 16)
-            );
-        }
-
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", deep.getModel());
-        body.put("instructions", instructions);
-        body.put("input", input);
-        body.put("tools", List.of(Map.of("type", "web_search_preview")));
-        body.put("max_tool_calls", deep.getMaxToolCalls());
-        body.put("max_output_tokens", deep.getMaxOutputTokens());
-        body.put("text", Map.of("format", Map.of(
-                "type", "json_schema",
-                "name", "company_deep_research_report",
-                "strict", true,
-                "schema", deepResearchSchema(12, 16)
-        )));
-        if (deep.isBackground()) {
-            body.put("background", true);
-        }
-
-        return postResponse(body, deep.getTimeout());
     }
 
     public OpenAiResponseResult createResearchReportResponse(String instructions, String input, String profileKey) {

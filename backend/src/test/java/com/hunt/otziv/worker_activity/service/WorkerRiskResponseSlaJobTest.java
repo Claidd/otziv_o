@@ -3,7 +3,6 @@ package com.hunt.otziv.worker_activity.service;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskEventType;
@@ -47,8 +46,6 @@ class WorkerRiskResponseSlaJobTest {
     @Mock
     private UserService userService;
     @Mock
-    private TelegramService telegramService;
-    @Mock
     private NotificationMediaDeliveryService notificationMediaDeliveryService;
     @Mock
     private AppSettingService appSettingService;
@@ -61,7 +58,6 @@ class WorkerRiskResponseSlaJobTest {
                 incidentRepository,
                 eventService,
                 userService,
-                telegramService,
                 notificationMediaDeliveryService,
                 appSettingService,
                 transactionManager()

@@ -5,7 +5,6 @@ import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.email.service.EmailService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
-import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -79,9 +78,6 @@ class OrderStatusCheckerServiceImplTest {
 
     @Mock
     private OrderPaymentIntegrityService orderPaymentIntegrityService;
-
-    @Mock
-    private ContractorCompletionRewardService contractorCompletionRewardService;
 
     @Test
     void validateCounterConsistencySynchronizesExpectedSingleReviewChangeWithoutEmail() {
@@ -237,8 +233,7 @@ class OrderStatusCheckerServiceImplTest {
                 commonBillingService,
                 recoveryGateService,
                 paymentLinkServiceProvider,
-                orderPaymentIntegrityService,
-                contractorCompletionRewardService
+                orderPaymentIntegrityService
         );
     }
 

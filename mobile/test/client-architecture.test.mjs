@@ -45,38 +45,17 @@ test('the compatibility API cannot regain HTTP ownership of migrated manager, or
     const body = method.body?.getText(tree) ?? '';
     if (!body.includes('this.http.')) continue;
     assert.doesNotMatch(body, /\/api\/(?:manager(?:\/|['"`])|admin\/(?:payments|manager-control|manager-daily-summary)|cabinet\/(?:payment-profile|manual-payment-tasks)|payments\/public)/,
-      `Move ${method.name.getText(tree)} to its feature client; keep only a compatibility delegate here`);
+      `Move ${method.name.getText(tree)} to its feature client and call that client directly`);
   }
 });
 
 test('production callers use the owner of every migrated API operation directly', () => {
-  const app = new URL('../src/app/', import.meta.url);
-  const legacySource = fs.readFileSync(new URL('core/api.service.ts', app), 'utf8');
-  const legacyTree = ts.createSourceFile('api.service.ts', legacySource, ts.ScriptTarget.Latest, true);
-  const legacyApi = legacyTree.statements.find(n => ts.isClassDeclaration(n) && n.name?.text === 'ApiService');
-  const migrated = new Set(legacyApi.members.filter(ts.isMethodDeclaration)
-    .filter(n => /^\{\s*return this\.\w+Api\.\w+\(/.test(n.body?.getText(legacyTree) ?? '')).map(n => n.name.getText(legacyTree)));
-  for (const name of fs.readdirSync(app, { recursive: true }).filter(n => n.endsWith('.ts') && !n.endsWith('.spec.ts') && !n.endsWith('api.service.ts'))) {
-    const source = fs.readFileSync(new URL(name.replaceAll('\\', '/'), app), 'utf8');
-    const tree = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true);
-    for (const owner of tree.statements.filter(ts.isClassDeclaration)) {
-      const broadFields = new Set();
-      for (const member of owner.members) {
-        if (ts.isConstructorDeclaration(member)) for (const parameter of member.parameters) {
-          if (parameter.type?.getText(tree) === 'ApiService') broadFields.add(parameter.name.getText(tree));
-        }
-        if (ts.isPropertyDeclaration(member) && member.initializer?.getText(tree) === 'inject(ApiService)') broadFields.add(member.name.getText(tree));
-      }
-      function check(node) {
-        if (ts.isPropertyAccessExpression(node) && ts.isPropertyAccessExpression(node.expression)
-          && node.expression.expression.kind === ts.SyntaxKind.ThisKeyword
-          && broadFields.has(node.expression.name.text) && migrated.has(node.name.text)) {
-          assert.fail(`${name}: ${node.name.text} belongs to an extracted feature API`);
-        }
-        ts.forEachChild(node, check);
-      }
-      check(owner);
-    }
+  const source = fs.readFileSync(new URL('../src/app/core/api.service.ts', import.meta.url), 'utf8');
+  const tree = ts.createSourceFile('api.service.ts', source, ts.ScriptTarget.Latest, true);
+  const api = tree.statements.find(n => ts.isClassDeclaration(n) && n.name?.text === 'ApiService');
+  for (const member of api.members) {
+    assert.doesNotMatch(member.getText(tree), /\binject\(\w+Api\)|\bthis\.\w+Api\b/,
+      `ApiService.${member.name?.getText(tree) ?? 'constructor'} must not delegate to an extracted feature API; callers inject that API directly`);
   }
 });
 

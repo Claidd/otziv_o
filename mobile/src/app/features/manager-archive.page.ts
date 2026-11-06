@@ -3,7 +3,6 @@ import { inject } from '@angular/core';
 import { ManagerArchiveApi } from '../core/manager-archive.api';
 import { ManagerOrdersApi } from '../core/manager-orders.api';
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import {
   IonContent,
   IonRefresher,
@@ -13,7 +12,6 @@ import {
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
-  type ApiService,
   ArchiveOrderDetailsPayload,
   ArchiveOrderListItem,
   ArchiveOrderMode,
@@ -83,7 +81,7 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-manager-archive',
-  imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
+  imports: [IonContent, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Архив" />

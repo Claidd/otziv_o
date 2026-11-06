@@ -25,7 +25,6 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -223,27 +222,6 @@ class TelegramServiceUpdateHandlingTest {
         verify(userService, never()).findByChatId(anyLong());
         verify(userService, never()).findByUserName(anyString());
         assertEquals("chatId: `-100123`", service.sentMessages.getFirst().getText());
-    }
-
-    @Test
-    void publicationProgressMessageIncludesInlineDisableButton() {
-        CapturingTelegramService service = service();
-        when(publicationProgressPreferenceService.appendTelegramOptOutHint("Отчет"))
-                .thenReturn("Отчет\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nНажмите кнопку ниже.");
-        when(publicationProgressPreferenceService.disableCallbackData(10L))
-                .thenReturn("publication_progress:disable:10");
-
-        boolean result = service.sendPublicationProgressMessage(-100123L, "Отчет", 10L);
-
-        assertTrue(result);
-        SendMessage sent = service.sentMessages.getFirst();
-        InlineKeyboardMarkup markup = (InlineKeyboardMarkup) sent.getReplyMarkup();
-        assertEquals("Отчет\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nНажмите кнопку ниже.", sent.getText());
-        assertEquals("Отключить уведомления",
-                markup.getKeyboard().getFirst().getFirst().getText());
-        assertEquals("publication_progress:disable:10",
-                markup.getKeyboard().getFirst().getFirst().getCallbackData());
-        verifyNoInteractions(userService);
     }
 
     @Test

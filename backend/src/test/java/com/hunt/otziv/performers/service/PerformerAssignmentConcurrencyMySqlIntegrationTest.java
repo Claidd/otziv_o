@@ -116,7 +116,7 @@ class PerformerAssignmentConcurrencyMySqlIntegrationTest {
         service = new PerformerAssignmentService(orders, reviews, mock(UserRepository.class),
                 mock(PerformerProfileRepository.class), mock(PerformerCityRepository.class), assignments, offers,
                 mock(PerformerTaskEvidenceRepository.class), mock(PerformerPayoutRepository.class),
-                mock(PerformerAssignmentMapper.class), mock(PerformerTelegramNotificationService.class),
+                mock(PerformerAssignmentMapper.class),
                 mock(OrderStatusTransitionService.class), mock(PerformerRolloutService.class),
                 mock(PerformerAssignmentScreenshotStorage.class), mock(CityDistanceService.class),
                 locks, notifications, notificationRepository, manager);

@@ -190,10 +190,6 @@ public class TbankPaymentProperties implements EnvironmentAware {
         this.primaryLivePassword = primaryLivePassword;
     }
 
-    public String getSecondaryTerminalKey() {
-        return safe(secondaryTerminalKey);
-    }
-
     public void setSecondaryTerminalKey(String secondaryTerminalKey) {
         this.secondaryTerminalKey = secondaryTerminalKey;
     }

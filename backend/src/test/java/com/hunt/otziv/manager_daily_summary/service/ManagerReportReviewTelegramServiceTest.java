@@ -424,12 +424,6 @@ class ManagerReportReviewTelegramServiceTest {
                 .doesNotContain("СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА")
                 .doesNotContain("<details")
                 .doesNotContain("<summary");
-        verify(telegramService, never()).sendProtectedRichMessageWithInlineKeyboardMessageId(
-                anyLong(), any(String.class), any()
-        );
-        verify(telegramService, never()).sendProtectedMessageWithInlineKeyboardMessageId(
-                anyLong(), any(String.class), any(String.class), any()
-        );
     }
 
     @Test

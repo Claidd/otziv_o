@@ -195,7 +195,6 @@ class ManagerBoardServiceTest {
         verify(badReviewTaskService).enrichOrderList(List.of(order));
         verify(clientMessageOrderStatusService).enrichOrderList(List.of(order));
         verify(staffDailyProgressService).aggregateWorkerProgressSnapshotByIds(eq(List.of(worker.getId())), any(LocalDate.class));
-        verify(staffDailyProgressService, never()).aggregateWorkerProgress(any(), any(LocalDate.class));
         verify(commonBillingService).managerBoardMetrics(null);
         verify(commonBillingService, never()).countLinkedManagerBoardOrders(nullable(Set.class));
         verify(commonBillingService, never()).countManagerBoardCards(nullable(Set.class));

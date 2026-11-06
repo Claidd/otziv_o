@@ -101,7 +101,6 @@ class ContractorPaymentLiveRoutingServiceTest {
                 runtimeSwitch,
                 allocationRepository,
                 profileRepository,
-                profileService,
                 routingLimitService,
                 accountingService,
                 commonInvoiceRepository,
@@ -1317,33 +1316,6 @@ class ContractorPaymentLiveRoutingServiceTest {
     }
 
     @Test
-    void partiallyConfirmedCommonRouteIsNotAdvertisedAsClientReportable() {
-        ContractorPaymentProfile recipient = profile(19L, user(219L), ContractorRole.SPECIALIST);
-        ContractorPaymentAllocation allocation = reportAllocation(
-                100L, 65L, recipient, ContractorRecipientType.SPECIALIST,
-                ContractorAllocationStatus.PARTIALLY_CONFIRMED
-        );
-        CommonInvoice invoice = reportableInvoice(65L, 100L, "partial-token");
-        when(allocationRepository.findById(100L)).thenReturn(Optional.of(allocation));
-
-        assertFalse(service.isCommonClientReportable(invoice));
-    }
-
-    @Test
-    void changedCommonInvoiceGenerationIsNotAdvertisedAsClientReportable() {
-        ContractorPaymentProfile recipient = profile(191L, user(291L), ContractorRole.SPECIALIST);
-        ContractorPaymentAllocation allocation = reportAllocation(
-                1001L, 651L, recipient, ContractorRecipientType.SPECIALIST,
-                ContractorAllocationStatus.RESERVED
-        );
-        CommonInvoice invoice = reportableInvoice(651L, 1001L, "changed-reportable-token");
-        invoice.setAmountKopecks(120_000L);
-        when(allocationRepository.findById(1001L)).thenReturn(Optional.of(allocation));
-
-        assertFalse(service.isCommonClientReportable(invoice));
-    }
-
-    @Test
     void commonClientReportRejectsChangedInvoiceGeneration() {
         ContractorPaymentProfile recipient = profile(192L, user(292L), ContractorRole.SPECIALIST);
         ContractorPaymentAllocation allocation = reportAllocation(
@@ -1449,7 +1421,7 @@ class ContractorPaymentLiveRoutingServiceTest {
         allocation.setStatus(ContractorAllocationStatus.RELEASED_UNPAID);
         when(allocationRepository.findById(804L)).thenReturn(Optional.of(allocation));
 
-        assertFalse(service.isPaymentLinkContractorRequisitesVisible(link));
+        assertTrue(service.activePaymentLinkRequisites(link).isEmpty());
     }
 
     @Test

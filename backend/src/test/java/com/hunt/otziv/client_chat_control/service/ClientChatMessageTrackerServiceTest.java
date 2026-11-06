@@ -821,6 +821,114 @@ class ClientChatMessageTrackerServiceTest {
         );
     }
 
+    @Test
+    void lateClientQuestionIsClosedByTheStaffReplyStoredAfterIt() {
+        LocalDateTime askedAt = LocalDateTime.of(2026, 11, 5, 23, 21, 23);
+        ClientChatMessage reply = storedReply("Хорошо, в ближайшее время отправлю вам 20 текстов для проверки",
+                askedAt.plusSeconds(18), ClientChatDirection.INCOMING, null);
+        clientSenders();
+        when(messageRepository.findByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+                eq(ClientChatPlatform.WHATSAPP), eq("12001@g.us"), eq(ClientChatSenderRole.STAFF), any()))
+                .thenReturn(List.of(reply));
+        ArgumentCaptor<ClientChatUnansweredItem> saved = ArgumentCaptor.forClass(ClientChatUnansweredItem.class);
+
+        service.track(clientMessage("late-20", "20", askedAt));
+
+        verify(unansweredRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        ClientChatUnansweredItem item = saved.getValue();
+        assertEquals(ClientChatUnansweredStatus.ANSWERED, item.getStatus());
+        assertEquals("Ответ сотрудника", item.getCloseReason());
+        assertSame(reply, item.getResolutionMessage());
+    }
+
+    @Test
+    void lateClientQuestionStaysOpenWhenOnlyTheOwnerOrAReactionFollowed() {
+        LocalDateTime askedAt = LocalDateTime.of(2026, 11, 5, 23, 21, 23);
+        Role ownerRole = new Role();
+        ownerRole.setName("ROLE_OWNER");
+        User owner = User.builder().id(9L).active(true).roles(Set.of(ownerRole)).build();
+        clientSenders();
+        when(messageRepository.findByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+                eq(ClientChatPlatform.WHATSAPP), eq("12001@g.us"), eq(ClientChatSenderRole.STAFF), any()))
+                .thenReturn(List.of(
+                        storedReply("Спасибо", askedAt.plusSeconds(10), ClientChatDirection.INCOMING, owner),
+                        storedReply("👍", askedAt.plusSeconds(20), ClientChatDirection.OUTGOING, null)));
+        ArgumentCaptor<ClientChatUnansweredItem> saved = ArgumentCaptor.forClass(ClientChatUnansweredItem.class);
+
+        service.track(clientMessage("late-20", "20", askedAt));
+
+        verify(unansweredRepository).save(saved.capture());
+        assertEquals(ClientChatUnansweredStatus.OPEN, saved.getValue().getStatus());
+    }
+
+    @Test
+    void lateOlderClientMessageKeepsTheNewerQuestionOnTheOpenCard() {
+        LocalDateTime askedAt = LocalDateTime.of(2026, 11, 5, 23, 21, 23);
+        ClientChatUnansweredItem open = openItem("Имена мастеров");
+        open.setPlatform(ClientChatPlatform.WHATSAPP);
+        open.setChatId("12001@g.us");
+        open.setLastClientMessageAt(askedAt.plusMinutes(2));
+        clientSenders();
+        when(unansweredRepository.findFirstByPlatformAndChatIdAndStatusOrderByLastClientMessageAtDesc(
+                ClientChatPlatform.WHATSAPP, "12001@g.us", ClientChatUnansweredStatus.OPEN)).thenReturn(Optional.of(open));
+
+        service.track(clientMessage("late-older", "20", askedAt));
+
+        assertEquals("Имена мастеров", open.getLastMessageText());
+        assertEquals(askedAt.plusMinutes(2), open.getLastClientMessageAt());
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+    }
+
+    @Test
+    void historyCheckClosesOnlyCardsWhoseReplyIsAlreadyStored() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        LocalDateTime askedAt = LocalDateTime.of(2026, 11, 5, 23, 21, 23);
+        ClientChatUnansweredItem answered = openItem("20");
+        answered.setPlatform(ClientChatPlatform.WHATSAPP);
+        answered.setChatId("toyama@g.us");
+        answered.setLastClientMessageAt(askedAt);
+        ClientChatUnansweredItem waiting = openItem("Когда будут тексты?");
+        waiting.setPlatform(ClientChatPlatform.MAX);
+        waiting.setChatId("-100");
+        waiting.setLastClientMessageAt(askedAt);
+        when(unansweredRepository.findByManagerAndPlatformAndStatus(eq(manager), any(), eq(ClientChatUnansweredStatus.OPEN)))
+                .thenAnswer(invocation -> switch ((ClientChatPlatform) invocation.getArgument(1)) {
+                    case WHATSAPP -> List.of(answered);
+                    case MAX -> List.of(waiting);
+                    default -> List.of();
+                });
+        when(messageRepository.findByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+                eq(ClientChatPlatform.WHATSAPP), eq("toyama@g.us"), eq(ClientChatSenderRole.STAFF), any()))
+                .thenReturn(List.of(storedReply("Хорошо, отправлю тексты", askedAt.plusSeconds(18),
+                        ClientChatDirection.INCOMING, null)));
+
+        assertEquals(1, service.closeOpenItemsAnsweredInHistory(manager));
+        assertEquals(ClientChatUnansweredStatus.ANSWERED, answered.getStatus());
+        assertEquals(ClientChatUnansweredStatus.OPEN, waiting.getStatus());
+    }
+
+    private void clientSenders() {
+        when(participantClassifier.classify(any(), any(), any(), any(), any(), any())).thenReturn(ClientChatSenderRole.CLIENT);
+    }
+
+    private static ClientChatMessageCommand clientMessage(String id, String text, LocalDateTime at) {
+        return new ClientChatMessageCommand(ClientChatPlatform.WHATSAPP, ClientChatDirection.INCOMING,
+                "12001@g.us", "Компания", id, "79059969991@c.us", "Арсен", text, at);
+    }
+
+    private static ClientChatMessage storedReply(String text, LocalDateTime at, ClientChatDirection direction, User actor) {
+        ClientChatMessage message = new ClientChatMessage();
+        message.setPlatform(ClientChatPlatform.WHATSAPP);
+        message.setChatId("12001@g.us");
+        message.setDirection(direction);
+        message.setSenderRole(ClientChatSenderRole.STAFF);
+        message.setActorUser(actor);
+        message.setMessageText(text);
+        message.setMessageAt(at);
+        return message;
+    }
+
     private static ClientChatUnansweredItem openItem(String text) {
         ClientChatUnansweredItem item = new ClientChatUnansweredItem();
         item.setStatus(ClientChatUnansweredStatus.OPEN);

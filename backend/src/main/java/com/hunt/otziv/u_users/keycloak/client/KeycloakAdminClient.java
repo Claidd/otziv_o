@@ -369,22 +369,6 @@ public class KeycloakAdminClient {
         }
     }
 
-    public void deleteUserStrict(String keycloakUserId) {
-        if (keycloakUserId == null || keycloakUserId.isBlank()) {
-            return;
-        }
-
-        try {
-            restClient.delete()
-                    .uri(adminUri("users", keycloakUserId))
-                    .headers(this::setBearerAuth)
-                    .retrieve()
-                    .toBodilessEntity();
-        } catch (RestClientResponseException e) {
-            throw keycloakException("Failed to delete Keycloak user", e);
-        }
-    }
-
     private KeycloakRoleRepresentation getOrCreateRealmRole(String roleName) {
         try {
             return getRealmRole(roleName);

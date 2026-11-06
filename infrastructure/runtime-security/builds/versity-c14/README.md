@@ -88,8 +88,10 @@ version-retention guarantees. There is no distributed storage, outage recovery,
 MinIO volume conversion, or production acceptance proof in this package.
 
 Raw before/after scans, SBOMs, package/binary hashes, the OOM negative control,
-runtime results and primary source bytes are retained in
-`../../proofs/c14-versity/`. Publication must rebuild the exact committed recipe,
+runtime results and primary source bytes were removed from the working tree on
+2026-11-06 together with `candidate.test.mjs`; restore them with
+`git checkout 179ca19a9 -- infrastructure/runtime-security/proofs/c14-versity
+infrastructure/runtime-security/builds/versity-c14/candidate.test.mjs`. Publication must rebuild the exact committed recipe,
 scan the actual registry image, verify provenance/SBOM, and replay compatibility.
 Local results alone do not activate the replacement.
 

@@ -120,9 +120,6 @@ $monitoringCompose = Get-RepositoryText 'compose.monitoring.yaml'
 $publisherDockerfile = Get-RepositoryText 'infrastructure/monitoring/Dockerfile'
 $dependencyWorkflow = Get-RepositoryText '.github/workflows/dependency-audit.yml'
 $sqlGuardWorkflow = Get-RepositoryText '.github/workflows/sql-injection-guard.yml'
-$legacyWhatsAppDockerfile = Get-RepositoryText 'Dockerfile2.whatsapp'
-$legacyNginxDockerfile = Get-RepositoryText 'Dockerfile.nginx'
-$legacyDeploy = Get-RepositoryText 'infrastructure/scripts/prod/deploy-prod-ssh-images.ps1'
 $backendDockerfile = Get-RepositoryText 'backend/Dockerfile'
 $frontendDockerfile = Get-RepositoryText 'frontend/Dockerfile'
 $frontendAngularConfig = Get-RepositoryText 'frontend/angular.json'
@@ -359,7 +356,6 @@ Assert-TextMatch $productionEnvExample '(?m)^OTZIV_AUTH_LEGACY_MIGRATION_ENABLED
 Assert-TextMatch $localEnvExample '(?m)^OTZIV_AUTH_LEGACY_MIGRATION_ENABLED=false\r?$' 'Prod-local env example must keep retired legacy user migration disabled.'
 Assert-TextMatch $deploy 'Set-EnvFileValue -Path \$stageEnv -Name "OTZIV_AUTH_LEGACY_MIGRATION_ENABLED" -Value "false"' 'Production deployment staging must overwrite stale legacy migration opt-ins.'
 Assert-TextMatch $deploy '(?m)^set_env OTZIV_AUTH_LEGACY_MIGRATION_ENABLED "false"\r?$' 'Production remote deployment must persist the closed legacy migration window.'
-Assert-TextMatch $legacyDeploy '(?m)^set_env OTZIV_AUTH_LEGACY_MIGRATION_ENABLED "false"\r?$' 'Legacy deployment must also persist the closed legacy migration window.'
 Assert-TextNotMatch $frontendRoutes "path:\s*'legacy-migration'" 'Desktop frontend must not expose the retired legacy migration route.'
 Assert-TextNotMatch $frontendNavigation "routerLink:\s*'/legacy-migration'" 'Desktop navigation must not link to retired legacy migration.'
 Assert-TextNotMatch $frontendAdminLayout "'migration'" 'Desktop layout must not request the retired migration navigation entry.'
@@ -549,8 +545,6 @@ Assert-TextMatch $deploy 'WhatsApp Chromium sandbox preflight failed; existing g
 Assert-TextMatch $deploy '(?m)^\s*compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app ' 'The one-shot app ownership migration must regain CAP_CHOWN after the service drops all capabilities.'
 Assert-TextMatch $deploy '(?m)^\s*compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh "`\$gateway" ' 'The one-shot WhatsApp ownership migration must regain CAP_CHOWN and narrowly bypass read/search checks for legacy mode-0700 session trees.'
 Assert-TextMatch $deploy '(?m)^for gateway in whatsapp_lika whatsapp_vika; do\s*$' 'Both one-shot WhatsApp ownership migrations must handle legacy mode-0700 session trees.'
-Assert-TextMatch $legacyDeploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app ' 'The legacy one-shot app ownership migration must regain CAP_CHOWN after the service drops all capabilities.'
-Assert-TextMatch $legacyDeploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika ' 'The legacy one-shot WhatsApp ownership migration must regain CAP_CHOWN after the service drops all capabilities.'
 
 Assert-TextNotMatch $notificationMediaImporter 'MYSQL_ROOT_PASSWORD|mysql\s+-uroot' 'Notification media import must not use the MySQL root account.'
 Assert-TextMatch $notificationMediaImporter 'MYSQL_PWD="\$MYSQL_PASSWORD"\s+mysql\s+-u"\$MYSQL_USER"' 'Notification media import must use the scoped application database account.'
@@ -655,9 +649,6 @@ Assert-TextMatch $dependencyWorkflow 'dependency-gate:' 'Conditional dependency 
 Assert-DigestPinnedComposeImages $productionCompose 'docker-compose.yaml'
 Assert-DigestPinnedComposeImages $localCompose 'compose.prod-local.yaml'
 Assert-DigestPinnedComposeImages $developmentCompose 'compose.yaml'
-Assert-TextMatch $legacyWhatsAppDockerfile 'OTZIV_ALLOW_QUARANTINED_DOCKERFILE' 'Legacy WhatsApp Dockerfile must refuse accidental builds.'
-Assert-TextMatch $legacyNginxDockerfile 'OTZIV_ALLOW_QUARANTINED_DOCKERFILE' 'Legacy Nginx Dockerfile must refuse accidental builds.'
-Assert-TextMatch $legacyDeploy 'if \(-not \$AllowLegacyDeploy\)' 'Legacy direct-image deploy must refuse accidental use.'
 
 if ($violations.Count -gt 0) {
     Write-Error ("Infrastructure contract violations:`n - " + ($violations -join "`n - "))

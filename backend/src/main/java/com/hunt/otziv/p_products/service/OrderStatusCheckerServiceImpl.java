@@ -4,7 +4,6 @@ import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.email.service.EmailService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
-import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.OrderStatusCheckerService;
@@ -35,7 +34,6 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final ReviewRecoveryGateService recoveryGateService;
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
-    private final ContractorCompletionRewardService contractorCompletionRewardService;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";

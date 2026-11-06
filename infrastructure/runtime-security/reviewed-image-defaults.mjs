@@ -9,19 +9,15 @@ import { validateManifest } from './publish-reviewed-images.mjs';
 import { assertPulledImage, validatePublication } from './verify-anonymous-download.mjs';
 import { checkedJson, SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
 import { checkKeycloakRuntimeDependencies, requiresKeycloakDependencyProof } from './keycloak-runtime-dependencies.mjs';
-import { loadAlloyProof, matchingAlloyFindings, effectiveAlloySummary } from './alloy-daemon-adjudication.mjs';
-import { effectiveScanSummary, loadReviewedProof, matchingFindings } from './grafana-tempo-adjudication.mjs';
+import { loadReviewedProof, matchingFindings } from './grafana-tempo-adjudication.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
-import { C29_ALLOY_PROOF_LABEL, C29_ALLOY_BUILD_INFO_READER } from './alloy-c29-adjudication.mjs';
-import { C36_ALLOY_PROOF_LABEL, C36_ALLOY_BUILD_INFO_READER } from './alloy-c36-adjudication.mjs';
 import { C43_ALLOY_PROOF_LABEL, C43_ALLOY_BUILD_INFO_READER } from './alloy-c43-adjudication.mjs';
 import {validateGuavaC43Activation,couplePostgresC36WithKeycloakC43} from './guava-c43-activation.mjs';
 import {validateBrotliC45Activation,couplePostgresC36WithKeycloakC45} from './brotli-c45-activation.mjs';
 import {validateAptC48Activation,couplePostgresC36WithKeycloakC48} from './apt-c48-activation.mjs';
 import {overlayForSet, overlayForManifest, overlayCompressedProofs} from './os-package-overlay-registry.mjs';
 import {validateOverlayActivation, coupleOverlayKeycloak} from './os-package-overlay.mjs';
-import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 import { validateDatabaseTransitionReadiness } from './mysql-c46-readiness.mjs';
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
@@ -38,6 +34,10 @@ import {validatePostgresC36Acceptance,validatePostgresC36Transition,
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
+// Superseded monitoring generations no longer have activation scan validators.
+// Refuse them instead of trusting their publication summary alone.
+const SUPERSEDED_MONITORING_SETS = new Set(['c29-alloy', 'c36-alloy', 'c29-grafana', 'c30-grafana',
+  'c36-grafana', 'c40-grafana', 'c41-grafana']);
 const MANIFEST = 'infrastructure/runtime-security/reviewed-images.json';
 // The C7 publication binds these exact bytes, including the original service/path coverage.
 const MANIFEST_SHA256 = 'd48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2';
@@ -59,65 +59,10 @@ const COMPRESSED_PROOFS = new Map([
   ['infrastructure/runtime-security/proofs/c43-keycloak/anonymous/registry-attestation-0-payload-0.json', '3394b868268b572422560b783b27dffeac05c73b812d094bd506df821b80e55f'],
   ['infrastructure/runtime-security/proofs/c40-node/acceptance/published-smoke.json',
     '18f2e12ff4386b3d5122f7fa0b4741e4bb4f59dfcdcb7ab665dbbb5c770a7981'],
-  ['infrastructure/runtime-security/proofs/c29-alloy/anonymous/registry-attestation-0-payload-0.json',
-    '7e66512278b6b71b139d00f0678400ff3f972fc6901d9f61e824ab0f921944e5'],
-  ['infrastructure/runtime-security/proofs/c29-alloy/publication/registry-attestation-0-payload-0.json',
-    '7e66512278b6b71b139d00f0678400ff3f972fc6901d9f61e824ab0f921944e5'],
-  ['infrastructure/runtime-security/proofs/c29-alloy/publication/vulnerabilities.json',
-    '3955c18d28ebf5e0d243dd6a5f172d10509292c9e0360ce0b73fab5b8b7c9108'],
-  ['infrastructure/runtime-security/proofs/c29-grafana/publication/vulnerabilities.sbom.cdx.json',
-    '4cf6633d14c7b3c35cfe8e4cecdf623e065c86c0fbf299ff66b1eba53d0e4839'],
-  ['infrastructure/runtime-security/proofs/c30-grafana/publication/vulnerabilities.sbom.cdx.json',
-    '76adb23c52d512270da0bd268053ec785a7255573f32f49e1b5ab3e26f0e2114'],
-  ['infrastructure/runtime-security/proofs/c30-grafana/anonymous/registry-attestation-0-payload-0.json',
-    '20c13b1415bd5a28b147836ef1d1bb118c4423034a08c2c84520a00ea90d4dc8'],
-  ['infrastructure/runtime-security/proofs/c30-grafana/publication/registry-attestation-0-payload-0.json',
-    '20c13b1415bd5a28b147836ef1d1bb118c4423034a08c2c84520a00ea90d4dc8'],
-  ['infrastructure/runtime-security/proofs/c30-grafana/publication/vulnerabilities.json',
-    'c4662b60f0c7b187abab33af4ef7d3733ef3e6b29810f9cd9fb6f164f0d41fac'],
 ]);
 
 // Registered OS package overlays bind their compressed public payloads in their reviewed spec.
 for (const [path, digest] of overlayCompressedProofs(COMPRESSED_PROOFS)) COMPRESSED_PROOFS.set(path, digest);
-
-export async function validateAlloyReassessment(image, entry, publication, proof) {
-  // The original C7 publication remains immutable. This later finding review is
-  // allowed only for the single reproduced Alloy executable, never other images.
-  assert.equal(image.component, 'alloy', 'activation_unresolved_security_review');
-  const { review, reviewSha256, files, closure } = await loadAlloyProof(new Date(), publication.imageId);
-  assert.equal(publication.reference, review.reference, 'activation_reassessment_reference');
-  assert.equal(publication.imageId, review.imageConfigId, 'activation_reassessment_image');
-  const reassessment = entry.securityReassessment;
-  assert.ok(reassessment, 'activation_unresolved_security_review');
-  assert.deepEqual(Object.keys(reassessment).sort(), ['adjudication', 'report', 'summary'], 'activation_reassessment_fields');
-  const raw = await proof(reassessment.report), receipt = await proof(reassessment.adjudication), summary = await proof(reassessment.summary);
-  assert.equal(raw.value.Metadata?.ImageID, publication.imageId, 'activation_reassessment_report_image');
-  const reviewedReport = JSON.parse(gunzipSync(files.get('reviewed-scan.json.gz')));
-  assert.deepEqual(raw.value.Metadata?.ImageConfig?.rootfs, reviewedReport.Metadata.ImageConfig.rootfs, 'activation_reassessment_report_rootfs');
-  assert.deepEqual(raw.value.Metadata?.ImageConfig?.config?.Labels, reviewedReport.Metadata.ImageConfig.config.Labels, 'activation_reassessment_report_labels');
-  const actual = receipt.value.alloy;
-  assert.equal(actual?.schema, 'otziv-alloy-adjudication-v1', 'activation_reassessment_schema');
-  assert.equal(actual.status, 'EXACT_BINARY_AFFECTED_CODE_ABSENT', 'activation_reassessment_not_proven');
-  assert.equal(actual.reviewSha256, reviewSha256, 'activation_reassessment_review_changed');
-  assert.equal(actual.rawReportSha256, sha256(raw.bytes), 'activation_reassessment_raw_report_changed');
-  assert.equal(actual.imageConfigId, publication.imageId, 'activation_reassessment_receipt_image');
-  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(actual.immutableImageId), 'activation_reassessment_inspected_image');
-  assert.equal(actual.binarySha256, review.binary.sha256, 'activation_reassessment_binary');
-  assert.equal(actual.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256, 'activation_reassessment_build_info');
-  assert.equal(actual.buildInfoReader, BUILD_INFO_READER, 'activation_reassessment_parser');
-  assert.deepEqual(actual.closure, closure, 'activation_reassessment_closure');
-  assert.deepEqual(actual.module, review.module, 'activation_reassessment_module');
-  assert.equal(actual.rawReportModified, false, 'activation_reassessment_raw_modified');
-  assert.equal(actual.inspectedBinaryExecuted, false, 'activation_reassessment_inspection_mode');
-  assert.equal(actual.validUntil, review.validUntil, 'activation_reassessment_expiry');
-  assert.deepEqual(actual.decisions, matchingAlloyFindings(raw.value, review), 'activation_reassessment_decisions');
-  assert.equal(actual.decisions.length, 2, 'activation_reassessment_scope_incomplete');
-  const expected = { ...effectiveAlloySummary(effectiveScanSummary(summarizeReport(raw.value), null), actual), scannerImage: TRIVY_IMAGE };
-  assert.deepEqual(summary.value, expected, 'activation_reassessment_summary_changed');
-  assert.equal(expected.result, 'PASS', 'activation_reassessment_security_failed');
-  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_unresolved_security_review');
-  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_reassessment_fixed_findings');
-}
 
 export async function resolveActivationManifest(image, entry, manifestBytes, proof) {
   if (['mc', 'minio'].includes(image.component)) assert.ok(entry.manifest, 'activation_versioned_manifest_required');
@@ -171,119 +116,6 @@ export async function validateUnadjudicatedActivationScan(publication, publicati
   assert.equal(summary.result, 'PASS', 'activation_raw_scan_failed');
   assert.equal(summary.unresolvedRiskReview, 'NONE', 'activation_raw_scan_unresolved');
   assert.equal(summary.scannerImage, TRIVY_IMAGE, 'activation_raw_scan_scanner');
-}
-
-export async function validateAlloyC29ActivationScan(publication, publicationPath, read) {
-  assert.equal(publication.component, 'alloy', 'activation_alloy_c29_component');
-  const directory = dirname(publicationPath).replaceAll('\\', '/');
-  const [rawBytes, receiptBytes] = await Promise.all([
-    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
-  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes).alloy;
-  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_alloy_c29_report_image');
-  assert.equal(raw.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'],
-    C29_ALLOY_PROOF_LABEL, 'activation_alloy_c29_proof_label');
-  assert.equal(raw.Metadata?.ImageConfig?.config?.Labels?.['org.opencontainers.image.source'],
-    'https://github.com/grafana/alloy', 'activation_alloy_c29_source');
-  assert.equal(raw.Metadata?.ImageConfig?.config?.Labels?.['org.opencontainers.image.revision'],
-    'becfd489a7bb459c0496893b555fb87a003296b1', 'activation_alloy_c29_revision');
-  assert.equal(raw.Metadata?.ImageConfig?.config?.Labels?.['org.opencontainers.image.version'],
-    '1.19.2-otziv.2', 'activation_alloy_c29_version');
-  assert.equal(receipt?.schema, 'otziv-alloy-c29-adjudication-v1', 'activation_alloy_c29_receipt_schema');
-  assert.equal(receipt.status, 'EXACT_BINARY_AFFECTED_CODE_ABSENT', 'activation_alloy_c29_not_proven');
-  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_alloy_c29_report_hash');
-  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_alloy_c29_receipt_image');
-  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
-    'activation_alloy_c29_inspected_image');
-  assert.equal(receipt.rawReportModified, false, 'activation_alloy_c29_raw_modified');
-  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_alloy_c29_binary_executed');
-  assert.equal(receipt.buildInfoReader, C29_ALLOY_BUILD_INFO_READER, 'activation_alloy_c29_reader');
-  for (const key of ['binarySha256', 'functionNamesSha256', 'closureSha256', 'buildInfoSha256'])
-    assert.match(receipt[key] || '', /^[a-f0-9]{64}$/, 'activation_alloy_c29_' + key);
-  assert.ok(receipt.functionCount > 1000 && receipt.clientFunctions > 0 && receipt.packageCount > 1000,
-    'activation_alloy_c29_positive_controls');
-  assert.equal(receipt.daemonFunctions, 0, 'activation_alloy_c29_daemon_functions');
-  assert.equal(receipt.daemonPackages, 0, 'activation_alloy_c29_daemon_packages');
-  assert.deepEqual(receipt.decisions.map(item => item.cve).sort(),
-    ['CVE-2026-41567', 'CVE-2026-42306'], 'activation_alloy_c29_cve_scope');
-  for (const decision of receipt.decisions) {
-    const result = raw.Results?.[decision.resultIndex];
-    const finding = result?.Vulnerabilities?.[decision.findingIndex];
-    assert.equal(result?.Type, 'gobinary', 'activation_alloy_c29_result_type');
-    assert.equal(result?.Target, 'usr/bin/alloy', 'activation_alloy_c29_target');
-    assert.equal(decision.target, result.Target, 'activation_alloy_c29_decision_target');
-    assert.equal(decision.cve, finding?.VulnerabilityID, 'activation_alloy_c29_decision_cve');
-    assert.equal(decision.package, finding?.PkgName, 'activation_alloy_c29_decision_package');
-    assert.equal(decision.version, finding?.InstalledVersion, 'activation_alloy_c29_decision_version');
-    assert.equal(decision.package, 'github.com/docker/docker', 'activation_alloy_c29_module');
-    assert.equal(decision.version, 'v28.5.2+incompatible', 'activation_alloy_c29_module_version');
-    assert.equal(decision.state, 'not_affected', 'activation_alloy_c29_decision_state');
-    assert.equal(decision.justification, 'vulnerable_code_not_present', 'activation_alloy_c29_justification');
-    assert.equal(decision.fixedHighOrCritical,
-      ['HIGH', 'CRITICAL'].includes(finding.Severity) && Boolean(finding.FixedVersion),
-      'activation_alloy_c29_fixed_classification');
-    assert.equal(decision.unfixedHighOrCritical,
-      ['HIGH', 'CRITICAL'].includes(finding.Severity) && !finding.FixedVersion,
-      'activation_alloy_c29_unfixed_classification');
-  }
-  const expected = { ...combinedScanSummary(summarizeReport(raw), { alloy: receipt }), scannerImage: TRIVY_IMAGE };
-  assert.deepEqual(publication.security, expected, 'activation_alloy_c29_summary');
-  assert.equal(expected.result, 'PASS', 'activation_alloy_c29_security_failed');
-  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_alloy_c29_unresolved');
-}
-
-export async function validateAlloyC36ActivationScan(publication, publicationPath, read) {
-  assert.equal(publication.component, 'alloy', 'activation_alloy_c36_component');
-  const directory = dirname(publicationPath).replaceAll('\\', '/');
-  const [rawBytes, receiptBytes] = await Promise.all([
-    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
-  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes).alloy;
-  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_alloy_c36_report_image');
-  const labels = raw.Metadata?.ImageConfig?.config?.Labels;
-  assert.equal(labels?.['com.otziv.security.proof'], C36_ALLOY_PROOF_LABEL, 'activation_alloy_c36_proof_label');
-  assert.equal(labels?.['org.opencontainers.image.source'], 'https://github.com/grafana/alloy', 'activation_alloy_c36_source');
-  assert.equal(labels?.['org.opencontainers.image.revision'], 'becfd489a7bb459c0496893b555fb87a003296b1', 'activation_alloy_c36_revision');
-  assert.equal(labels?.['org.opencontainers.image.version'], '1.19.2-otziv.3', 'activation_alloy_c36_version');
-  assert.equal(receipt?.schema, 'otziv-alloy-c36-adjudication-v1', 'activation_alloy_c36_receipt_schema');
-  assert.equal(receipt.status, 'EXACT_BINARY_AFFECTED_CODE_ABSENT', 'activation_alloy_c36_not_proven');
-  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_alloy_c36_report_hash');
-  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_alloy_c36_receipt_image');
-  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
-    'activation_alloy_c36_inspected_image');
-  assert.equal(receipt.rawReportModified, false, 'activation_alloy_c36_raw_modified');
-  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_alloy_c36_binary_executed');
-  assert.equal(receipt.buildInfoReader, C36_ALLOY_BUILD_INFO_READER, 'activation_alloy_c36_reader');
-  for (const key of ['binarySha256', 'functionNamesSha256', 'closureSha256', 'buildInfoSha256'])
-    assert.match(receipt[key] || '', /^[a-f0-9]{64}$/, 'activation_alloy_c36_' + key);
-  assert.ok(receipt.functionCount > 1000 && receipt.clientFunctions > 0 && receipt.packageCount > 1000,
-    'activation_alloy_c36_positive_controls');
-  assert.equal(receipt.daemonFunctions, 0, 'activation_alloy_c36_daemon_functions');
-  assert.equal(receipt.daemonPackages, 0, 'activation_alloy_c36_daemon_packages');
-  assert.deepEqual(receipt.decisions.map(item => item.cve).sort(),
-    ['CVE-2026-41567', 'CVE-2026-42306'], 'activation_alloy_c36_cve_scope');
-  for (const decision of receipt.decisions) {
-    const result = raw.Results?.[decision.resultIndex];
-    const finding = result?.Vulnerabilities?.[decision.findingIndex];
-    assert.equal(result?.Type, 'gobinary', 'activation_alloy_c36_result_type');
-    assert.equal(result?.Target, 'usr/bin/alloy', 'activation_alloy_c36_target');
-    assert.equal(decision.target, result.Target, 'activation_alloy_c36_decision_target');
-    assert.equal(decision.cve, finding?.VulnerabilityID, 'activation_alloy_c36_decision_cve');
-    assert.equal(decision.package, finding?.PkgName, 'activation_alloy_c36_decision_package');
-    assert.equal(decision.version, finding?.InstalledVersion, 'activation_alloy_c36_decision_version');
-    assert.equal(decision.package, 'github.com/docker/docker', 'activation_alloy_c36_module');
-    assert.equal(decision.version, 'v28.5.2+incompatible', 'activation_alloy_c36_module_version');
-    assert.equal(decision.state, 'not_affected', 'activation_alloy_c36_decision_state');
-    assert.equal(decision.justification, 'vulnerable_code_not_present', 'activation_alloy_c36_justification');
-    assert.equal(decision.fixedHighOrCritical,
-      ['HIGH', 'CRITICAL'].includes(finding.Severity) && Boolean(finding.FixedVersion),
-      'activation_alloy_c36_fixed_classification');
-    assert.equal(decision.unfixedHighOrCritical,
-      ['HIGH', 'CRITICAL'].includes(finding.Severity) && !finding.FixedVersion,
-      'activation_alloy_c36_unfixed_classification');
-  }
-  const expected = { ...combinedScanSummary(summarizeReport(raw), { alloy: receipt }), scannerImage: TRIVY_IMAGE };
-  assert.deepEqual(publication.security, expected, 'activation_alloy_c36_summary');
-  assert.equal(expected.result, 'PASS', 'activation_alloy_c36_security_failed');
-  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_alloy_c36_unresolved');
 }
 
 export async function validateAlloyC43ActivationScan(publication, publicationPath, read) {
@@ -342,40 +174,6 @@ export async function validateAlloyC43ActivationScan(publication, publicationPat
   assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_alloy_c43_unresolved');
 }
 
-export async function validateGrafanaC29ActivationScan(publication, publicationPath, read) {
-  assert.equal(publication.component, 'grafana', 'activation_grafana_c29_component');
-  const directory = dirname(publicationPath).replaceAll('\\', '/');
-  const [rawBytes, receiptBytes] = await Promise.all([
-    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
-  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
-  const { review, reviewSha256 } = await loadReviewedProof('c29');
-  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c29_report_image');
-  assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c29_schema');
-  assert.equal(receipt.status, 'EXACT_BINARY_FIXED_CODE_PROVEN', 'activation_grafana_c29_not_proven');
-  assert.equal(receipt.alloy?.status, 'NOT_APPLICABLE', 'activation_grafana_c29_alloy_scope');
-  assert.deepEqual(receipt.alloy.decisions, [], 'activation_grafana_c29_alloy_decisions');
-  assert.equal(receipt.reviewSha256, reviewSha256, 'activation_grafana_c29_review_changed');
-  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_grafana_c29_raw_changed');
-  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_grafana_c29_receipt_image');
-  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
-    'activation_grafana_c29_inspected_image');
-  assert.equal(receipt.binarySha256, review.binary.sha256, 'activation_grafana_c29_binary');
-  assert.equal(receipt.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256,
-    'activation_grafana_c29_build_info');
-  assert.equal(receipt.buildInfoReader, review.binary.buildInfoReader, 'activation_grafana_c29_reader');
-  assert.equal(receipt.rawReportModified, false, 'activation_grafana_c29_raw_modified');
-  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_grafana_c29_binary_executed');
-  assert.deepEqual(receipt.module, review.module, 'activation_grafana_c29_module');
-  assert.deepEqual(receipt.decisions, matchingFindings(raw, review), 'activation_grafana_c29_decisions');
-  assert.equal(receipt.decisions.length, 2, 'activation_grafana_c29_scope');
-  const expected = { ...combinedScanSummary(summarizeReport(raw),
-    { grafana: receipt, alloy: receipt.alloy }), scannerImage: TRIVY_IMAGE };
-  assert.deepEqual(publication.security, expected, 'activation_grafana_c29_summary');
-  assert.equal(expected.result, 'PASS', 'activation_grafana_c29_security_failed');
-  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_grafana_c29_fixed_findings');
-  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c29_unresolved');
-}
-
 export function assertGrafanaC30KinOpenApi(raw) {
   const grafana = (raw.Results || []).filter(result => result.Type === 'gobinary' &&
     result.Target === 'usr/share/grafana/bin/grafana');
@@ -383,76 +181,6 @@ export function assertGrafanaC30KinOpenApi(raw) {
   const modules = (grafana[0].Packages || []).filter(pkg => pkg.Name === 'github.com/getkin/kin-openapi');
   assert.equal(modules.length, 1, 'activation_grafana_c30_kin_openapi_coverage');
   assert.equal(modules[0].Version, 'v0.149.0', 'activation_grafana_c30_kin_openapi_version');
-}
-
-export async function validateGrafanaC30ActivationScan(publication, publicationPath, read) {
-  assert.equal(publication.component, 'grafana', 'activation_grafana_c30_component');
-  const directory = dirname(publicationPath).replaceAll('\\', '/');
-  const [rawBytes, receiptBytes] = await Promise.all([
-    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
-  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
-  const { review, reviewSha256 } = await loadReviewedProof('c30');
-  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c30_report_image');
-  assertGrafanaC30KinOpenApi(raw);
-  assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c30_schema');
-  assert.equal(receipt.status, 'EXACT_BINARY_FIXED_CODE_PROVEN', 'activation_grafana_c30_not_proven');
-  assert.equal(receipt.alloy?.status, 'NOT_APPLICABLE', 'activation_grafana_c30_alloy_scope');
-  assert.deepEqual(receipt.alloy.decisions, [], 'activation_grafana_c30_alloy_decisions');
-  assert.equal(receipt.reviewSha256, reviewSha256, 'activation_grafana_c30_review_changed');
-  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_grafana_c30_raw_changed');
-  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_grafana_c30_receipt_image');
-  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
-    'activation_grafana_c30_inspected_image');
-  assert.equal(receipt.binarySha256, review.binary.sha256, 'activation_grafana_c30_binary');
-  assert.equal(receipt.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256,
-    'activation_grafana_c30_build_info');
-  assert.equal(receipt.buildInfoReader, review.binary.buildInfoReader, 'activation_grafana_c30_reader');
-  assert.equal(receipt.rawReportModified, false, 'activation_grafana_c30_raw_modified');
-  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_grafana_c30_binary_executed');
-  assert.deepEqual(receipt.module, review.module, 'activation_grafana_c30_module');
-  assert.deepEqual(receipt.decisions, matchingFindings(raw, review), 'activation_grafana_c30_decisions');
-  assert.equal(receipt.decisions.length, 2, 'activation_grafana_c30_scope');
-  const expected = { ...combinedScanSummary(summarizeReport(raw),
-    { grafana: receipt, alloy: receipt.alloy }), scannerImage: TRIVY_IMAGE };
-  assert.deepEqual(publication.security, expected, 'activation_grafana_c30_summary');
-  assert.equal(expected.result, 'PASS', 'activation_grafana_c30_security_failed');
-  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_grafana_c30_fixed_findings');
-  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c30_unresolved');
-}
-
-export async function validateGrafanaC36ActivationScan(publication, publicationPath, read) {
-  assert.equal(publication.component, 'grafana', 'activation_grafana_c36_component');
-  const directory = dirname(publicationPath).replaceAll('\\', '/');
-  const [rawBytes, receiptBytes] = await Promise.all([
-    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
-  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
-  const { review, reviewSha256 } = await loadReviewedProof('c36');
-  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c36_report_image');
-  assertGrafanaC30KinOpenApi(raw);
-  assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c36_schema');
-  assert.equal(receipt.status, 'EXACT_BINARY_FIXED_CODE_PROVEN', 'activation_grafana_c36_not_proven');
-  assert.equal(receipt.alloy?.status, 'NOT_APPLICABLE', 'activation_grafana_c36_alloy_scope');
-  assert.deepEqual(receipt.alloy.decisions, [], 'activation_grafana_c36_alloy_decisions');
-  assert.equal(receipt.reviewSha256, reviewSha256, 'activation_grafana_c36_review_changed');
-  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_grafana_c36_raw_changed');
-  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_grafana_c36_receipt_image');
-  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
-    'activation_grafana_c36_inspected_image');
-  assert.equal(receipt.binarySha256, review.binary.sha256, 'activation_grafana_c36_binary');
-  assert.equal(receipt.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256,
-    'activation_grafana_c36_build_info');
-  assert.equal(receipt.buildInfoReader, review.binary.buildInfoReader, 'activation_grafana_c36_reader');
-  assert.equal(receipt.rawReportModified, false, 'activation_grafana_c36_raw_modified');
-  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_grafana_c36_binary_executed');
-  assert.deepEqual(receipt.module, review.module, 'activation_grafana_c36_module');
-  assert.deepEqual(receipt.decisions, matchingFindings(raw, review), 'activation_grafana_c36_decisions');
-  assert.equal(receipt.decisions.length, 2, 'activation_grafana_c36_scope');
-  const expected = { ...combinedScanSummary(summarizeReport(raw),
-    { grafana: receipt, alloy: receipt.alloy }), scannerImage: TRIVY_IMAGE };
-  assert.deepEqual(publication.security, expected, 'activation_grafana_c36_summary');
-  assert.equal(expected.result, 'PASS', 'activation_grafana_c36_security_failed');
-  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_grafana_c36_fixed_findings');
-  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c36_unresolved');
 }
 
 export async function validateGrafanaC43ActivationScan(publication, publicationPath, read) {
@@ -502,6 +230,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
     return { bytes, value: JSON.parse(bytes) };
   }
   const selected = await resolveActivationManifest(image, entry, manifestBytes, proof);
+  assert.ok(!SUPERSEDED_MONITORING_SETS.has(selected.manifestSet), 'activation_superseded_monitoring_generation');
   const publicationImage = selected.image;
   const publication = await proof(entry.publication);
   const anonymous = await proof(entry.anonymous);
@@ -515,13 +244,10 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (['mc', 'minio'].includes(publicationImage.component)) {
     await validateUnadjudicatedActivationScan(publication.value, entry.publication.path, read);
   }
-  if (selected.manifestSet === 'c29-alloy') {
-    await validateAlloyC29ActivationScan(publication.value, entry.publication.path, read);
-  }
   if (selected.manifestSet === 'c43-alloy') {
     await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read);
   }
-  if (['c43-grafana', 'c44-grafana'].includes(selected.manifestSet)) {
+  if (['c43-grafana', 'c44-grafana', 'c49-grafana'].includes(selected.manifestSet)) {
     await validateGrafanaC43ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet === 'c43-keycloak') {
@@ -543,18 +269,6 @@ export async function validateActivation(image, entry, manifestBytes, read) {
     assert.equal(overlay.status, 'accepted', 'overlay_runtime_and_data_acceptance_required');
     await validateOverlayActivation(overlay, publication.value, entry, read, validateActivation);
   }
-  if (selected.manifestSet === 'c36-alloy') {
-    await validateAlloyC36ActivationScan(publication.value, entry.publication.path, read);
-  }
-  if (selected.manifestSet === 'c29-grafana') {
-    await validateGrafanaC29ActivationScan(publication.value, entry.publication.path, read);
-  }
-  if (selected.manifestSet === 'c30-grafana') {
-    await validateGrafanaC30ActivationScan(publication.value, entry.publication.path, read);
-  }
-  if (['c36-grafana', 'c40-grafana', 'c41-grafana'].includes(selected.manifestSet)) {
-    await validateGrafanaC36ActivationScan(publication.value, entry.publication.path, read);
-  }
   if (requiresKeycloakDependencyProof(publicationImage)) {
     const checked = checkKeycloakRuntimeDependencies(
       await read(dirname(entry.publication.path).replaceAll('\\', '/') + '/vulnerabilities.json'), publication.value.imageId);
@@ -573,12 +287,8 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if(selected.manifestSet==='c35-keycloak')await validateVertxC35Activation(publication.value,entry,read,validateActivation);
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
-  if (publication.value.security.unresolvedRiskReview === 'NONE') {
-    assert.equal(entry.securityReassessment, undefined, 'activation_unnecessary_reassessment');
-  } else {
-    assert.equal(publication.value.security.unresolvedRiskReview, 'REQUIRED', 'activation_unresolved_security_review');
-    await validateAlloyReassessment(image, entry, publication.value, proof);
-  }
+  assert.equal(publication.value.security.unresolvedRiskReview, 'NONE', 'activation_unresolved_security_review');
+  assert.equal(entry.securityReassessment, undefined, 'activation_unnecessary_reassessment');
   const downloaded = anonymous.value;
   assertPublicationSet(downloaded, selected.manifestSet);
   assert.equal(downloaded.schema, 'otziv-anonymous-download-v1', 'activation_anonymous_schema');

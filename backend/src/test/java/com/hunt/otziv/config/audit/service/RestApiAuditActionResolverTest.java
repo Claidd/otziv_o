@@ -325,9 +325,6 @@ class RestApiAuditActionResolverTest {
                 arguments("PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/answer", "редактирование ответа отзыва 25 при проверке"),
                 arguments("PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/text", "редактирование текста отзыва 25 при проверке"),
                 arguments("GET", "/api/worker/overdue-orders", "проверка заказов специалиста, которые давно не менялись"),
-                arguments("POST", "/api/worker/reviews/{reviewId}/copy-click", "нажатие кнопки копирования данных аккаунта в отзыве 25"),
-                arguments("POST", "/api/worker/bad-review-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в плохом отзыве 8"),
-                arguments("POST", "/api/worker/recovery-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в восстановлении 8"),
                 arguments("GET", "/api/ai/reputation/status", "загрузка статуса AI-помощника репутации"),
                 arguments("POST", "/api/ai/reputation/status/openai-check", "проверка маршрута OpenAI для AI-помощника репутации"),
                 arguments("GET", "/api/ai/reputation/prompts", "загрузка промптов AI-помощника репутации"),
@@ -362,12 +359,7 @@ class RestApiAuditActionResolverTest {
                 arguments("POST", "/api/ai/reputation/review/rewrite", "переписывание отзыва через AI-помощник репутации"),
                 arguments("POST", "/api/ai/reputation/review/check", "проверка отзыва на безопасность через AI-помощник репутации"),
                 arguments("POST", "/api/ai/reputation/companies/{companyId}/reply/positive", "создание ответа на положительный отзыв через AI-помощник для компании 3"),
-                arguments("POST", "/api/ai/reputation/companies/{companyId}/reply/negative", "создание ответа на негативный отзыв через AI-помощник для компании 3"),
-                arguments("GET", "/logs", "просмотр логов системы"),
-                arguments("GET", "/logs/tail", "загрузка новых строк лога"),
-                arguments("POST", "/logs/clear", "очистка текущего файла лога"),
-                arguments("POST", "/logs/clear/all", "очистка основных файлов логов"),
-                arguments("GET", "/logs/ui", "открытие страницы живых логов")
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/reply/negative", "создание ответа на негативный отзыв через AI-помощник для компании 3")
         );
     }
 

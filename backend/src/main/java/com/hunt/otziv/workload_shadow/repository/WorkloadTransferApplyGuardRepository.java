@@ -67,10 +67,6 @@ public interface WorkloadTransferApplyGuardRepository
     interface ApplyGuardProjection {
         Long getLiveSettingsRevision();
 
-        Long getShadowSettingsRevision();
-
-        Long getSuccessfulSettingsRevision();
-
         Long getRecommendationCurrent();
     }
 }

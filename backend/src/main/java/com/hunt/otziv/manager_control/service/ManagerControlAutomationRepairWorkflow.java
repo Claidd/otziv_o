@@ -61,6 +61,11 @@ public class ManagerControlAutomationRepairWorkflow {
 
     private final ManagerControlReminderRestart reminderRestart;
 
+    static final String PROVIDER_REJECTED_MESSAGE = "Проверено: WhatsApp не доставил это сообщение. Номер менеджера, похоже, больше не состоит в группе клиента "
+                            + "или ссылка-приглашение сброшена. Клиент сообщение не получил, повтор не отправлялся, новые сообщения "
+                            + "в эту группу приостановлены. Попросите клиента снова добавить номер или прислать новую ссылку, "
+                            + "сохраните её в карточке компании и нажмите «Починить».";
+
     ManagerControlConcreteItemResponse repairAutomationFailureConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, Principal principal) {
         Manager manager = control.getManager();
         Optional<ManagerAutomationFailureService.AutomationFailureIssue> currentIssue = managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId());
@@ -88,6 +93,9 @@ public class ManagerControlAutomationRepairWorkflow {
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "История проверена, но исходная отправка пока не подтверждена. Система продолжит сверку автоматически. Новое сообщение не отправлялось и повтор заблокирован; отсутствие записи не доказывает недоставку.");
+            }
+            if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.PROVIDER_REJECTED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, PROVIDER_REJECTED_MESSAGE);
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNRESOLVED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -179,6 +187,8 @@ public class ManagerControlAutomationRepairWorkflow {
                 if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE)
                     throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                             "Сверка временно недоступна. Система продолжит проверять сохранённую отправку после восстановления WhatsApp. Повторное сообщение заблокировано.");
+                if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.PROVIDER_REJECTED)
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, PROVIDER_REJECTED_MESSAGE);
                 if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNSENT_CONFIRMED)
                     throw new ResponseStatusException(HttpStatus.CONFLICT,
                             "Подтверждено, что прежнее сообщение не отправлено. Исход сохранён; очередь повторно проверит эту же операцию.");

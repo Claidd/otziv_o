@@ -43,11 +43,6 @@ public class OrderPublicationApprovalService {
     }
 
     @Transactional
-    public void approveExistingOrderAfterReminders(Long orderId, String auditDetails) {
-        approvePreparedOrder(orderId, List.of(), auditDetails, false, true);
-    }
-
-    @Transactional
     public void approvePreparedOrder(Long orderId, List<OrderDetailsDTO> details, String auditDetails) {
         approvePreparedOrder(orderId, details, auditDetails, false);
     }

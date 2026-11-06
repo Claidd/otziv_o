@@ -362,6 +362,25 @@ class ScheduledDeliveryProtocolTest {
         verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
     }
 
+    @Test void manualRepairClosesARefusedGroupMessageWithoutDispatch() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.failed("whatsapp_delivery_rejected", "refused"));
+
+        assertThat(service.recoverUncertainOrdinaryDelivery(71L))
+                .isEqualTo(ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.PROVIDER_REJECTED);
+        assertThat(state.getDeliveryEnvelope()).isNull();
+        assertThat(state.getDeliveryToken()).isNull();
+        assertThat(state.getDeliveryStatus()).isNull();
+        assertThat(state.getSentCount()).isZero();
+        assertThat(state.getLastErrorCode()).isEqualTo("whatsapp_group_unavailable");
+        assertThat(state.getNextAttemptAt()).isNotNull();
+        verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
     @Test void manualRepairReportsUnavailableHistoryWithoutChangingUnknownState() {
         var prepared = prepare("message", null);
         state.setDeliveryStatus("UNKNOWN");

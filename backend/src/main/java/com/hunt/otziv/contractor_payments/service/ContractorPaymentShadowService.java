@@ -106,7 +106,6 @@ public class ContractorPaymentShadowService {
     private final ManualPaymentTaskContractorReturnBridge taskReturnBridge;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentProfileRepository profileRepository;
-    private final ContractorPaymentProfileService profileService;
     private final ManualPaymentTaskContractorCapacityService taskCapacityService;
     private final ContractorPaymentRoutingLimitService routingLimitService;
     private final ContractorPaymentAccountingService accountingService;

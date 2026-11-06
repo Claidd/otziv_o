@@ -3,7 +3,6 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AdminCitiesApi } from '../../../core/admin-cities.api';
-import { AdminDictionariesApi } from '../../../core/admin-dictionaries.api';
 import { AdminCitiesFacade } from './admin-cities.facade';
 
 describe('city dictionary commands and view lifetime', () => {
@@ -125,8 +124,8 @@ describe('city dictionary commands and view lifetime', () => {
     expect(selectedId()).toBe(18);
   });
 
-  it('preserves legacy API delegation and the global rebuild threshold', () => {
-    TestBed.inject(AdminDictionariesApi).rebuildCityDistances().subscribe();
+  it('preserves the global rebuild threshold', () => {
+    TestBed.inject(AdminCitiesApi).rebuildCityDistances().subscribe();
     const write = http.expectOne(request => request.url.endsWith('/cities/distances/rebuild'));
     expect(write.request.params.get('minCityId')).toBe('150');
     expect(write.request.method).toBe('POST');

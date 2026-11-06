@@ -565,18 +565,6 @@ public class OrderArchiveDryRunService {
         this.defaultApplyEnabled = applyEnabled;
     }
 
-    void setDefaultScheduleWorkerEnabled(boolean defaultScheduleWorkerEnabled) {
-        this.defaultScheduleWorkerEnabled = defaultScheduleWorkerEnabled;
-    }
-
-    void setDefaultScheduleCron(String defaultScheduleCron) {
-        this.defaultScheduleCron = defaultScheduleCron;
-    }
-
-    void setDefaultScheduleZone(String defaultScheduleZone) {
-        this.defaultScheduleZone = defaultScheduleZone;
-    }
-
     private void verifyArchiveComplete(ArchiveCandidateCounts selected, ArchiveCandidateCounts archived) {
         if (!selected.equals(archived)) {
             throw new IllegalStateException("Archive copy verification failed: selected=" + selected + ", archived=" + archived);

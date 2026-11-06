@@ -135,10 +135,6 @@ public class AnalyticsAggregateReadService {
         return userScopeKey(SCOPE_TYPE_OWNER, ownerUserId);
     }
 
-    public static String managerScopeKey(Long managerUserId) {
-        return userScopeKey(SCOPE_TYPE_MANAGER, managerUserId);
-    }
-
     public static LocalDate monthStart(LocalDate date) {
         if (date == null) {
             throw new IllegalArgumentException("date must not be null");

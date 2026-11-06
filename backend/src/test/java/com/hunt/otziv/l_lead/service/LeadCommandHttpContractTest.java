@@ -22,14 +22,13 @@ class LeadCommandHttpContractTest {
     final ObjectMapper json=new ObjectMapper().findAndRegisterModules();
     final JwtService jwt=new JwtService();
     final LeadCommandReceiver receiver=mock(LeadCommandReceiver.class);
-    final LeadCommandService producer=mock(LeadCommandService.class);
     MockMvc mvc;
 
     @BeforeEach void setup() {
         ReflectionTestUtils.setField(jwt,"secret",UUID.randomUUID()+UUID.randomUUID().toString());
         var replay=mock(LeadTokenReplayGuard.class);when(replay.consume(anyString(),any())).thenReturn(true);
-        mvc=MockMvcBuilders.standaloneSetup(new LeadSyncController(receiver),new LeadReceiverController(receiver),
-                new LeadSenderController(producer)).addFilters(new JwtAuthFilter(json,jwt,replay)).build();
+        mvc=MockMvcBuilders.standaloneSetup(new LeadSyncController(receiver),new LeadReceiverController(receiver))
+                .addFilters(new JwtAuthFilter(json,jwt,replay)).build();
     }
     @AfterEach void clear(){SecurityContextHolder.clearContext();}
 
@@ -60,15 +59,6 @@ class LeadCommandHttpContractTest {
         mvc.perform(post("/api/leads/import").contentType("application/json").content(json.writeValueAsBytes(dto))
                 .header(LeadIntegrationHeaders.TOKEN,token)).andExpect(status().isOk());
         verify(receiver).receive("IMPORT",dto,token,null);
-    }
-
-    @Test void manualEndpointOnlyEnqueuesAndExposesThePersistentOperationIdentity() throws Exception {
-        String key=UUID.randomUUID().toString(),operation=UUID.randomUUID().toString();
-        when(producer.enqueueImport(7,key)).thenReturn(operation);
-        mvc.perform(post("/api/leads/sendToServer").param("leadId","7").header("Idempotency-Key",key))
-                .andExpect(status().isOk()).andExpect(header().string("X-Lead-Command-Id",operation))
-                .andExpect(content().string("redirect:/dashboard"));
-        verify(producer).enqueueImport(7,key);verifyNoInteractions(receiver);
     }
 
     private LeadDtoTransfer payload(){return LeadDtoTransfer.builder().telephoneLead("79990000000").cityLead("Fixture")

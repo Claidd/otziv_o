@@ -111,7 +111,7 @@ describe('routes', () => {
     expect(route('admin/tbank-payments')?.pathMatch).toBe('full');
   });
 
-  it('keeps gamification UI routes disabled and provides a public not-found route', () => {
+  it('does not expose the removed gamification UI routes and provides a public not-found route', () => {
     expect(route('gamification/progress')).toBeUndefined();
     expect(route('admin/gamification/rewards')).toBeUndefined();
 

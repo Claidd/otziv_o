@@ -60,17 +60,6 @@ public interface ScheduledClientMessageAttemptRepository extends CrudRepository<
             ScheduledMessageAttemptStatus status
     );
 
-    Optional<ScheduledClientMessageAttempt> findFirstByStateIdAndStatusOrderByAttemptedAtDescIdDesc(
-            Long stateId,
-            ScheduledMessageAttemptStatus status
-    );
-
-    Optional<ScheduledClientMessageAttempt> findFirstByScenarioAndTargetKeyAndStatusOrderByAttemptedAtDescIdDesc(
-            ClientMessageScenario scenario,
-            String targetKey,
-            ScheduledMessageAttemptStatus status
-    );
-
     interface ScenarioCount {
         ClientMessageScenario getScenario();
         long getTotal();

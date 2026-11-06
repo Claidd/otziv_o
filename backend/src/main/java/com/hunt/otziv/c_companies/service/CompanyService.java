@@ -24,12 +24,10 @@ public interface CompanyService extends com.hunt.otziv.c_companies.api.CompanyOr
     Optional<Company> saveAndReturn(CompanyDTO companyDTO); //    сохранить компанию и вернуть созданную запись
     Page<CompanyListDTO> getAllCompaniesDTOList(String keyword, int pageNumber, int pageSize);
     Page<CompanyListDTO> getAllCompaniesDTOList(String keyword, int pageNumber, int pageSize, String sortDirection);
-    List<Company> getAllCompaniesList();
     List<CompanyDTO> getAllCompaniesDTOList(String keywords, String status);
     CompanyDTO getCompaniesDTOById(Long id); // взять одну компанию по id с переводом их в DTO
     Company getCompaniesById(Long id); // взять одну компанию по id
 
-    List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
     Map<String, Long> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     void updateCompany(CompanyDTO companyDTO, WorkerDTO workerDTO, Long companyId);
@@ -39,15 +37,12 @@ public interface CompanyService extends com.hunt.otziv.c_companies.api.CompanyOr
     void save(Company company);
     boolean changeStatusForCompany(Long companyId, String title);
     void changeDataTry(Long companyId);
-    CompanyDTO getCompaniesAllStatusByIdAndKeyword(Long id, String keyword);
     Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize);
     Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize, String sortDirection);
     Page<CompanyListDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, int pageNumber, int pageSize);
     Page<CompanyListDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection);
     Page<CompanyListDTO> getAllCompaniesDTOListToList(String keywords, String status, int pageNumber, int pageSize);
     Page<CompanyListDTO> getAllCompaniesDTOListToList(String keywords, String status, int pageNumber, int pageSize, String sortDirection);
-    Page<CompanyListDTO> getAllCompaniesDTOListToListToSend(String keywords, String status, int pageNumber, int pageSize);
-    Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManagerToSend(Principal principal, String keyword, String status, int pageNumber, int pageSize);
     Page<CompanyListDTO>getAllCompaniesDtoToOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize);
     Page<CompanyListDTO>getAllCompaniesDtoToOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize, String sortDirection);
     Page<CompanyListDTO> getAllCompaniesDTOListOwner(Principal principal, String keyword, int pageNumber, int pageSize);
@@ -63,10 +58,6 @@ public interface CompanyService extends com.hunt.otziv.c_companies.api.CompanyOr
     Map<String, Integer> countCompaniesByStatusToOwner(Set<Manager> managerList);
 
     int countAllCompanies();
-
-    int countAllCompaniesToManager(Manager manager);
-
-    int countAllCompaniesToOwner(Set<Manager> managerList);
 
     int getAllCompanyDTOByStatusToManager(Manager manager, String status);
 

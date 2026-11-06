@@ -1,24 +1,26 @@
 import { HttpClient } from '@angular/common/http';
+import { Type } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appEnvironment } from './app-environment';
-import { AdminDictionariesApi } from './admin-dictionaries.api';
+import { AdminAccountsApi } from './admin-accounts.api';
+import { AdminWorkSettingsApi } from './admin-work-settings.api';
 
-function createApi(http: Partial<HttpClient>): AdminDictionariesApi {
+function createApi<T>(api: Type<T>, http: Partial<HttpClient>): T {
   TestBed.configureTestingModule({ providers: [{ provide: HttpClient, useValue: http }] });
-  return TestBed.inject(AdminDictionariesApi);
+  return TestBed.inject(api);
 }
 
-describe('AdminDictionariesApi bot browser endpoints', () => {
+describe('AdminAccountsApi bot browser endpoints', () => {
   let get: ReturnType<typeof vi.fn>;
   let post: ReturnType<typeof vi.fn>;
-  let api: AdminDictionariesApi;
+  let api: AdminAccountsApi;
 
   beforeEach(() => {
     get = vi.fn().mockReturnValue(of({}));
     post = vi.fn().mockReturnValue(of({}));
-    api = createApi({ get, post } as unknown as HttpClient);
+    api = createApi(AdminAccountsApi, { get, post } as unknown as HttpClient);
   });
 
   it('loads browser display data from the safe metadata endpoint', () => {
@@ -79,11 +81,11 @@ describe('AdminDictionariesApi bot browser endpoints', () => {
   });
 });
 
-describe('AdminDictionariesApi specialist account action settings', () => {
+describe('AdminWorkSettingsApi specialist account action settings', () => {
   it('loads and updates the duration and independent timer switch', () => {
     const get = vi.fn().mockReturnValue(of({ enabled: true, cooldownSeconds: 60 }));
     const put = vi.fn().mockReturnValue(of({ enabled: true, cooldownSeconds: 180 }));
-    const api = createApi({ get, put } as unknown as HttpClient);
+    const api = createApi(AdminWorkSettingsApi, { get, put } as unknown as HttpClient);
     const endpoint = `${appEnvironment.apiBaseUrl}/api/admin/dictionaries/worker-account-action-settings`;
 
     api.getWorkerAccountActionSettings();

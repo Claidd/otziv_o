@@ -134,21 +134,6 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    public int countBoardReviewsToPublish(LocalDate localDate, Principal principal, String role) {
-        return countBoardReviews(ReviewBoardMode.PUBLISH, localDate, null, principal, role);
-    }
-
-    @Override
-    public int countBoardReviewsToVigul(LocalDate localDate, Principal principal, String role) {
-        return countBoardReviews(ReviewBoardMode.VIGUL, localDate, null, principal, role);
-    }
-
-    @Override
-    public int countBoardReviewsByOrderStatus(String status, Principal principal, String role) {
-        return countBoardReviews(ReviewBoardMode.ORDER_STATUS, null, status, principal, role);
-    }
-
-    @Override
     public Map<String, Integer> countBoardReviewMetrics(
             LocalDate publishDate,
             LocalDate vigulDate,
@@ -503,57 +488,6 @@ public class ReviewServiceImpl implements ReviewService {
         return new PageImpl<>(reviewDTOOnes, reviewIds.getPageable(), reviewIds.getTotalElements());
     }
 
-    private int countBoardReviews(
-            ReviewBoardMode mode,
-            LocalDate localDate,
-            String status,
-            Principal principal,
-            String role
-    ) {
-        if (mode == ReviewBoardMode.ORDER_STATUS && !hasText(status)) {
-            return 0;
-        }
-
-        ReviewBoardScope scope = ReviewBoardScope.fromRole(role);
-        Worker worker = null;
-        Manager manager = null;
-        Set<Worker> workers = null;
-
-        switch (scope) {
-            case WORKER -> {
-                User user = requireUser(principal);
-                worker = workerService.getWorkerByUserId(user.getId());
-                if (worker == null) {
-                    return 0;
-                }
-            }
-            case MANAGER -> {
-                User user = requireUser(principal);
-                manager = managerService.getManagerByUserId(user.getId());
-                if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
-                    return 0;
-                }
-                workers = manager.getUser().getWorkers();
-            }
-            case OWNER -> {
-                User user = requireUser(principal);
-                List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
-                if (managerList.isEmpty()) {
-                    return 0;
-                }
-                workers = workerService.getAllWorkersToManagerList(managerList);
-            }
-            case ADMIN -> {
-            }
-        }
-
-        if ((scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) && (workers == null || workers.isEmpty())) {
-            return 0;
-        }
-
-        return toIntCount(reviewBoardQueryService.countReviewIdsForBoard(mode, scope, localDate, status, worker, manager, workers));
-    }
-
     private Map<String, Integer> countBoardReviewMetrics(
             ReviewBoardScope scope,
             LocalDate publishDate,
@@ -722,41 +656,6 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    @Transactional
-    public Review updateReviewPhoto(Long reviewId, String url) {
-        orderAggregateMutationLockService.lockForReview(reviewId);
-        assignmentMutationGuardService.assertReview(reviewId);
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
-
-        photoReferences.requireAssignable(url);
-        review.setUrl(url);
-        log.info("Обновляем фото отзыва {}", reviewId);
-        return reviewRepository.save(review);
-    }
-
-    @Transactional
-    public boolean deleteReview(Long reviewId) {
-        orderAggregateMutationLockService.lockForReview(reviewId);
-        assignmentMutationGuardService.assertReview(reviewId);
-        Review review = reviewRepository.findById(reviewId).orElse(null);
-        if (review == null) {
-            return false;
-        }
-        Long orderId = orderId(review);
-        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId);
-        OrderDetails orderDetails = review.getOrderDetails();
-        reviewRepository.delete(review);
-        if (orderDetails != null) {
-            List<Review> remaining = new ArrayList<>(safeReviews(orderDetails));
-            remaining.removeIf(candidate -> Objects.equals(reviewId, candidate.getId()));
-            orderDetails.setReviews(remaining);
-            payableRecalculationService.recalculate(orderDetails);
-        }
-        return true;
-    }
-
-    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean deleteReviewFromLockedOrder(Long orderId, Long reviewId) {
         if (orderId == null || reviewId == null) {
@@ -772,29 +671,6 @@ public class ReviewServiceImpl implements ReviewService {
         return true;
     }
 
-    @Override
-    public List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId) {
-        return reviewRepository.findAllByOrderDetailsId(orderDetailsId);
-    }
-
-    public List<Review> getAllWorkerReviews(Long workerId) {
-        List<Long> reviewId = getReviewByWorkerId(workerId);
-        return findAllByListId(reviewId);
-    }
-
-
-    @Override
-    public List<Long> getReviewByWorkerId(Long workerId) {
-        return reviewRepository.findAllIdByWorkerId(workerId);
-    }
-
-    @Override
-    public List<Review> findAllByListId(List<Long> reviewId) {
-        if (reviewId == null || reviewId.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return reviewRepository.findAll(reviewId);
-    }
 
     public List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId) {
         return reviewRepository.getAllByOrderId(orderId).stream().map(this::toReviewDTOOne).collect(Collectors.toList());
@@ -1126,22 +1002,6 @@ public class ReviewServiceImpl implements ReviewService {
         return reviewRepository.findAllByReviewsListStatus(localDate, worker);
     }
 
-    @Transactional
-    public void deleteReviewsByOrderId(Long reviewId) {
-        orderAggregateMutationLockService.lockForReview(reviewId);
-        assignmentMutationGuardService.assertReview(reviewId);
-        Review review = reviewRepository.findById(reviewId).orElse(null);
-        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(review));
-        OrderDetails orderDetails = review != null ? review.getOrderDetails() : null;
-        reviewRepository.deleteReviewByReviewId(reviewId);
-        if (orderDetails != null) {
-            List<Review> remaining = new ArrayList<>(safeReviews(orderDetails));
-            remaining.removeIf(candidate -> Objects.equals(reviewId, candidate.getId()));
-            orderDetails.setReviews(remaining);
-            payableRecalculationService.recalculate(orderDetails);
-        }
-    }
-
     @Override
     public List<Review> findAllByFilial(Filial filial) {
         return reviewRepository.findAllByFilial(filial);
@@ -1169,67 +1029,6 @@ public class ReviewServiceImpl implements ReviewService {
                     category,
                     subCategory
             );
-        }
-    }
-
-    @Override
-    @Transactional
-    public void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId) {
-        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа");
-        if (orderDetailsDTO == null || orderDetailsDTO.getId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Детали заказа не указаны");
-        }
-        orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
-        Review saveReview = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
-        OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveOrderDetails));
-
-        UUID reviewOrderDetailsId = saveReview.getOrderDetails() == null
-                ? null
-                : saveReview.getOrderDetails().getId();
-        if (saveOrderDetails == null
-                || saveOrderDetails.getId() == null
-                || !Objects.equals(saveOrderDetails.getId(), reviewOrderDetailsId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Отзыв не относится к указанным деталям заказа"
-            );
-        }
-
-        boolean isChanged = false;
-        boolean oldPublish = saveReview.isPublish();
-
-        if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
-            saveReview.setText(reviewDTO.getText());
-            isChanged = true;
-        }
-        if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())) {
-            saveReview.setAnswer(reviewDTO.getAnswer());
-            isChanged = true;
-        }
-        if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
-            saveOrderDetails.setComment(orderDetailsDTO.getComment());
-            orderDetailsService.save(saveOrderDetails);
-            isChanged = true;
-        }
-        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
-            saveReview.setPublish(reviewDTO.isPublish());
-            syncExternalConfirmationState(saveReview, oldPublish);
-            isChanged = true;
-        }
-        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
-            requirePublicationDateIntegrity(saveReview, reviewDTO.getPublishedDate());
-            validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
-            saveReview.setPublishedDate(reviewDTO.getPublishedDate());
-            isChanged = true;
-        }
-
-        if (isChanged) {
-            reviewRepository.save(saveReview);
-            if (!oldPublish && saveReview.isPublish()) {
-                gamificationEventService.recordReviewPublished(saveReview);
-            }
         }
     }
 

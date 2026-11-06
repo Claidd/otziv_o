@@ -113,7 +113,6 @@ lead:
 app:
   nagul:
     cooldown: 3
-    forbidden-words: "впиши имя фамилию,впишите имя фамилию,имя фамилия, имя фамилию, фамилия имя,шаблон,template, 1, 2, 12, 3"
 
 jwt:
   secret: ${JWT_SECRET}

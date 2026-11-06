@@ -69,7 +69,6 @@ describe('order details late write reconciliation through actual Angular HTTP fe
     let completion = Promise.resolve(); let url: string;
     switch (kind) {
       case 'details': page.addReview(); url = `${root}/reviews`; break;
-      case 'review': page.changeReviewText(review()); url = `${root}/reviews/1/change-text`; break;
       case 'recovery': page.changeRecoveryTaskBot({ id: 77, statusCode: 'PLANNED' } as ReviewRecoveryTaskItem); url = '/api/worker/recovery-tasks/77/change-bot'; break;
       case 'form': page.openReviewEdit(review()); page.setReviewEditField('text', 'Captured form'); page.saveReviewEdit(); url = `${root}/reviews/1`; break;
       case 'text': page.openReviewTextEdit(review(), 'text'); page.setReviewTextEditValue('Captured text'); page.saveReviewTextEdit(); url = `${root}/reviews/1/text`; break;
@@ -90,7 +89,7 @@ describe('order details late write reconciliation through actual Angular HTTP fe
     return { write, completion };
   }
 
-  for (const kind of ['details', 'review', 'recovery', 'form', 'text', 'delete', 'route', 'issued', 'link']) {
+  for (const kind of ['details', 'recovery', 'form', 'text', 'delete', 'route', 'issued', 'link']) {
     for (const outcome of ['success', 'error']) {
       it(`${kind}: re-reads after late ${outcome}, without replay, old UI effects or overwriting the returned-page draft`, async () => {
         const { write, completion } = await start(kind);
@@ -142,7 +141,7 @@ describe('order details late write reconciliation through actual Angular HTTP fe
     write.flush(details(101, 'Old A')); await settle(); http.expectNone(() => true);
   });
   it('does not replace current-page feedback when the reconciliation GET also fails', async () => {
-    const { write } = await start('review'); returnToA(); newerDrafts();
+    const { write } = await start('details'); returnToA(); newerDrafts();
     write.flush({}, { status: 503, statusText: 'Unavailable' }); await settle();
     http.expectOne(`${root}/details`).flush({}, { status: 503, statusText: 'Unavailable' });
     assertNewerDrafts(); expect(page.loading()).toBe(false); http.expectNone(() => true);

@@ -303,15 +303,6 @@ export class AdminUsersApi {
     );
   }
 
-  getContractorAccrualAdjustments(
-    userId: number,
-    profileId: number
-  ): Observable<ContractorAccrualAdjustment[]> {
-    return this.http.get<ContractorAccrualAdjustment[]>(
-      `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments`
-    );
-  }
-
   getContractorAccrualAdjustmentsPage(
     userId: number,
     profileId: number,

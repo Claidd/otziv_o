@@ -21,8 +21,6 @@ public interface PerformerProfileRepository extends CrudRepository<PerformerProf
 
     Optional<PerformerProfile> findByUserId(Long userId);
 
-    Optional<PerformerProfile> findByTelegramLinkToken(String token);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT p

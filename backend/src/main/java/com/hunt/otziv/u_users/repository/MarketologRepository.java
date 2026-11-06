@@ -45,18 +45,6 @@ public interface MarketologRepository extends CrudRepository<Marketolog, Long> {
         JOIN FETCH m.user u
         JOIN u.roles r
         LEFT JOIN FETCH u.image
-        WHERE m IN (:marketologs)
-          AND u.active = true
-          AND r.name = 'ROLE_MARKETOLOG'
-        """)
-    List<Marketolog> findAllToManagerMarketologs(Set<Marketolog> marketologs);
-
-    @Query("""
-        SELECT m
-        FROM Marketolog m
-        JOIN FETCH m.user u
-        JOIN u.roles r
-        LEFT JOIN FETCH u.image
         WHERE u.active = true
           AND r.name = 'ROLE_MARKETOLOG'
         """)

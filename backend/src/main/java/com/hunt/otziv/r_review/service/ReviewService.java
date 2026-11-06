@@ -17,7 +17,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 public interface ReviewService {
 
@@ -77,18 +76,8 @@ public interface ReviewService {
 
     Review save(Review review);
 
-    Review updateReviewPhoto(Long reviewId, String url);
-
-    boolean deleteReview(Long reviewId);
-
     /** Deletes only a review already proven to belong to the caller's locked order aggregate. */
     boolean deleteReviewFromLockedOrder(Long orderId, Long reviewId);
-
-    List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId);
-
-    List<Long> getReviewByWorkerId(Long workerId);
-
-    List<Review> findAllByListId(List<Long> reviewId);
 
     List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId);
 
@@ -96,13 +85,9 @@ public interface ReviewService {
 
     void updateReview(String userRole, ReviewDTO reviewDTO, Long reviewId);
 
-    void deleteReviewsByOrderId(Long reviewId);
-
     List<Review> findAllByFilial(Filial filial);
 
     void updateReviewByFilials(Set<Filial> filials, Long categoryId, Long subCategoryId);
-
-    void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
 
     /** Updates a shared review form from one canonical detail fetch. */
     void updateOrderDetailAndReviews(OrderDetailsDTO orderDetailsDTO);
@@ -193,12 +178,6 @@ public interface ReviewService {
 //    int findAllByReviewListStatus(String name);
 
     int countReviewsForWorkerUserId(Long userId);
-
-    int countBoardReviewsToPublish(LocalDate localDate, Principal principal, String role);
-
-    int countBoardReviewsToVigul(LocalDate localDate, Principal principal, String role);
-
-    int countBoardReviewsByOrderStatus(String status, Principal principal, String role);
 
     Map<String, Integer> countBoardReviewMetrics(LocalDate publishDate, LocalDate vigulDate, String badStatus, Principal principal, String role);
     Map<String, Integer> countBoardPublicationMetrics(LocalDate publishDate, LocalDate vigulDate, Principal principal, String role);

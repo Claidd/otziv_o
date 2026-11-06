@@ -29,25 +29,4 @@ public record ManualPaymentRecipientMonthlySummaryItem(
         LocalDateTime firstConfirmedAt,
         LocalDateTime lastConfirmedAt
 ) {
-    /** Historical constructor retained for the old projection and binary-compatible callers. */
-    public ManualPaymentRecipientMonthlySummaryItem(
-            String manualRecipientName,
-            String manualPhone,
-            String manualPaymentUrl,
-            String manualPaymentButtonLabel,
-            String paymentProfileName,
-            ManualPaymentSource manualSource,
-            ManualPaymentType manualPaymentType,
-            long paymentCount,
-            long amountKopecks,
-            LocalDateTime firstConfirmedAt,
-            LocalDateTime lastConfirmedAt
-    ) {
-        this(
-                manualRecipientName, manualPhone, manualPaymentUrl, manualPaymentButtonLabel,
-                paymentProfileName, manualSource, manualPaymentType,
-                null, manualRecipientName, null, null, null, null, null, null, false,
-                paymentCount, amountKopecks, firstConfirmedAt, lastConfirmedAt
-        );
-    }
 }

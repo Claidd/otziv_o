@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { ApiService, type OrderUpdateRequest } from './api.service';
+import type { OrderUpdateRequest } from './api.service';
 import { ManagerOrderEditorApi } from './manager-order-editor.api';
 
 describe('manager order editor HTTP boundary', () => {
@@ -27,10 +27,9 @@ describe('manager order editor HTTP boundary', () => {
     expect(payload.status).toBe('FUTURE_STATUS');
   });
 
-  it('preserves the legacy API adapter and exact update command', async () => {
-    const legacy = TestBed.inject(ApiService);
+  it('preserves the exact update command', async () => {
     const command: OrderUpdateRequest = { filialId: null, workerId: null, managerId: null, counter: 7, orderComments: 'note', commentsCompany: '', complete: false };
-    const result = firstValueFrom(legacy.updateManagerOrder(202, command));
+    const result = firstValueFrom(api.update(202, command));
     const request = requests.expectOne('/api/manager/orders/202');
     expect(request.request.method).toBe('PUT');
     expect(request.request.body).toEqual(command);

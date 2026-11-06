@@ -8,7 +8,6 @@ import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewSession;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewStatus;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewEventRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewSessionRepository;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,7 +35,6 @@ public class ManagerReportReviewReminderJob {
 
     private final ManagerReportReviewSessionRepository repository;
     private final ManagerReportReviewEventRepository eventRepository;
-    private final TelegramService telegramService;
     private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final AppSettingService appSettingService;
     private final ManagerReportReviewAccessPolicy accessPolicy;

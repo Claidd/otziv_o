@@ -36,7 +36,6 @@ import com.hunt.otziv.p_products.repository.ProductRepository;
 import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.config.WorkerCellularAccessProperties;
 import com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessRuntimeSettingsService;
-import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsRequest;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsService;
@@ -107,7 +106,6 @@ public class ApiAdminDictionaryController {
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
     private final ScheduledClientMessageService scheduledClientMessageService;
     private final BotAssignmentService botAssignmentService;
-    private final ReviewRepository reviewRepository;
     private final CityDistanceService cityDistanceService;
     private final FileUploadGuard fileUploadGuard;
     private final BotBrowserAccessService botBrowserAccessService;

@@ -68,7 +68,6 @@ public class ContractorPaymentLiveRoutingService {
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentProfileRepository profileRepository;
-    private final ContractorPaymentProfileService profileService;
     private final ContractorPaymentRoutingLimitService routingLimitService;
     private final ContractorPaymentAccountingService accountingService;
     private final CommonInvoiceRepository commonInvoiceRepository;
@@ -90,38 +89,6 @@ public class ContractorPaymentLiveRoutingService {
                 && status.rewardAttributionDatabaseEnabled()
                 && status.rewardAttributionLiveEnabled()
                 && !status.liveRoutingEnabled();
-    }
-
-    @Transactional(readOnly = true)
-    public boolean isCommonClientReportable(CommonInvoice invoice) {
-        if (invoice == null
-                || invoice.getId() == null
-                || invoice.getContractorAllocationId() == null
-                || !PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus())
-                || invoice.getClientReportedAt() != null
-                || invoice.getPaymentRouteAmountKopecks() == null
-                || invoice.getPaymentRouteAmountKopecks() <= 0
-                || invoice.getPaidKopecks() >= invoice.getAmountKopecks()
-                || !"MANUAL_MOBILE_BANK".equals(normalize(invoice.getPaymentRouteType())
-                        .toUpperCase(java.util.Locale.ROOT))
-                || invoice.getPaymentRouteManualType() != ManualPaymentType.MOBILE_BANK
-                || invoice.getPaymentRouteManualSource() != ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE) {
-            return false;
-        }
-        long remaining = Math.max(0L, invoice.getAmountKopecks() - invoice.getPaidKopecks());
-        long routeAmount = invoice.getPaymentRouteAmountKopecks();
-        return allocationRepository.findById(invoice.getContractorAllocationId())
-                .filter(allocation -> allocation.getMode() == ContractorAllocationMode.LIVE)
-                .filter(allocation -> allocation.getSourceType() == ContractorAllocationSourceType.COMMON_INVOICE)
-                .filter(allocation -> Objects.equals(allocation.getSourceId(), invoice.getId()))
-                .filter(allocation -> Objects.equals(allocation.getCommonInvoiceId(), invoice.getId()))
-                .filter(allocation -> allocation.getStatus() == ContractorAllocationStatus.RESERVED)
-                .filter(allocation -> allocation.getRecipientProfile() != null)
-                .filter(allocation -> allocation.getRecipientType() == ContractorRecipientType.SPECIALIST
-                        || allocation.getRecipientType() == ContractorRecipientType.MANAGER)
-                .filter(allocation -> allocation.getAmountKopecks() == routeAmount)
-                .filter(allocation -> commonInvoiceGenerationStillMatches(invoice, allocation, remaining))
-                .isPresent();
     }
 
     /**
@@ -190,17 +157,6 @@ public class ContractorPaymentLiveRoutingService {
                         .map(value -> Objects.equals(value.getId(), allocation.getId()))
                         .orElse(false))
                 .flatMap(this::requisitesSnapshot);
-    }
-
-    /**
-     * Public standalone requisites are valid only for the exact active LIVE
-     * attempt frozen on this payment-link row. A payable-looking legacy link
-     * must not keep exposing a contractor after its allocation was released
-     * and the capacity was assigned elsewhere.
-     */
-    @Transactional(readOnly = true)
-    public boolean isPaymentLinkContractorRequisitesVisible(PaymentLink link) {
-        return activePaymentLinkRequisites(link).isPresent();
     }
 
     /**

@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import type { AdminPaymentLinkResponse, AdminPaymentLinksPageResponse, PaymentLinkArchiveRunResponse, PaymentLinkListSource } from './api.service';
 import { mobileEnvironment } from './mobile-environment';
 

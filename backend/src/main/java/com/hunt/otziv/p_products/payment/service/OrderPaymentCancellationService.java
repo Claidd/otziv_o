@@ -8,9 +8,7 @@ import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardSourceCodes;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentRolloutStateService;
 import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
 import com.hunt.otziv.p_products.model.Order;
@@ -76,8 +74,6 @@ public class OrderPaymentCancellationService {
     private final ContractorRewardLedgerService contractorRewardLedgerService;
     private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
-    private final ContractorPaymentRolloutStateService rolloutStateService;
-    private final ContractorPaymentRuntimeSwitch contractorPaymentRuntimeSwitch;
 
     @Transactional
     public void cancelPayment(Long orderId, Principal principal) {

@@ -94,65 +94,6 @@ public class ReviewCityServiceImpl implements ReviewCityService {
         );
     }
 
-    /**
-     * Получить общее количество неопубликованных отзывов
-     */
-    public Long getTotalUnpublishedCount() {
-        List<CityWithUnpublishedReviewsDTO> cities = getCitiesWithUnpublishedReviews();
-        return cities.stream()
-                .mapToLong(CityWithUnpublishedReviewsDTO::getUnpublishedCount)
-                .sum();
-    }
-
-    /**
-     * Получить среднее количество неопубликованных отзывов на город
-     */
-    public Long getAverageUnpublishedPerCity() {
-        List<CityWithUnpublishedReviewsDTO> cities = getCitiesWithUnpublishedReviews();
-        if (cities.isEmpty()) {
-            return 0L;
-        }
-
-        long total = cities.stream()
-                .mapToLong(CityWithUnpublishedReviewsDTO::getUnpublishedCount)
-                .sum();
-        return total / cities.size();
-    }
-
-    /**
-     * Получить карту: cityId -> unpublishedCount
-     */
-    public Map<Long, Long> getUnpublishedCountByCityId() {
-        return getCitiesWithUnpublishedReviews().stream()
-                .collect(Collectors.toMap(
-                        CityWithUnpublishedReviewsDTO::getCityId,
-                        CityWithUnpublishedReviewsDTO::getUnpublishedCount
-                ));
-    }
-
-    /**
-     * Получить статистику для дашборда
-     */
-    public Map<String, Object> getDashboardStats() {
-        List<CityWithUnpublishedReviewsDTO> cities = getCitiesWithUnpublishedReviews();
-        long total = cities.stream()
-                .mapToLong(CityWithUnpublishedReviewsDTO::getUnpublishedCount)
-                .sum();
-        long average = cities.isEmpty() ? 0L : total / cities.size();
-
-        return Map.of(
-                "totalCities", cities.size(),
-                "totalUnpublished", total,
-                "averagePerCity", average,
-                "citiesWithManyReviews", cities.stream()
-                        .filter(c -> c.getUnpublishedCount() > 10)
-                        .count(),
-                "citiesWithFewReviews", cities.stream()
-                        .filter(c -> c.getUnpublishedCount() <= 5 && c.getUnpublishedCount() > 0)
-                        .count()
-        );
-    }
-
 
 
     public List<CityWithUnpublishedReviewsDTO> getAllCitiesWithUnpublishedReviewsNoPagination(

@@ -26,10 +26,6 @@ export class MobilePushApiService {
     return this.http.post<void>(this.apiUrl('/api/mobile/push-token/revoke'), request);
   }
 
-  revokeAllTokens(): Observable<void> {
-    return this.http.post<void>(this.apiUrl('/api/mobile/push-token/revoke-all'), {});
-  }
-
   private apiUrl(path: string): string {
     return `${mobileEnvironment.apiBaseUrl}${path}`;
   }

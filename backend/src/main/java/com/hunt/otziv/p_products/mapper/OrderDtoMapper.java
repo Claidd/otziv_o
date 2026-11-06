@@ -50,17 +50,6 @@ public class OrderDtoMapper {
         this.maxGroupLinkService = maxGroupLinkService;
     }
 
-    public List<OrderDTOList> toBoardDTOList(List<Order> orders) {
-        if (orders == null || orders.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return orders.stream()
-                .map(this::toBoardDTO)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-    }
-
     public OrderDTOList toBoardDTO(Order order) {
         if (order == null) {
             return null;
@@ -165,17 +154,6 @@ public class OrderDtoMapper {
                 .orderComments(rowString(row, 24, "нет заметок"))
                 .firstOrderForCompany(rowBoolean(row, 25))
                 .build();
-    }
-
-    public List<OrderDTO> toOrderDTOList(List<Order> orders) {
-        if (orders == null || orders.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return orders.stream()
-                .map(this::toOrderDTO)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
     }
 
     public OrderDTO toOrderDTO(Order order) {

@@ -11,9 +11,7 @@ import java.util.List;
 
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstDetail;
-import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstReview;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.hasDetails;
-import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeFilialTitle;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,11 +25,9 @@ class OrderReviewGraphTest {
     @Test
     void returnsNullAndEmptyDefaultsForMissingGraph() {
         assertNull(getFirstDetail(null));
-        assertNull(getFirstReview(null));
         assertEquals(List.of(), getAllReviews(null));
         assertFalse(hasDetails(null));
         assertEquals("", safeStatusTitle(null));
-        assertEquals("Без филиала", safeFilialTitle(null));
         assertEquals("", safeString(null));
     }
 
@@ -50,7 +46,6 @@ class OrderReviewGraphTest {
                 .build();
 
         assertSame(firstDetail, getFirstDetail(order));
-        assertSame(firstReview, getFirstReview(order));
         assertEquals(List.of(firstReview, secondReview), getAllReviews(order));
         assertTrue(hasDetails(order));
     }
@@ -63,7 +58,6 @@ class OrderReviewGraphTest {
                 .build();
 
         assertEquals("Публикация", safeStatusTitle(order));
-        assertEquals("Центр", safeFilialTitle(order));
         assertEquals("", safeString(null));
         assertEquals("text", safeString("text"));
     }

@@ -22,14 +22,6 @@ public final class OrderReviewGraph {
         return order.getDetails().get(0);
     }
 
-    public static Review getFirstReview(Order order) {
-        OrderDetails firstDetail = getFirstDetail(order);
-        if (firstDetail == null || firstDetail.getReviews() == null || firstDetail.getReviews().isEmpty()) {
-            return null;
-        }
-        return firstDetail.getReviews().get(0);
-    }
-
     public static List<Review> getAllReviews(Order order) {
         if (order == null || order.getDetails() == null || order.getDetails().isEmpty()) {
             return Collections.emptyList();
@@ -51,12 +43,6 @@ public final class OrderReviewGraph {
             return "";
         }
         return order.getStatus().getTitle();
-    }
-
-    public static String safeFilialTitle(Order order) {
-        return order != null && order.getFilial() != null
-                ? safeString(order.getFilial().getTitle())
-                : "Без филиала";
     }
 
     public static String safeString(String value) {

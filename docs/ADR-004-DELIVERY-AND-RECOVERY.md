@@ -64,7 +64,7 @@ Legacy синхронные уведомления статуса заказа �
 Общий R6 outbox подключается отдельно для event type после проверки lease/deadline,
 receiver identity/order, retention, mixed-version handler и UNKNOWN policy. Для
 неподходящего транспорта допустима отдельная domain state machine.
-Опора: [R6](R6_TRANSACTIONAL_OUTBOX.md), [outbound protocol](../whatsapp/OUTBOUND_OPERATIONS.md),
+Опора: R6 (`R6_TRANSACTIONAL_OUTBOX.md`, удалён 2026-11-06, есть в истории Git), [outbound protocol](../whatsapp/OUTBOUND_OPERATIONS.md),
 [rollout](ARCHITECTURE_ROLLOUT.md).
 
 `c_companies.api.MissingWhatsAppRoute` принадлежит companies и вызывается messaging

@@ -59,7 +59,9 @@ public class ScheduledDeliveryRecovery {
                 if (snapshot == null) continue;
                 ClientMessageSendResult receipt = delivery.recoverRecordedOutcomeFromChat(
                         operationId.apply(snapshot.envelope()), snapshot.preparedAt());
-                if (receipt != null && receipt.sent()) {
+                // A refusal by WhatsApp is final too: the old operation closes and no follow-up is sent.
+                if (receipt != null && (receipt.sent()
+                        || com.hunt.otziv.client_messages.api.ClientMessageDelivery.isDeliveryRejected(receipt))) {
                     finalizeReceipt.accept(snapshot.envelope(), receipt);
                 } else if (snapshot.followupAllowed()) {
                     authorizedFollowup.accept(snapshot.envelope());

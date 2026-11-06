@@ -96,7 +96,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:a28faa872c401b182e11021fc1cb2c20d10c4ade88dabf8d6be49c7a0660004b
+    image: ghcr.io/claidd/otziv-security@sha256:2f4863a2cca459beb732b9081588cec9f411ac68e83d2cddf2609b16cd708c27
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -183,7 +183,7 @@ services:
 
   minio:
     # Retain the service alias used by local S3 clients; keep old MinIO data separately.
-    image: ghcr.io/claidd/otziv-security@sha256:bdbacc1acd769119b1456b830196041eecb4ed50bcb8a5e03d9812e309c6309c
+    image: ghcr.io/claidd/otziv-security@sha256:860e028744b41222a75dce94ce5c31572364a90787ccf478be95f575da6ad9a3
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 768m
@@ -508,11 +508,6 @@ services:
       OPENAI_PROXY_PORT: ${OPENAI_PROXY_PORT:-8888}
       OPENAI_PROXY_USERNAME: ${OPENAI_PROXY_USERNAME:-}
       OPENAI_PROXY_PASSWORD: ${OPENAI_PROXY_PASSWORD:-}
-      OPENAI_DEEP_RESEARCH_MODEL: ${OPENAI_DEEP_RESEARCH_MODEL:-o4-mini-deep-research}
-      OPENAI_DEEP_RESEARCH_TIMEOUT: ${OPENAI_DEEP_RESEARCH_TIMEOUT:-8m}
-      OPENAI_DEEP_RESEARCH_MAX_TOOL_CALLS: ${OPENAI_DEEP_RESEARCH_MAX_TOOL_CALLS:-40}
-      OPENAI_DEEP_RESEARCH_MAX_OUTPUT_TOKENS: ${OPENAI_DEEP_RESEARCH_MAX_OUTPUT_TOKENS:-24000}
-      OPENAI_DEEP_RESEARCH_BACKGROUND: ${OPENAI_DEEP_RESEARCH_BACKGROUND:-false}
       OPENAI_RESEARCH_REPORT_MODEL: ${OPENAI_RESEARCH_REPORT_MODEL:-gpt-5.4-mini}
       OPENAI_RESEARCH_REPORT_TIMEOUT: ${OPENAI_RESEARCH_REPORT_TIMEOUT:-6m}
       OPENAI_RESEARCH_REPORT_MAX_TOOL_CALLS: ${OPENAI_RESEARCH_REPORT_MAX_TOOL_CALLS:-6}
@@ -562,13 +557,10 @@ services:
       YANDEX_SEARCH_REGION: ${YANDEX_SEARCH_REGION:-}
       JWT_SECRET: ${JWT_SECRET}
       LEAD_TRANSFER_URL: ${LEAD_TRANSFER_URL}
-      LEAD_SYNCHRONY_URL: ${LEAD_SYNCHRONY_URL}
       LEAD_UPDATE_URL: ${LEAD_UPDATE_URL}
       LEAD_VPS_URL: ${LEAD_VPS_URL}
-      LEAD_SYNC_OUTBOUND_ENABLED: ${LEAD_SYNC_OUTBOUND_ENABLED:-false}
       LEAD_VPS_RETRY_BATCH_SIZE: ${LEAD_VPS_RETRY_BATCH_SIZE:-100}
       LEAD_VPS_RETRY_MAX_ATTEMPTS: ${LEAD_VPS_RETRY_MAX_ATTEMPTS:-20}
-      LEAD_VPS_RETRY_PERIOD_MS: ${LEAD_VPS_RETRY_PERIOD_MS:-1800000}
       APP_NAGUL_COOLDOWN: ${APP_NAGUL_COOLDOWN:-60}
       APP_NAGUL_LOOKAHEAD_DAYS: ${APP_NAGUL_LOOKAHEAD_DAYS:-60}
       OTZIV_APP_SETTINGS_CACHE_TTL: ${OTZIV_APP_SETTINGS_CACHE_TTL:-PT5M}
@@ -872,7 +864,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:07233e89f1964d967e516a7b97856011a502213194a27c941fc5cf5d052208fa
+    image: ghcr.io/claidd/otziv-security@sha256:a9eb6567dc0fceb41dbe6225f49e80a39db9e1b9d5f82abb5003ee69fe4a5688
     # Builds the Telegram contact point for the alert rules, then runs the image entrypoint.
     entrypoint: ["/bin/sh", "/etc/otziv/grafana-alerting-entrypoint.sh"]
     profiles: ["observability"]

@@ -88,6 +88,16 @@ endpoint. A future authenticated operator flow must supply trustworthy evidence,
 audit the decision and fence the active gateway owner. It cannot infer non-delivery
 from timeout or an absent message in a bounded history page.
 
+One provider statement is reported as such: `POST /operations/:id/reconcile-history`
+answers `recoveryCode: "history_provider_rejected"` (state stays `UNKNOWN`, nothing
+is bound) when the operation's own group message (`send-group` only) is found and a
+fresh provider read still shows ACK -1 at least 10 minutes after dispatch, outside
+any competing window with the same envelope. WhatsApp sets ACK -1 when it refused
+the message, typically because the account is no longer a member of the group.
+The backend then holds new messages to that group for that account before any
+provider call and closes the old operation without a resend; a client message from
+the group, or the manager's repair, ends the hold.
+
 ## Shutdown and supported runtime
 
 HTTP permits live until task work/cleanup completes. Timed operations register

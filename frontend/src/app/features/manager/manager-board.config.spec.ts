@@ -1,7 +1,6 @@
 import type { CompanyCardItem, ManagerMetric, ManagerOption, OrderCardItem } from '../../core/manager.api';
 import {
   MANAGER_ORDER_ACTIONS,
-  MANAGER_SECTIONS,
   managerBoardTitle,
   managerChatBindingWarningForValues,
   managerChatPlatformFromUrl,
@@ -16,10 +15,8 @@ import {
   managerOptionLabel,
   managerOrderActions,
   managerOrderChatBindingWarning,
-  managerOrderPaymentCopyText,
   managerOrderChatUrl,
   managerOrderDetailsUrl,
-  managerOrderInfoUrl,
   managerOrderReviewCopyText,
   managerOrderReviewUrl,
   managerPayableOrderSum,
@@ -34,7 +31,6 @@ import {
   trackManagerOption,
   trackManagerOrder,
   trackManagerProduct,
-  trackManagerSection,
   trackManagerStatus
 } from './manager-board.config';
 
@@ -219,19 +215,6 @@ describe('manager-board config helpers', () => {
     ].join('\n'));
   });
 
-  it('builds payment copy text with company and filial before the bill body', () => {
-    expect(managerOrderPaymentCopyText(order({
-      companyTitle: 'Бюро переводов',
-      filialTitle: 'Пушкина, 70',
-      managerPayText: 'Здравствуйте, ваш заказ выполнен, просьба оплатить.',
-      sum: 1000
-    }), 1000)).toBe([
-      'Бюро переводов - Пушкина, 70',
-      '',
-      'Здравствуйте, ваш заказ выполнен, просьба оплатить. К оплате: 1000 руб.'
-    ].join('\n'));
-  });
-
   it('keeps note, chat and Angular URL helpers stable', () => {
     expect(managerHasMeaningfulNote('нет заметок')).toBe(false);
     expect(managerHasMeaningfulNote(' полезно ')).toBe(true);
@@ -245,7 +228,6 @@ describe('manager-board config helpers', () => {
     expect(managerOrderDetailsUrl(order({ companyId: 9, id: 4 }))).toBe('/orders/9/4');
     expect(managerOrderDetailsUrl(order({ commonInvoice: true, commonInvoiceId: 12, id: -12 })))
       .toBe('/manager/common-billing?invoiceId=12');
-    expect(managerOrderInfoUrl(order({ companyId: 9, id: 4 }))).toBe('/orders/9/4');
   });
 
   it('detects active chat channel binding problems from the current link', () => {
@@ -289,7 +271,6 @@ describe('manager-board config helpers', () => {
     expect(managerErrorMessage({ error: { message: 'Ошибка API' } }, 'fallback')).toBe('Ошибка API');
     expect(managerErrorMessage({ error: 'plain error' }, 'fallback')).toBe('plain error');
     expect(managerErrorMessage({}, 'fallback')).toBe('fallback');
-    expect(trackManagerSection(0, MANAGER_SECTIONS[1])).toBe('orders');
     expect(trackManagerStatus(0, 'Все')).toBe('Все');
     expect(trackManagerCompany(0, company({ id: 3 }))).toBe(3);
     expect(trackManagerOrder(0, order({ id: 4 }))).toBe(4);

@@ -8,7 +8,6 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
-import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
@@ -138,7 +137,6 @@ public class OrderStatusTransitionService {
     private final AppSettingService appSettingService;
     private final BusinessAuditService businessAuditService;
     private final ContractorPaymentShadowService contractorPaymentShadowService;
-    private final ContractorCompletionRewardService contractorCompletionRewardService;
     private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final ReviewRecoveryGateService recoveryGateService;

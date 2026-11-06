@@ -144,42 +144,6 @@ public class LeadMapper {
         lead.setTelephone(dto.getTelephoneId() != null ? telephoneRepository.findById(dto.getTelephoneId()).orElse(null) : null);
     }
 
-    /** Апдейт для /update: телефон НЕ меняем. */
-    public void updateEntityExceptPhone(Lead lead,
-                                        LeadUpdateDto dto,
-                                        OperatorRepository operatorRepository,
-                                        ManagerRepository managerRepository,
-                                        MarketologRepository marketologRepository,
-                                        TelephoneRepository telephoneRepository) {
-
-        // телефон НЕ трогаем
-        lead.setCompanyName(dto.getCompanyName());
-        lead.setPhones(dto.getPhones());
-        lead.setMobilePhones(dto.getMobilePhones());
-        lead.setWhatsappPhones(dto.getWhatsappPhones());
-        lead.setEmails(dto.getEmails());
-        lead.setWebsites(dto.getWebsites());
-        lead.setVkUrl(dto.getVkUrl());
-        lead.setTelegramUrl(dto.getTelegramUrl());
-        lead.setIndustries(dto.getIndustries());
-        lead.setCompanyType(dto.getCompanyType());
-        lead.setRegion(dto.getRegion());
-        lead.setAddress(dto.getAddress());
-        lead.setCityLead(dto.getCityLead());
-        lead.setCommentsLead(dto.getCommentsLead());
-        lead.setLidStatus(dto.getLidStatus());
-        lead.setCreateDate(dto.getCreateDate());
-        lead.setUpdateStatus(dto.getUpdateStatus());
-        lead.setDateNewTry(dto.getDateNewTry());
-        lead.setOffer(dto.isOffer());
-        lead.setLastSeen(dto.getLastSeen());
-
-        lead.setOperator(dto.getOperatorId() != null ? operatorRepository.findById(dto.getOperatorId()).orElse(null) : null);
-        lead.setManager(dto.getManagerId() != null ? managerRepository.findById(dto.getManagerId()).orElse(null) : null);
-        lead.setMarketolog(dto.getMarketologId() != null ? marketologRepository.findById(dto.getMarketologId()).orElse(null) : null);
-        lead.setTelephone(dto.getTelephoneId() != null ? telephoneRepository.findById(dto.getTelephoneId()).orElse(null) : null);
-    }
-
     public void updateEntityFromTransfer(Lead lead,
                                          LeadDtoTransfer dto,
                                          OperatorRepository operatorRepository,
@@ -222,41 +186,6 @@ public class LeadMapper {
         lead.setManager(dto.getManagerId() != null ? managerRepository.findById(dto.getManagerId()).orElse(null) : null);
         lead.setMarketolog(dto.getMarketologId() != null ? marketologRepository.findById(dto.getMarketologId()).orElse(null) : null);
         lead.setTelephone(dto.getTelephoneId() != null ? telephoneRepository.findById(dto.getTelephoneId()).orElse(null) : null);
-    }
-
-    /** Нужна только если где-то действительно создаёшь лид из UpdateDto. Для строгого /update — не используется. */
-    public Lead toEntityFromUpdateDto(LeadUpdateDto dto,
-                                      OperatorRepository operatorRepository,
-                                      ManagerRepository managerRepository,
-                                      MarketologRepository marketologRepository,
-                                      TelephoneRepository telephoneRepository) {
-        return Lead.builder()
-                .telephoneLead(dto.getTelephoneLead())
-                .companyName(dto.getCompanyName())
-                .phones(dto.getPhones())
-                .mobilePhones(dto.getMobilePhones())
-                .whatsappPhones(dto.getWhatsappPhones())
-                .emails(dto.getEmails())
-                .websites(dto.getWebsites())
-                .vkUrl(dto.getVkUrl())
-                .telegramUrl(dto.getTelegramUrl())
-                .industries(dto.getIndustries())
-                .companyType(dto.getCompanyType())
-                .region(dto.getRegion())
-                .address(dto.getAddress())
-                .cityLead(dto.getCityLead())
-                .commentsLead(dto.getCommentsLead())
-                .lidStatus(dto.getLidStatus())
-                .createDate(dto.getCreateDate())
-                .updateStatus(dto.getUpdateStatus())
-                .dateNewTry(dto.getDateNewTry())
-                .offer(dto.isOffer())
-                .lastSeen(dto.getLastSeen())
-                .operator(dto.getOperatorId() != null ? operatorRepository.findById(dto.getOperatorId()).orElse(null) : null)
-                .manager(dto.getManagerId() != null ? managerRepository.findById(dto.getManagerId()).orElse(null) : null)
-                .marketolog(dto.getMarketologId() != null ? marketologRepository.findById(dto.getMarketologId()).orElse(null) : null)
-                .telephone(dto.getTelephoneId() != null ? telephoneRepository.findById(dto.getTelephoneId()).orElse(null) : null)
-                .build();
     }
 }
 

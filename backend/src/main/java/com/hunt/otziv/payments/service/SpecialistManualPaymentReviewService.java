@@ -366,9 +366,14 @@ public class SpecialistManualPaymentReviewService {
         if (claim == null) {
             return;
         }
-        String message = "💳 Менеджер сообщил о переводе получателю по заказу.\n"
-                + "Заказ №" + claim.orderId() + ", сумма "
-                + BigDecimal.valueOf(claim.amountKopecks(), 2).stripTrailingZeros().toPlainString()
+        String amount = BigDecimal.valueOf(claim.amountKopecks(), 2).stripTrailingZeros().toPlainString();
+        String message = claim.ownerGroup()
+                ? "💳 Менеджер сообщил о переводе владельцу по заказу.\n"
+                + "Заказ №" + claim.orderId() + ", сумма " + amount
+                + " ₽. Оплата учтена по отметке менеджера. Если деньги владельцу не пришли, владелец или администратор"
+                + " может нажать «Оспорить» в течение 24 часов от отметки. Без спора подтверждение станет окончательным."
+                : "💳 Менеджер сообщил о переводе получателю по заказу.\n"
+                + "Заказ №" + claim.orderId() + ", сумма " + amount
                 + " ₽. Оплата учтена по отметке менеджера. Если деньги не пришли, сообщите менеджеру"
                 + " или нажмите «Оспорить» в течение 24 часов от отметки. Без спора подтверждение станет окончательным.";
         boolean accepted;
@@ -419,11 +424,15 @@ public class SpecialistManualPaymentReviewService {
             }
         }
         boolean ownerReceipt = "OWNER".equals(review.getRecipientType());
-        Long chatId = review.getRecipientUserId() == null ? null : (ownerReceipt
+        // A transfer to the owner has no recipient user: its notice goes to the group of the manager who marked it.
+        boolean ownerGroup = ownerReceipt && review.getRecipientUserId() == null;
+        Long chatId = ownerGroup ? users.activeOwnerReceiptGroupChatId(review.getRequestedByUserId()).orElse(null)
+                : review.getRecipientUserId() == null ? null : (ownerReceipt
                 ? users.activePersonalTelegramChatId(review.getRecipientUserId())
                 : users.activePaymentReviewGroupChatId(review.getRecipientUserId(), review.getRecipientType())).orElse(null);
         if (chatId == null) {
-            notificationFailure(review, ownerReceipt ? "У владельца нет активного личного Telegram-чата"
+            notificationFailure(review, ownerGroup ? "У менеджера, отметившего перевод владельцу, не привязана рабочая Telegram-группа"
+                    : ownerReceipt ? "У владельца нет активного личного Telegram-чата"
                     : "У получателя не привязана рабочая Telegram-группа с менеджером");
             return null;
         }
@@ -432,7 +441,7 @@ public class SpecialistManualPaymentReviewService {
         review.setLastError(null);
         reviews.saveAndFlush(review);
         return new DeliveryClaim(review.getId(), review.getOrderId(), review.getAmountKopecks(),
-                chatId, now);
+                chatId, now, ownerGroup);
     }
 
     private Void finishDelivery(DeliveryClaim claim, Boolean accepted) {
@@ -489,6 +498,17 @@ public class SpecialistManualPaymentReviewService {
     public String dispute(Long reviewId, Long telegramUserId, Long chatId) {
         SpecialistManualPaymentReview review = reviews.lockById(reviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
+        if ("OWNER".equals(review.getRecipientType()) && review.getRecipientUserId() == null) {
+            requireOwnerGroupDispute(review, telegramUserId, chatId);
+            if (review.getStatus() == SpecialistManualPaymentReviewStatus.DISPUTED) {
+                return "Поступление уже оспорено; владельцы и администраторы уведомлены";
+            }
+            if (!ManualPaymentReviewView.from(review).disputeAllowed()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Окно спора закрыто или операция ещё выполняется");
+            }
+            recordDispute(review, "owner", "Владелец или администратор оспорил поступление через Telegram");
+            return "Спор сохранён. Окончательное подтверждение остановлено; менеджер проведёт сверку";
+        }
         Long recipientChatId = users.activePersonalTelegramChatId(review.getRecipientUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Получатель не найден"));
         if (telegramUserId == null || !telegramUserId.equals(recipientChatId)) {
@@ -512,6 +532,19 @@ public class SpecialistManualPaymentReviewService {
         }
         recordDispute(review, "recipient", "Получатель оспорил поступление через Telegram");
         return "Спор сохранён. Окончательное подтверждение остановлено; менеджер проведёт сверку";
+    }
+
+    /** Only an owner or administrator, pressing in the group that received the notice, disputes an owner transfer. */
+    private void requireOwnerGroupDispute(SpecialistManualPaymentReview review, Long telegramUserId, Long chatId) {
+        if (!users.activeOwnerOrAdminTelegramUser(telegramUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Оспорить перевод владельцу может только владелец или администратор с привязанным Telegram");
+        }
+        Long groupId = users.activeOwnerReceiptGroupChatId(review.getRequestedByUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Рабочая группа менеджера не привязана"));
+        if (!Objects.equals(groupId, chatId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Оспорить перевод владельцу можно в рабочей группе менеджера");
+        }
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -602,6 +635,6 @@ public class SpecialistManualPaymentReviewService {
     }
 
     private record DeliveryClaim(Long reviewId, Long orderId, long amountKopecks,
-                                 Long chatId, LocalDateTime attemptAt) {
+                                 Long chatId, LocalDateTime attemptAt, boolean ownerGroup) {
     }
 }

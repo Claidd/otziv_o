@@ -390,21 +390,6 @@ public class ApiWorkerBoardController {
                 source == null ? null : source.sourceSection());
     }
 
-    @PostMapping("/reviews/{reviewId}/copy-click")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public WorkerCredentialPreparationResponse logReviewCredentialCopyClick(
-            @PathVariable Long reviewId,
-            @RequestBody ReviewCopyClickRequest request,
-            Principal principal,
-            Authentication authentication
-    ) {
-        try {
-            return workerCredentialCommands.logReviewCredentialCopyClick(reviewId, request == null ? null : new WorkerCredentialCommands.ReviewCopyClickRequest(request.field(), request.sourcePage(), request.sourceEntry(), request.sourceSection()), WorkerOrderActor.from(authentication));
-        } catch (WorkerOrderCommandException failure) {
-            throw commandHttpFailure(failure);
-        }
-    }
-
     @PostMapping("/reviews/{reviewId}/credential-reveal")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public ResponseEntity<CredentialRevealResponse> revealReviewCredential(
@@ -443,38 +428,6 @@ public class ApiWorkerBoardController {
     ) {
         try {
             return noStore(workerCredentialCommands.revealBadReviewTaskCredential(taskId, request, WorkerOrderActor.from(authentication)));
-        } catch (WorkerOrderCommandException failure) {
-            throw commandHttpFailure(failure);
-        }
-    }
-
-    @PostMapping("/recovery-tasks/{taskId}/copy-click")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void logRecoveryTaskCredentialCopyClick(
-            @PathVariable Long taskId,
-            @RequestBody ReviewCopyClickRequest request,
-            Principal principal,
-            Authentication authentication
-    ) {
-        try {
-            workerCredentialCommands.logRecoveryTaskCredentialCopyClick(taskId, request == null ? null : new WorkerCredentialCommands.ReviewCopyClickRequest(request.field(), request.sourcePage(), request.sourceEntry(), request.sourceSection()), WorkerOrderActor.from(authentication));
-        } catch (WorkerOrderCommandException failure) {
-            throw commandHttpFailure(failure);
-        }
-    }
-
-    @PostMapping("/bad-review-tasks/{taskId}/copy-click")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void logBadReviewTaskCredentialCopyClick(
-            @PathVariable Long taskId,
-            @RequestBody ReviewCopyClickRequest request,
-            Principal principal,
-            Authentication authentication
-    ) {
-        try {
-            workerCredentialCommands.logBadReviewTaskCredentialCopyClick(taskId, request == null ? null : new WorkerCredentialCommands.ReviewCopyClickRequest(request.field(), request.sourcePage(), request.sourceEntry(), request.sourceSection()), WorkerOrderActor.from(authentication));
         } catch (WorkerOrderCommandException failure) {
             throw commandHttpFailure(failure);
         }
@@ -2207,12 +2160,6 @@ public class ApiWorkerBoardController {
     }
 
     public record WorkerActivitySourceRequest(String sourcePage, String sourceEntry, String sourceSection) {
-    }
-
-    public record ReviewCopyClickRequest(String field, String sourcePage, String sourceEntry, String sourceSection) {
-        public ReviewCopyClickRequest(String field) {
-            this(field, null, null, null);
-        }
     }
 
     public record OrderNoteUpdateRequest(String orderComments) {

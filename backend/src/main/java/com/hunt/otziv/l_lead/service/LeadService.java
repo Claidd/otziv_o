@@ -1,6 +1,5 @@
 package com.hunt.otziv.l_lead.service;
 
-import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -28,7 +27,6 @@ public interface LeadService {
     // метод поиска лидав по id
     Optional<Lead> findByIdAndToUpdate(Long id);
     LeadDTO findById(Long id);
-    Optional<Lead> findByIdOptional(Long leadId);
     Optional<User> findByFio(String operator);
     List<Long> getAllLeadsByDate(LocalDate localDate);
     List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status);
@@ -87,17 +85,11 @@ public interface LeadService {
 
     void changeCountToOperator(Long leadId);
 
-    Optional<Lead> getByTelephoneLead(String telephoneNumber);
-
     void saveLead(Lead lead);
 
     int countNewLeadsByClient(Long telephoneId, String status);
 
-    LeadDtoTransfer findByIdToTransfer(Long leadId);
-
     List<Lead> findModifiedSince(LocalDateTime since);
-
-    void saveOrUpdateByTelephoneLead(Lead incomingLead);
 
     void changeStatusLeadToWork(Long leadId, String commentsLead);
 
@@ -108,10 +100,6 @@ public interface LeadService {
     Page<LeadDTO> getAllLeadsToOperatorAll(Long operatorID, String keyword, Principal principal, int pageNumber, int i);
     Page<LeadDTO> getOperatorSentLeads(Long operatorID, String keyword, Principal principal, int pageNumber, int pageSize);
     Page<LeadDTO> searchOperatorQueueAndSentLeads(Long operatorID, Long telephoneId, String keyword, Principal principal, int pageNumber, int pageSize);
-
-    List<Lead> findNewLeadsByClient(Long telephoneId, String status);
-
-    void markOfferSentAndPublish(Long id);
 
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================

@@ -75,7 +75,6 @@ class AnalyticsAggregateReadServiceTest {
     @Test
     void scopeKeysAreStable() {
         assertEquals("OWNER:42", AnalyticsAggregateReadService.ownerScopeKey(42L));
-        assertEquals("MANAGER:7", AnalyticsAggregateReadService.managerScopeKey(7L));
     }
 
     @Test

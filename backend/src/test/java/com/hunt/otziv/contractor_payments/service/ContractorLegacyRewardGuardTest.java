@@ -51,10 +51,10 @@ class ContractorLegacyRewardGuardTest {
                 reward(ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER),
                 reward(ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST)
         ));
-        guard.requireCancellationClassifiable(91L);
+        guard.requireNoUnclassifiedActiveRows(91L);
 
         when(zpRepository.findByOrderIdAndActiveTrue(92L)).thenReturn(List.of(reward(null)));
-        assertThatThrownBy(() -> guard.requireCancellationClassifiable(92L))
+        assertThatThrownBy(() -> guard.requireNoUnclassifiedActiveRows(92L))
                 .isInstanceOf(ResponseStatusException.class);
     }
 
@@ -65,7 +65,7 @@ class ContractorLegacyRewardGuardTest {
         when(zpRepository.findByOrderIdAndActiveTrue(91L)).thenReturn(List.of(completion));
 
         guard.requireNoActiveLegacyAggregate(91L);
-        guard.requireCancellationClassifiable(91L);
+        guard.requireNoUnclassifiedActiveRows(91L);
     }
 
     @Test

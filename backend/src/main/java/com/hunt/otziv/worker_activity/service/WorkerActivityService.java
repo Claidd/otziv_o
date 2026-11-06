@@ -11,7 +11,6 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -139,27 +138,6 @@ public class WorkerActivityService {
                 workloadRefreshSignal.markDirty();
             }
         }
-    }
-
-    public void recordCurrentAuthenticationSafely(
-            WorkerActivityAction action,
-            String entityType,
-            Long entityId,
-            Long orderId,
-            Long reviewId,
-            String section,
-            String details
-    ) {
-        recordSafely(
-                SecurityContextHolder.getContext().getAuthentication(),
-                action,
-                entityType,
-                entityId,
-                orderId,
-                reviewId,
-                section,
-                details
-        );
     }
 
     /** Successful command audit is atomic with its business transaction. */

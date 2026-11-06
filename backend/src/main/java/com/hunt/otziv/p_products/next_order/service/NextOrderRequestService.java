@@ -6,7 +6,6 @@ import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestFailedEvent;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestedEvent;
-import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestSummary;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
@@ -24,12 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -233,45 +228,6 @@ public class NextOrderRequestService {
         return requestRepository.existsByCompanyIdAndStatusIn(companyId, OPEN_REQUEST_STATUSES);
     }
 
-    public Map<Long, NextOrderRequestSummary> summariesForCompanies(Collection<Long> companyIds) {
-        if (companyIds == null || companyIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, MutableSummary> mutableSummaries = new HashMap<>();
-        List<NextOrderRequest> requests = requestRepository.findByCompanyIdInAndStatusIn(companyIds, OPEN_REQUEST_STATUSES);
-        for (NextOrderRequest request : requests) {
-            if (request.getCompany() == null || request.getCompany().getId() == null) {
-                continue;
-            }
-            MutableSummary summary = mutableSummaries.computeIfAbsent(request.getCompany().getId(), id -> new MutableSummary());
-            summary.openCount++;
-            if (isAfter(request.getUpdatedAt(), summary.latestRequestAt)) {
-                summary.latestRequestAt = request.getUpdatedAt();
-                summary.latestFilialTitle = request.getFilial() == null ? null : request.getFilial().getTitle();
-            }
-            if (request.getStatus() == NextOrderRequestStatus.FAILED) {
-                summary.failedCount++;
-                if (hasText(request.getErrorMessage()) && isAfter(request.getUpdatedAt(), summary.latestErrorAt)) {
-                    summary.latestErrorAt = request.getUpdatedAt();
-                    summary.latestError = request.getErrorMessage();
-                }
-            }
-        }
-
-        Map<Long, NextOrderRequestSummary> result = new HashMap<>();
-        mutableSummaries.forEach((companyId, summary) -> result.put(
-                companyId,
-                new NextOrderRequestSummary(
-                        summary.openCount,
-                        summary.failedCount,
-                        summary.latestFilialTitle,
-                        summary.latestError
-                )
-        ));
-        return result;
-    }
-
     public boolean hasActiveOrderForFilial(Long companyId, Long filialId, Long workerId, Long excludedOrderId) {
         return orderRepository.existsActiveOrderByCompanyIdAndFilialId(
                 companyId,
@@ -411,18 +367,5 @@ public class NextOrderRequestService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
-    }
-
-    private boolean isAfter(LocalDateTime candidate, LocalDateTime current) {
-        return candidate != null && (current == null || candidate.isAfter(current));
-    }
-
-    private static class MutableSummary {
-        private int openCount;
-        private int failedCount;
-        private LocalDateTime latestRequestAt;
-        private String latestFilialTitle;
-        private LocalDateTime latestErrorAt;
-        private String latestError;
     }
 }

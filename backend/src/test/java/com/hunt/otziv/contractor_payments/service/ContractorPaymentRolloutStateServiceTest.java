@@ -31,7 +31,7 @@ class ContractorPaymentRolloutStateServiceTest {
     void freshSnapshotExposesImmutableCompletionAuthorityAndRevision() {
         LocalDate cutover = LocalDate.of(2026, 8, 1);
         ContractorPaymentRolloutState state = state(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 true,
                 cutover,
                 7L
@@ -51,7 +51,7 @@ class ContractorPaymentRolloutStateServiceTest {
     @Test
     void lockedRoutingCheckRequiresCompletionAuthorityDateAndRequest() {
         ContractorPaymentRolloutState completion = state(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 true,
                 LocalDate.of(2026, 8, 1),
                 1L

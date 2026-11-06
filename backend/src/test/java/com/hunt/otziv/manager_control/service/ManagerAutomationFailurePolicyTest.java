@@ -46,6 +46,17 @@ class ManagerAutomationFailurePolicyTest {
     }
 
     @Test
+    void ignoresReminderHeldBehindTheManagersOwnMessageEvenAfterAnEarlierFailure() {
+        // A failed attempt left one failure; the manager then messaged the client by hand for this cycle.
+        ScheduledClientMessageState state = state("manual_contact_reserved", 1, now.minusHours(6));
+        state.setDeliveryStatus("RETRYABLE");
+        state.setNextAttemptAt(now.plusMinutes(5));
+
+        assertFalse(policy.isActionable(state, now, 1, 60));
+        assertFalse(policy.requiresDeliveryReceipt(state));
+    }
+
+    @Test
     void ignoresRepeatedRateLimitWhileNextRetryIsScheduled() {
         ScheduledClientMessageState state = state("rate_limited", 24, now.minusHours(1));
         state.setScenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER);

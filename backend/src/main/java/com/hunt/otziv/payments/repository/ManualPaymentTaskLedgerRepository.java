@@ -91,18 +91,6 @@ public interface ManualPaymentTaskLedgerRepository extends JpaRepository<ManualP
     );
 
     @Query("""
-        SELECT entry.reservedDeltaKopecks AS reservedDeltaKopecks,
-               entry.confirmedDeltaKopecks AS confirmedDeltaKopecks,
-               entry.redirectedAmountKopecks AS redirectedAmountKopecks,
-               entry.eventType AS eventType,
-               entry.verified AS verified
-        FROM ManualPaymentTaskLedgerEntry entry
-        WHERE entry.task.id = :taskId
-        ORDER BY entry.id
-    """)
-    List<ManualPaymentTaskLedgerDeltaProjection> findDeltasByTaskId(@Param("taskId") Long taskId);
-
-    @Query("""
         SELECT entry
         FROM ManualPaymentTaskLedgerEntry entry
         LEFT JOIN FETCH entry.accountingTargetProfile profile

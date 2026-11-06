@@ -9,7 +9,6 @@ $deployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod.ps1'
 $frontDeployPath = Join-Path $repoRoot 'deploy.ps1'
 $snapshotPath = Join-Path $repoRoot 'infrastructure\scripts\prod\DeploySnapshot.ps1'
 $snapshotValidatorPath = Join-Path $repoRoot 'infrastructure\scripts\prod\validate-deploy-snapshot.ps1'
-$legacyDeployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod-ssh-images.ps1'
 $backupPath = Join-Path $repoRoot 'infrastructure\scripts\prod\create-pre-deploy-db-backup.sh'
 $maxWebhookPath = Join-Path $repoRoot 'infrastructure\scripts\prod\register-max-webhook.sh'
 $selfHealPath = Join-Path $repoRoot 'infrastructure\scripts\prod\otziv-prod-up.sh'
@@ -29,7 +28,6 @@ $deploy = [IO.File]::ReadAllText($deployPath).Replace("`r`n", "`n")
 $frontDeploy = [IO.File]::ReadAllText($frontDeployPath).Replace("`r`n", "`n")
 $snapshot = [IO.File]::ReadAllText($snapshotPath)
 $snapshotValidator = [IO.File]::ReadAllText($snapshotValidatorPath)
-$legacyDeploy = [IO.File]::ReadAllText($legacyDeployPath)
 $backup = [IO.File]::ReadAllText($backupPath)
 $maxWebhook = [IO.File]::ReadAllText($maxWebhookPath)
 $selfHeal = [IO.File]::ReadAllText($selfHealPath)
@@ -386,7 +384,6 @@ Assert-Match $productionCompose 'APP_MEMORY_LIMIT:-2304m' 'Production Compose mu
 Assert-Match $deploy 'APP_MEMORY_LIMIT[\s\S]{0,500}2304' 'Production deploy must reject an omitted or undersized backend memory limit.'
 Assert-Match $deploy '\[switch\]\$EnableExternalReviewWorker' 'External review worker deployment must be an explicit opt-in.'
 Assert-Match $deploy '\$buildArgs \+= @\("app", "nginx", "docker-observer"\)[\s\S]{0,200}if \(\$EnableExternalReviewWorker\)[\s\S]{0,100}\$buildArgs \+= "external-review-worker"' 'Default builds must exclude the worker and append it only for an explicit opt-in.'
-Assert-Match $legacyDeploy '\$buildArgs \+= @\("app", "nginx"\)' 'The quarantined legacy deploy must not build the external review worker implicitly.'
 Assert-Match $deploy 'if \(\$EnableExternalReviewWorker\)[\s\S]{0,200}docker.+push.+\$externalReviewWorkerImage' 'Production deploy must push the worker image only in the opt-in branch.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_WORKER_IMAGE.+external_review_worker_image' 'Production deploy must persist the worker image tag in the active VPS env.'
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,300}recreate_service_with_retry external-review-worker external-review[\s\S]{0,200}wait_service_healthy external-review-worker[\s\S]{0,300}assert_running_service_image external-review-worker[\s\S]{0,100}fi' 'Production deploy must start, health-check, and verify the worker image only when opted in.'
@@ -572,10 +569,8 @@ foreach ($runbook in @('whatsapp/OPERATION_LEDGER_RECOVERY.md', 'whatsapp/OUTBOU
     Assert-Match $deployBundle ('"' + [regex]::Escape($runbook.Replace('/', '\')) + '"') "Deploy bundle must include WhatsApp runbook: $runbook"
     if ($runbook.StartsWith('docs/')) {
         if ($runbook -notin @(Get-OtzivDeployInputPaths)) { throw "Automatic snapshot must include runbook: $runbook" }
-        Assert-Match $legacyDeploy ('Copy-DeployPath[^\r\n]+-RelativePath "' + [regex]::Escape($runbook.Replace('/', '\')) + '"') "SSH image deploy must include runbook: $runbook"
     }
 }
-Assert-Match $legacyDeploy 'Copy-DeployPath[^\r\n]+-RelativePath "whatsapp"' 'SSH image deploy must retain the complete WhatsApp runtime and maintenance source tree.'
 Assert-Match $whatsappIndex 'chromiumLaunchArgs\(proxyServerArg\(\)\)' 'WhatsApp clients must use the shared audited Chromium launch arguments.'
 Assert-Match $whatsappIndex 'webVersionCache:\s*\{[\s\S]{0,300}type:\s*"none"' 'WhatsApp Web cache must stay disabled because its default local persistence targets the read-only application directory before READY.'
 Assert-Match $whatsappPackage '"brace-expansion"\s*:\s*"5\.0\.12"' 'WhatsApp must retain the patched brace-expansion override compatible with minimatch 11.'
@@ -626,7 +621,6 @@ Assert-Match $frontDeploy '\[switch\]\$CoordinatedMysqlRefresh' 'The main releas
 Assert-Match $frontDeploy 'New-OtzivPreparedDeployArchive[^\r\n]+-CoordinatedMysqlRefresh:\$CoordinatedMysqlRefresh' 'The reviewed MySQL evidence must enter the exact committed source archive.'
 Assert-Match $frontDeploy 'CoordinatedMysqlRefresh = \$CoordinatedMysqlRefresh' 'The main release entry point must pass the cutover choice to production installation.'
 Assert-Match $deploy '\(\$CoordinatedMysqlRefresh -or \$CoordinatedSslRefresh\) -and -not \$RequireMainCi' 'Both database cutovers must require protected main CI.'
-Assert-Match $deploy '"infrastructure\\scripts\\prod\\coordinated_mysql_refresh\.py"' 'The production bundle must carry the reviewed MySQL cutover helper.'
 Assert-Match $deploy '"infrastructure\\scripts\\prod\\coordinated_mysql_brotli_refresh\.py"' 'The production bundle must carry the separate C37-to-C42 guarded procedure.'
 Assert-Match $deploy '"infrastructure\\scripts\\prod\\coordinated_mysql_curl_refresh\.py"' 'The production bundle must carry the separate C42-to-C46 guarded procedure.'
 Assert-Match $deploy '"infrastructure\\scripts\\prod\\coordinated_mysql_cutover\.py"' 'The production bundle must carry the exact-target transition selector.'
@@ -688,8 +682,7 @@ Assert-Match $deploy 'Protected self-heal state is missing; leaving deploy lock 
 Assert-Match $deploy 'Protected deploy lock ownership changed; refusing to remove it' 'Local pre-rollout cleanup must never remove an unowned lock.'
 
 foreach ($composeRunContract in @(
-    @{ Name = 'production deploy'; Text = $deploy; Expected = 3 },
-    @{ Name = 'quarantined legacy deploy'; Text = $legacyDeploy; Expected = 4 }
+    @{ Name = 'production deploy'; Text = $deploy; Expected = 3 }
 )) {
     $composeRunLines = @($composeRunContract.Text -split "`r?`n" | Where-Object {
         $_.Trim() -match '^(?:if ! )?compose run\b'

@@ -19,7 +19,6 @@ import {
   AdminPaymentLinkResponse,
   AdminPaymentLinkSummaryResponse,
   AdminPaymentLinksPageResponse,
-  type ApiService,
   ManualPaymentRecipientMonthlySummaryItem,
   ManualPaymentRecipientMonthlySummaryResponse,
   ManualPaymentTaskAccountingTargetOption,
@@ -2492,10 +2491,6 @@ export class TbankPage implements OnInit, OnDestroy {
 
   readonly hasDateFilter = computed(() => Boolean(this.dateFrom() || this.dateTo()));
 
-  readonly manualPendingLinks = computed(() => this.links().filter((link) => {
-    return this.isManualPayment(link) && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
-  }));
-
   readonly recipientSummaryItems = computed(() => this.recipientMonthlySummary()?.items ?? []);
 
   readonly activeManualTaskCount = computed(() => {
@@ -2723,16 +2718,6 @@ export class TbankPage implements OnInit, OnDestroy {
   selectPaymentSource(value: string): void {
     this.paymentSource.set(value === 'ARCHIVE' ? 'ARCHIVE' : 'LIVE');
     this.resetPageAndLoad();
-  }
-
-  setDateFrom(value: string): void {
-    this.dateFrom.set(value ?? '');
-    this.resetPage();
-  }
-
-  setDateTo(value: string): void {
-    this.dateTo.set(value ?? '');
-    this.resetPage();
   }
 
   openDateSheet(): void {
@@ -3080,28 +3065,6 @@ export class TbankPage implements OnInit, OnDestroy {
   resetAdminTaskDraft(): void {
     if (!this.savingManualTask()) {
       this.startNewAdminTaskDraft();
-    }
-  }
-
-  async saveProfileAssignments(): Promise<void> {
-    if (this.savingProfiles()) {
-      return;
-    }
-
-    const assignments: ManagerPaymentProfileAssignmentRequest[] = this.managerProfiles().map((manager) => ({
-      managerId: manager.managerId,
-      paymentProfileId: this.selectedProfileId(manager)
-    }));
-
-    this.savingProfiles.set(true);
-    this.error.set(null);
-    try {
-      const state = await firstValueFrom(this.paymentConfigurationApi.updateAdminTbankPaymentProfileAssignments(assignments));
-      this.applyProfilesState(state.profiles, state.managers);
-    } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось сохранить платежные профили.'));
-    } finally {
-      this.savingProfiles.set(false);
     }
   }
 
@@ -3514,10 +3477,6 @@ export class TbankPage implements OnInit, OnDestroy {
     return link.companyTitle || link.filialTitle || `Заказ ${link.orderId ?? '-'}`;
   }
 
-  paymentSubtitle(link: AdminPaymentLinkResponse): string {
-    return [link.filialTitle, link.description].filter(Boolean).join(' · ') || 'Банк';
-  }
-
   paymentAddress(link: AdminPaymentLinkResponse): string {
     return link.filialTitle?.trim() || '';
   }
@@ -3857,31 +3816,6 @@ export class TbankPage implements OnInit, OnDestroy {
     void this.loadPaymentLinks();
   }
 
-  private matchesSearch(link: AdminPaymentLinkResponse, search: string): boolean {
-    if (!search) {
-      return true;
-    }
-    return [
-      link.companyTitle,
-      link.filialTitle,
-      link.description,
-      link.orderId,
-      link.tbankPaymentId,
-      link.tbankOrderId,
-      link.paymentProfileName,
-      link.tbankTerminalKey,
-      link.payerEmail,
-      link.manualPhone,
-      link.manualRecipientName,
-      link.manualPaymentUrl,
-      link.manualPaymentButtonLabel,
-      link.manualTaskTitle,
-      link.manualComment,
-      link.lastError,
-      this.statusLabel(link.status)
-    ].join(' ').toLowerCase().includes(search);
-  }
-
   private matchesStatusFilter(link: AdminPaymentLinkResponse, filter: PaymentStatusFilter): boolean {
     switch (filter) {
       case 'active':
@@ -4095,23 +4029,6 @@ export class TbankPage implements OnInit, OnDestroy {
     return value && value > 0 ? value / 100 : null;
   }
 
-  private matchesDateRange(link: AdminPaymentLinkResponse, from: string, to: string): boolean {
-    const createdAt = this.timeValue(link.createdAt);
-    if (from) {
-      const fromTime = new Date(`${from}T00:00:00`).getTime();
-      if (!Number.isNaN(fromTime) && createdAt < fromTime) {
-        return false;
-      }
-    }
-    if (to) {
-      const toTime = new Date(`${to}T23:59:59.999`).getTime();
-      if (!Number.isNaN(toTime) && createdAt > toTime) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   private isPaid(status: string): boolean {
     return status === 'CONFIRMED' || status === 'TEST_CONFIRMED' || status === 'AUTHORIZED';
   }
@@ -4121,11 +4038,6 @@ export class TbankPage implements OnInit, OnDestroy {
       || status === 'PARTIAL_REFUNDED'
       || status === 'REVERSED'
       || status === 'PARTIAL_REVERSED';
-  }
-
-  private timeValue(value: string | null | undefined): number {
-    const date = value ? new Date(value).getTime() : 0;
-    return Number.isNaN(date) ? 0 : date;
   }
 
   private dateInputLabel(value: string): string {

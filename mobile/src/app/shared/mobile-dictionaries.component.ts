@@ -1219,20 +1219,6 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     this.setTab(tab as DictionaryTabKey);
   }
 
-  activeTabMeta(): DictionaryTab {
-    return this.visibleTabs().find((tab) => tab.key === this.activeTab()) ?? TABS[0];
-  }
-
-  activeTabSubtitle(): string {
-    if (this.loading()) {
-      return `загружаем · ${this.activeTabMeta().description}`;
-    }
-    if (this.error()) {
-      return `раздел не загрузился · ${this.activeTabMeta().description}`;
-    }
-    return `${this.tabTotalLabel(this.activeTab())} записей · ${this.activeTabMeta().description}`;
-  }
-
   setTab(tab: DictionaryTabKey): void {
     if (!this.visibleTabs().some((item) => item.key === tab)) {
       tab = 'categories';

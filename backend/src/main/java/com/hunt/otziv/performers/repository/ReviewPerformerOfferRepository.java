@@ -5,7 +5,6 @@ import com.hunt.otziv.performers.model.ReviewPerformerOffer;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -22,31 +21,6 @@ public interface ReviewPerformerOfferRepository extends CrudRepository<ReviewPer
           AND o.expiresAt <= :now ORDER BY o.expiresAt, o.id
     """)
     List<Long> findExpiredIds(@Param("now") LocalDateTime now, Pageable pageable);
-
-    @Query("""
-        SELECT DISTINCT o
-        FROM ReviewPerformerOffer o
-        JOIN FETCH o.assignment a
-        JOIN FETCH a.order ord
-        LEFT JOIN FETCH ord.company
-        LEFT JOIN FETCH a.review
-        JOIN FETCH o.performer p
-        JOIN FETCH p.user
-        WHERE o.id = :offerId
-    """)
-    Optional<ReviewPerformerOffer> findByIdForAction(@Param("offerId") Long offerId);
-
-    @Query("""
-        SELECT DISTINCT o
-        FROM ReviewPerformerOffer o
-        JOIN FETCH o.assignment a
-        JOIN FETCH o.performer p
-        JOIN FETCH p.user
-        WHERE o.status = com.hunt.otziv.performers.model.PerformerOfferStatus.OFFERED
-          AND o.expiresAt <= :now
-        ORDER BY o.expiresAt ASC, o.id ASC
-    """)
-    List<ReviewPerformerOffer> findExpired(@Param("now") LocalDateTime now, Pageable pageable);
 
     @Query("""
         SELECT o

@@ -10,7 +10,7 @@ const pushApi = read('../src/app/core/mobile-push-api.service.ts');
 const interceptor = read('../src/app/core/auth.interceptor.ts');
 
 test('logout attempts current push-token revoke before clearing authentication', () => {
-  const start = auth.indexOf('async logout(): Promise<void>');
+  const start = auth.indexOf('async logoutFrom(');
   const end = auth.indexOf('async handleUnauthorized', start);
   const logout = auth.slice(start, end);
 
@@ -37,7 +37,7 @@ test('logout revoke never starts refresh and late refresh cannot restore a clear
   assert.doesNotMatch(revokeBranch, /getAccessToken|refreshTokens|handleUnauthorized/);
   assert.match(auth, /const refreshGeneration = this\.sessionGeneration/);
   assert.match(auth, /refreshGeneration !== this\.sessionGeneration/);
-  assert.match(auth, /async logout\(\): Promise<void> \{[\s\S]*this\.sessionGeneration \+= 1/);
+  assert.match(auth, /async logoutFrom\([\s\S]*this\.sessionGeneration \+= 1/);
 });
 
 test('all local session clears reset push registration without revocation or refresh', () => {

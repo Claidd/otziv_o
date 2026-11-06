@@ -6,7 +6,6 @@ import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.service.CategoryService;
 import com.hunt.otziv.c_categories.service.SubCategoryService;
-import com.hunt.otziv.c_companies.api.CompanyStatisticsOperations;
 import com.hunt.otziv.c_companies.api.CompanyChatLinkChanged;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
@@ -80,7 +79,6 @@ public class CompanyServiceImpl implements CompanyService{
     private final CompanyRepository companyRepository;
     private final CompanyInfoRepository companyInfoRepository;
     private final CompanyRecordService companyRecords;
-    private final CompanyStatisticsOperations companyStatistics;
     private final LeadService leadService;
     private final UserService userService;
     private final ManagerService managerService;
@@ -194,10 +192,6 @@ public class CompanyServiceImpl implements CompanyService{
     } // Создание нового пользователя "Клиент" - конец
 //      =====================================CREATE USERS - START=======================================================
 
-    public List<Company> getAllCompaniesList(){ // Взять все компании
-        return companyRepository.findAll();
-    } // Взять все компании
-
 
     // ======================================== JUST ADMIN ===============================================================
     public Page<CompanyListDTO> getAllCompaniesDTOListToList(String keywords, String status, int pageNumber, int pageSize){ // Показ всех компаний + поиск + статус
@@ -217,19 +211,6 @@ public class CompanyServiceImpl implements CompanyService{
         return getCompanyDTOPage(companyIds);
     } // Показ всех компаний + поиск + статус
 
-
-    public Page<CompanyListDTO> getAllCompaniesDTOListToListToSend(String keywords, String status, int pageNumber, int pageSize){ // Показ всех компаний + поиск + статус + для рассылки
-        Pageable pageable = companyPageable(pageNumber, pageSize, "desc");
-        Page<Long> companyIds;
-        if (!keywords.isEmpty()){
-            log.info("Отработал метод с keywords");
-            companyIds = companyRepository.findPageIdByStatusAndKeyword(keywords, status, keywords, status, pageable);
-        }
-        else {
-            companyIds = companyRepository.findPageIdByStatus(status, pageable);
-        }
-        return getCompanyDTOPage(companyIds, true);
-    } // Показ всех компаний + поиск + статус + для рассылки
 
 
 
@@ -295,19 +276,6 @@ public class CompanyServiceImpl implements CompanyService{
             companyIds = companyRepository.findPageByManagerAndStatus(manager, status, pageable);
         }
         return getCompanyDTOPage(companyIds);
-    } // Берем все заказы Менеджера + поиск + статус
-
-    public Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManagerToSend(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы Менеджера + поиск + статус
-        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        Pageable pageable = companyPageable(pageNumber, pageSize, "desc");
-        Page<Long> companyIds;
-        if (!keyword.isEmpty()){
-            companyIds = companyRepository.findPageByManagerAndStatusAndKeyWords(manager,keyword, status, manager, keyword, status, pageable);
-        }
-        else{
-            companyIds = companyRepository.findPageByManagerAndStatus(manager, status, pageable);
-        }
-        return getCompanyDTOPage(companyIds, true);
     } // Берем все заказы Менеджера + поиск + статус
 
     @Override
@@ -479,26 +447,6 @@ public class CompanyServiceImpl implements CompanyService{
     public Company getCompaniesById(Long id) { // Берем компанию по Id
         return companyRecords.getCompaniesById(id);
     } // Берем компанию по Id
-
-    @Override
-    public CompanyDTO getCompaniesAllStatusByIdAndKeyword(Long companyId, String keywords) { // Взять компанию по Id и поиску
-        if (!keywords.isEmpty()){
-            log.info("Отработал метод с keywords");
-            Company company = companyRepository.findByIdAndTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(companyId, keywords, keywords).orElse(null);
-            if (company != null){
-                log.info("Отработал не равно null " + company.getId());
-                return convertToDto(company);
-            }
-            else {
-                log.info("Отработал равно null");
-                return convertToDto(companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(
-                        String.format("Компания '%d' не найден", companyId))));
-            }
-
-        }
-        else return convertToDto(companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Компания '%d' не найден", companyId))));
-    } // Взять компанию по Id и поиску
 
 
 
@@ -928,22 +876,6 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     @Override
-    public int countAllCompaniesToManager(Manager manager) {
-        if (manager == null) {
-            return 0;
-        }
-        return companyRepository.countByManager(manager);
-    }
-
-    @Override
-    public int countAllCompaniesToOwner(Set<Manager> managerList) {
-        if (managerList == null || managerList.isEmpty()) {
-            return 0;
-        }
-        return companyRepository.countByManagers(managerList);
-    }
-
-    @Override
     public int getAllCompanyDTOByStatusToManager(Manager manager, String status) {
         return companyRepository.countByManagerAndStatusTitle(manager, status);
     }
@@ -951,11 +883,6 @@ public class CompanyServiceImpl implements CompanyService{
     @Override
     public int getAllCompanyDTOByStatusToOwner(Set<Manager> managerList, String status) {
         return companyRepository.countByManagersAndStatusTitle(managerList, status);
-    }
-
-    @Override
-    public List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return companyStatistics.countNewCompaniesByManager(firstDayOfMonth, lastDayOfMonth);
     }
 
     @Override

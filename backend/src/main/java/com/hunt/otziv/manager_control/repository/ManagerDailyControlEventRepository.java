@@ -16,11 +16,6 @@ public interface ManagerDailyControlEventRepository extends CrudRepository<Manag
 
     List<ManagerDailyControlEvent> findByControlOrderByCreatedAtDesc(ManagerDailyControl control);
 
-    long countByControlInAndEventType(
-            Collection<ManagerDailyControl> controls,
-            ManagerDailyControlEventType eventType
-    );
-
     interface ManagerEventCount { Long getManagerId(); long getTotal(); }
 
     @Query("""

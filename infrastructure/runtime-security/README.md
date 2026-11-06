@@ -30,6 +30,50 @@ it does not prevent a repository administrator from deleting the release.
 Historical Git commits still contain the original files; this change does not
 rewrite history or shrink existing clones.
 
+## Removed unread evidence (2026-11-05)
+
+Proof directories of superseded generations that no validator, test, CI step or
+deploy script reads were removed from the working tree (1 279 files, about
+164 MB): monitoring c12/c15/c23/c29/c30/c36 generations, nginx and phpMyAdmin
+c12–c41, mc/S3/node/certbot c14–c33, C7/C12/C14 helper proofs, the
+`proofs/c7-published` subdirectories except `mysql/`, and
+`keycloak/security-generation/proofs/c7-complete`. The active parent chains
+(c14→c48 Keycloak, c14→c46 MySQL, PostgreSQL, current monitoring) and every file
+a test reads are unchanged. Nothing needs to be hydrated. To inspect or restore a
+removed set, check it out from the last commit that contained it, for example:
+
+```sh
+git checkout a7aa87467 -- infrastructure/runtime-security/proofs/c41-nginx
+```
+
+## Removed superseded validators and manual tools (2026-11-06)
+
+- Activation scan validators for the superseded monitoring generations
+  c29/c36 Alloy and c29/c30/c36/c40/c41 Grafana, the C36 Alloy adjudicator and
+  the C29 Alloy adjudicator (its exact-binary inspectors stay in
+  `alloy-c29-adjudication.mjs` for C43), with their tests. Activating one of those
+  generations is now refused (`activation_superseded_monitoring_generation`);
+  `scan.mjs` adjudicates only C43-labelled Alloy builds besides the original proof.
+- The C15 Alloy security reassessment path: a publication that still requires a
+  risk review is refused. `proofs/c15-alloy-published/reassessment` was removed;
+  `adjudications/alloy-daemon*` stay because `scan.mjs` and the SSL refresh
+  validators read them.
+- Nested C14 candidate tests that CI never ran (`builds/minio/mc-candidate.test.mjs`,
+  `builds/versity-c14/candidate.test.mjs`) with `proofs/c14-minio-mc` and
+  `proofs/c14-versity`. The build contexts stay.
+- The manual P21.5 queue benchmarks: `queue-saturation.mjs`,
+  `QueueSaturationBenchmark.java`, `queue-load-smoke.mjs`, `QUEUE_SATURATION.md`,
+  `QUEUE_SATURATION_2026-09-07.json`, `QUEUE_LOAD_2026-09-07.md`.
+- Unread Keycloak C14 leftovers: `c14-migration-fix/pr51945*.json` and the stale
+  `c14-migration-fix/proofs/actual-source-{provisional,sha256-6d71d32d0e4d810f8,sha256-949f59488d0a83174}.json`
+  and `issuer-protocol-sha256-949f59488d0a83174.json`.
+
+Restore any of them from the last commit that contained it, for example:
+
+```sh
+git checkout 179ca19a9 -- infrastructure/runtime-security/queue-saturation.mjs
+```
+
 The quality workflow builds the actual backend, web, worker, WhatsApp, Docker-observer and monitoring-publisher Dockerfiles, checks their runtime boundaries and preserves vulnerability reports. Local commands require Node 22.12+ and a local Docker context; remote Docker contexts are rejected. Nothing here starts the application Compose stack, restores production data, logs into WhatsApp or sends provider messages.
 
 ```sh
@@ -82,8 +126,6 @@ The runtime images use a verified Node 22.23.2 Debian Bookworm base digest and a
 The packaged Maven scan covers shipped Java libraries. The mandatory CI security profile additionally scans resolved test/provided/system dependencies and build-plugin dependency graphs; authenticated Sonatype credentials and the other analyzer prerequisites must be provisioned. See the [Maven fixes, exact false-product corrections and remaining build/test findings](MAVEN_AUDIT_2026-09-07.md). Neither scanner proves runtime reachability or substitutes for code authorization tests. The integration matrix covers six actual built images: backend, web, worker, WhatsApp, observer and the signals publisher. A separate upstream-image inventory/gate covers checked-in dependency images; the [published fleet registry and exact-image reports](PUBLISHED_FLEET_2026-09-07.md) record the observed production artifacts. Each release must retain its own matching digest, report and review. Backend/web also receive bounded network-disabled runtime/configuration probes; application health against a real database is a separate acceptance step. These checks do not assert that the entire production fleet is vulnerability-free.
 
 ## External acceptance remains explicit
-
-For bounded database query measurements with synthetic data, run `node infrastructure/runtime-security/queue-load-smoke.mjs /secure/evidence/queue-load.json`. It owns an isolated MySQL container/volume and never uses Compose or restored data. See [the measured plans, improvement and remaining limits](QUEUE_LOAD_2026-09-07.md). Completion is not a throughput or product SLO assertion.
 
 The local recovery tests prove archive authentication, identity/manifest checks, negative cases and command boundaries. They do not prove a coordinated production MySQL/PostgreSQL/object-storage/secrets restore. Follow [the recovery runbook](../recovery/README.md), agree RPO/RTO, establish a real write fence and test the restored identity/session boundaries before public access.
 

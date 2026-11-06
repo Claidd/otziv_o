@@ -15,6 +15,5 @@ The comparison below describes the existing web/mobile behavior. The common SDK 
 | Explicit `BANK_LINK`, `TBANK_LINK`, `TOCHKA_LINK` | Bank route | Bank route | Same; trim/case accepted |
 | Unknown nonempty route | Not a bank route | Not a bank route | Common public-invoice guard also disables payment/report capabilities |
 | Bank recipient distinct from accounting recipient | Separate `manualPaymentBankRecipientName` display helper | No corresponding helper/API in this adapter | Preserve web-specific presentation; do not invent mobile UI |
-| Task target selector and overrun acknowledgement | `manualPaymentTaskTargetKey`, `manualPaymentTaskOverrunAcknowledgementRequired` | No corresponding helper in this adapter | Keep web-only settings responsibility; its existing tests remain authoritative |
 
 Future consolidation of the routing adapters must preserve this matrix. An empty legacy route is not evidence that a new unknown route should be accepted. Unknown public invoice status/route disables `payable` and `clientReportable`; unknown single-payment status/method/page mode disables all existing payment flags. Raw strings remain visible for diagnosis.

@@ -1599,10 +1599,8 @@ public interface WorkloadTransferExecutionRepository
         Long getCompanyId();
         String getCompanyTitle();
         String getGraphFingerprint();
-        String getGraphJson();
         String getMode();
         LocalDate getDecisionDate();
-        Long getAcceptedOfferId();
         /*
          * MySQL exposes CASE ... THEN TRUE ELSE FALSE as a numeric BIGINT in a
          * native projection. Keeping the projection numeric avoids Spring Data's

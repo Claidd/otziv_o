@@ -23,10 +23,6 @@ public interface SpecialistManualPaymentReviewRepository
     @Query("select r from SpecialistManualPaymentReview r where r.id = :id")
     Optional<SpecialistManualPaymentReview> lockById(@Param("id") Long id);
 
-    @Query("select r.id from SpecialistManualPaymentReview r where r.status = :status order by r.id")
-    List<Long> findIdsByStatus(@Param("status") SpecialistManualPaymentReviewStatus status,
-                               org.springframework.data.domain.Pageable page);
-
     @Query("select r.id from SpecialistManualPaymentReview r where r.status = :status "
             + "and (r.lastAttemptAt is null or r.lastAttemptAt <= :cutoff) order by r.id")
     List<Long> findRetryableIds(@Param("status") SpecialistManualPaymentReviewStatus status,

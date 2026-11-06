@@ -30,8 +30,6 @@ public interface ManagerService {
     Manager save(Manager manager);
 
 
-    List<Manager> getAllManagersToOwner(List<Manager> managers);
-
 
     List<Manager> findAllManagersWorkers(List<Manager> managerList);
 

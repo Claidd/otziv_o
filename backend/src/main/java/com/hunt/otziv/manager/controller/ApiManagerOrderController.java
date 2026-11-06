@@ -15,9 +15,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService;
-import com.hunt.otziv.p_products.service.OrderDetailsService;
 import com.hunt.otziv.p_products.service.OrderService;
-import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Worker;
@@ -50,8 +48,6 @@ public class ApiManagerOrderController {
 
     private final OrderService orderService;
     private final com.hunt.otziv.p_products.api.OrderStatusCommands statusCommands;
-    private final OrderDetailsService orderDetailsService;
-    private final ReviewService reviewService;
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
     private final ManagerPermissionService managerPermissionService;
     private final ManagerAccessService managerAccessService;

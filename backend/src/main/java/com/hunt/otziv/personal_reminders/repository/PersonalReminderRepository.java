@@ -25,7 +25,6 @@ public interface PersonalReminderRepository extends JpaRepository<PersonalRemind
     List<Long> findSettledBadReviewReminderIds(@Param("userId") Long userId);
 
     boolean existsBySourceTypeAndSourceId(String sourceType, Long sourceId);
-    List<PersonalReminder> findBySourceTypeAndSourceOrderIdAndCompletedAtIsNull(String sourceType, Long sourceOrderId);
 
     @Query("SELECT r.id FROM PersonalReminder r WHERE r.sourceType = :sourceType "
             + "AND r.completedAt IS NULL AND r.id > :afterId ORDER BY r.id")

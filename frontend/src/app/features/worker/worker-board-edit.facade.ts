@@ -556,21 +556,6 @@ export class WorkerBoardEditFacade {
     }));
   }
 
-  private patchReviewsFromDetails(details: OrderDetailsPayload): void {
-    const updatedReviews = new Map(details.reviews.map((review) => [review.id, review]));
-
-    this.patchBoard((board) => ({
-      ...board,
-      reviews: {
-        ...board.reviews,
-        content: board.reviews.content.map((review) => {
-          const updatedReview = updatedReviews.get(review.id);
-          return updatedReview ? { ...review, ...updatedReview } : review;
-        })
-      }
-    }));
-  }
-
   private patchReviewEditDetails(updatedReview: OrderReviewItem): void {
     this.reviewEditDetails.update((details) => details ? {
       ...details,

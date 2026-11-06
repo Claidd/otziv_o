@@ -5,8 +5,7 @@ import {
   manualPaymentRecipientEffect,
   manualPaymentRecipientKey,
   manualPaymentRecipientLabel,
-  manualPaymentRouteErrorCode,
-  manualPaymentTaskOverrunAcknowledgementRequired
+  manualPaymentRouteErrorCode
 } from './manual-payment-routing';
 
 describe('manual payment task routing', () => {
@@ -74,19 +73,5 @@ describe('manual payment task routing', () => {
       .toBe('TASK_TARGET_UNRESOLVED');
     expect(isRetryablePaymentRouteError({ error: { errorCode: 'ACTUAL_RECIPIENT_REQUIRED' } })).toBe(true);
     expect(isRetryablePaymentRouteError({ error: { code: 'TASK_TARGET_UNRESOLVED' } })).toBe(false);
-  });
-
-  it('requires an explicit acknowledgement for any projected target overrun', () => {
-    expect(manualPaymentTaskOverrunAcknowledgementRequired({
-      key: 'MANAGER:4',
-      kind: 'MANAGER',
-      profileId: 4,
-      label: 'Менеджер · Вика',
-      enabled: true,
-      projectedOverrunKopecks: 1
-    })).toBe(true);
-    expect(manualPaymentTaskOverrunAcknowledgementRequired({
-      key: 'OWNER', kind: 'OWNER', label: 'Владелец', enabled: true, projectedOverrunKopecks: 0
-    })).toBe(false);
   });
 });

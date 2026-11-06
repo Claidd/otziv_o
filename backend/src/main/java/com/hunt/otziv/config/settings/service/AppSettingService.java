@@ -274,17 +274,6 @@ public class AppSettingService implements com.hunt.otziv.config.settings.api.Bac
     }
 
     /**
-     * Reads a safety-critical boolean directly from the database so a change made on
-     * another application node is observed without waiting for the local cache TTL.
-     */
-    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
-    public boolean getBooleanFresh(String key, boolean fallback) {
-        String value = repository.findFreshValueByKey(key).orElse(null);
-        cache.put(key, CachedSetting.fresh(value, cacheTtl));
-        return value == null ? fallback : parseBoolean(value, fallback);
-    }
-
-    /**
      * Fresh safety-switch read: a missing row keeps the rollout default, while
      * an existing but malformed value fails closed.
      */

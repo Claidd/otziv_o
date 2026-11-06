@@ -13,7 +13,7 @@ import { MobilePushService } from './mobile-push.service';
 import { oidcCallbackErrorCode, oidcCallbackErrorMessage } from './auth-callback-errors';
 import { sanitizeDiagnosticRoute } from './mobile-diagnostics-route';
 
-export type MobileLogoutSource = 'home_actions' | 'header_menu' | 'profile' | 'unknown';
+export type MobileLogoutSource = 'home_actions' | 'header_menu' | 'unknown';
 
 const LOGOUT_REVOKE_TIMEOUT_MS = 4000;
 
@@ -361,10 +361,6 @@ export class AuthService {
 
     this.refreshPromise = refresh;
     return refresh;
-  }
-
-  async logout(): Promise<void> {
-    return this.logoutFrom('unknown');
   }
 
   async logoutFrom(

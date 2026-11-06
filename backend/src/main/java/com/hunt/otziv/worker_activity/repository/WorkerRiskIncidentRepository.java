@@ -65,17 +65,6 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
             Pageable pageable
     );
 
-    Page<WorkerRiskIncident> findByAssignedManagerIdInAndAuditRequiredTrueOrderByResolvedAtDescCreatedAtDesc(
-            Collection<Long> managerIds,
-            Pageable pageable
-    );
-
-    Page<WorkerRiskIncident> findByAssignedManagerIdInAndStatusOrderByCreatedAtDesc(
-            Collection<Long> managerIds,
-            WorkerRiskIncidentStatus status,
-            Pageable pageable
-    );
-
     @Query("""
             SELECT i
             FROM WorkerRiskIncident i
@@ -185,32 +174,6 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
             @Param("afterId") Long afterId,
             Pageable pageable
     );
-
-    @Query("""
-            SELECT i
-            FROM WorkerRiskIncident i
-            WHERE i.status = :status
-              AND i.resolutionAction = :resolutionAction
-              AND i.explanationAcceptedAt IS NULL
-              AND i.explanationPromptedAt IS NOT NULL
-              AND EXISTS (
-                    SELECT 1
-                    FROM com.hunt.otziv.u_users.model.User u
-                    WHERE u.id = i.workerUserId
-                      AND u.active = true
-                      AND u.workerTelegramGroupChatId = :chatId
-              )
-            ORDER BY i.explanationPromptedAt DESC, i.createdAt DESC
-            """)
-    List<WorkerRiskIncident> findPendingExplanationByWorkerGroupChatId(
-            @Param("chatId") Long chatId,
-            @Param("status") WorkerRiskIncidentStatus status,
-            @Param("resolutionAction") WorkerRiskResolutionAction resolutionAction,
-            Pageable pageable
-    );
-
-    @Modifying
-    long deleteByStatusNotAndCreatedAtBefore(WorkerRiskIncidentStatus status, LocalDateTime cutoff);
 
     /** One bounded batch of closed incidents; response rows go with them via ON DELETE CASCADE. */
     @Modifying

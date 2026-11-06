@@ -1,6 +1,5 @@
 package com.hunt.otziv.contractor_payments.service;
 
-import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
@@ -36,7 +35,6 @@ public class ContractorPaymentReconciliationDispatcher {
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentReconcileClaimService claimService;
     private final ContractorPaymentShadowService shadowService;
-    private final AppSettingService appSettingService;
     private volatile boolean stopping;
 
     @EventListener(ContextClosedEvent.class)

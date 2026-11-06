@@ -194,11 +194,6 @@ public class ManagerReportReviewIssueService {
         return dispute;
     }
 
-    @Transactional(readOnly = true)
-    public Optional<ManagerReportReviewDispute> draftDispute(ManagerReportReviewSession review) {
-        return dispute(review, List.of(ManagerReportReviewDisputeStatus.DRAFT));
-    }
-
     /** A verifier failure requests an owner decision; it is not an employee dispute or admission. */
     @Transactional
     public Optional<ManagerReportReviewDispute> requestOwnerVerification(ManagerReportReviewSession review,
@@ -218,14 +213,6 @@ public class ManagerReportReviewIssueService {
     public Optional<ManagerReportReviewDispute> explanationDispute(ManagerReportReviewSession review) {
         return dispute(review, List.of(ManagerReportReviewDisputeStatus.DRAFT,
                 ManagerReportReviewDisputeStatus.NEEDS_CONTEXT));
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<ManagerReportReviewDispute> openDispute(ManagerReportReviewSession review) {
-        return dispute(review, List.of(
-                ManagerReportReviewDisputeStatus.OPEN,
-                ManagerReportReviewDisputeStatus.NEEDS_CONTEXT
-        ));
     }
 
     @Transactional(readOnly = true)

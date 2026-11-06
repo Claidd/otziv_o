@@ -9,7 +9,6 @@ const header = readFileSync(new URL('../src/app/shared/mobile-header.component.t
 const confirmService = readFileSync(new URL('../src/app/shared/mobile-confirm.service.ts', import.meta.url), 'utf8');
 const confirmHost = readFileSync(new URL('../src/app/shared/mobile-confirm-host.component.ts', import.meta.url), 'utf8');
 const home = readFileSync(new URL('../src/app/features/home.page.ts', import.meta.url), 'utf8');
-const profile = readFileSync(new URL('../src/app/features/profile.page.ts', import.meta.url), 'utf8');
 const appDiagnosticsPlugin = readFileSync(new URL('../src/app/core/app-diagnostics.plugin.ts', import.meta.url), 'utf8');
 const telemetryInterceptor = readFileSync(new URL('../src/app/core/mobile-telemetry.interceptor.ts', import.meta.url), 'utf8');
 const externalLinks = readFileSync(new URL('../src/app/shared/mobile-external-link.service.ts', import.meta.url), 'utf8');
@@ -42,9 +41,8 @@ test('diagnostics upload only after authentication and never persist raw tokens'
 test('all logout buttons report an exact source before clearing the session', () => {
   assert.match(header, /this\.auth\.logoutFrom\('header_menu',/);
   assert.match(home, /this\.auth\.logoutFrom\('home_actions'\)/);
-  assert.match(profile, /this\.auth\.logoutFrom\('profile'\)/);
 
-  const start = auth.indexOf('async logout(');
+  const start = auth.indexOf('async logoutFrom(');
   const end = auth.indexOf('private async revokeCurrentPushTokenBestEffort', start);
   const logout = auth.slice(start, end);
   assert.ok(logout.indexOf("recordAuthDiagnostic('auth.logout_requested'") < logout.indexOf('clearSession('));

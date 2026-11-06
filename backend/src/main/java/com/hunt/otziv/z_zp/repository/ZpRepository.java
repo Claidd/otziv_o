@@ -50,12 +50,6 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
 
     boolean existsByOrderIdAndSourceAndActiveTrue(Long orderId, String source);
 
-    boolean existsByOrderIdAndSourceAndContractorRoleAndActiveTrue(
-            Long orderId,
-            String source,
-            ContractorRole contractorRole
-    );
-
     Optional<Zp> findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
             Long orderId,
             String source,
@@ -64,54 +58,6 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
     );
 
     List<Zp> findByOrderIdAndSourceAndActiveTrue(Long orderId, String source);
-
-    @Query("""
-        SELECT z
-        FROM Zp z
-        WHERE z.userId = :userId
-          AND z.contractorRole = :role
-          AND z.id > :startZpId
-        ORDER BY z.created, z.id
-    """)
-    List<Zp> findContractorRewards(@Param("userId") Long userId,
-                                   @Param("role") ContractorRole role,
-                                   @Param("startZpId") long startZpId);
-
-    @Query("""
-        SELECT z
-        FROM Zp z
-        WHERE z.contractorRole = :role
-          AND z.id > :startZpId
-        ORDER BY z.id
-    """)
-    List<Zp> findContractorRewardsByRoleAfterId(@Param("role") ContractorRole role,
-                                                @Param("startZpId") long startZpId);
-
-    @Query("""
-        SELECT z
-        FROM Zp z
-        WHERE z.contractorRole = :role
-          AND z.updatedAt >= :updatedSince
-          AND z.id <= :maxZpId
-        ORDER BY z.id
-    """)
-    List<Zp> findChangedContractorRewardsByRole(@Param("role") ContractorRole role,
-                                                @Param("updatedSince") LocalDateTime updatedSince,
-                                                @Param("maxZpId") long maxZpId);
-
-    @Query("""
-        SELECT z
-        FROM Zp z
-        WHERE z.userId = :userId
-          AND z.contractorRole = :role
-          AND z.updatedAt >= :updatedSince
-          AND z.id <= :maxZpId
-        ORDER BY z.id
-    """)
-    List<Zp> findChangedContractorRewards(@Param("userId") Long userId,
-                                          @Param("role") ContractorRole role,
-                                          @Param("updatedSince") LocalDateTime updatedSince,
-                                          @Param("maxZpId") long maxZpId);
 
     /**
      * Rewards whose ledger marker is missing or stale. The marker is unique per
@@ -311,17 +257,6 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
     """, nativeQuery = true)
     long countEligibleLegacyManagerRewardForSync(@Param("sourceId") Long sourceId);
 
-    @Query("SELECT z FROM Zp z WHERE z.userId = :userId AND z.active = true AND z.created >= :startDate AND z.created < :endDate")
-    List<Zp> getAllWorkerZpInPeriod(@Param("userId") Long userId,
-                                    @Param("startDate") LocalDate startDate,
-                                    @Param("endDate") LocalDate endDate);
-
-    @Query("SELECT zp FROM Zp zp WHERE zp.userId = :userId AND zp.active = true AND zp.created >= :firstDayOfMonth AND zp.created <= :lastDayOfMonth")
-    List<Zp> getAllWorkerZp(@Param("userId") Long userId,
-                            @Param("firstDayOfMonth") LocalDate firstDayOfMonth,
-                            @Param("lastDayOfMonth") LocalDate lastDayOfMonth);
-
-
 //    @Query("SELECT z FROM Zp z WHERE YEAR(z.created) = YEAR(:localDate) AND MONTH(z.created) = MONTH(:localDate)")
 //    List<Zp> findAllToDate(LocalDate localDate);
 
@@ -371,38 +306,6 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
 
 //    @Query("SELECT z.fio, SUM(z.sum) as totalSum FROM Zp z WHERE z.created BETWEEN :startDate AND :endDate GROUP BY z.fio ORDER BY totalSum DESC")
 //    List<Object[]> findAllToDateToMap(LocalDate startDate, LocalDate endDate);
-
-
-    @Query(value = """
-        SELECT
-            u.fio AS fio,
-            COALESCE(z.total_sum, 0) AS totalSum,
-            MIN(r.name) AS role,
-            COALESCE(z.total_orders, 0) AS totalOrders,
-            COALESCE(z.total_amount, 0) AS totalAmount
-        FROM users u
-        LEFT JOIN (
-            SELECT
-                zp_user,
-                SUM(zp_sum) AS total_sum,
-                COUNT(DISTINCT zp_id) AS total_orders,
-                SUM(zp_amount) AS total_amount
-            FROM zp
-            WHERE zp_date BETWEEN :startDate AND :endDate
-              AND zp_active = 1
-            GROUP BY zp_user
-        ) z ON z.zp_user = u.id
-        LEFT JOIN users_roles ur ON ur.user_id = u.id
-        LEFT JOIN roles r ON r.id = ur.role_id
-        WHERE u.active = true
-        GROUP BY u.id, u.fio, z.total_sum, z.total_orders, z.total_amount
-        ORDER BY totalSum DESC
-    """, nativeQuery = true)
-    List<Object[]> findAllUsersWithZpToDate(@Param("startDate") LocalDate startDate,
-                                            @Param("endDate") LocalDate endDate);
-
-
-
 
 
 //    @Query("""

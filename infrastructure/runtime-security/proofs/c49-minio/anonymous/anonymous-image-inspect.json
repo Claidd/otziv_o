@@ -1,0 +1,84 @@
+[
+    {
+        "Id": "sha256:b140204d96553974dd0ae3880fbb330a718b65a399031055e56cdd50161e7c41",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:860e028744b41222a75dce94ce5c31572364a90787ccf478be95f575da6ad9a3"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-06T14:16:35.241243969Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/usr/local/bin/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.derivative": "Alpine vendor libssl3/libcrypto3 package update only; Versity v1.8.0 binary unchanged",
+                "com.otziv.publication.revision": "1cf595a0f79c021feaf30107137611d63b271a19",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "minio",
+                "com.otziv.security.patch": "Go1.27.3; x/net0.60.0; parent Alpine security packages preserved",
+                "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; C36 versitygw executable and unrelated packages unchanged",
+                "com.otziv.upstream.image": "ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499",
+                "org.opencontainers.image.created": "2026-09-04T23:12:05.588Z",
+                "org.opencontainers.image.description": "A simple to deploy but feature rich S3 object storage server for your filesystem",
+                "org.opencontainers.image.licenses": "Apache-2.0",
+                "org.opencontainers.image.revision": "fd04bc1df2656298577b82667a4195c77f8c7563",
+                "org.opencontainers.image.source": "https://github.com/versity/versitygw",
+                "org.opencontainers.image.title": "versitygw",
+                "org.opencontainers.image.url": "https://github.com/versity/versitygw",
+                "org.opencontainers.image.version": "v1.8.0-otziv.c36"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 118211074,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/b0107170f4adab8cb4abab6fd4ad5d00e1b3edb735cec26bb2bd43d34d5a0aa9/diff:/var/lib/docker/overlay2/ee97b6f73baf876a00bca16e102c3e1cdec64ffceb961a4bebc75df386eb52c1/diff:/var/lib/docker/overlay2/e244b91589650116bb7f812ac1666cb3e6423efd77d2bd67c22234ad35334a05/diff:/var/lib/docker/overlay2/e4275e697bee2f1dab6a5ff5492a1d3f928ced7a78254152b5dc136c60a25586/diff:/var/lib/docker/overlay2/8ae1f47fe9df5f45c9cba4170ee8874ee83a005e3a6e0cda5c9c29446ee8ebb2/diff:/var/lib/docker/overlay2/ddcf532d3290a1cfb42532b263350e50096794c5e6bfaf59d704e480449567d1/diff:/var/lib/docker/overlay2/53ff958ab0c62d0e5e30f0cbd0380197a221c8a1baa5028dc9091033e17d3414/diff:/var/lib/docker/overlay2/1a140b9250dd23fd4bd448877923372618273176735cfe8fd51a4061875d8342/diff:/var/lib/docker/overlay2/999e95ad1f49eb53b06637d703c7cbdc9ece715eec63fa2bb2f3fb37a4af15ef/diff:/var/lib/docker/overlay2/6946c263d2664fcfaa5d5c92198aaa52a7f91e722b319ee43e7f047f008487d9/diff",
+                "MergedDir": "/var/lib/docker/overlay2/b072764a064cb282f59c1973758a854b7a0f75cd39fbd0ae5839273e3a96a164/merged",
+                "UpperDir": "/var/lib/docker/overlay2/b072764a064cb282f59c1973758a854b7a0f75cd39fbd0ae5839273e3a96a164/diff",
+                "WorkDir": "/var/lib/docker/overlay2/b072764a064cb282f59c1973758a854b7a0f75cd39fbd0ae5839273e3a96a164/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:cc015d1a2a543af8a6d773a6e9262d8ad65af4374900c83691bf60c13c85c588",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:b6a352de45b1318fde6932192304a4d9919bd9c4d9a6ce728aeb582f5cb6e384",
+                "sha256:9c46e264a8e898ced678db4b4c9f881c98ae974f02b7f69578aba3ad8b7c530f",
+                "sha256:d1f3a415814c1f0b22a146c25b2be676c19aa364ae16df3a3ba338fb75a84b3d",
+                "sha256:7c26790ef261d25af40cb01517ad675f7d59028303d79548f2d4edac03a0679b",
+                "sha256:c8570ba2591e17b97ab54e82175eb283a834c7b6ef2990809e483acc0a09ec44",
+                "sha256:607c7415e72c29f92629483eb971e3f8999ac9d9623f93ae5a7b9fd6428258e3",
+                "sha256:52b93e6addcc4972831a85a1207a258cc3f70b043a06fedfe19ee50d30a39239",
+                "sha256:04249ab947c65706169cff9fddf75a8fc50afccffe5304a2f65bc5d6b097c25a"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

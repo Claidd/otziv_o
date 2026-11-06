@@ -36,8 +36,6 @@ public interface ContractorRewardLedgerRepository extends JpaRepository<Contract
             long attributionKey
     );
 
-    List<ContractorRewardLedgerEntry> findAllBySourceZpIdAndProfileId(Long sourceZpId, Long profileId);
-
     List<ContractorRewardLedgerEntry> findAllBySourceZpId(Long sourceZpId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -83,6 +81,4 @@ public interface ContractorRewardLedgerRepository extends JpaRepository<Contract
         """)
     List<ProfileAccrualTotals> sumActiveForProfiles(@Param("ids") java.util.Collection<Long> ids,
             @Param("from") LocalDate from, @Param("to") LocalDate to);
-
-    List<ContractorRewardLedgerEntry> findAllByProfileIdAndActiveTrueOrderByOccurredOnAscIdAsc(Long profileId);
 }

@@ -45,7 +45,6 @@ com.hunt.otziv.admin.controller.ApiAdminDictionaryController -> com.hunt.otziv.p
 com.hunt.otziv.admin.controller.ApiAdminDictionaryController -> com.hunt.otziv.p_products.service.BotAssignmentService
 com.hunt.otziv.admin.controller.ApiAdminDictionaryController -> com.hunt.otziv.p_products.worker_access.config.WorkerCellularAccessProperties
 com.hunt.otziv.admin.controller.ApiAdminDictionaryController -> com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessRuntimeSettingsService
-com.hunt.otziv.admin.controller.ApiAdminDictionaryController -> com.hunt.otziv.r_review.repository.ReviewRepository
 com.hunt.otziv.admin.controller.ApiAdminDictionaryController -> com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsRequest
 com.hunt.otziv.admin.controller.ApiAdminDictionaryController -> com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse
 com.hunt.otziv.admin.controller.ApiAdminDictionaryController -> com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsService
@@ -271,8 +270,6 @@ com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.p_
 com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.p_products.repository.OrderRepository
 com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService
 com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.p_products.worker_access.service.WorkerTaskSchedulePermission
-com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse
-com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.payments.service.BankPaymentInstructionSource
 com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.payments.service.PaymentLinkService
 com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.personal_reminders.service.PersonalReminderService
 com.hunt.otziv.bad_reviews.service.BadReviewTaskServiceImpl -> com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService
@@ -913,7 +910,6 @@ com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService -> co
 com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService -> com.hunt.otziv.u_users.repository.UserRepository
 com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService -> com.hunt.otziv.z_zp.repository.ZpRepository
 com.hunt.otziv.contractor_payments.service.ContractorPaymentQueueHealthService -> com.hunt.otziv.p_products.repository.OrderRepository
-com.hunt.otziv.contractor_payments.service.ContractorPaymentReconciliationDispatcher -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.contractor_payments.service.ContractorPaymentRoutingLimitService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeHealthMonitor -> com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository
 com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeHealthMonitor -> com.hunt.otziv.payments.service.PaymentIssueReminderService
@@ -1104,7 +1100,6 @@ com.hunt.otziv.l_lead.service.LeadService -> com.hunt.otziv.u_users.model.Operat
 com.hunt.otziv.l_lead.service.LeadService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.gamification.service.GamificationEventService
-com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.logs.util.LogMasking
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.u_users.model.Marketolog
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.u_users.model.Operator
@@ -1115,10 +1110,6 @@ com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.u_users.service.
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.u_users.service.OperatorService
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.u_users.service.UserService
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.z_zp.service.ZpService
-com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.config.jwt.service.JwtService
-com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repository.ManagerRepository
-com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repository.MarketologRepository
-com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repository.OperatorRepository
 com.hunt.otziv.l_lead.service.LeadWorkNotificationService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.l_lead.service.TelephoneServiceImpl -> com.hunt.otziv.u_users.model.Operator
 com.hunt.otziv.l_lead.service.TelephoneServiceImpl -> com.hunt.otziv.u_users.repository.OperatorRepository
@@ -1165,9 +1156,7 @@ com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.p_
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.p_products.repository.OrderRepository
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService
-com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.p_products.service.OrderDetailsService
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.p_products.service.OrderService
-com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.r_review.service.ReviewService
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.u_users.dto.ManagerDTO
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.u_users.dto.WorkerDTO
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.u_users.model.Worker
@@ -1656,7 +1645,6 @@ com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewQueryService -> 
 com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewReminderJob -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewReminderJob -> com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService
 com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewReminderJob -> com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog
-com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewReminderJob -> com.hunt.otziv.t_telegrambot.service.TelegramService
 com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter -> com.hunt.otziv.u_users.repository.UserRepository
 com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewSettingsService -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewSettingsService -> com.hunt.otziv.u_users.model.Manager
@@ -1787,7 +1775,6 @@ com.hunt.otziv.p_products.application.ReviewPublicationMutationService -> com.hu
 com.hunt.otziv.p_products.application.WorkerCredentialCommands -> com.hunt.otziv.b_bots.model.Bot
 com.hunt.otziv.p_products.application.WorkerCredentialCommands -> com.hunt.otziv.bad_reviews.model.BadReviewTask
 com.hunt.otziv.p_products.application.WorkerCredentialCommands -> com.hunt.otziv.bad_reviews.service.BadReviewTaskService
-com.hunt.otziv.p_products.application.WorkerCredentialCommands -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.p_products.application.WorkerCredentialCommands -> com.hunt.otziv.review_recovery.model.ReviewRecoveryTask
 com.hunt.otziv.p_products.application.WorkerCredentialCommands -> com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService
 com.hunt.otziv.p_products.application.WorkerCredentialCommands -> com.hunt.otziv.security.credentials.CredentialRevealRequest
@@ -1990,8 +1977,6 @@ com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com
 com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler
 com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com.hunt.otziv.common_billing.service.CommonBillingService
 com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService
-com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com.hunt.otziv.contractor_payments.service.ContractorPaymentRolloutStateService
-com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch
 com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService
 com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard
 com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService -> com.hunt.otziv.payments.model.PaymentLink
@@ -2080,7 +2065,6 @@ com.hunt.otziv.p_products.service.OrderStatusCheckerServiceImpl -> com.hunt.otzi
 com.hunt.otziv.p_products.service.OrderStatusCheckerServiceImpl -> com.hunt.otziv.common_billing.service.CommonBillingService
 com.hunt.otziv.p_products.service.OrderStatusCheckerServiceImpl -> com.hunt.otziv.config.email.service.EmailService
 com.hunt.otziv.p_products.service.OrderStatusCheckerServiceImpl -> com.hunt.otziv.config.settings.service.AppSettingService
-com.hunt.otziv.p_products.service.OrderStatusCheckerServiceImpl -> com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService
 com.hunt.otziv.p_products.service.OrderStatusCheckerServiceImpl -> com.hunt.otziv.payments.service.OrderPaymentIntegrityService
 com.hunt.otziv.p_products.service.OrderStatusCheckerServiceImpl -> com.hunt.otziv.payments.service.PaymentLinkService
 com.hunt.otziv.p_products.service.OrderStatusCheckerServiceImpl -> com.hunt.otziv.review_recovery.service.ReviewRecoveryGateService
@@ -2135,7 +2119,6 @@ com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hun
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.common_billing.service.CommonBillingService
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.config.settings.service.AppSettingService
-com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService
@@ -2146,7 +2129,6 @@ com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hun
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.p_products.status.service.OrderStatusTransitionService -> com.hunt.otziv.u_users.model.Worker
-com.hunt.otziv.p_products.utils.OrderReviewGraph -> com.hunt.otziv.c_companies.model.Filial
 com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository -> com.hunt.otziv.u_users.model.Worker
 com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService -> com.hunt.otziv.manager.service.ManagerAccessService
@@ -2557,17 +2539,11 @@ com.hunt.otziv.r_review.bot.service.ReviewBotChangeService -> com.hunt.otziv.con
 com.hunt.otziv.r_review.bot.service.ReviewBotChangeService -> com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService
 com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService -> com.hunt.otziv.b_bots.model.Bot
 com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService -> com.hunt.otziv.config.settings.service.AppSettingService
-com.hunt.otziv.r_review.bot.service.ReviewBotReuseRepairService -> com.hunt.otziv.b_bots.model.Bot
-com.hunt.otziv.r_review.bot.service.ReviewBotReuseRepairService -> com.hunt.otziv.business_audit.service.BusinessAuditService
-com.hunt.otziv.r_review.bot.service.ReviewBotReuseRepairService -> com.hunt.otziv.c_companies.model.Company
-com.hunt.otziv.r_review.bot.service.ReviewBotReuseRepairService -> com.hunt.otziv.c_companies.model.Filial
-com.hunt.otziv.r_review.bot.service.ReviewBotReuseRepairService -> com.hunt.otziv.c_companies.repository.CompanyOrganizationIdentityRepository
 com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityMutationService -> com.hunt.otziv.manager.service.ManagerAccessService
 com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityMutationService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityMutationService -> com.hunt.otziv.u_users.repository.UserRepository
 com.hunt.otziv.r_review.controller.ApiReviewCheckCapabilityManagementController -> com.hunt.otziv.manager.service.ManagerAccessService
 com.hunt.otziv.r_review.controller.ApiReviewCheckController -> com.hunt.otziv.b_bots.model.Bot
-com.hunt.otziv.r_review.controller.ApiReviewCheckController -> com.hunt.otziv.business_audit.service.BusinessAuditService
 com.hunt.otziv.r_review.controller.ApiReviewCheckController -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.r_review.controller.ApiReviewCheckController -> com.hunt.otziv.c_companies.model.Filial
 com.hunt.otziv.r_review.controller.ApiReviewCheckController -> com.hunt.otziv.c_companies.service.CompanyService
@@ -2726,7 +2702,6 @@ com.hunt.otziv.security.credentials.service.CredentialRevealService -> com.hunt.
 com.hunt.otziv.security.credentials.service.CredentialRevealService -> com.hunt.otziv.p_products.model.OrderDetails
 com.hunt.otziv.security.credentials.service.CredentialRevealService -> com.hunt.otziv.r_review.model.Review
 com.hunt.otziv.security.credentials.service.CredentialRevealService -> com.hunt.otziv.review_recovery.model.ReviewRecoveryTask
-com.hunt.otziv.t_telegrambot.dto.WorkerData -> com.hunt.otziv.admin.dto.personal.UserData
 com.hunt.otziv.t_telegrambot.service.NotificationSchedulerToTelegramImpl -> com.hunt.otziv.admin.dto.personal.UserData
 com.hunt.otziv.t_telegrambot.service.NotificationSchedulerToTelegramImpl -> com.hunt.otziv.admin.service.PersonalService
 com.hunt.otziv.t_telegrambot.service.NotificationSchedulerToTelegramImpl -> com.hunt.otziv.u_users.model.Manager
@@ -2758,34 +2733,12 @@ com.hunt.otziv.t_telegrambot.service.TelegramService -> com.hunt.otziv.u_users.m
 com.hunt.otziv.t_telegrambot.service.TelegramService -> com.hunt.otziv.u_users.service.UserService
 com.hunt.otziv.t_telegrambot.service.TelegramService -> com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService
 com.hunt.otziv.t_telegrambot.service.TelegramService -> com.hunt.otziv.workload_shadow.service.WorkloadTransferTelegramCallbackService
-com.hunt.otziv.text_generator.service.AutoTextService -> com.hunt.otziv.p_products.dto.OrderDTO
-com.hunt.otziv.text_generator.service.AutoTextService -> com.hunt.otziv.p_products.model.OrderDetails
-com.hunt.otziv.text_generator.service.AutoTextService -> com.hunt.otziv.r_review.model.Review
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_categories.dto.CategoryDTO
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_categories.dto.SubCategoryDTO
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_categories.model.Category
 com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_categories.model.SubCategory
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_categories.service.CategoryService
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_categories.service.SubCategoryService
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_companies.dto.CompanyDTO
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_companies.dto.FilialDTO
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_companies.model.Company
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_companies.model.Filial
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.c_companies.service.FilialService
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.p_products.dto.OrderDTO
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.p_products.model.Order
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.p_products.model.OrderDetails
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.p_products.model.Product
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.p_products.service.BotAssignmentService
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode
-com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService
 com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.r_review.model.Review
 com.hunt.otziv.text_generator.service.AutoTextServiceImpl -> com.hunt.otziv.r_review.service.ReviewService
-com.hunt.otziv.text_generator.service.parser.WebsiteParserServiceImpl -> com.hunt.otziv.security.OutboundUrlGuard
 com.hunt.otziv.u_users.config.RequestValidationFilter -> com.hunt.otziv.config.jwt.service.CachedBodyHttpServletRequest
 com.hunt.otziv.u_users.config.SecurityConfig -> com.hunt.otziv.config.jwt.service.JwtAuthFilter
 com.hunt.otziv.u_users.config.SecurityConfig -> com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter
-com.hunt.otziv.u_users.controller.EmailController -> com.hunt.otziv.config.email.service.EmailService
 com.hunt.otziv.u_users.controller.LoginController -> com.hunt.otziv.config.legacy.LegacyMvc
 com.hunt.otziv.u_users.controller.OperatorsController -> com.hunt.otziv.config.legacy.LegacyMvc
 com.hunt.otziv.u_users.controller.RegistrationController -> com.hunt.otziv.config.legacy.LegacyMvc
@@ -2870,7 +2823,6 @@ com.hunt.otziv.worker_activity.service.WorkerRiskExplanationQualityService -> co
 com.hunt.otziv.worker_activity.service.WorkerRiskResponseSlaJob -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.worker_activity.service.WorkerRiskResponseSlaJob -> com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService
 com.hunt.otziv.worker_activity.service.WorkerRiskResponseSlaJob -> com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog
-com.hunt.otziv.worker_activity.service.WorkerRiskResponseSlaJob -> com.hunt.otziv.t_telegrambot.service.TelegramService
 com.hunt.otziv.worker_activity.service.WorkerRiskResponseSlaJob -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.worker_activity.service.WorkerRiskResponseSlaJob -> com.hunt.otziv.u_users.service.UserService
 com.hunt.otziv.worker_activity.service.WorkerRiskRollbackService -> com.hunt.otziv.bad_reviews.model.BadReviewTask
@@ -2953,17 +2905,13 @@ com.hunt.otziv.z_zp.service.PaymentCheckServiceImpl -> com.hunt.otziv.p_products
 com.hunt.otziv.z_zp.service.PaymentCheckServiceImpl -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.z_zp.service.PaymentCheckServiceImpl -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.z_zp.service.PaymentCheckServiceImpl -> com.hunt.otziv.u_users.model.Worker
-com.hunt.otziv.z_zp.service.ZpService -> com.hunt.otziv.admin.model.Quadruple
-com.hunt.otziv.z_zp.service.ZpService -> com.hunt.otziv.l_lead.model.Lead
 com.hunt.otziv.z_zp.service.ZpService -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.z_zp.service.ZpService -> com.hunt.otziv.u_users.model.Manager
-com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.admin.model.Quadruple
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.contractor_payments.model.ContractorRole
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionService
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionSnapshotCodec
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService
-com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.l_lead.model.Lead
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.p_products.model.OrderStatus
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.u_users.model.Manager
@@ -2971,7 +2919,6 @@ com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.u_users.model.Market
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.u_users.model.Operator
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.u_users.model.Worker
-com.hunt.otziv.z_zp.service.ZpServiceImpl -> com.hunt.otziv.u_users.service.UserService
 com.hunt.otziv.l_lead.service.LeadCommandReceiver -> com.hunt.otziv.config.jwt.service.JwtService
 com.hunt.otziv.l_lead.service.LeadCommandService -> com.hunt.otziv.config.jwt.service.JwtService
 # P14 reviewed 2026-09-07: receiver mapping moved from both controllers to one transactional mutation owner; retired controller edges removed.

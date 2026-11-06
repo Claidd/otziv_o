@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy } from '@angular/core';
-import { Component, computed, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, computed } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular';
 
@@ -150,7 +149,7 @@ const PAGES: Record<PublicPageKey, PublicPageContent> = {
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-public-mobile-page',
-  imports: [FormsModule, IonContent, RouterLink],
+  imports: [IonContent, RouterLink],
   template: `
     <div class="ion-page public-shell">
       <ion-content fullscreen>

@@ -30,10 +30,6 @@ public class ManagerSummaryFormatter {
         return render(managers, testMode, false);
     }
 
-    public String formatRich(List<ManagerDailySummaryResponse> managers, boolean testMode) {
-        return render(managers, testMode, true);
-    }
-
     public ManagerFormattedReport formatBoth(
             List<ManagerDailySummaryResponse> managers,
             boolean testMode

@@ -15,11 +15,11 @@
 
 ## Артефакты и происхождение
 
-Инвентаризатор `mobile/scripts/inventory-android-artifacts.ps1` использует установленные `aapt`/`apksigner`, читает manifest и хеширует APK. Результат сохранён в `contracts/releases/local-artifacts.json`; полный вывод — `.codex-tmp/remediation-completion-20260907/android-artifact-inventory-v2.json`. Первый локальный вариант парсера не распознавал формат `V2 Signer` новых Build Tools; итоговый вариант исправлен, старый вывод не считается доказательством неверной подписи.
+Инвентаризатор `mobile/scripts/inventory-android-artifacts.ps1` использует установленные `aapt`/`apksigner`, читает manifest и хеширует APK. Результат сохранялся в `contracts/releases/local-artifacts.json` (удалён 2026-11-06, есть в истории Git); полный вывод — `.codex-tmp/remediation-completion-20260907/android-artifact-inventory-v2.json`. Первый локальный вариант парсера не распознавал формат `V2 Signer` новых Build Tools; итоговый вариант исправлен, старый вывод не считается доказательством неверной подписи.
 
 Неизменённые извлечённые assets и их хеши сохранены в `released-runtime-matrix/<54..73>` внутри той же директории evidence. Сводка — `historical-client-runtime-matrix.json`. `contracts/releases/android-73/provenance.json` сохраняет отдельно наблюдаемую production identity и точный опубликованный JAR; её историческое происхождение не заменено текущей локальной сборкой.
 
-Для обратной сериализации использован `contracts/ArtifactPublicPaymentFixture.java`: он проверяет расположение загруженного DTO-класса и использует библиотеки того же JAR. Синтетический результат — `contracts/releases/android-73/rollback-public-payment.json`; отчёты текущих клиентов — `candidate-{mobile,web}-rollback-public-runtime.json`.
+Для обратной сериализации использован `contracts/ArtifactPublicPaymentFixture.java` (удалён 2026-11-06, есть в истории Git): он проверяет расположение загруженного DTO-класса и использует библиотеки того же JAR. Синтетический результат — `contracts/releases/android-73/rollback-public-payment.json`; отчёты текущих клиентов — `candidate-{mobile,web}-rollback-public-runtime.json`.
 
 ## Проверенный локальный recovery-кандидат
 
@@ -35,9 +35,9 @@
 
 Из текущего локального sanitized MySQL прочитан single-transaction dump; исходная БД не изменялась. Данные восстановлены в отдельный owned volume/MySQL на internal Docker network. Приложение получило только необходимые локальные ключи расшифрования, случайные fixture secrets и выключенные отправки. Исходные значения не печатались. Plaintext dump удалён после восстановления. На копии созданы две синтетические ссылки со своим company/order; в клиент передавались только их данные.
 
-Кандидат прошёл штатную проверку схемы, Spring стартовал 14:12:14Z. HTTP health — 200/UP. `contracts/recovery-runtime-smoke.mjs` проверяет имя/owner/image/internal network и делает только allowlisted GET через `curl` внутри конкретного контейнера. Полученные байты HTTP напрямую возвращаются браузеру, не подменяются DTO fixtures. Так сохранена изоляция от внешней сети; это не проверка production proxy/TLS. Web сохраняет disabled форму для EXPIRED, mobile скрывает её; тест проверяет невозможность отправки даже после заполнения согласий. Первое предположение теста «форма отсутствует у обоих» уточнено по фактическому HTML, исходный неуспешный отчёт сохранён.
+Кандидат прошёл штатную проверку схемы, Spring стартовал 14:12:14Z. HTTP health — 200/UP. `contracts/recovery-runtime-smoke.mjs` (удалён 2026-11-06, есть в истории Git) проверял имя/owner/image/internal network и делал только allowlisted GET через `curl` внутри конкретного контейнера. Полученные байты HTTP напрямую возвращаются браузеру, не подменяются DTO fixtures. Так сохранена изоляция от внешней сети; это не проверка production proxy/TLS. Web сохраняет disabled форму для EXPIRED, mobile скрывает её; тест проверяет невозможность отправки даже после заполнения согласий. Первое предположение теста «форма отсутствует у обоих» уточнено по фактическому HTML, исходный неуспешный отчёт сохранён.
 
-Итоговые отчёты — `candidate-{mobile,web}-recovery-actual-runtime-v2.json` (по 3/3, 0 mutations). Их хеши записаны в `contracts/releases/recovery-candidate-20260907.json`. Полная сводка — `rollback-app-runtime/recovery-summary.json`; SQL evidence — `recovery-schema-proof.txt`.
+Итоговые отчёты — `candidate-{mobile,web}-recovery-actual-runtime-v2.json` (по 3/3, 0 mutations). Их хеши были записаны в `contracts/releases/recovery-candidate-20260907.json` (удалён 2026-11-06, есть в истории Git). Полная сводка — `rollback-app-runtime/recovery-summary.json`; SQL evidence — `recovery-schema-proof.txt`.
 
 **Обратный rename `lead_command_queue` в `lead_sync_queue`, alias старого имени и отключение schema validation запрещены для запуска `fc191ac`.** V298 специально не допускает старый consumer, который не знает quarantine/UNKNOWN. Запуск старого бинарника требует отдельно совместимой согласованной схемы/paired restore; такой production rollback здесь не выполнялся. Проверка exact `fc191ac` на собственной старой схеме также не выдаётся за выполненную.
 

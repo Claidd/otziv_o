@@ -455,7 +455,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     }
 
     public enum OrdinaryDeliveryRecoveryResult {
-        UNRESOLVED, HISTORY_UNAVAILABLE, HISTORY_CHECKED_NO_RECEIPT, SENT_CONFIRMED, UNSENT_CONFIRMED
+        UNRESOLVED, HISTORY_UNAVAILABLE, HISTORY_CHECKED_NO_RECEIPT, SENT_CONFIRMED, UNSENT_CONFIRMED,
+        /** WhatsApp refused the saved group message: it was not delivered and the old operation is closed. */
+        PROVIDER_REJECTED
     }
 
     @Transactional(readOnly = true)
@@ -1092,6 +1094,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
         if (receipt != null && "whatsapp_history_checked_no_receipt".equals(receipt.errorCode())) {
             return OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT;
+        }
+        if (com.hunt.otziv.client_messages.api.ClientMessageDelivery.isDeliveryRejected(receipt)) {
+            LocalDateTime rejectedAt = messageTime.databaseTimestamp(messageTime.nowStorage());
+            boolean closed = transactionRunner.callInNewTransaction(
+                    () -> finalizeScheduledDelivery(prepared, receipt, rejectedAt, 0));
+            return closed ? OrdinaryDeliveryRecoveryResult.PROVIDER_REJECTED : OrdinaryDeliveryRecoveryResult.UNRESOLVED;
         }
         if (receipt == null || !receipt.sent()) {
             return OrdinaryDeliveryRecoveryResult.UNRESOLVED;
@@ -2641,10 +2649,26 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 recordAttempt(state, ScheduledMessageAttemptStatus.SENT, result.channel(),
                         "late_delivery_confirmed", "Подтверждение получено после завершения задачи", prepared.message(), durationMs);
                 stateRepository.save(state);
+            } else if (com.hunt.otziv.client_messages.api.ClientMessageDelivery.isDeliveryRejected(result)) {
+                // A closed task keeps its envelope; the refusal only stops further receipt checks.
+                state.setDeliveryStatus("REJECTED");
+                recordAttempt(state, ScheduledMessageAttemptStatus.FAILED, "WhatsApp", result.errorCode(),
+                        "WhatsApp отклонил сообщение после завершения задачи", prepared.message(), durationMs);
+                stateRepository.save(state);
             }
             return false;
         }
         stateRepository.lockDispatchBudget();
+        if (com.hunt.otziv.client_messages.api.ClientMessageDelivery.isDeliveryRejected(result)) {
+            // WhatsApp refused the saved group message (settled ACK -1), so the client did not get it. The
+            // saved operation is released: a later attempt prepares a new one, which the group hold stops
+            // before any provider call until the chat is fixed. Nothing is sent from here.
+            clearDeliveryPreparation(state);
+            registerFailure(state, nowStorage, com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_CODE,
+                    com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_MESSAGE + ". Прошлое сообщение клиенту не доставлено.",
+                    prepared.message(), durationMs);
+            return true;
+        }
         if (!result.sent() && !ClientChatMessageSender.isKnownUnsent(result)) {
             state.setDeliveryStatus("UNKNOWN");
             state.setLastAttemptAt(nowStorage);
@@ -3870,6 +3894,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private boolean isManualFixError(String code) {
         String normalized = code == null ? "" : code.toLowerCase(Locale.ROOT);
         return normalized.equals("whatsapp_group_missing")
+                || normalized.equals(com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_CODE)
                 || normalized.equals("telegram_group_missing")
                 || normalized.equals("max_group_missing")
                 || normalized.equals("chat_platform_unknown")

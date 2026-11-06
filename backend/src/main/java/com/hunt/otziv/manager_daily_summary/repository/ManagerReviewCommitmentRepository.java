@@ -22,6 +22,5 @@ public interface ManagerReviewCommitmentRepository extends JpaRepository<Manager
             Long managerId, Collection<String> statuses, LocalDateTime now);
     List<ManagerReviewCommitment> findBySourceTaskIdAndStatusIn(Long sourceTaskId, Collection<String> statuses);
     List<ManagerReviewCommitment> findByStatusInOrderByCheckedAtAsc(Collection<String> statuses, Pageable page);
-    List<ManagerReviewCommitment> findTop20BySourceTaskIdOrderByCreatedAtDesc(Long sourceTaskId);
     List<ManagerReviewCommitment> findTop20BySourceTaskIdInOrderByCreatedAtDesc(Collection<Long> sourceTaskIds);
 }

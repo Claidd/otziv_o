@@ -59,17 +59,6 @@ public class JwtService {
         return generate(LEAD_TRANSFER_SUBJECT, IMPORT_SCOPE, generateChecksum(dto));
     }
 
-    public String generateLegacyTransferToken(LeadDtoTransfer dto) {
-        Instant now = Instant.now();
-        return Jwts.builder()
-                .subject(LEAD_TRANSFER_SUBJECT)
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(TOKEN_TTL_SECONDS)))
-                .claim("checksum", generateLegacyChecksum(dto))
-                .signWith(signingKey(), SignatureAlgorithm.HS256)
-                .compact();
-    }
-
     public String generateSyncToken(String scope) {
         return generate(LEAD_SYNC_SUBJECT, scope, null);
     }
@@ -110,11 +99,6 @@ public class JwtService {
             throw new IllegalArgumentException("Invalid legacy integration token");
         }
         return claims;
-    }
-
-    /** Retained for diagnostics/tests; validates the complete token contract. */
-    public String extractChecksum(String token) {
-        return parseAndValidate(token, LEAD_TRANSFER_SUBJECT, IMPORT_SCOPE).get("checksum", String.class);
     }
 
     public String generateChecksum(Object payload) {

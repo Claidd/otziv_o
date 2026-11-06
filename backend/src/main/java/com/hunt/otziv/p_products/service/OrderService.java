@@ -31,7 +31,6 @@ public interface OrderService {
     boolean changeStatusForPrivilegedOrder(Long orderID,String title,org.springframework.security.core.Authentication actor) throws Exception;
     OrderDTO getOrderDTO(Long orderId);
     Order getOrder(Long orderId);
-    List<OrderDTO> getAllOrderDTO();
     Page<OrderDTOList> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize, String sortDirection);
     Page<OrderDTOList> getAllOrderDTOAndKeywordAndStatus(String keyword, String status, int pageNumber, int pageSize);

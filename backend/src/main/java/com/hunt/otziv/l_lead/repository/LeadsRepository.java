@@ -27,29 +27,6 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("SELECT lead FROM Lead lead WHERE lead.id=:id")
     Optional<Lead> findByIdForWorkTransition(@Param("id") Long id);
 
-    // Выборка всех лидов по телефону, статусу и дате (от самых старых)
-    @Query("""
-        SELECT l FROM Lead l
-        WHERE l.telephone.id = :telephoneId
-          AND l.lidStatus = :status
-          AND l.createDate <= :date
-        ORDER BY l.createDate ASC
-    """)
-    List<Lead> findByTelephoneAndStatusBeforeDateOrdered(
-            @Param("telephoneId") Long telephoneId,
-            @Param("status") String status,
-            @Param("date") LocalDate date
-    );
-
-    @Query("SELECT COUNT(l) FROM Lead l WHERE l.telephone.id = :telephoneId AND l.lidStatus = 'Новый' AND l.createDate <= CURRENT_DATE")
-    long countPendingLeadsByTelephone(@Param("telephoneId") Long telephoneId);
-
-
-    @Query("SELECT l FROM Lead l WHERE l.telephone.id = :telephoneId " +
-            "AND l.lidStatus = :status AND l.createDate <= :date ORDER BY l.createDate ASC")
-    List<Lead> findByTelephoneAndStatusBeforeDate(@Param("telephoneId") Long telephoneId,
-                                                  @Param("status") String status,
-                                                  @Param("date") LocalDate date);
 
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.telephone.id = :telephoneId " +
             "AND l.lidStatus = :status AND l.createDate <= :date")
@@ -57,25 +34,6 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
                                             @Param("status") String status,
                                             @Param("date") LocalDate date);
 
-    @Query("SELECT l FROM Lead l WHERE l.telephone.id = :telephoneId " +
-            "AND l.lidStatus = :status AND l.createDate <= :date ORDER BY l.createDate ASC")
-    Optional<Lead> findFirstByTelephoneAndStatusBeforeDate(@Param("telephoneId") Long telephoneId,
-                                                           @Param("status") String status,
-                                                           @Param("date") LocalDate date);
-
-
-    @Query("""
-        SELECT l FROM Lead l
-        WHERE l.telephone.id = :telephoneId
-          AND l.lidStatus = :status
-          AND l.createDate <= :date
-        ORDER BY l.createDate ASC
-    """)
-    List<Lead> findAllByTelephoneAndStatusBeforeDate(
-            @Param("telephoneId") Long telephoneId,
-            @Param("status") String status,
-            @Param("date") LocalDate date
-    );
 
 
     Optional<Lead> findByTelephoneLead(String telephoneLead);
@@ -233,9 +191,6 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     """)
     List<Long> findIdListByDateToOwner(LocalDate dateFrom, LocalDate dateTo, String status, Set<Manager> managerList);
 
-
-    @Query("SELECT l FROM Lead l  WHERE l.id IN (:leadId)")
-    List<Lead> findAllByDate(List<Long> leadId);
 
 
     @Query("select l from Lead l where l.lidStatus = :status and l.manager = :manager")
@@ -466,9 +421,6 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
             @Param("keyword") String keyword,
             @Param("manager") Manager manager);
 
-    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
-    Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndMarketolog(String keyword, Marketolog marketolog, Pageable pageable);
-    long countByTelephoneLeadContainingIgnoreCaseAndMarketolog(String keyword, Marketolog marketolog);
 
     @Query("""
         SELECT l FROM Lead l
@@ -596,7 +548,6 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("SELECT l FROM Lead l WHERE LOWER(l.telephoneLead) LIKE %:keyword% AND l.manager IN :managers")
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String keyword, List<Manager> managers, Pageable pageable);
-    long countByTelephoneLeadContainingIgnoreCaseAndManagerIn(String keyword, Collection<Manager> managers);
 
     @Query("""
         SELECT l FROM Lead l
@@ -710,7 +661,6 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("SELECT l FROM Lead l WHERE l.lidStatus = :status AND LOWER(l.telephoneLead) LIKE LOWER(concat('%', :keyword, '%')) AND l.manager IN :managers")
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String status, String keyword, List<Manager> managers, Pageable pageable);
-    long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerIn(String status, String keyword, Collection<Manager> managers);
 
 
     @Query("select l from Lead l where l.lidStatus = :status and l.manager IN :managers")
@@ -721,17 +671,12 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndDateNewTryLessThanEqual(String status, LocalDate dateNewTry, Pageable pageable);
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
-    Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndDateNewTryLessThanEqual(
-            String status, String keyword, LocalDate dateNewTry, Pageable pageable);
-    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndManagerAndDateNewTryLessThanEqual(
             String status, Manager manager, LocalDate dateNewTry, Pageable pageable);
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerAndDateNewTryLessThanEqual(
             String status, String keyword, Manager manager, LocalDate dateNewTry, Pageable pageable);
     long countByLidStatusAndDateNewTryLessThanEqual(String status, LocalDate dateNewTry);
-    long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndDateNewTryLessThanEqual(
-            String status, String keyword, LocalDate dateNewTry);
     long countByLidStatusAndManagerAndDateNewTryLessThanEqual(String status, Manager manager, LocalDate dateNewTry);
     long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerAndDateNewTryLessThanEqual(
             String status, String keyword, Manager manager, LocalDate dateNewTry);
@@ -979,12 +924,6 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 //    ORDER BY l.createDate ASC
 //""")
 //    Optional<Lead> findFirstByTelephone(Long telephoneId, String status, LocalDate date);
-
-    Optional<Lead> findFirstByTelephone_IdAndLidStatusAndCreateDateLessThanEqualOrderByCreateDateAsc(
-            Long telephoneId,
-            String status,
-            LocalDate date
-    );
 
 
     int countByTelephone_IdAndCreateDateLessThanEqualAndLidStatus(Long telephone_id, LocalDate createDate, String lidStatus);

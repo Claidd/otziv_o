@@ -109,6 +109,13 @@ const EXPLICIT_RELEASE_SETS = {
   'c43-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c43-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-loki/Dockerfile' },
   'c43-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c43-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-alloy/Dockerfile' },
   'c43-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c43-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-grafana/Dockerfile' },
+  // C49 adds only the official Alpine zlib 1.3.2-r1 (CVE-2026-85091) to the accepted images;
+  // phpMyAdmin also takes the official symfony/expression-language v5.4.54 parser (CVE-2026-109449).
+  'c49-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c49-nginx.json', context: 'infrastructure/runtime-security/builds/c49-nginx', dockerfile: 'infrastructure/runtime-security/builds/c49-nginx/Dockerfile' },
+  'c49-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c49-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c49-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c49-phpmyadmin/Dockerfile' },
+  'c49-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c49-grafana.json', context: 'infrastructure/runtime-security/builds/c49-grafana', dockerfile: 'infrastructure/runtime-security/builds/c49-grafana/Dockerfile' },
+  'c49-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c49-minio.json', context: 'infrastructure/runtime-security/builds/c49-minio', dockerfile: 'infrastructure/runtime-security/builds/c49-minio/Dockerfile' },
+  'c49-certbot': { component: 'certbot', path: 'infrastructure/runtime-security/reviewed-images-c49-certbot.json', context: 'infrastructure/runtime-security/builds/c49-certbot', dockerfile: 'infrastructure/runtime-security/builds/c49-certbot/Dockerfile' },
 };
 // Later official OS package overlays are registered data (os-package-overlays.json).
 const RELEASE_SETS = Object.freeze({ ...EXPLICIT_RELEASE_SETS, ...overlayReleaseSets(EXPLICIT_RELEASE_SETS) });

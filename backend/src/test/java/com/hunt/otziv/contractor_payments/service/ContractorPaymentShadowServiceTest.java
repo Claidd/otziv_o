@@ -109,7 +109,6 @@ class ContractorPaymentShadowServiceTest {
             taskReturnBridge,
             allocationRepository,
             profileRepository,
-            profileService,
             taskCapacityService,
             routingLimitService,
             accountingService,

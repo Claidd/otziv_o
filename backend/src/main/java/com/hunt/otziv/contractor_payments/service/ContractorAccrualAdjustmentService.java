@@ -55,7 +55,6 @@ public class ContractorAccrualAdjustmentService {
     private final ContractorPaymentProfileRepository profileRepository;
     private final ContractorRewardLedgerRepository rewardLedgerRepository;
     private final ContractorRewardLedgerService rewardLedgerService;
-    private final ContractorPaymentProfileService profileService;
     private final ContractorPaymentAccountingPhaseService phaseService;
     private final ContractorPaymentAccountingService accountingService;
     private final ContractorPaymentAllocationRepository allocationRepository;

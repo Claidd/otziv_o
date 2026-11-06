@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { Device, type DeviceInfo } from '@capacitor/device';
-import { Keyboard, KeyboardResize, KeyboardStyle, type KeyboardInfo } from '@capacitor/keyboard';
+import { Keyboard, type KeyboardInfo } from '@capacitor/keyboard';
 import { Network, type ConnectionStatus } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -209,15 +209,6 @@ export class MobileNativeService {
       return;
     }
 
-    if (Capacitor.getPlatform() === 'ios') {
-      await Promise.all([
-        Keyboard.setResizeMode({ mode: KeyboardResize.Ionic }).catch(() => undefined),
-        Keyboard.setScroll({ isDisabled: false }).catch(() => undefined),
-        Keyboard.setAccessoryBarVisible({ isVisible: true }).catch(() => undefined),
-        Keyboard.setStyle({ style: KeyboardStyle.Default }).catch(() => undefined)
-      ]);
-    }
-
     const showHandle = await Keyboard.addListener('keyboardWillShow', (info) => this.setKeyboardState(true, info));
     const didShowHandle = await Keyboard.addListener('keyboardDidShow', (info) => this.setKeyboardState(true, info));
     const hideHandle = await Keyboard.addListener('keyboardWillHide', () => this.setKeyboardState(false));
@@ -328,10 +319,6 @@ export class MobileNativeService {
     if (parsed.protocol === 'otziv:' && parsed.hostname === 'app') {
       void this.router.navigateByUrl(`${parsed.pathname || '/tabs/home'}${parsed.search}`, { replaceUrl: false });
       return;
-    }
-
-    if (/^https?:$/i.test(parsed.protocol) && parsed.hostname === 'o-ogo.ru' && parsed.pathname.startsWith('/mobile/')) {
-      void this.router.navigateByUrl(parsed.pathname.replace(/^\/mobile/, '') + parsed.search, { replaceUrl: false });
     }
   }
 

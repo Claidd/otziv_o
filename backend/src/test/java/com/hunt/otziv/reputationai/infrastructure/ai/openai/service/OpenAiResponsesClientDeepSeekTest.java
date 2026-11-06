@@ -83,7 +83,6 @@ class OpenAiResponsesClientDeepSeekTest {
             );
 
             assertThat(client.activeProviderName()).isEqualTo("deepseek");
-            assertThat(client.activeModel()).isEqualTo("deepseek-v4-pro");
             assertThat(client.usesExternalSearchContext()).isTrue();
             assertThat(result.provider()).isEqualTo("deepseek");
             assertThat(result.model()).isEqualTo("deepseek-v4-pro");

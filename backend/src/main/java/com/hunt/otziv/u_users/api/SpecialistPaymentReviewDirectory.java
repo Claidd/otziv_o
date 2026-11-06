@@ -15,4 +15,13 @@ public interface SpecialistPaymentReviewDirectory {
     Optional<Long> activePaymentReviewGroupChatId(Long userId, String recipientType);
 
     Optional<Actor> activeActor(Long userId);
+
+    /**
+     * Working Telegram group of the active manager who marked a transfer to the owner. Owner transfers have
+     * no recipient user; the notice goes where owner approvals used to go, the manager's group.
+     */
+    Optional<Long> activeOwnerReceiptGroupChatId(Long requesterUserId);
+
+    /** True for an active owner or administrator whose Telegram account is linked to this user ID. */
+    boolean activeOwnerOrAdminTelegramUser(Long telegramUserId);
 }

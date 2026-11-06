@@ -26,7 +26,6 @@ import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.*;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
@@ -63,7 +62,6 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     private final SubCategoryService subCategoryService;
     private final CategoryService categoryService;
     private final FilialService filialService;
-    private final ReviewRepository reviewRepository;
     private final BotAssignmentService botAssignmentService;
     private final NextOrderRequestService nextOrderRequestService;
     private final ApplicationEventPublisher eventPublisher;

@@ -16,9 +16,6 @@ public final class OutreachBridgeDtos {
     public record StageUpdate(String stage) {
     }
 
-    public record MessageRequest(String phone, String message) {
-    }
-
     public record TextResponse(String text) {
     }
 

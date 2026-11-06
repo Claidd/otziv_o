@@ -52,16 +52,6 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
     }
 
     @Override
-    public void deleteOrderDetailsById(UUID orderDetailId) {
-        orderDetailsRepository.deleteById(orderDetailId);
-    }
-
-    @Override
-    public void deleteOrderDetails(OrderDetails orderDetails) {
-        orderDetailsRepository.delete(orderDetails);
-    }
-
-    @Override
     public void saveOrder(Order order) {
         orderRepository.save(order);
     }

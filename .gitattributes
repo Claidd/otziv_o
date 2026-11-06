@@ -186,3 +186,7 @@ infrastructure/runtime-security/os-package-overlay.mjs text eol=lf
 infrastructure/runtime-security/os-package-overlay-registry.mjs text eol=lf
 infrastructure/runtime-security/os-package-overlays.json text eol=lf
 infrastructure/runtime-security/fixtures/os-overlay-*.parity.json text eol=lf
+
+# Preserve C49 zlib (and phpMyAdmin expression-language) recipes and publication manifest hashes.
+infrastructure/runtime-security/builds/c49-*/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c49-*.json text eol=lf

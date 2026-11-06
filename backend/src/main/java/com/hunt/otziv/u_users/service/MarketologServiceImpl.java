@@ -44,10 +44,6 @@ public class MarketologServiceImpl implements MarketologService {
         return marketologRepository.findAllWithUserAndImage();
     }
 
-    public List<Marketolog> getAllMarketologsToManager(Manager manager) {
-        return marketologRepository.findAllToManagerMarketologs(manager.getUser().getMarketologs());
-    }
-
     @Override
     public List<Marketolog> getAllMarketologsToOwner(List<Manager> managers) {
         return marketologRepository.findAllByMarketologsToOwner(managers);

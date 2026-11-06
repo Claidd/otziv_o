@@ -13,10 +13,5 @@ public interface ManagerReportReviewIssueRepository extends JpaRepository<Manage
 
     Optional<ManagerReportReviewIssue> findByReview_IdAndQuestionIndex(Long reviewId, int questionIndex);
 
-    Optional<ManagerReportReviewIssue> findFirstByReview_IdAndStatusOrderByQuestionIndexAsc(
-            Long reviewId,
-            ManagerReportReviewIssueStatus status
-    );
-
     long countByReview_IdAndStatusIn(Long reviewId, Collection<ManagerReportReviewIssueStatus> statuses);
 }

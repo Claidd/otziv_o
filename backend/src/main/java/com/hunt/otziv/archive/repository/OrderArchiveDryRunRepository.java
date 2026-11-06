@@ -343,23 +343,6 @@ public class OrderArchiveDryRunRepository {
               ON component_invoice.invoice_id = component_item.invoice_id
             """;
 
-    private static final String CANDIDATE_ORDER_CTE = """
-            WITH candidate_orders AS (
-                SELECT o.order_id
-                """ + ELIGIBLE_ORDER_WHERE + """
-                ORDER BY
-                    CASE
-                        WHEN s.order_status_title = 'Оплачено'
-                            THEN COALESCE(o.order_pay_day, o.order_changed, o.order_created)
-                        WHEN s.order_status_title = 'Бан'
-                            THEN COALESCE(DATE(o.order_status_changed_at), o.order_changed, o.order_pay_day, o.order_created)
-                        ELSE COALESCE(o.order_changed, o.order_pay_day, o.order_created)
-                    END,
-                    o.order_id
-                LIMIT :batchLimit
-            )
-            """;
-
     private final NamedParameterJdbcTemplate jdbc;
 
     public long countEligibleOrders(LocalDate cutoffDate) {
@@ -657,53 +640,6 @@ public class OrderArchiveDryRunRepository {
         return newInvoiceMember != null && newInvoiceMember > 0;
     }
 
-    public ArchiveCandidateCounts countSelected(LocalDate cutoffDate, int batchLimit) {
-        MapSqlParameterSource params = candidateParams(cutoffDate, batchLimit);
-        return jdbc.queryForObject(CANDIDATE_ORDER_CTE + """
-                SELECT
-                    (SELECT COUNT(*) FROM candidate_orders) AS orders_selected,
-                    (
-                        SELECT COUNT(*)
-                        FROM order_details od
-                        JOIN candidate_orders co ON co.order_id = od.order_detail_order
-                    ) AS order_details_selected,
-                    (
-                        SELECT COUNT(*)
-                        FROM reviews r
-                        JOIN order_details od ON od.order_detail_id = r.review_order_details
-                        JOIN candidate_orders co ON co.order_id = od.order_detail_order
-                    ) AS reviews_selected,
-                    (
-                        SELECT COUNT(*)
-                        FROM bad_review_tasks brt
-                        JOIN candidate_orders co ON co.order_id = brt.bad_review_task_order
-                    ) AS bad_review_tasks_selected,
-                    (
-                        SELECT COUNT(*)
-                        FROM next_order_requests nor
-                        JOIN candidate_orders co ON co.order_id = nor.source_order_id
-                    ) AS next_order_requests_selected,
-                    (
-                        SELECT COUNT(*)
-                        FROM zp z
-                        JOIN candidate_orders co ON co.order_id = z.zp_order
-                    ) AS zp_selected,
-                    (
-                        SELECT COUNT(*)
-                        FROM payment_check pc
-                        JOIN candidate_orders co ON co.order_id = pc.check_order
-                    ) AS payment_check_selected
-                """, params, (rs, rowNum) -> new ArchiveCandidateCounts(
-                rs.getLong("orders_selected"),
-                rs.getLong("order_details_selected"),
-                rs.getLong("reviews_selected"),
-                rs.getLong("bad_review_tasks_selected"),
-                rs.getLong("next_order_requests_selected"),
-                rs.getLong("zp_selected"),
-                rs.getLong("payment_check_selected")
-        ));
-    }
-
     public List<ArchiveOrderCandidateItem> findPreparedCandidateOrders(int previewLimit) {
         return jdbc.query("""
                 SELECT
@@ -793,59 +729,6 @@ public class OrderArchiveDryRunRepository {
                         JOIN archive_candidate_orders co ON co.order_id = pc.check_order
                         """)
         );
-    }
-
-    public long countMissingClosedAnalyticsMonths(LocalDate cutoffDate, int batchLimit, LocalDate currentMonthStart) {
-        MapSqlParameterSource params = candidateParams(cutoffDate, batchLimit)
-                .addValue("currentMonthStart", currentMonthStart)
-                .addValue("adminScopeKey", AnalyticsAggregateReadService.SCOPE_ADMIN_ALL);
-        Long count = jdbc.queryForObject(CANDIDATE_ORDER_CTE + """
-                , candidate_dates AS (
-                    SELECT CASE
-                        WHEN s.order_status_title = 'Оплачено'
-                            THEN COALESCE(o.order_pay_day, o.order_changed, o.order_created)
-                        WHEN s.order_status_title = 'Бан'
-                            THEN COALESCE(DATE(o.order_status_changed_at), o.order_changed, o.order_pay_day, o.order_created)
-                        ELSE COALESCE(o.order_changed, o.order_pay_day, o.order_created)
-                    END AS metric_date
-                    FROM orders o
-                    JOIN candidate_orders co ON co.order_id = o.order_id
-                    JOIN order_statuses s ON s.order_status_id = o.order_status
-
-                    UNION ALL
-
-                    SELECT r.review_publish_date AS metric_date
-                    FROM reviews r
-                    JOIN order_details od ON od.order_detail_id = r.review_order_details
-                    JOIN candidate_orders co ON co.order_id = od.order_detail_order
-
-                    UNION ALL
-
-                    SELECT z.zp_date AS metric_date
-                    FROM zp z
-                    JOIN candidate_orders co ON co.order_id = z.zp_order
-
-                    UNION ALL
-
-                    SELECT pc.check_date AS metric_date
-                    FROM payment_check pc
-                    JOIN candidate_orders co ON co.order_id = pc.check_order
-                ),
-                candidate_months AS (
-                    SELECT DISTINCT DATE_SUB(metric_date, INTERVAL (DAYOFMONTH(metric_date) - 1) DAY) AS month_start
-                    FROM candidate_dates
-                    WHERE metric_date IS NOT NULL
-                      AND metric_date < :currentMonthStart
-                )
-                SELECT COUNT(*)
-                FROM candidate_months cm
-                LEFT JOIN analytics_monthly_total amt
-                  ON amt.month_start = cm.month_start
-                 AND amt.scope_key = :adminScopeKey
-                 AND amt.period_closed = 1
-                WHERE amt.analytics_monthly_total_id IS NULL
-                """, params, Long.class);
-        return count == null ? 0L : count;
     }
 
     public long countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate currentMonthStart) {

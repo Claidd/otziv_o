@@ -108,12 +108,6 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
 
     List<ManagerDailyControlConcreteItem> findByEntityTypeStartingWithAndEntityId(String entityType, Long entityId);
 
-    List<ManagerDailyControlConcreteItem> findByEntityTypeAndEntityIdAndControl_ControlDate(
-            String entityType,
-            Long entityId,
-            LocalDate controlDate
-    );
-
     boolean existsByEntityTypeAndEntityIdAndControl_Manager_User_Username(
             String entityType,
             Long entityId,
@@ -129,14 +123,6 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
     List<ManagerDailyControlConcreteItem> findByControlAndFollowUpAtAfter(
             ManagerDailyControl control,
             LocalDateTime followUpAt
-    );
-
-    List<ManagerDailyControlConcreteItem> findByWorkerNotificationAcceptedByUserIdAndWorkerExplanationRequestedAtIsNotNullAndWorkerExplanationAtIsNullOrderByWorkerExplanationPromptedAtDesc(
-            Long workerNotificationAcceptedByUserId
-    );
-
-    List<ManagerDailyControlConcreteItem> findByWorkerNotificationUserIdAndWorkerExplanationRequestedAtIsNotNullAndWorkerExplanationAtIsNullOrderByWorkerExplanationPromptedAtDesc(
-            Long workerNotificationUserId
     );
 
     @Query("""
