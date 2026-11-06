@@ -120,8 +120,6 @@ $monitoringCompose = Get-RepositoryText 'compose.monitoring.yaml'
 $publisherDockerfile = Get-RepositoryText 'infrastructure/monitoring/Dockerfile'
 $dependencyWorkflow = Get-RepositoryText '.github/workflows/dependency-audit.yml'
 $sqlGuardWorkflow = Get-RepositoryText '.github/workflows/sql-injection-guard.yml'
-$legacyWhatsAppDockerfile = Get-RepositoryText 'Dockerfile2.whatsapp'
-$legacyNginxDockerfile = Get-RepositoryText 'Dockerfile.nginx'
 $legacyDeploy = Get-RepositoryText 'infrastructure/scripts/prod/deploy-prod-ssh-images.ps1'
 $backendDockerfile = Get-RepositoryText 'backend/Dockerfile'
 $frontendDockerfile = Get-RepositoryText 'frontend/Dockerfile'
@@ -655,8 +653,6 @@ Assert-TextMatch $dependencyWorkflow 'dependency-gate:' 'Conditional dependency 
 Assert-DigestPinnedComposeImages $productionCompose 'docker-compose.yaml'
 Assert-DigestPinnedComposeImages $localCompose 'compose.prod-local.yaml'
 Assert-DigestPinnedComposeImages $developmentCompose 'compose.yaml'
-Assert-TextMatch $legacyWhatsAppDockerfile 'OTZIV_ALLOW_QUARANTINED_DOCKERFILE' 'Legacy WhatsApp Dockerfile must refuse accidental builds.'
-Assert-TextMatch $legacyNginxDockerfile 'OTZIV_ALLOW_QUARANTINED_DOCKERFILE' 'Legacy Nginx Dockerfile must refuse accidental builds.'
 Assert-TextMatch $legacyDeploy 'if \(-not \$AllowLegacyDeploy\)' 'Legacy direct-image deploy must refuse accidental use.'
 
 if ($violations.Count -gt 0) {

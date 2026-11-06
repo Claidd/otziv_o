@@ -8,7 +8,7 @@ export const scopes = ['backend', 'issuer', 'frontend', 'mobile', 'browser', 'an
 
 // Only reviewed, exact helper names are narrow. New helpers still select all checks.
 const deployHelpers = new Set([
-  'DeploySnapshot.ps1', 'deploy-prod.ps1', 'deploy-prod-fast.ps1', 'deploy-prod-ssh-images.ps1',
+  'DeploySnapshot.ps1', 'deploy-prod.ps1', 'deploy-prod-ssh-images.ps1',
   'release_ci.py', 'release_preflight.py', 'release_registry.py', 'remote_release_transport.py',
   'ci_release.py', 'ci_artifacts.py', 'deployment_capacity.py', 'image_layer_capacity.py',
   'selective_rollout.py', 'database_image_guard.py', 'whatsapp_deploy_state.py',
