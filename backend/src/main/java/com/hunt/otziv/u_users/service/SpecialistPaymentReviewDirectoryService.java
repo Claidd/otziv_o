@@ -46,6 +46,26 @@ public class SpecialistPaymentReviewDirectoryService implements SpecialistPaymen
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Long> activeOwnerReceiptGroupChatId(Long requesterUserId) {
+        if (requesterUserId == null) return Optional.empty();
+        return users.findById(requesterUserId).filter(User::isActive)
+                .flatMap(user -> managers.findByUserId(requesterUserId))
+                .map(manager -> manager.getAuditTelegramGroupChatId())
+                .filter(chatId -> chatId < 0);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean activeOwnerOrAdminTelegramUser(Long telegramUserId) {
+        if (telegramUserId == null || telegramUserId <= 0) return false;
+        return java.util.stream.Stream.concat(users.findAllOwners("ROLE_OWNER").stream(),
+                        users.findAllOwners("ROLE_ADMIN").stream())
+                .filter(java.util.Objects::nonNull).filter(User::isActive)
+                .anyMatch(user -> telegramUserId.equals(user.getTelegramChatId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<Actor> activeActor(Long userId) {
         return users.findById(userId).filter(User::isActive)
                 .filter(user -> user.getUsername() != null && user.getRoles() != null && !user.getRoles().isEmpty())
