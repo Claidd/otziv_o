@@ -168,11 +168,6 @@ export const routes: Routes = [
     }
   },
   {
-    path: 'operator/phones',
-    redirectTo: 'admin/dictionaries/phones',
-    pathMatch: 'full'
-  },
-  {
     path: 'orders/:companyId/:orderId',
     loadComponent: () => import('./features/manager/order-details.component')
       .then((m) => m.OrderDetailsComponent),
@@ -246,11 +241,6 @@ export const routes: Routes = [
       roles: ['ADMIN', 'OWNER', 'MANAGER'],
       workerTab: 'risk'
     }
-  },
-  {
-    path: 'manager/worker-risk',
-    redirectTo: 'worker/risk',
-    pathMatch: 'full'
   },
   {
     path: 'worker',
@@ -376,11 +366,6 @@ export const routes: Routes = [
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER']
     }
-  },
-  {
-    path: 'manager/control',
-    redirectTo: 'admin/manager-control',
-    pathMatch: 'full'
   },
   {
     path: 'admin/bank-payments',

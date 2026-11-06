@@ -27,8 +27,7 @@ describe('public payment route isolation', () => {
         .mockReturnValueOnce(of(payment('C'))),
       getPublicSbpBanks: vi.fn(() => of([])),
       initPublicPayment: vi.fn(() => withTeardown(mutation, mutationTeardown)),
-      initPublicSbpPayment: vi.fn(),
-      reportPublicManualPayment: vi.fn()
+      initPublicSbpPayment: vi.fn()
     };
     await configure(PayPageComponent, params, paymentsApi);
     const fixture = TestBed.createComponent(PayPageComponent);
@@ -77,8 +76,7 @@ describe('public payment route isolation', () => {
       getPublicPaymentLink: vi.fn(() => of(current)),
       getPublicSbpBanks: vi.fn(() => of(banks)),
       initPublicPayment: vi.fn(),
-      initPublicSbpPayment: vi.fn(),
-      reportPublicManualPayment: vi.fn()
+      initPublicSbpPayment: vi.fn()
     };
     await configure(PayPageComponent, params, paymentsApi);
     const fixture = TestBed.createComponent(PayPageComponent);
@@ -104,8 +102,7 @@ describe('public payment route isolation', () => {
       getPublicPaymentLink: vi.fn(() => of(current)),
       getPublicSbpBanks: vi.fn(() => of([])),
       initPublicPayment: vi.fn(),
-      initPublicSbpPayment: vi.fn(() => mutation),
-      reportPublicManualPayment: vi.fn()
+      initPublicSbpPayment: vi.fn(() => mutation)
     };
     await configure(PayPageComponent, params, paymentsApi);
     const fixture = TestBed.createComponent(PayPageComponent);
@@ -166,8 +163,7 @@ describe('public payment route isolation', () => {
         getPublicPaymentLink: vi.fn(() => of(current)),
         getPublicSbpBanks: vi.fn(() => of([])),
         initPublicPayment: vi.fn(),
-        initPublicSbpPayment: vi.fn(),
-        reportPublicManualPayment: vi.fn()
+        initPublicSbpPayment: vi.fn()
       };
       await configure(PayPageComponent, params, paymentsApi);
       const fixture = TestBed.createComponent(PayPageComponent);
@@ -206,8 +202,7 @@ describe('public payment route isolation', () => {
         .mockReturnValueOnce(withTeardown(first, firstTeardown))
         .mockReturnValueOnce(second)
         .mockReturnValueOnce(of(invoice('C'))),
-      initPublicCommonInvoicePayment: vi.fn(() => withTeardown(mutation, mutationTeardown)),
-      reportPublicCommonInvoicePaid: vi.fn()
+      initPublicCommonInvoicePayment: vi.fn(() => withTeardown(mutation, mutationTeardown))
     };
     await configure(PayGroupPageComponent, params, paymentsApi);
     const fixture = TestBed.createComponent(PayGroupPageComponent);
@@ -251,8 +246,7 @@ describe('public payment route isolation', () => {
       const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
       const paymentsApi = {
         getPublicCommonInvoice: vi.fn(() => of({ ...invoice('A'), paymentRouteType })),
-        initPublicCommonInvoicePayment: vi.fn(),
-        reportPublicCommonInvoicePaid: vi.fn()
+        initPublicCommonInvoicePayment: vi.fn()
       };
       await configure(PayGroupPageComponent, params, paymentsApi);
       const fixture = TestBed.createComponent(PayGroupPageComponent);
@@ -280,8 +274,7 @@ describe('public payment route isolation', () => {
       getPublicPaymentLink: vi.fn(() => of(current)),
       getPublicSbpBanks: vi.fn(() => of([])),
       initPublicPayment: vi.fn(),
-      initPublicSbpPayment: vi.fn(),
-      reportPublicManualPayment: vi.fn()
+      initPublicSbpPayment: vi.fn()
     };
     await configure(PayPageComponent, params, paymentsApi);
     const fixture = TestBed.createComponent(PayPageComponent);
@@ -301,8 +294,7 @@ describe('public payment route isolation', () => {
     };
     const paymentsApi = {
       getPublicCommonInvoice: vi.fn(() => of(current)),
-      initPublicCommonInvoicePayment: vi.fn(),
-      reportPublicCommonInvoicePaid: vi.fn()
+      initPublicCommonInvoicePayment: vi.fn()
     };
     await configure(PayGroupPageComponent, params, paymentsApi);
     const fixture = TestBed.createComponent(PayGroupPageComponent);

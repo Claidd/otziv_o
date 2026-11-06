@@ -547,14 +547,6 @@ export class PaymentsApi {
     ).pipe(map(decodePublicSbpBanks));
   }
 
-  reportPublicManualPayment(token: string): Observable<PublicPaymentLink> {
-    return this.http.post<unknown>(
-      `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/manual-paid`,
-      {},
-      { context: this.publicContext }
-    ).pipe(map(decodePublicPaymentLink));
-  }
-
   getTbankStatus(): Observable<TbankPaymentStatus> {
     return this.http.get<TbankPaymentStatus>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-status`
@@ -626,14 +618,6 @@ export class PaymentsApi {
       `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/contractor-confirmation`,
       request
     );
-  }
-
-  reportPublicCommonInvoicePaid(token: string): Observable<PublicCommonInvoice> {
-    return this.http.post<PublicCommonInvoiceResponseOutput>(
-      `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}/reported-paid`,
-      {},
-      { context: this.publicContext }
-    ).pipe(map(decodePublicCommonInvoice));
   }
 
   closeAdminManualPaymentLinkAsUnpaid(

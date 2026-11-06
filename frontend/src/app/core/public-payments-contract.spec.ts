@@ -23,13 +23,6 @@ describe('public payments generated boundary and presentation projection', () =>
     expect(value.status).toBe('FUTURE_STATE'); expect(value.payable).toBe(false); expect(value.clientReportable).toBe(false);
     expect(value.amountKopecks).toBe(10_000); expect(value.manualPhone).toBeNull();
   });
-  it('validates reported group invoice response once and disables an unknown route', async () => {
-    const result = firstValueFrom(api.reportPublicCommonInvoicePaid('a/b'));
-    const request = requests.expectOne('/api/payments/public/group/a%2Fb/reported-paid');
-    expect(request.request.method).toBe('POST'); expect(request.request.body).toEqual({});
-    request.flush({ ...invoice(), paymentRouteType: 'FUTURE_ROUTE' });
-    const value = await result; expect(value.payable).toBe(false); expect(value.clientReportable).toBe(false);
-  });
   it('preserves all initiation payloads and QR-only nullable responses', async () => {
     const cases = [
       { start: () => api.initPublicPayment('a/b', 'test@example.invalid', true, false, true), suffix: '/a%2Fb/init', bank: false },
@@ -60,13 +53,5 @@ describe('public payments generated boundary and presentation projection', () =>
     const result = firstValueFrom(api.getPublicSbpBanks('current'));
     const banks = [{ bankId: 'bank-1', name: 'Bank', featured: false, nspkBankId: null, logoUrl: null }];
     requests.expectOne('/api/payments/public/current/sbp/banks').flush(banks); expect(await result).toEqual(banks);
-  });
-  it('applies the same unknown-state protection to manual-payment write responses', async () => {
-    const result = firstValueFrom(api.reportPublicManualPayment('token'));
-    const request = requests.expectOne('/api/payments/public/token/manual-paid');
-    expect(request.request.method).toBe('POST');
-    request.flush({ token: 'token', companyTitle: '', filialTitle: '', serviceTitle: '', amount: 10, amountKopecks: 1000,
-      description: '', status: 'FUTURE', expiresAt: null, payable: true });
-    expect((await result).payable).toBe(false);
   });
 });

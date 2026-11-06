@@ -4,7 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of, Subject } from 'rxjs';
-import { AdminDictionariesApi, type AdminClientMessageMonitor } from '../../../core/admin-dictionaries.api';
+import type { AdminClientMessageMonitor } from '../../../core/admin-dictionaries.api';
 import { AdminMessageMonitorApi } from '../../../core/admin-message-monitor.api';
 import { AdminGamificationRewardsApi } from '../../../core/admin-gamification-rewards.api';
 import { AuthService } from '../../../core/auth.service';
@@ -25,12 +25,10 @@ describe('dictionary monitor component integration', () => {
       getClientMessageMonitor: vi.fn().mockReturnValueOnce(initial).mockReturnValue(polling),
       getClientMessageMaintenancePreview: vi.fn().mockReturnValue(of({}))
     };
-    const legacyApi = { getClientMessageMonitor: vi.fn() };
     const taxonomyApi = { getCategories: vi.fn().mockReturnValue(of([])) };
     TestBed.configureTestingModule({ providers: [
       provideHttpClient(), provideHttpClientTesting(),
       { provide: ActivatedRoute, useValue: { snapshot: { data: {}, queryParamMap: convertToParamMap({ tab: 'autoresponderMonitor' }) } } },
-      { provide: AdminDictionariesApi, useValue: legacyApi },
       { provide: AdminTaxonomyApi, useValue: taxonomyApi },
       { provide: AdminMessageMonitorApi, useValue: monitorApi },
       { provide: AuthService, useValue: { tokenParsed: () => null, hasAnyRealmRole: () => true, hasRealmRole: () => true } },
@@ -44,7 +42,6 @@ describe('dictionary monitor component integration', () => {
     const fixture = TestBed.createComponent(AdminDictionariesComponent);
     const page = fixture.componentInstance;
     expect(monitorApi.getClientMessageMonitor).toHaveBeenCalledTimes(1);
-    expect(legacyApi.getClientMessageMonitor).not.toHaveBeenCalled();
     expect(page.activeLoading()).toBe(true);
     initial.next({ enabled: true, activeCandidates: 7, queue: [], attempts: [] } as unknown as AdminClientMessageMonitor);
     initial.complete();
