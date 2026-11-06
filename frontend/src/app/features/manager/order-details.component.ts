@@ -9,7 +9,7 @@ import { AuthService } from '../../core/auth.service';
 import { WorkerAccountActionCooldownService } from '../../core/worker-account-action-cooldown.service';
 import { LatestRouteRequest } from '../../core/latest-route-request';
 import { ReputationDeepReportMonitorService } from '../../core/reputation-deep-report-monitor.service';
-import type { DeepCompanyResearchJob, ReputationSingleReviewDraftResult } from '../../core/reputation-ai.api';
+import type { DeepCompanyResearchJob } from '../../core/reputation-ai.api';
 import {
   BadReviewTaskItem,
   CompanyDeepReportState,
@@ -3147,110 +3147,6 @@ export class OrderDetailsComponent {
         this.toastService.error('Действие не выполнено', message);
       }
     });
-  }
-
-  private saveReviewHelpDraft(
-    review: OrderReviewItem,
-    result: ReputationSingleReviewDraftResult
-  ): void {
-    const text = (result.draft ?? '').trim();
-    if (!text) {
-      this.mutationKey.set(null);
-      this.toastService.error('Текст не получен', 'AI-помощник вернул пустой черновик');
-      return;
-    }
-
-    this.startReviewFieldEdit(review, 'text');
-    this.setReviewFieldDraft(review, 'text', text);
-    this.expandedReviewTextIds.update((items) => ({
-      ...items,
-      [review.id]: true
-    }));
-    const routeVisit = this.captureActiveOrderRoute();
-    if (!routeVisit) {
-      return;
-    }
-
-    this.managerApi.updateOrderReviewText(review.orderId, review.id, text).subscribe({
-      next: (updatedReview) => {
-        if (!this.isActiveOrderRoute(routeVisit)) {
-          return;
-        }
-
-        this.applyUpdatedOrderReview(updatedReview);
-        this.clearReviewFieldDraft(review, 'text');
-        this.savedReviewFieldKey.set(this.reviewFieldKey(review, 'text'));
-        this.mutationKey.set(null);
-        this.toastService.success(
-          'Текст сохранён',
-          result.provider === 'local'
-            ? 'Черновик собран локально и записан в карточку'
-            : 'AI-помощник записал текст в карточку'
-        );
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeVisit)) {
-          return;
-        }
-
-        const message = this.errorMessage(err, 'Черновик подготовлен, но не сохранён');
-        this.mutationKey.set(null);
-        this.error.set(message);
-        this.toastService.error('Текст не сохранён', message);
-      }
-    });
-
-  }
-
-  private reviewHelpIdea(details: OrderDetailsPayload, review: OrderReviewItem): string {
-    const product = this.cleanReviewHelpText(review.productTitle || details.productTitle);
-    const current = this.cleanReviewHelpText(this.reviewFieldSourceValue(review, 'text'));
-    const base = product
-      ? `Новый отзыв по карточке заказа: клиент получил/заказывал "${product}".`
-      : 'Новый отзыв по карточке заказа на основе отчёта о компании и данных заказа.';
-
-    if (current && current.toLocaleLowerCase('ru-RU') !== PLACEHOLDER_REVIEW_TEXT) {
-      return `${base} Не копировать старый текст, а написать новый вариант с другим началом и структурой.`;
-    }
-
-    return base;
-  }
-
-  private reviewHelpManualNotes(details: OrderDetailsPayload, review: OrderReviewItem): string {
-    const notes = [
-      this.cleanReviewHelpText(review.comment),
-      this.cleanReviewHelpText(review.orderComments || details.orderComments),
-      this.cleanReviewHelpText(review.commentCompany || details.companyComments)
-    ].filter(Boolean);
-
-    return notes.slice(0, 4).join('\n');
-  }
-
-  private reviewHelpFrontendContext(details: OrderDetailsPayload, review: OrderReviewItem): string {
-    const lines = [
-      `Заказ #${details.orderId}`,
-      `Статус заказа: ${details.status}`,
-      `Компания: ${details.companyTitle}`,
-      `Категория: ${review.category || ''}`,
-      `Подкатегория: ${review.subCategory || ''}`,
-      `Филиал: ${review.filialTitle || ''}`,
-      `Город филиала: ${review.filialCity || ''}`,
-      `Товар/услуга карточки: ${review.productTitle || details.productTitle || ''}`,
-      review.price != null ? `Цена карточки: ${review.price}` : '',
-      details.amount != null ? `Количество в заказе: ${details.amount}` : '',
-      details.sum != null ? `Сумма заказа: ${details.sum}` : ''
-    ];
-
-    return lines
-      .map((line) => this.cleanReviewHelpText(line))
-      .filter(Boolean)
-      .join('\n');
-  }
-
-  private cleanReviewHelpText(value: string | number | null | undefined): string {
-    return String(value ?? '')
-      .replace(/\s+/g, ' ')
-      .trim();
   }
 
   private async copyText(

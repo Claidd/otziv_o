@@ -321,26 +321,6 @@ export interface ManagerControlSummary {
   managers: ManagerControlManager[];
 }
 
-export interface ManagerQueueState {
-  enabled: boolean;
-  date: string;
-  state: string;
-  openActionCount: number;
-  withinTargetCount: number;
-  targetMissedCount: number;
-  overdueCount: number;
-  controlledSeconds: number;
-  cleanQueueSeconds: number;
-  currentControlledStreakSeconds: number;
-  controlTargetHours: number;
-  controlPercent: number;
-  activeWorkSeconds: number;
-  averageDailyWorkSeconds: number;
-  averageReactionSeconds: number;
-  reactionCount: number;
-  observedAt?: string | null;
-}
-
 export interface ManagerDailySummaryRow {
   date: string;
   managerId: number;
@@ -521,10 +501,6 @@ export class ManagerControlApi {
     return this.http.get<ManagerControlSummary>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/today`
     );
-  }
-
-  myQueueState(): Observable<ManagerQueueState> {
-    return this.http.get<ManagerQueueState>(`${appEnvironment.apiBaseUrl}/api/admin/manager-control/queue-state/me`);
   }
 
   syncToday(): Observable<ManagerControlSummary> {

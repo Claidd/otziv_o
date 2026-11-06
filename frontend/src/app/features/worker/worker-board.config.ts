@@ -1,7 +1,6 @@
 import type { ManagerOption, OrderCardItem, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import {
-  absoluteAppUrl,
   orderPaymentCopyText,
   orderReviewCopyText,
   reviewCheckPath
@@ -150,14 +149,6 @@ export function workerReviewDetailsPath(review: { companyId: number; orderId: nu
 
 export function workerBotBrowserPath(botId?: number | null): string {
   return botId ? `/admin/dictionaries/accounts/${botId}/browser` : 'https://vk.com/';
-}
-
-export function workerAbsoluteAppUrl(path: string): string {
-  return absoluteAppUrl(path);
-}
-
-export function workerReviewCheckPath(orderDetailsId: string): string {
-  return reviewCheckPath(orderDetailsId);
 }
 
 export function workerOrderReviewCopyText(order: OrderCardItem, promoTexts: string[]): string {

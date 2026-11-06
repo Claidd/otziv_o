@@ -37,11 +37,6 @@ export function workerReviewFieldSourceValue(review: WorkerReviewItem, field: Re
   return field === 'text' ? review.text ?? '' : review.answer ?? '';
 }
 
-export function workerReviewTextNeedsToggle(review: WorkerReviewItem): boolean {
-  const value = workerReviewFieldSourceValue(review, 'text');
-  return value.length > 190 || value.split(/\r?\n/).length > 5;
-}
-
 export function workerHasReviewOwnNote(review: WorkerReviewItem): boolean {
   return workerHasMeaningfulNote(review.comment);
 }

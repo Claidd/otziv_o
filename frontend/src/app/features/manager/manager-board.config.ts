@@ -1,7 +1,5 @@
 import { apiErrorMessage } from '../../shared/api-error-message';
 import {
-  absoluteAppUrl,
-  orderPaymentCopyText,
   orderReviewCopyText,
   reviewCheckPath
 } from '../../shared/order-review-copy-text';
@@ -170,10 +168,6 @@ export function managerReviewCheckPath(orderDetailsId: string): string {
   return reviewCheckPath(orderDetailsId);
 }
 
-export function managerAbsoluteAppUrl(path: string): string {
-  return absoluteAppUrl(path);
-}
-
 export function managerSectionLabel(section: ManagerSection): string {
   return section === 'companies' ? 'Компании' : 'Заказы';
 }
@@ -286,10 +280,6 @@ export function managerPayableOrderSum(order: OrderCardItem): number {
   }
 
   return order.totalSumWithBadReviews ?? order.sum ?? 0;
-}
-
-export function managerOrderPaymentCopyText(order: OrderCardItem, sum: number): string {
-  return orderPaymentCopyText(order, sum);
 }
 
 export function managerShowBadReviewSummary(order: OrderCardItem): boolean {
@@ -425,13 +415,6 @@ function managerInactiveCompanyStatus(status?: string | null): boolean {
   return normalized === 'бан';
 }
 
-export function managerCompanyHeaderUrl(company: CompanyCardItem): string {
-  if (managerCompanyChatBindingNotRequired(company)) {
-    return company.urlChat || managerCompanyFilialUrl(company);
-  }
-  return managerChatBotInviteUrl(company) || company.urlChat || managerCompanyFilialUrl(company);
-}
-
 export function managerOrderHeaderUrl(order: OrderCardItem): string {
   if (order.commonInvoice) {
     return order.commonInvoicePublicUrl || managerOrderDetailsUrl(order);
@@ -531,10 +514,6 @@ export function managerOrderDetailsUrl(order: OrderCardItem): string {
   }
 
   return `/orders/${order.companyId}/${order.id}`;
-}
-
-export function managerOrderInfoUrl(order: OrderCardItem): string {
-  return managerOrderDetailsUrl(order);
 }
 
 export function managerOrderReviewUrl(order: OrderCardItem): string {
@@ -676,10 +655,6 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
 
 export function managerErrorMessage(err: unknown, fallback: string): string {
   return apiErrorMessage(err, fallback);
-}
-
-export function trackManagerSection(_index: number, section: SectionTab): ManagerSection {
-  return section.key;
 }
 
 export function trackManagerStatus(_index: number, status: string): string {

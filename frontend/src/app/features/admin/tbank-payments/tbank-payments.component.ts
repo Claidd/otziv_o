@@ -2243,34 +2243,6 @@ export class TbankPaymentsComponent implements OnDestroy {
     return value === 'EXTERNAL_LINK' ? 'EXTERNAL_LINK' : 'MOBILE_BANK';
   }
 
-  private matchesSearch(link: AdminPaymentLinkResponse, search: string): boolean {
-    if (!search) {
-      return true;
-    }
-    const haystack = [
-      link.companyTitle,
-      link.filialTitle,
-      link.description,
-      link.orderId,
-      link.tbankPaymentId,
-      link.tbankOrderId,
-      link.paymentProfileName,
-      link.tbankTerminalKey,
-      link.payerEmail,
-      link.manualPhone,
-      link.manualRecipientName,
-      link.manualPaymentUrl,
-      link.manualPaymentButtonLabel,
-      link.manualComment,
-      link.paymentSuccessNotificationError,
-      link.clientChatPlatform,
-      link.clientChatWarning,
-      link.lastError,
-      this.statusLabel(link.status)
-    ].join(' ').toLowerCase();
-    return haystack.includes(search);
-  }
-
   private matchesStatusFilter(link: AdminPaymentLinkResponse, filter: PaymentStatusFilter): boolean {
     switch (filter) {
       case 'active':
@@ -2295,26 +2267,6 @@ export class TbankPaymentsComponent implements OnDestroy {
       default:
         return true;
     }
-  }
-
-  private matchesDateRange(link: AdminPaymentLinkResponse, from: string, to: string): boolean {
-    const createdAt = new Date(link.createdAt).getTime();
-    if (Number.isNaN(createdAt)) {
-      return true;
-    }
-    if (from) {
-      const fromTime = new Date(`${from}T00:00:00`).getTime();
-      if (!Number.isNaN(fromTime) && createdAt < fromTime) {
-        return false;
-      }
-    }
-    if (to) {
-      const toTime = new Date(`${to}T23:59:59.999`).getTime();
-      if (!Number.isNaN(toTime) && createdAt > toTime) {
-        return false;
-      }
-    }
-    return true;
   }
 
   private applyProfilesState(

@@ -232,11 +232,6 @@ export interface TbankPaymentProfilesResponse {
 
 export type BankPaymentProfilesResponse = TbankPaymentProfilesResponse;
 
-export interface TbankClientPaymentMode {
-  enabled: boolean;
-  paymentInstructionSource: PaymentInstructionSource;
-}
-
 export type TbankRuntimeMode = 'TEST' | 'LIVE';
 export type PaymentInstructionSource = 'MANAGER_TEXT' | 'TBANK_LINK' | 'BANK_LINK' | 'TOCHKA_LINK';
 export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_PAY_ONLY' | 'SBP_ONLY' | 'BANK_ONLY';
@@ -369,10 +364,6 @@ export interface UpdateManualPaymentTaskRequest {
   accountingTargetProfileId?: number | null;
   accountingTargetOverrunAcknowledged: boolean;
   expectedGeneration: number | null;
-}
-
-export interface UpdateManualPaymentTaskStatusRequest {
-  status: ManualPaymentTaskStatus;
 }
 
 export interface TbankRuntimeSettings {
@@ -675,23 +666,6 @@ export class PaymentsApi {
     );
   }
 
-  getAdminTbankPaymentProfiles(): Observable<TbankPaymentProfilesResponse> {
-    return this.getAdminBankPaymentProfiles();
-  }
-
-  getAdminTbankClientPaymentMode(): Observable<TbankClientPaymentMode> {
-    return this.http.get<TbankClientPaymentMode>(
-      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-client-payment-mode`
-    );
-  }
-
-  updateAdminTbankClientPaymentMode(enabled: boolean): Observable<TbankClientPaymentMode> {
-    return this.http.put<TbankClientPaymentMode>(
-      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-client-payment-mode`,
-      { enabled }
-    );
-  }
-
   getAdminTbankRuntimeSettings(): Observable<TbankRuntimeSettings> {
     return this.http.get<TbankRuntimeSettings>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-runtime-settings`
@@ -716,12 +690,6 @@ export class PaymentsApi {
     );
   }
 
-  updateAdminTbankPaymentProfileAssignments(
-    assignments: ManagerPaymentProfileAssignmentRequest[]
-  ): Observable<TbankPaymentProfilesResponse> {
-    return this.updateAdminBankPaymentProfileAssignments(assignments);
-  }
-
   updateAdminBankPaymentProfilePolicies(
     profiles: PaymentProfilePolicyRequest[]
   ): Observable<BankPaymentProfilesResponse> {
@@ -729,12 +697,6 @@ export class PaymentsApi {
       `${appEnvironment.apiBaseUrl}/api/admin/payments/bank-profiles/policies`,
       { profiles }
     );
-  }
-
-  updateAdminPaymentProfilePolicies(
-    profiles: PaymentProfilePolicyRequest[]
-  ): Observable<TbankPaymentProfilesResponse> {
-    return this.updateAdminBankPaymentProfilePolicies(profiles);
   }
 
   getAdminManualPaymentTasks(): Observable<ManualPaymentTaskResponse[]> {

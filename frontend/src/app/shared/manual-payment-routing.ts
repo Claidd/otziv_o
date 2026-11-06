@@ -187,17 +187,6 @@ export function manualPaymentBankRecipientName(candidate: ManualPaymentRecipient
   return bankRecipient === accountingRecipient ? '' : bankRecipient;
 }
 
-export function manualPaymentTaskTargetKey(option: ManualPaymentTaskAccountingTargetOptionLike): string {
-  return option.key?.trim() || `${option.kind}:${option.profileId ?? ''}`;
-}
-
-export function manualPaymentTaskOverrunAcknowledgementRequired(
-  option: ManualPaymentTaskAccountingTargetOptionLike | null | undefined
-): boolean {
-  return Boolean(option
-    && (option.overrunAcknowledgementRequired || (option.projectedOverrunKopecks ?? 0) > 0));
-}
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? value as Record<string, unknown> : null;
 }

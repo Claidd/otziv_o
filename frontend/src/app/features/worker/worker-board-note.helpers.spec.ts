@@ -19,7 +19,6 @@ import {
   workerReviewFieldSourceValue,
   workerReviewNoteMutationKey,
   workerReviewNoteTitle,
-  workerReviewTextNeedsToggle,
   workerSaveReviewFieldMutationKey,
   workerShouldShowExpander,
   workerSideNoteKey,
@@ -118,8 +117,6 @@ describe('worker-board note helpers', () => {
     expect(workerSaveReviewFieldMutationKey(item, 'answer')).toBe('save-answer-7');
     expect(workerReviewFieldSourceValue(item, 'text')).toBe('source text');
     expect(workerReviewFieldSourceValue(item, 'answer')).toBe('source answer');
-    expect(workerReviewTextNeedsToggle(item)).toBe(false);
-    expect(workerReviewTextNeedsToggle(review({ text: 'line\nline\nline\nline\nline\nline' }))).toBe(true);
   });
 
   it('keeps review note labels and side note keys stable', () => {

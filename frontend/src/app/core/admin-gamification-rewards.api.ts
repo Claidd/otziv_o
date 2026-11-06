@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
-import { GamificationReward, GamificationRewardClaim, GamificationWallet } from './gamification.api';
+import { GamificationReward, GamificationRewardClaim } from './gamification.api';
 
 export interface AdminGamificationRewardRequest {
   code: string;
@@ -64,10 +64,6 @@ export class AdminGamificationRewardsApi {
 
   updateClaim(id: number, status: string, adminComment = ''): Observable<GamificationRewardClaim> {
     return this.http.put<GamificationRewardClaim>(`${appEnvironment.apiBaseUrl}/api/admin/gamification/reward-claims/${id}`, { status, adminComment });
-  }
-
-  grantTokens(userId: number, amount: number, description: string): Observable<GamificationWallet> {
-    return this.http.post<GamificationWallet>(`${appEnvironment.apiBaseUrl}/api/admin/gamification/tokens/grant`, { userId, amount, description });
   }
 
   settings(): Observable<GamificationRewardSettings> {

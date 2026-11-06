@@ -927,20 +927,6 @@ export class ManagerApi {
     );
   }
 
-  resolveWorkerRiskIncident(incidentId: number): Observable<WorkerRiskIncident> {
-    return this.http.post<WorkerRiskIncident>(
-      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/${incidentId}/resolve`,
-      {}
-    );
-  }
-
-  ignoreWorkerRiskIncident(incidentId: number): Observable<WorkerRiskIncident> {
-    return this.http.post<WorkerRiskIncident>(
-      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/${incidentId}/ignore`,
-      {}
-    );
-  }
-
   setWorkerRiskIncidentResolution(
     incidentId: number,
     action: WorkerRiskResolutionAction,

@@ -41,11 +41,6 @@ export interface RegisterPerformerResponse {
   requiresAdminApproval: boolean;
 }
 
-export interface LegacyUserMigrationRequest {
-  username: string;
-  password: string;
-}
-
 export interface ProvisionedUserResponse {
   id: number;
   keycloakId: string;
@@ -78,13 +73,6 @@ export class AuthLifecycleApi {
   registerPerformer(request: RegisterPerformerRequest): Observable<RegisterPerformerResponse> {
     return this.http.post<RegisterPerformerResponse>(
       `${appEnvironment.apiBaseUrl}/api/auth/register-performer`,
-      request
-    );
-  }
-
-  migrateLegacyUser(request: LegacyUserMigrationRequest): Observable<ProvisionedUserResponse> {
-    return this.http.post<ProvisionedUserResponse>(
-      `${appEnvironment.apiBaseUrl}/api/auth/legacy-migration`,
       request
     );
   }

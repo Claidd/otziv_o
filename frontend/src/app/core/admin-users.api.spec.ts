@@ -17,7 +17,6 @@ describe('AdminUsersApi accrual adjustments', () => {
     };
     const base = '/api/admin/users/14/contractor-payment-profiles/27/accrual-adjustments';
 
-    api.getContractorAccrualAdjustments(14, 27);
     api.getContractorAccrualAdjustmentsPage(14, 27, 2);
     api.previewContractorAccrualAdjustment(14, 27, request);
     api.createContractorAccrualAdjustment(14, 27, request);
@@ -26,7 +25,6 @@ describe('AdminUsersApi accrual adjustments', () => {
       idempotencyKey: 'reverse-one-transaction'
     });
 
-    expect(get).toHaveBeenCalledWith(base);
     expect(get).toHaveBeenCalledWith(`${base}/pages?page=2`);
     expect(post).toHaveBeenNthCalledWith(1, `${base}/preview`, request);
     expect(post).toHaveBeenNthCalledWith(2, base, request);
