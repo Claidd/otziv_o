@@ -12,7 +12,6 @@ import {
   RefresherCustomEvent
 } from '@ionic/angular';
 import {
-  type ApiService,
   Page,
   WorkerRiskIncident,
   WorkerRiskIncidentLevel,

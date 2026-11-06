@@ -23,12 +23,8 @@ import {
 } from '@ionic/angular';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
-  type ApiService,
   CompanyChatBindingRepair,
-  CommonBillingAccountResponse,
   CompanyEditPayload,
-  CompanyFilialEditItem,
-  CompanyFilialUpdateRequest,
   CompanyCreateOption,
   CompanyOrderCreatePayload,
   CompanyOrderCreateRequest,
@@ -37,7 +33,6 @@ import {
   CompanyCreateRequest,
   CompanyCreateSource,
   CompanyItem,
-  CompanyUpdateRequest,
   DailyWorkProgress,
   ManagerBoard,
   ManagerBoardSection,
@@ -2428,10 +2423,6 @@ export class ManagerPage implements OnInit, OnDestroy {
       : 'Заказ, компания, филиал';
   }
 
-  openStatusSheet(): void {
-    this.statusSheetOpen.set(true);
-  }
-
   closeStatusSheet(): void {
     this.statusSheetOpen.set(false);
   }
@@ -2595,10 +2586,6 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   normalizedStatus(status: string): string {
     return normalizedManagerStatus(status);
-  }
-
-  openCompanyDetails(company: CompanyItem): void {
-    this.companyDetails.set(company);
   }
 
   closeCompanyDetails(): void {
@@ -2945,10 +2932,6 @@ export class ManagerPage implements OnInit, OnDestroy {
     }
   }
 
-  isMutatingOrder(order: OrderItem, action: OrderStatusAction): boolean {
-    return this.mutationKey() === this.orderMutationKey(order, action);
-  }
-
   async updateOrderStatusFromCard(order: OrderItem, action: MobileOrderStatusAction): Promise<void> {
     const matchedAction = this.orderActions.find((item) => item.status === action.status);
     if (!matchedAction) {
@@ -3091,29 +3074,6 @@ export class ManagerPage implements OnInit, OnDestroy {
     } finally {
       this.mutationKey.set(null);
     }
-  }
-
-  isOrderClientWaitingMutating(order: OrderItem): boolean {
-    return this.mutationKey() === `order-${order.id}-client-waiting`;
-  }
-
-  hasCompanyNote(company: CompanyItem): boolean {
-    return Boolean((company.commentsCompany ?? '').trim());
-  }
-
-  companyNoteBadge(company: CompanyItem): string {
-    const hasNote = this.hasCompanyNote(company);
-    const hasOrderRequest = this.hasNextOrderRequest(company);
-    if (hasNote && hasOrderRequest) {
-      return '2 метки';
-    }
-    if (hasNote) {
-      return 'заметка';
-    }
-    if (hasOrderRequest) {
-      return this.hasFailedNextOrderRequest(company) ? 'ошибка' : 'заказ';
-    }
-    return '';
   }
 
   companyNoteFor(company: CompanyItem): string {
@@ -3672,20 +3632,6 @@ export class ManagerPage implements OnInit, OnDestroy {
       default:
         return '';
     }
-  }
-
-  companyTone(company: CompanyItem): 'default' | 'new' | 'work' | 'send' {
-    const status = (company.status ?? '').trim().toLocaleLowerCase('ru-RU');
-    if (status.includes('нов')) {
-      return 'new';
-    }
-    if (status.includes('работ')) {
-      return 'work';
-    }
-    if (status.includes('рассыл') || status.includes('ожидан')) {
-      return 'send';
-    }
-    return 'default';
   }
 
   hasNextOrderRequest(company: CompanyItem): boolean {

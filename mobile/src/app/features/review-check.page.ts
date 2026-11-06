@@ -1569,10 +1569,6 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     return review.productTitle || 'Отзыв';
   }
 
-  reviewedCount(details: ReviewCheckPayload): number {
-    return details.reviews.filter((review) => this.isReviewPublished(review)).length;
-  }
-
   reviewCardCount(details: ReviewCheckPayload): number {
     return details.reviews.length + (details.permissions.canApprovePublication ? 1 : 0);
   }
@@ -1621,19 +1617,6 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
       return 'approved';
     }
     return 'not-approved';
-  }
-
-  reviewWindowStatusLabel(details: ReviewCheckPayload): string {
-    switch (this.reviewWindowStatus(details)) {
-      case 'paid':
-        return 'Оплачено';
-      case 'approved':
-        return 'Одобрено';
-      case 'correction':
-        return 'Коррекция';
-      default:
-        return 'Не одобрено';
-    }
   }
 
   isReviewWindowApproved(details: ReviewCheckPayload): boolean {

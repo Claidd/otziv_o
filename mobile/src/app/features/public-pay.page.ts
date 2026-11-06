@@ -7,7 +7,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular';
 import { Subscription } from 'rxjs';
-import { type ApiService, PublicPaymentLink, PublicSbpBank } from '../core/api.service';
+import { PublicPaymentLink, PublicSbpBank } from '../core/api.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { configuredPaymentTarget, type PaymentNavigationPurpose } from '../shared/payment-navigation';

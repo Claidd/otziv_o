@@ -25,10 +25,6 @@ export class VisibilityAwarePoller {
     private readonly nextDelayMs: () => number | null
   ) {}
 
-  get running(): boolean {
-    return this.active;
-  }
-
   start(): void {
     if (this.active) {
       return;

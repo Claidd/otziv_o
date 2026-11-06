@@ -7,14 +7,14 @@ import type { PageWriteTracker } from '../../core/page-write-tracker';
 type ReviewEditableField = 'text' | 'answer';
 type ReviewSideNoteField = 'order' | 'company';
 type Dependencies = {
-  writes: Pick<PageWriteTracker, 'begin' | 'track'>;
-  api: Pick<OrderReviewsApi, 'updateManagerOrderReviewText' | 'updateManagerOrderReviewAnswer' | 'updateManagerOrderReviewNote' | 'updateManagerOrderNote' | 'updateManagerOrderCompanyNote'>;
+  writes: Pick<PageWriteTracker, 'begin'>;
+  api: Pick<OrderReviewsApi, 'updateManagerOrderReviewNote' | 'updateManagerOrderNote' | 'updateManagerOrderCompanyNote'>;
   details(): OrderDetailsPayload | null;
   mutationKey: WritableSignal<string | null>; error: WritableSignal<string | null>;
   capture(): RouteEpochTicket | null; accepts(ticket: RouteEpochTicket): boolean;
   isMutating(key: string): boolean; applyReview(review: OrderReviewItem): void;
   patchOrderNote(orderId: number, note: string): void; patchCompanyNote(companyId: number, note: string): void;
-  focusInline(reviewId: number): void; blur(): void; errorMessage(error: unknown, fallback: string): string;
+  errorMessage(error: unknown, fallback: string): string;
 };
 /** Owns inline review drafts and the captured sequential note-save command. */
 export class OrderReviewNotesFacade {
@@ -29,97 +29,8 @@ export class OrderReviewNotesFacade {
     return this.reviewFieldDrafts()[key] ?? this.reviewFieldSourceValue(review, field);
   }
 
-  setReviewFieldDraft(review: OrderReviewItem, field: ReviewEditableField, value: string): void {
-    const key = this.reviewFieldKey(review, field);
-    this.reviewFieldDrafts.update((drafts) => ({ ...drafts, [key]: value }));
-  }
-
-  startReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
-    if (!this.deps.details()?.canEditReviews) {
-      return;
-    }
-
-    const key = this.reviewFieldKey(review, field);
-    this.editingFieldKey.set(key);
-    this.reviewFieldDrafts.update((drafts) => key in drafts ? drafts : {
-      ...drafts,
-      [key]: this.reviewFieldSourceValue(review, field)
-    });
-  }
-
-  startReviewTextInlineEdit(review: OrderReviewItem): void {
-    this.startReviewFieldEdit(review, 'text');
-    const ticket = this.deps.capture();
-    window.setTimeout(() => { if (ticket && this.deps.accepts(ticket) && this.isReviewFieldEditing(review, 'text')) this.deps.focusInline(review.id); }, 40);
-  }
-
-  cancelReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
-    const key = this.reviewFieldKey(review, field);
-    this.editingFieldKey.set(null);
-    this.reviewFieldDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[key];
-      return next;
-    });
-    this.deps.blur();
-  }
-
-  saveReviewField(review: OrderReviewItem, field: ReviewEditableField): void {
-    if (!this.canSaveReviewField(review, field)) {
-      return;
-    }
-
-    const routeTicket = this.deps.capture();
-    if (!routeTicket) {
-      return;
-    }
-
-    const value = this.reviewFieldValue(review, field);
-    const key = this.saveFieldMutationKey(review, field);
-    this.deps.mutationKey.set(key);
-    const request = field === 'text'
-      ? this.deps.api.updateManagerOrderReviewText(review.orderId, review.id, value)
-      : this.deps.api.updateManagerOrderReviewAnswer(review.orderId, review.id, value);
-
-    this.deps.writes.track(request).subscribe({
-      next: (updatedReview) => {
-        if (!this.deps.accepts(routeTicket)) {
-          return;
-        }
-        this.deps.applyReview(updatedReview);
-        this.deps.mutationKey.set(null);
-        this.cancelReviewFieldEdit(updatedReview, field);
-        this.deps.blur();
-      },
-      error: (err) => {
-        if (!this.deps.accepts(routeTicket)) {
-          return;
-        }
-        this.deps.error.set(this.deps.errorMessage(err, 'Не удалось сохранить отзыв'));
-        this.deps.mutationKey.set(null);
-      }
-    });
-  }
-
-  canSaveReviewField(review: OrderReviewItem, field: ReviewEditableField): boolean {
-    if (this.deps.isMutating(this.saveFieldMutationKey(review, field))) {
-      return false;
-    }
-
-    const value = this.reviewFieldValue(review, field);
-    if (field === 'text' && !value.trim()) {
-      return false;
-    }
-
-    return value !== this.reviewFieldSourceValue(review, field);
-  }
-
   isReviewFieldEditing(review: OrderReviewItem, field: ReviewEditableField): boolean {
     return this.editingFieldKey() === this.reviewFieldKey(review, field);
-  }
-
-  saveFieldMutationKey(review: OrderReviewItem, field: ReviewEditableField): string {
-    return `save-${field}-${review.id}`;
   }
 
   toggleReviewNote(review: OrderReviewItem): void {

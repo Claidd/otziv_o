@@ -6,7 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular';
 import { Subscription } from 'rxjs';
-import { type ApiService, PublicCommonInvoice } from '../core/api.service';
+import { PublicCommonInvoice } from '../core/api.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { manualTransferDestinationPresentation } from '../shared/manual-transfer-destination';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';

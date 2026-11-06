@@ -310,7 +310,7 @@ describe('native auth storage durability through the real services', () => {
     const auth = createAuth(saved); const release = holdNextFlush('secure');
     const refresh = auth.refreshTokens(); await microtasks();
     expect(auth.tokens()).toBe(saved);
-    const logout = auth.logout(); await microtasks();
+    const logout = auth.logoutFrom('unknown'); await microtasks();
     expect(auth.tokens()).toBeNull();
     expect(Browser.open).not.toHaveBeenCalled();
     release(); await logout;
@@ -322,7 +322,7 @@ describe('native auth storage durability through the real services', () => {
   it('rejects the actual logout on commit failure while keeping memory anonymous and the marker durable', async () => {
     const saved = tokens(); seed(TOKEN, saved);
     const auth = createAuth(saved); failFlush(4);
-    await expect(auth.logout()).rejects.toThrow('fixture commit failed');
+    await expect(auth.logoutFrom('unknown')).rejects.toThrow('fixture commit failed');
     expect(auth.tokens()).toBeNull();
     expect(auth.status()).toBe('anonymous');
     expect(Browser.open).not.toHaveBeenCalled();
@@ -333,7 +333,7 @@ describe('native auth storage durability through the real services', () => {
   it('does not claim logout completion when pending-login removal fails its disk commit', async () => {
     const saved = tokens(); seed(TOKEN, saved); seed(PENDING, pending);
     const auth = createAuth(saved); failFlush(6);
-    await expect(auth.logout()).rejects.toThrow('fixture commit failed');
+    await expect(auth.logoutFrom('unknown')).rejects.toThrow('fixture commit failed');
     expect(auth.tokens()).toBeNull();
     expect(auth.status()).toBe('anonymous');
     expect(Browser.open).not.toHaveBeenCalled();
@@ -349,7 +349,7 @@ describe('native auth storage durability through the real services', () => {
       return { status: 200, headers: {}, url: 'http://localhost/revoke', data: '' };
     });
 
-    await auth.logout();
+    await auth.logoutFrom('unknown');
 
     expect(bridge.post).toHaveBeenCalledTimes(1);
     const request = bridge.post.mock.calls[0][0];
@@ -369,7 +369,7 @@ describe('native auth storage durability through the real services', () => {
     const auth = createAuth(saved);
     bridge.post.mockRejectedValue(new Error('offline'));
 
-    await auth.logout();
+    await auth.logoutFrom('unknown');
 
     expect(auth.tokens()).toBeNull();
     expect(auth.status()).toBe('anonymous');

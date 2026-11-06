@@ -1,6 +1,6 @@
-import type { ManagerPerformanceScore, ManagerControlStatus, ManagerControlSeverity, ManagerControlGroup, ManagerControlItemStatus, ManagerControlActionType, ManagerControlActionPayload, ManagerControlClientReplyPayload, ManagerControlClientMessageReconciliation, ManagerControlStagePayload, ManagerControlClosePayload, ManagerControlCloseResponse, ManagerControlConcreteItem, ManagerControlSlaState, ManagerControlItemDetail, ManagerControlWorkerExplanationStats, ManagerControlManagerDetail, ManagerControlProblem, ManagerControlSection, ManagerControlOverdueStatus, ManagerControlManager, ManagerControlSummary } from './manager-control.models';
+import type { ManagerControlActionPayload, ManagerControlClientReplyPayload, ManagerControlClientMessageReconciliation, ManagerControlStagePayload, ManagerControlClosePayload, ManagerControlCloseResponse, ManagerControlConcreteItem, ManagerControlManagerDetail, ManagerControlSummary } from './manager-control.models';
 export type { ManagerPerformanceScore, ManagerControlStatus, ManagerControlSeverity, ManagerControlGroup, ManagerControlItemStatus, ManagerControlActionType, ManagerControlActionPayload, ManagerControlClientReplyPayload, ManagerControlClientMessageReconciliation, ManagerControlStagePayload, ManagerControlClosePayload, ManagerControlCloseResponse, ManagerControlConcreteItem, ManagerControlSlaState, ManagerControlItemDetail, ManagerControlWorkerExplanationStats, ManagerControlManagerDetail, ManagerControlProblem, ManagerControlSection, ManagerControlOverdueStatus, ManagerControlManager, ManagerControlSummary } from './manager-control.models';
-import type { PublicPaymentInitResponse, PublicCommonInvoiceOrder, PublicCommonInvoice, PublicSbpBank } from '@otziv/client-common/public-payments';
+import type { PublicPaymentInitResponse, PublicCommonInvoice, PublicSbpBank } from '@otziv/client-common/public-payments';
 export type { PublicPaymentInitResponse, PublicCommonInvoiceOrder, PublicCommonInvoice, PublicSbpBank } from '@otziv/client-common/public-payments';
 import { ManualPaymentTasksApi } from './manual-payment-tasks.api';
 import { ManagerBoardApi } from './manager-board.api';
@@ -23,8 +23,7 @@ import { DictionariesApi } from './dictionaries.api';
 import { OrderReviewsApi } from './order-reviews.api';
 import { OrderPaymentApi } from './order-payment.api';
 import { OrderCompanyReportApi } from './order-company-report.api';
-import { decodePublicPaymentLink, decodeCommonBillingAccounts } from '@otziv/client-common/billing-payments';
-import type { CommonBillingCompanyResponse, CommonInvoiceSummaryResponse, CommonBillingAccountResponse, InvoicePaymentMode, PublicPaymentLink } from '@otziv/client-common/billing-payments';
+import type { CommonInvoiceSummaryResponse, CommonBillingAccountResponse, InvoicePaymentMode, PublicPaymentLink } from '@otziv/client-common/billing-payments';
 export type { CommonBillingCompanyResponse, CommonInvoiceSummaryResponse, CommonBillingAccountResponse, InvoicePaymentMode, PublicPaymentLink } from '@otziv/client-common/billing-payments';
 import { ManagerCompanyEditorApi } from './manager-company-editor.api';
 import { ManagerCompanyBillingApi } from './manager-company-billing.api';
@@ -33,7 +32,7 @@ export type { OrderEditPayload } from '@otziv/client-common/order-editor';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { ManagerOrderEditorApi } from './manager-order-editor.api';
-import { forkJoin, map, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import {
   botBrowserApiPaths,
   botBrowserSessionClosePath,
@@ -424,11 +423,6 @@ export interface RegisterPerformerResponse {
   status: string;
   registrationExpiresAt: string;
   requiresAdminApproval: boolean;
-}
-
-export interface LegacyUserMigrationRequest {
-  username: string;
-  password: string;
 }
 
 export interface ProvisionedUserResponse {
@@ -4266,10 +4260,6 @@ export class ApiService {
     return this.http.post<RegisterPerformerResponse>(this.apiUrl('/api/auth/register-performer'), request);
   }
 
-  migrateLegacyUser(request: LegacyUserMigrationRequest): Observable<ProvisionedUserResponse> {
-    return this.http.post<ProvisionedUserResponse>(this.apiUrl('/api/auth/legacy-migration'), request);
-  }
-
   getWhatsAppBindingStatus(): Observable<WhatsAppClientStatus> {
     return this.http.get<WhatsAppClientStatus>(this.apiUrl('/api/cabinet/whatsapp'));
   }
@@ -4354,11 +4344,6 @@ export class ApiService {
       params = params.set('refresh', 'true');
     }
     return params;
-  }
-
-  private keywordParams(keyword: string): HttpParams {
-    const value = keyword.trim();
-    return value ? new HttpParams().set('keyword', value) : new HttpParams();
   }
 
   private apiUrl(path: string): string {

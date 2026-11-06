@@ -16,7 +16,6 @@ import {
 } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
-  type ApiService,
   type ManagerManualCardPaymentResult,
   type ManualCardPaymentConfirmationRequest,
   type ManualCardPaymentContext,
@@ -87,8 +86,6 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
     return Boolean(selected && this.context?.originalRecipient
       && mobileManualCardRecipientKey(selected) !== mobileManualCardRecipientKey(this.context.originalRecipient));
   });
-
-  readonly ownerSelected = computed(() => this.selectedRecipient()?.recipientType === 'OWNER');
 
   readonly selectedAnomalyWarning = computed(() => {
     const selected = this.selectedRecipient();
@@ -222,25 +219,5 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
         'Маршрут оплаты изменился, но актуальный список не загрузился. Закройте окно и повторите.'
       ));
     }
-  }
-
-  private apiErrorMessage(error: unknown): string {
-    if (error && typeof error === 'object' && 'error' in error) {
-      const payload = error.error;
-      if (typeof payload === 'string' && payload.trim()) {
-        return payload.trim();
-      }
-      if (payload && typeof payload === 'object') {
-        for (const key of ['message', 'detail', 'error']) {
-          const value = (payload as Record<string, unknown>)[key];
-          if (typeof value === 'string' && value.trim()) {
-            return value.trim();
-          }
-        }
-      }
-    }
-    return error instanceof Error && error.message.trim()
-      ? error.message.trim()
-      : 'Не удалось безопасно подтвердить перевод.';
   }
 }

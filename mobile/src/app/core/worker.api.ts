@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, forkJoin, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import type { BotChangeResponse, CredentialRevealResponse, ManagerOverdueOrders, WorkerActionResponse, WorkerActivitySource, WorkerBoard, WorkerBoardQuery } from './api.service';
 import { mobileEnvironment } from './mobile-environment';
 

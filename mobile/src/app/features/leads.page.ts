@@ -1763,12 +1763,8 @@ export class LeadsPage implements OnInit, OnDestroy {
     const rest = visible.filter((bucket) => bucket.key !== 'all');
     return allBucket ? [allBucket, ...rest] : rest;
   });
-  readonly activeBucketInfo = computed(() => (
-    this.visibleBuckets().find((bucket) => bucket.key === this.activeBucket()) ?? this.visibleBuckets()[0] ?? this.buckets[0]
-  ));
   readonly currentPage = computed(() => this.pageFor(this.activeBucket()));
   readonly visibleLeads = computed(() => this.currentPage().content ?? []);
-  readonly previewLeads = computed(() => this.visibleLeads().slice(0, 3));
   readonly leadSheetOpen = computed(() => this.selectedLead() !== null);
   readonly sortTitle = computed(() => mobileSortTitle(this.sortDirection(), {
     desc: 'давно без изменений',
@@ -1840,17 +1836,8 @@ export class LeadsPage implements OnInit, OnDestroy {
     void this.loadBoard();
   }
 
-  openFilterSheet(): void {
-    this.selectedLead.set(null);
-    this.filterSheetOpen.set(true);
-  }
-
   closeFilterSheet(): void {
     this.filterSheetOpen.set(false);
-  }
-
-  openBucketSheet(): void {
-    this.bucketSheetOpen.set(true);
   }
 
   closeBucketSheet(): void {
@@ -2791,11 +2778,6 @@ export class LeadsPage implements OnInit, OnDestroy {
 
   personName(person?: { fio?: string; username?: string; id?: number }): string {
     return person?.fio || person?.username || (person?.id ? `ID ${person.id}` : '-');
-  }
-
-  leadCardPerson(lead: LeadItem): string {
-    const manager = this.personName(lead.manager);
-    return manager !== '-' ? manager : this.personName(lead.operator);
   }
 
   leadTitle(lead: LeadItem): string {

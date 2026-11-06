@@ -28,15 +28,12 @@ import { Observable, Subscription, finalize, firstValueFrom } from 'rxjs';
 import {
   type ApiService,
   BadReviewTaskItem,
-  CompanyDeepReportState,
   ManagerPaymentLinkResponse,
-  PaymentRouteChangeContext,
   PaymentRouteChangeTarget,
   OrderDetailsPayload,
   OrderReviewItem,
   ReviewRecoveryBatchItem,
   ReviewRecoveryTaskItem,
-  TbankPaymentStatus,
   WorkerActivitySource,
   WorkerCredentialPreparation,
   ReviewUpdateRequest
@@ -55,16 +52,12 @@ import {
   dispatchMobileRecoveryClientNotified
 } from '../shared/mobile-reminders.component';
 import { MobileReviewCardShellComponent } from '../shared/mobile-review-card-shell.component';
-import { safeHttpsExternalUrl, safeHttpsOrInternalUrl } from '../shared/external-navigation';
+import { safeHttpsOrInternalUrl } from '../shared/external-navigation';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
 type BadReviewTaskCopyKind = 'botLogin' | 'botPassword';
 type RecoveryTaskCopyKind = 'botLogin' | 'botPassword';
 type ReviewEditableField = 'text' | 'answer';
-type ReviewTextEditState = {
-  review: OrderReviewItem;
-  field: ReviewEditableField;
-};
 type ReviewSideNoteField = 'order' | 'company';
 type BadReviewTaskDraft = {
   taskText: string;
@@ -2288,7 +2281,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     capture: () => this.captureOrderRoute(), accepts: ticket => this.isActiveOrderRoute(ticket),
     isMutating: key => this.isMutating(key), applyReview: review => this.applyUpdatedReview(review),
     patchOrderNote: (id, note) => this.patchOrderNote(id, note), patchCompanyNote: (id, note) => this.patchCompanyNote(id, note),
-    focusInline: id => this.focusInlineReviewText(id), blur: () => this.blurActiveControl(), errorMessage: (error, fallback) => this.errorMessage(error, fallback)
+    errorMessage: (error, fallback) => this.errorMessage(error, fallback)
   });
   readonly editingFieldKey = this.reviewNotesFacade.editingFieldKey;
   readonly reviewFieldDrafts = this.reviewNotesFacade.reviewFieldDrafts;
@@ -2643,12 +2636,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   private isActiveOrderRoute(ticket: RouteEpochTicket): boolean {
     return this.orderRouteGuard.accepts(ticket);
-  }
-
-  backToOrders(): void {
-    void this.router.navigate(['/tabs/orders'], {
-      queryParams: { mobileNav: 'all', navTs: Date.now() }
-    });
   }
 
   previousReview(): void {
@@ -3037,18 +3024,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       `bot-${review.id}`,
       () => this.managerReviewActionsApi.changeManagerOrderReviewBot(review.orderId, review.id, this.orderDetailsActivitySource()),
       'Не удалось сменить аккаунт'
-    );
-  }
-
-  changeReviewText(review: OrderReviewItem): void {
-    if (this.isMutating(`ai-text-${review.id}`)) {
-      return;
-    }
-
-    this.runReviewMutation(
-      `ai-text-${review.id}`,
-      () => this.managerReviewActionsApi.changeManagerOrderReviewText(review.orderId, review.id),
-      'Не удалось изменить текст отзыва'
     );
   }
 
@@ -3968,18 +3943,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
-  private focusInlineReviewText(reviewId: number): void {
-    const element = document.querySelector<HTMLTextAreaElement>(`textarea[data-review-textarea="${reviewId}"]`);
-    if (!element) {
-      return;
-    }
-
-    element.focus({ preventScroll: true });
-    const position = element.value.length;
-    element.setSelectionRange(position, position);
-    element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
-  }
-
   private focusReviewTextEditor(): void {
     const element = document.querySelector<HTMLTextAreaElement>('.review-text-edit-sheet textarea[name="reviewTextFullEditor"]');
     if (!element) {
@@ -4248,15 +4211,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       }
       return false;
     }
-  }
-
-  private webAppUrl(path: string): string {
-    const { hostname, protocol } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `${protocol}//${hostname}:8088${path}`;
-    }
-
-    return path;
   }
 
   private errorMessage(err: unknown, fallback: string): string {

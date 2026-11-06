@@ -58,11 +58,6 @@ export class ManagerReportReviewAccessService {
     return true;
   }
 
-  clear(): void {
-    this.state.set(null);
-    this.notifiedReviewId = null;
-  }
-
   private apiUrl(path: string): string {
     return `${mobileEnvironment.apiBaseUrl}${path}`;
   }

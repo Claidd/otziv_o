@@ -15,7 +15,6 @@ import {
 } from '@ionic/angular';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
-  type ApiService,
   DailyWorkProgress,
   ManagerOverdueOrders,
   ManagerOverdueStatus,
@@ -1849,17 +1848,6 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.botSheetOpen.set(false);
   }
 
-  openAllSection(load = true): void {
-    this.activeSection.set('all');
-    this.pageNumber.set(0);
-    this.sortDirection.set(workerDefaultSortDirection('all'));
-    this.listExpanded.set(false);
-    this.sectionSheetOpen.set(false);
-    if (load) {
-      void this.load();
-    }
-  }
-
   selectSection(section: WorkerBoardSection): void {
     if (this.isSectionLocked(section)) {
       return;
@@ -2655,16 +2643,6 @@ export class WorkerPage implements OnInit, OnDestroy {
     void this.router.navigate(['/tabs/orders', order.companyId, order.id]);
   }
 
-  openReviewDetails(review: WorkerReviewItem): void {
-    if (!review.companyId || !review.orderId) {
-      return;
-    }
-    this.storeListState();
-    void this.router.navigate(['/tabs/orders', review.companyId, review.orderId], {
-      queryParams: this.activeSection() === 'all' ? { from: 'worker-all' } : undefined
-    });
-  }
-
   handleReviewFooterClick(review: WorkerReviewItem): void {
     this.openReviewEdit(review);
   }
@@ -2838,32 +2816,6 @@ export class WorkerPage implements OnInit, OnDestroy {
       return 0;
     }
     return Math.max(0, Math.min(100, Math.round((order.counter / order.amount) * 100)));
-  }
-
-  orderToneClass(order: OrderItem): string {
-    if (order.waitingForClient) {
-      return 'tone-wait';
-    }
-    switch (order.status) {
-      case 'В проверку':
-      case 'Выставлен счет':
-      case 'Архив':
-        return 'tone-walk';
-      case 'На проверке':
-      case 'Напоминание':
-        return 'tone-wait';
-      case 'Коррекция':
-        return 'tone-correction';
-      case 'Публикация':
-        return 'tone-publication';
-      case 'Опубликовано':
-      case 'Оплачено':
-        return 'tone-success';
-      case 'Не оплачено':
-        return 'tone-bad';
-      default:
-        return '';
-    }
   }
 
   orderLeadToneClass(order: OrderItem): string {

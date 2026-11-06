@@ -329,10 +329,6 @@ export class MobileNativeService {
       void this.router.navigateByUrl(`${parsed.pathname || '/tabs/home'}${parsed.search}`, { replaceUrl: false });
       return;
     }
-
-    if (/^https?:$/i.test(parsed.protocol) && parsed.hostname === 'o-ogo.ru' && parsed.pathname.startsWith('/mobile/')) {
-      void this.router.navigateByUrl(parsed.pathname.replace(/^\/mobile/, '') + parsed.search, { replaceUrl: false });
-    }
   }
 
   private async handleBackButton(canGoBack: boolean): Promise<void> {

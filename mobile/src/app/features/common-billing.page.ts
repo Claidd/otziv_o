@@ -700,7 +700,6 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   ) !== null);
 
   constructor(
-    private readonly api: ApiService,
     private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,

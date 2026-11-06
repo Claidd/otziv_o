@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import type { ManagerControlActionPayload, ManagerControlClientMessageReconciliation, ManagerControlClientReplyPayload, ManagerControlClosePayload, ManagerControlCloseResponse, ManagerControlConcreteItem, ManagerControlManagerDetail, ManagerControlStagePayload, ManagerControlSummary } from './manager-control.models';
 import { mobileEnvironment } from './mobile-environment';
 

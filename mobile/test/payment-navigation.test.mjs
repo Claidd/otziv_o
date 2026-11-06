@@ -4,7 +4,6 @@ import { loadTsModule } from './load-ts-module.mjs';
 
 const {
   configuredPaymentTarget,
-  navigateToPaymentTarget,
   paymentTargetForUpdate,
   safePaymentNavigationTarget
 } = loadTsModule(
@@ -34,11 +33,8 @@ for (const value of [
   'bank100000000111://qr.nspk.ru:443/AS100000000111',
   'bank100000000111://qr.nspk.ru\\evil.test/AS100000000111'
 ]) {
-  test(`rejects unsafe payment target without navigation: ${value}`, () => {
-    const navigated = [];
-
-    assert.equal(navigateToPaymentTarget(value, 'sbp', (target) => navigated.push(target)), false);
-    assert.deepEqual(navigated, []);
+  test(`rejects unsafe payment target: ${value}`, () => {
+    assert.equal(safePaymentNavigationTarget(value, 'sbp'), null);
   });
 }
 
@@ -58,10 +54,8 @@ for (const value of [
 
 test('keeps a valid public payment URL byte-for-byte unchanged', () => {
   const value = 'https://securepay.tinkoff.ru/pay?order=42#confirm';
-  const navigated = [];
 
-  assert.equal(navigateToPaymentTarget(value, 'payment', (target) => navigated.push(target)), true);
-  assert.deepEqual(navigated, [value]);
+  assert.equal(safePaymentNavigationTarget(value, 'payment'), value);
 });
 
 for (const value of [
@@ -70,11 +64,8 @@ for (const value of [
   'https://pay.tbank-online.com:443/fixture',
   'https://merch.securepaytb.ru/order/?uuid=tochka-test-operation'
 ]) {
-  test(`opens the original bank payment URL: ${value}`, () => {
-    const navigated = [];
-
-    assert.equal(navigateToPaymentTarget(value, 'payment', (target) => navigated.push(target)), true);
-    assert.deepEqual(navigated, [value]);
+  test(`accepts the original bank payment URL: ${value}`, () => {
+    assert.equal(safePaymentNavigationTarget(value, 'payment'), value);
   });
 }
 
@@ -94,9 +85,7 @@ for (const value of [
   'https://evil.test/pay'
 ]) {
   test(`rejects untrusted generated payment URL: ${value}`, () => {
-    const navigated = [];
-    assert.equal(navigateToPaymentTarget(value, 'payment', target => navigated.push(target)), false);
-    assert.deepEqual(navigated, []);
+    assert.equal(safePaymentNavigationTarget(value, 'payment'), null);
   });
 }
 

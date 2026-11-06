@@ -11,7 +11,6 @@ import { Router } from '@angular/router';
 import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
-  type ApiService,
   CommonBillingAccountRequest,
   CommonBillingAccountResponse,
   CommonBillingCompanyResponse,

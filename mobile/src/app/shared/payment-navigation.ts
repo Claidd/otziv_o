@@ -80,16 +80,3 @@ export function safePaymentNavigationTarget(
     return null;
   }
 }
-
-export function navigateToPaymentTarget(
-  value: unknown,
-  purpose: PaymentNavigationPurpose,
-  navigate: (target: string) => void
-): boolean {
-  const target = safePaymentNavigationTarget(value, purpose);
-  if (!target) {
-    return false;
-  }
-  navigate(target);
-  return true;
-}

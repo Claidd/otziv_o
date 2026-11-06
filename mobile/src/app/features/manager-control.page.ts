@@ -18,7 +18,6 @@ import {
   RefresherCustomEvent
 } from '@ionic/angular';
 import {
-  type ApiService,
   ManagerControlActionPayload,
   ManagerControlConcreteItem,
   ManagerControlItemStatus,

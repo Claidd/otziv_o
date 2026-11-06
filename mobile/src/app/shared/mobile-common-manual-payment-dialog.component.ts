@@ -17,7 +17,6 @@ import {
 } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
-  type ApiService,
   type CommonInvoiceDetailsResponse,
   type CommonManualPaymentAttributionRequest,
   type CommonManualPaymentMode,

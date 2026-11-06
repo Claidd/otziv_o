@@ -407,14 +407,6 @@ export class ReputationAiApi {
     return this.http.get<ReputationAiStatus>(`${this.baseUrl}/status`);
   }
 
-  selectProvider(provider: ReputationAiProvider): Observable<ReputationAiStatus> {
-    return this.http.put<ReputationAiStatus>(`${this.baseUrl}/status/provider`, { provider });
-  }
-
-  setEnabled(enabled: boolean): Observable<ReputationAiStatus> {
-    return this.http.put<ReputationAiStatus>(`${this.baseUrl}/status/enabled`, { enabled });
-  }
-
   checkOpenAiRoute(): Observable<OpenAiProviderDiagnostics> {
     return this.http.post<OpenAiProviderDiagnostics>(`${this.baseUrl}/status/openai-check`, {});
   }
@@ -465,10 +457,6 @@ export class ReputationAiApi {
 
   latestResearch(companyId: number): Observable<ResearchSnapshot> {
     return this.http.get<ResearchSnapshot>(`${this.baseUrl}/companies/${companyId}/research/latest`);
-  }
-
-  createDeepResearch(companyId: number, request: ReputationResearchRequest): Observable<DeepCompanyResearchReport> {
-    return this.http.post<DeepCompanyResearchReport>(`${this.baseUrl}/companies/${companyId}/deep-research`, request);
   }
 
   startDeepResearchJob(companyId: number, request: ReputationResearchRequest): Observable<DeepCompanyResearchJob> {
@@ -526,10 +514,6 @@ export class ReputationAiApi {
       `${this.baseUrl}/companies/${companyId}/deep-research/jobs/${jobId}/review-ideas`,
       { reviewIdeas }
     );
-  }
-
-  createContentPack(companyId: number, request: ReputationContentPackRequest): Observable<ReputationContentPack> {
-    return this.http.post<ReputationContentPack>(`${this.baseUrl}/companies/${companyId}/content-pack`, request);
   }
 
   startContentPackJob(companyId: number, request: ReputationContentPackRequest): Observable<ReputationContentPackJob> {

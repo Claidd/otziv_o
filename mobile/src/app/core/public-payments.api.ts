@@ -1,7 +1,7 @@
 import { decodePublicCommonInvoice, decodePublicPaymentInit, decodePublicSbpBanks } from '@otziv/client-common/public-payments';
 import type { PublicCommonInvoiceResponseOutput, PublicPaymentInitRequestInput, PublicPaymentInitResponseOutput, PublicSbpBankResponseOutput } from '@otziv/client-common/client-api';
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import type { PublicCommonInvoice, PublicPaymentInitResponse, PublicSbpBank } from '@otziv/client-common/public-payments';
 import type { PublicPaymentLink } from '@otziv/client-common/billing-payments';
