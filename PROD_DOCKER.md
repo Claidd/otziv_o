@@ -290,6 +290,29 @@ Prod deploy-скрипты отдельно собирают `whatsapp_lika` и 
 WhatsApp group sync finished source=scheduled clients=2 groups=18 linked=3
 ```
 
+Ссылку-приглашение группы WhatsApp показывает только тем участникам, кому разрешено приглашать
+(обычно администраторам). Поэтому у каждой группы в `GET /groups` есть `inviteStatus`, а у ответа —
+`inviteStatusCounts`:
+
+- `ok` — ссылка прочитана;
+- `not_member` — номер больше не состоит в группе;
+- `not_admin` — номер участник без прав администратора;
+- `refused` — WhatsApp отказал с кодом, права номера неизвестны;
+- `timeout` — ответ не пришёл за `WHATSAPP_GROUP_INVITE_TIMEOUT_MS`;
+- `unsupported` — не загрузился модуль запроса ссылки. WhatsApp Web держит его в отдельном пакете
+  окна «Пригласить по ссылке». Шлюз подгружает этот пакет перед каждым обновлением списка групп и
+  пишет `WhatsApp invite link bundle loaded` или `... unavailable` с причинами;
+- `empty` — ответ пришёл без ссылки;
+- `error` — прочая ошибка.
+
+Подробность лежит в `inviteError`. Шлюз пишет счётчики и самые частые причины в строку
+`WhatsApp groups cache refreshed`. Если не прочитана ни одна ссылка, он добавляет предупреждение
+`No WhatsApp group invite code was readable`.
+
+Backend каждые 30 минут пишет `WhatsApp invite link check finished: stale=…, targets=…, readable=…, unreadable={…}`
+по привязанным группам. Сверх `inviteStatus` там бывают `not_listed` (группы нет ни в одном списке),
+`unreported` (старый шлюз без статуса) и `conflicting` (два номера видят разные ссылки).
+
 Отправка сообщений идет так: заказ берет `manager.clientId`, компания берет `company.groupId`, backend вызывает `/send-group` у нужного WhatsApp-контейнера. Ответы из личных чатов приходят в `/webhook/whatsapp-reply`, ответы из групп - в `/webhook/whatsapp-group-reply`.
 
 ## Временный доступ к phpMyAdmin

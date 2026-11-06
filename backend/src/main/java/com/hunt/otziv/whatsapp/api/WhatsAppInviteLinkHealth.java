@@ -17,8 +17,20 @@ public interface WhatsAppInviteLinkHealth {
 
     enum RecheckResult { VALID, STALE, UNKNOWN, NOT_APPLICABLE }
 
-    record Recheck(RecheckResult result, String currentInviteLink) {
+    /**
+     * unreadableReason explains an UNKNOWN result when the gateway reported why the connected
+     * account cannot read the group's invite (for example {@code not_member} or {@code not_admin}).
+     */
+    record Recheck(RecheckResult result, String currentInviteLink, String unreadableReason) {
+        public Recheck(RecheckResult result, String currentInviteLink) {
+            this(result, currentInviteLink, null);
+        }
     }
+
+    /** The account was removed from the group: it can neither read the invite nor deliver there. */
+    String UNREADABLE_NOT_MEMBER = "not_member";
+    /** The account is a participant without admin rights: WhatsApp does not show it the invite. */
+    String UNREADABLE_NOT_ADMIN = "not_admin";
 
     /** Confirmed stale links of eligible companies (active, not banned, bound, not waiting for a new link). */
     List<StaleInvite> staleInvites();

@@ -772,7 +772,8 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             groups.add(new WhatsAppGroupInfo(
                     groupId,
                     firstText(groupNode, "name", "title", "subject"),
-                    firstText(groupNode, "inviteLink", "inviteCode", "invite", "link", "url")
+                    firstText(groupNode, "inviteLink", "inviteCode", "invite", "link", "url"),
+                    firstText(groupNode, "inviteStatus")
             ));
         }
         return groups;

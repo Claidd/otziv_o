@@ -147,6 +147,86 @@ class WhatsAppInviteLinkHealthServiceTest {
         neverChangesBindingsOrRefreshesTheGateway();
     }
 
+    @Test
+    void unreadableInvitesAreCountedByTheGatewaysReasonInsteadOfLookingClean() {
+        LocalDateTime now = LocalDateTime.of(2026, 11, 6, 12, 0);
+        Company member = company(192L, "https://chat.whatsapp.com/MemberCode12345", "2@g.us", "В работе");
+        Company left = company(193L, "https://chat.whatsapp.com/LeftCode1234567", "3@g.us", "В работе");
+        Company older = company(194L, "https://chat.whatsapp.com/OlderCode123456", "4@g.us", "В работе");
+        Company unlisted = company(195L, "https://chat.whatsapp.com/MissingCode1234", "5@g.us", "В работе");
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company, member, left, older, unlisted));
+        when(whatsAppService.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(List.of(
+                new WhatsAppGroupInfo(GROUP, "Toyama", "https://chat.whatsapp.com/" + STORED, "ok"),
+                new WhatsAppGroupInfo("2@g.us", "Member", "", "not_admin"),
+                new WhatsAppGroupInfo("3@g.us", "Left", "", "not_member"),
+                new WhatsAppGroupInfo("4@g.us", "Older gateway", "", null)), true, false, "2026-11-06T11:59:00Z"));
+
+        var summary = service.check(now);
+
+        assertEquals(true, summary.observed());
+        assertEquals(5, summary.targets());
+        assertEquals(1, summary.readable());
+        assertEquals(Map.of("not_admin", 1, "not_member", 1, "unreported", 1, "not_listed", 1), summary.unreadable());
+        assertEquals(0, summary.stale());
+        verify(store, never()).suspect(any(), any(), any(), any(), any(), any());
+        neverChangesBindingsOrRefreshesTheGateway();
+    }
+
+    @Test
+    void aListWithoutAnyReadableInviteIsReportedWithItsReasons() {
+        when(whatsAppService.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo(GROUP, "Toyama", null, "timeout")), true, false, "2026-11-06T12:00:00Z"));
+
+        var summary = service.check(LocalDateTime.now());
+        assertEquals(1, summary.targets());
+        assertEquals(0, summary.readable());
+        assertEquals(Map.of("timeout", 1), summary.unreadable());
+
+        // An unavailable gateway is not an observation: nothing is counted as unreadable.
+        when(whatsAppService.groupsSnapshot("whatsapp_lika")).thenReturn(WhatsAppService.GroupsSnapshot.unavailable());
+        var unavailable = service.check(LocalDateTime.now());
+        assertEquals(false, unavailable.observed());
+        assertEquals(Map.of(), unavailable.unreadable());
+    }
+
+    @Test
+    void theAccountStillInTheGroupExplainsAnUnreadableInviteBetterThanTheOneThatLeft() {
+        var vika = new WhatsAppProperties.ClientConfig();
+        vika.setId("whatsapp_vika");
+        vika.setUrl("http://whatsapp_vika:3000");
+        properties.setClients(List.of(properties.getClients().getFirst(), vika));
+        when(whatsAppService.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo(GROUP, "Toyama", null, "not_member")), true, false, "t1"));
+        when(whatsAppService.groupsSnapshot("whatsapp_vika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo(GROUP, "Toyama", null, "not_admin")), true, false, "t2"));
+        assertEquals(Map.of("not_admin", 1), service.check(LocalDateTime.now()).unreadable());
+
+        // Different invites from two accounts: one cache is outdated, so neither is trusted.
+        when(whatsAppService.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo(GROUP, "Toyama", "https://chat.whatsapp.com/" + STORED, "ok")), true, false, "t3"));
+        when(whatsAppService.groupsSnapshot("whatsapp_vika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo(GROUP, "Toyama", "https://chat.whatsapp.com/" + CURRENT, "ok")), true, false, "t4"));
+        assertEquals(Map.of("conflicting", 1), service.check(LocalDateTime.now()).unreadable());
+        verify(store, never()).suspect(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void anUnknownRecheckCarriesWhyTheAccountCannotReadTheInvite() {
+        when(whatsAppService.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo(GROUP, "Toyama", null, "not_member")), true, false, "2026-11-06T12:00:00Z"));
+        when(whatsAppService.resolveGroupByInvite(anyString(), anyString())).thenReturn(Optional.empty());
+
+        var recheck = service.recheck(191L);
+        assertEquals(WhatsAppInviteLinkHealth.RecheckResult.UNKNOWN, recheck.result());
+        assertEquals(WhatsAppInviteLinkHealth.UNREADABLE_NOT_MEMBER, recheck.unreadableReason());
+
+        // Without a fresh list there is no reason to report.
+        when(whatsAppService.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo(GROUP, "Toyama", null, "not_member")), true, true, "2026-11-06T11:00:00Z"));
+        assertNull(service.recheck(191L).unreadableReason());
+        neverChangesBindingsOrRefreshesTheGateway();
+    }
+
     private void snapshot(String code, String cachedAt, boolean stale) {
         when(whatsAppService.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(
                 List.of(new WhatsAppGroupInfo(GROUP, "Toyama motors", "https://chat.whatsapp.com/" + code)),
