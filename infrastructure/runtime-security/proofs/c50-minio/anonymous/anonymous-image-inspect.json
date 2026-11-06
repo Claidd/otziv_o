@@ -1,0 +1,88 @@
+[
+    {
+        "Id": "sha256:54d6db9018bd8ca88cb9360ac0890a08df5c61f8c5f9caf4b8538baafaf76aa0",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:5209b4ef86d3c35dd1696bbc5b9aaf2414105c8872a932ebe71dea802a8bb21d"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-06T21:22:37.150975003Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/usr/local/bin/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.derivative": "Alpine vendor libssl3/libcrypto3 package update only; Versity v1.8.0 binary unchanged",
+                "com.otziv.publication.revision": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "minio",
+                "com.otziv.security.c50": "C50: official musl security package; golang.org/x/net v0.62.0; required x/* dependency closure",
+                "com.otziv.security.patch": "Go1.27.3; x/net0.62.0; parent Alpine security packages preserved",
+                "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; C36 versitygw executable and unrelated packages unchanged",
+                "com.otziv.upstream.image": "ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499",
+                "org.opencontainers.image.created": "2026-09-04T23:12:05.588Z",
+                "org.opencontainers.image.description": "A simple to deploy but feature rich S3 object storage server for your filesystem",
+                "org.opencontainers.image.licenses": "Apache-2.0",
+                "org.opencontainers.image.revision": "fd04bc1df2656298577b82667a4195c77f8c7563",
+                "org.opencontainers.image.source": "https://github.com/versity/versitygw",
+                "org.opencontainers.image.title": "versitygw",
+                "org.opencontainers.image.url": "https://github.com/versity/versitygw",
+                "org.opencontainers.image.version": "v1.8.0-otziv.c36"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 162623397,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/c8b50d9a083a178f4f0387d8f853cfe7a2c2b9c3f4a77b21605b11ce9d782d7c/diff:/var/lib/docker/overlay2/428133a74a1eee51799081a0d7797c7f39bd606584e30452d3f8e8b04ba4430a/diff:/var/lib/docker/overlay2/33b3a4637e3976d6f2be224790e87ee38b83ab7a4a19b3c13e38c2c347fdb2cc/diff:/var/lib/docker/overlay2/798a6cc4908ecf3dbd16608b12b8ce0ecf4e917b3a4e40d8359f88a4f5e8910e/diff:/var/lib/docker/overlay2/a2da411e6820085ae1c4e9e408a69442f2e084a1fcabf89126a31974c5fed4a1/diff:/var/lib/docker/overlay2/0aa7fe9b266437bb31adaf9325d89d93827ac42d0a65684cd2cc1b88c66a6f0c/diff:/var/lib/docker/overlay2/eedd20a4060389cb83747a57c8e673f2609235b7f88a7d3e812cee8dc530f2f3/diff:/var/lib/docker/overlay2/6e736e4746419c76974ae9f939e787763d20aa043992e35f08a856bee9b5d4b8/diff:/var/lib/docker/overlay2/107f078925fc9160274af48ab9c00ad0a12ab0873e7c324886b434881ee55ca0/diff:/var/lib/docker/overlay2/d139b90570f3b7cb521dd15c8fb12d8fa1c30cc1d35ed4f3e752f22c8030fba5/diff:/var/lib/docker/overlay2/0aceef26443776eb4d57359584f8a15c3703d94017a4b220cd42fbf3d007465b/diff:/var/lib/docker/overlay2/2090a529d51b35f29edf72b2350c37c34f96aa8c0265a9e9f600c3e70c344c18/diff:/var/lib/docker/overlay2/c6ba33b9b7ea254aa64ec841a1833d598522cd8ac3f4b3c74dac39db18de15e2/diff",
+                "MergedDir": "/var/lib/docker/overlay2/3b77ef96c26f4a349b2e00edf1f3c37e968ed3d260cc207a6c6113e93ad0f74c/merged",
+                "UpperDir": "/var/lib/docker/overlay2/3b77ef96c26f4a349b2e00edf1f3c37e968ed3d260cc207a6c6113e93ad0f74c/diff",
+                "WorkDir": "/var/lib/docker/overlay2/3b77ef96c26f4a349b2e00edf1f3c37e968ed3d260cc207a6c6113e93ad0f74c/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:cc015d1a2a543af8a6d773a6e9262d8ad65af4374900c83691bf60c13c85c588",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:b6a352de45b1318fde6932192304a4d9919bd9c4d9a6ce728aeb582f5cb6e384",
+                "sha256:9c46e264a8e898ced678db4b4c9f881c98ae974f02b7f69578aba3ad8b7c530f",
+                "sha256:d1f3a415814c1f0b22a146c25b2be676c19aa364ae16df3a3ba338fb75a84b3d",
+                "sha256:7c26790ef261d25af40cb01517ad675f7d59028303d79548f2d4edac03a0679b",
+                "sha256:c8570ba2591e17b97ab54e82175eb283a834c7b6ef2990809e483acc0a09ec44",
+                "sha256:607c7415e72c29f92629483eb971e3f8999ac9d9623f93ae5a7b9fd6428258e3",
+                "sha256:52b93e6addcc4972831a85a1207a258cc3f70b043a06fedfe19ee50d30a39239",
+                "sha256:04249ab947c65706169cff9fddf75a8fc50afccffe5304a2f65bc5d6b097c25a",
+                "sha256:b42c969d0694287c1b3c9d3030244c03ff6c8c72e9612a5b5dabfee2309dceae",
+                "sha256:de7504dad9eff93b73900f094440872e8ca7d41a3feab65c5aae0c879091ecf5",
+                "sha256:8102c2a9e7c96e665f8e0934242284482c516457526087874156375ff75aee06"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

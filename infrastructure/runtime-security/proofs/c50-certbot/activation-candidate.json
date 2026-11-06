@@ -1,0 +1,19 @@
+{
+  "component": "certbot",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:ba8083c2e4ed8eb3ade559c2bb1f72a2ff3ae62847f7601c5729910026bd1fc7",
+  "commit": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+  "run": "42295908074",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c50-certbot.json",
+    "sha256": "c949d329c53620ce8ed57168a0be254f699cf718c3b2e71e954a2b4df9eb176f"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c50-certbot/publication/publication.json",
+    "sha256": "04a0715187c5435ade5d4c07b226a1075c0850b88a01cf7b5b2c4e68158836d0"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c50-certbot/anonymous/anonymous-download.json",
+    "sha256": "00c723d0d791e3e23ceca7ee03edc795f49b9e728a0f2932643b3f6c5b790379"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "phpmyadmin",
+  "commit": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+  "run": "42295907826",
+  "attempt": "1",
+  "manifestSet": "c50-phpmyadmin",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c50-phpmyadmin.json",
+  "runner": "GitHub Actions 1000031955",
+  "startedAt": "2026-11-06T21:22:13.835Z",
+  "sourcePublicationSha256": "15aef4ec9d83c8a8af04ffdda432f9b4a2b98c67718124b20d729d1d7a21b3b2",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:374430936cad1fcc6ea665ce93aa12314d980f35f623938b4d9c821a720322e5",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:bf550318e10a9be4a9c2fa60659f32373abf4a9f8bcac8ad19d1ebe759d5273e",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:374430936cad1fcc6ea665ce93aa12314d980f35f623938b4d9c821a720322e5",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:bf550318e10a9be4a9c2fa60659f32373abf4a9f8bcac8ad19d1ebe759d5273e",
+        "size": 8059
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:bb2c3a7e4ed8979ebaba8cea427757b4c0d66f38f2680fb2a7fe0b9ed90dc977",
+        "size": 33564
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:a69ea04de9489d2f096b361bbdfff31d07c1d1cc0ee2b17e85f3fee8da762dbc",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:3ee56108a0c3aeb113edea50cd1fe19fb7e9b69010e57e082ea9fc00fb603017",
+        "size": 894989
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:8aa29949b80ba2bbd924d7343dce3894ac55735f2488e784079c9b059ce7e35a",
+        "size": 35885
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:bb2c3a7e4ed8979ebaba8cea427757b4c0d66f38f2680fb2a7fe0b9ed90dc977",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "phpmyadmin",
+    "com.otziv.security.brotli-refresh": "C40: official Alpine3.24 brotli-libs1.2.1-r0; C39 PHP/iconv/application/config and unrelated packages unchanged",
+    "com.otziv.security.c50": "C50: official musl security package; accepted application and configuration bytes unchanged",
+    "com.otziv.security.curl-refresh": "C41: official Alpine3.24 curl/libcurl8.23.0-r0; C40 PHP/iconv/application/config and all other packages unchanged",
+    "com.otziv.security.expat-refresh": "C47: official Alpine3.24 libexpat2.10.0-r0; C41 server/application/config and unrelated packages unchanged",
+    "com.otziv.security.php-refresh": "C39: PHP8.3.36-r0; version-matched official iconv with GNU libiconv1.18; C32 application/config/non-PHP runtime preserved",
+    "com.otziv.security.scope": "Exact C7 PMA5.2.3 Composer tree; signed Alpine3.24 PHP83/Apache; unmodified PHP8.3.35 iconv extension with GNU libiconv1.18; community refresh required",
+    "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; official symfony/expression-language v5.4.54 Parser.php and composer.json; C47 server/application/config and unrelated packages unchanged"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-06T21:22:23.174Z"
+}

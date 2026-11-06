@@ -1,0 +1,94 @@
+[
+    {
+        "Id": "sha256:1e6c4aeebd2b97c8124dc5792048abfe09d0730c5e8a2603e42fb1af98720d42",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:ba8083c2e4ed8eb3ade559c2bb1f72a2ff3ae62847f7601c5729910026bd1fc7"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-06T21:21:28.3431095Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "443/tcp": {},
+                "80/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "PYTHON_VERSION=3.14.7",
+                "PYTHON_SHA256=3b48dac8fb59f62eaa67ac83c1eb12bda1b7a08406dd286e252c11a66be27f81"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": {
+                "/etc/letsencrypt": {},
+                "/var/lib/letsencrypt": {}
+            },
+            "WorkingDir": "/opt/certbot",
+            "Entrypoint": [
+                "certbot"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "certbot",
+                "com.otziv.security.c50": "C50: official musl security package; accepted application and configuration bytes unchanged",
+                "com.otziv.security.patch": "Certbot5.8.0 unchanged; Alpine3.23 updates; actual installer code removed from runtime",
+                "com.otziv.security.zlib-refresh": "C49: official Alpine3.23 zlib1.3.2-r1; C34 Certbot, Python runtime and unrelated packages unchanged"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 197345666,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/251f5839429a33d1fb80d2ea401e81a9286aa9a39cff0c76c170e97ed07c2f61/diff:/var/lib/docker/overlay2/94629038a318dfdbe34f2de8aef9b13ff18fa244896eb57bc1e5f3755c7ff1f3/diff:/var/lib/docker/overlay2/d393e9db7116a5b96a5729dbabd5eb7c83ceefdcd2c65b59b5eeafa93193aa45/diff:/var/lib/docker/overlay2/55ec52c141a7a44b7de2e06b8a3b60e73a0827f6ae9e8955f8428c3a2e7c37ad/diff:/var/lib/docker/overlay2/c90d00f118388df62d36a83f5760648bb62fd213cd36843dc31303bfdfc0d873/diff:/var/lib/docker/overlay2/7dca8447e423ee500d936ec0254a236ffd106a53a558a5cc5703354b76499b31/diff:/var/lib/docker/overlay2/00092e87aa224a9edbe956c903fd2242393746ac05bf7f2204026114e9d43bdb/diff:/var/lib/docker/overlay2/c86904c2424fcce3a11addb3d4543d9b12988d91b8a0bc68b6ff76f36fa95ff3/diff:/var/lib/docker/overlay2/4011625f582fe53337e484cb021472b2c8cbdac18d2ce101d75bc491828bfc2b/diff:/var/lib/docker/overlay2/592766c582798b31c8ddb7240b24535edc7cbff5d5e176c9b173acc932f5d347/diff:/var/lib/docker/overlay2/bb288d4b379b4c238e25093c5cd474de6945c59e3991c1cb74a60cf8ec19a112/diff:/var/lib/docker/overlay2/a7f590869adb81dae67086ffa707938d54550fdf445aa0ef2c70426753a884fc/diff:/var/lib/docker/overlay2/a81e78337e948fe118d31f1e7a2f3fa94063c83780d13b68007c6ae39f549cbe/diff:/var/lib/docker/overlay2/c9c59795981099e19a37eaeb0cf9bd85711941153d029241857e1d08571db265/diff:/var/lib/docker/overlay2/139a4ef0c8968b76ef6f3ba2ad48fe073c2c06427a3e9da8824825d88b45cf23/diff:/var/lib/docker/overlay2/e9b3560489fd06f30a1d186c55a1eaf12dc46770e3bc2ddf1927df6db3fa2fc3/diff:/var/lib/docker/overlay2/02f58d8e3d80bfcb3dbf074517c2b0e1d26887814a78e601039fb625cc78d8bd/diff:/var/lib/docker/overlay2/2129be0f5f94407edc32fc760272842554d14191237a0c435581da03ac92ec2c/diff:/var/lib/docker/overlay2/3c67c042903e9fbec1b3cd78f5fdc06698cafe25743b0e619f536639d9266015/diff:/var/lib/docker/overlay2/fd920af0c1c1d7490d8c0fe4b1e6c6cbfd82d85d52c2f6ee42b200259c3e2fdd/diff",
+                "MergedDir": "/var/lib/docker/overlay2/5ffa0015de7272b34076577258c03c27931fa4204aa696fb444a9317fb2a140b/merged",
+                "UpperDir": "/var/lib/docker/overlay2/5ffa0015de7272b34076577258c03c27931fa4204aa696fb444a9317fb2a140b/diff",
+                "WorkDir": "/var/lib/docker/overlay2/5ffa0015de7272b34076577258c03c27931fa4204aa696fb444a9317fb2a140b/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:31ad4a471c6852bfec14d757cc75a566c82a9769f12c3918cf6bf52cc0eeb3d0",
+                "sha256:6c89462f1460a25010ce1c5b803e0f73b7abeadb8aadd19780e5f274524244d9",
+                "sha256:8db1db438929d6f87dc658090a5b7620f843d5d55334bf19ff1d34d02fae6de5",
+                "sha256:9984ce7ca1602dbac8dd09f767174873da04ac6417484d05fa486d89ae5acd0d",
+                "sha256:77848973927cb0e07e0495c330d4bd6293555dca3b9eea3ee251df147f119d9c",
+                "sha256:70049969887b7b32a22595836d7e9526ba3f71377559adf03dd1edb9b40a75d1",
+                "sha256:33b5c658b86ace0793c87fd0437ad297d5c507ecec1fe5daba5b863b0adfa06b",
+                "sha256:c8db08cab275cd1170038f0961a793e88d691553ce9f47a6799c6b45f8b8755b",
+                "sha256:8c57e113b6b30c2511ab0ca6246f774687d153050ed069393a5b7dbb31fb0518",
+                "sha256:116f1062bba68bf69c01776043f457687d059c29092fca37f7b530f25a5970c4",
+                "sha256:c4a36adc5b2a91b0effc266bea649c51e93d1cc2828f1cd1dd252c11c2f4bcca",
+                "sha256:221f62de9c71f8b02cf5117411c6be66011223886b9f6c3be57e2fb9ef0544df",
+                "sha256:be00f9beb9f3d12d481d4db567967a3c73514c347b3305605e1de7e3296e8f3c",
+                "sha256:8d15518bf7362e8561dbac07be55cc1e189a58c3023f1ddb31365e4fa91de996",
+                "sha256:f3d45131e25cd65a77dafcabd1fd6941fb2a37889ed8c4c9788ddc6e2ff6d33f",
+                "sha256:f4d3438d567355e7ca4d52c1a8ed957a5d0aa05fa3bd903ef7c07134b59e720e",
+                "sha256:a85fdc110b1da5309700752dc5ea754e2f80fbe53ce3dbd967f8e13dd0e03bb3",
+                "sha256:8e7a7c354e31591ce2f23d24f6bc981fd093c5b39b9ba8e5c244b80e9cd3f091",
+                "sha256:a47515e9331df29da2aaba7384a2380e9ff50cb5edc9a66c52110e8e64243b1b",
+                "sha256:33f7f308f70afb34fa58c35aaa8b309ca615eec6eb6ecd6d53eef76a56de670f",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]
