@@ -139,6 +139,12 @@ public class CommonInvoiceInitializationService {
 
     private final TochkaClient tochkaClient;
 
+    /** Closes an expired link's old bank session at once; absent in narrow unit wiring. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CommonInvoiceCancellationService expiredLinkRelease;
+
+    static final String EXPIRED_LINK_CLIENT_MESSAGE = "Старая ссылка на оплату устарела, готовим новую. Повторите оплату через 10–15 минут.";
+
     boolean isTochkaRefundSubmissionClaimed(String reason) {
         return settlementService.isTochkaRefundSubmissionClaimed(reason);
     }
@@ -163,7 +169,12 @@ public class CommonInvoiceInitializationService {
         if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите e-mail для электронного чека");
         }
-        PreparedCommonPaymentInit prepared = writeTransaction(() -> preparePaymentInit(cleanToken(token), cleanEmail));
+        PreparedCommonPaymentInit firstAttempt = writeTransaction(() -> preparePaymentInit(cleanToken(token), cleanEmail));
+        // When the bank confirms the expired link's old session took no money, the new link is issued on the same click.
+        PreparedCommonPaymentInit prepared = EXPIRED_LINK_CLIENT_MESSAGE.equals(firstAttempt.deferredFailure())
+                && expiredLinkRelease != null && expiredLinkRelease.releaseExpiredLinkNow(firstAttempt.invoiceId())
+                ? writeTransaction(() -> preparePaymentInit(cleanToken(token), cleanEmail))
+                : firstAttempt;
         if (prepared.deferredFailure() != null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, prepared.deferredFailure());
         }
@@ -308,12 +319,13 @@ public class CommonInvoiceInitializationService {
             return new PreparedCommonPaymentInit(invoice.getId(), null, cleanEmail, remaining, null, null, new PublicPaymentInitResponse(cachedPaymentUrl, invoice.getTbankPaymentId(), invoice.getStatus().name()), null);
         }
         if (hasPersistedProviderRef) {
-            archiveAndClearCurrentPaymentRef(invoice, "payment_link_expired_before_replacement");
+            archiveAndClearCurrentPaymentRef(invoice, CommonInvoiceCancellationService.EXPIRED_LINK_REF_REASON);
             invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
             invoice.setNextReminderAt(null);
-            invoice.setLastError(limit("payment_init_conflict: предыдущая T-Bank ссылка истекла и отправлена на отмену; " + "новую ссылку можно создать после завершения отмены и ручной проверки", 512));
+            invoice.setLastError(limit(CommonInvoiceCancellationService.EXPIRED_LINK_ATTENTION_PREFIX + " и отправлена на отмену; "
+                    + "счёт вернётся в работу автоматически, когда банк подтвердит, что по старой ссылке оплаты нет", 512));
             invoiceRepository.save(invoice);
-            return new PreparedCommonPaymentInit(invoice.getId(), null, cleanEmail, remaining, null, null, null, "Предыдущая ссылка Т-Банка отменяется. Повторите после ручной проверки.");
+            return new PreparedCommonPaymentInit(invoice.getId(), null, cleanEmail, remaining, null, null, null, EXPIRED_LINK_CLIENT_MESSAGE);
         }
         ensureNoBlockingPaymentRefsForNewInit(invoice);
         TbankPaymentProfile runtimeProfile = normalize(invoice.getPaymentRouteTerminalKey()).isBlank() ? paymentProfileService.toRuntime(profile) : paymentProfileService.toRuntimeForTerminal(profile, invoice.getPaymentRouteTerminalKey());

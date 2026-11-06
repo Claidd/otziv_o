@@ -166,8 +166,11 @@ public class CommonInvoiceDeliveryService {
                     && invoice.isPaymentMessageConfirmed() && normalize(invoice.getLastError()).isBlank()
                     && operation != null && "SENT".equals(operation.status());
             boolean pending = operation != null && Set.of("QUEUED", "RETRYABLE", "SENDING", "UNKNOWN").contains(operation.status());
+            boolean heldByAutoresponder = !confirmed && messageQueue.autoresponderWait(operationId).isPresent();
             return new CommonInvoiceMessageRecovery(confirmed, pending, confirmed
                     ? "Отправка счёта подтверждена по WhatsApp. Повторного сообщения не было."
+                    : heldByAutoresponder ? "Сообщение по счёту ещё не отправлялось: оно ждёт в очереди автоответчика "
+                        + "(рабочее окно, дневной лимит, интервал или пауза) и уйдёт автоматически. Ничего делать не нужно."
                     : pending ? "Система сверяет исходную отправку счёта с историей WhatsApp и продолжит проверку автоматически. Повторное сообщение заблокировано."
                     : "Отправка проверена, но в счёте осталось расхождение. Повторное сообщение не отправлялось.");
         });

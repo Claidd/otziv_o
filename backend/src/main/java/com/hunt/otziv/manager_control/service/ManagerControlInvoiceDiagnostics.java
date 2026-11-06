@@ -54,7 +54,15 @@ public class ManagerControlInvoiceDiagnostics {
     private com.hunt.otziv.payments.api.PaperInvoiceReminderProgress paperReminderProgress;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices overdueNotices;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait deliveryWait;
     private static final int OVERDUE_NOTICE_DAYS = com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.NOTICE_DAYS;
+    /** A reminder the autoresponder holds longer than this has stopped being ordinary waiting. */
+    private static final int AUTORESPONDER_WAIT_LIMIT_HOURS = 48;
+    /** The daily manager notice and the escalation run on their own; past this they are late. */
+    private static final int OVERDUE_AUTOMATION_GRACE_HOURS = 24;
+    /** The expired-link check repeats every 10 minutes; past this it could not close the old link. */
+    private static final int EXPIRED_LINK_SELF_REPAIR_MINUTES = 60;
 
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
     /** A due reminder may wait for business windows and the shared limit; a day late means stalled. */
@@ -164,10 +172,14 @@ public class ManagerControlInvoiceDiagnostics {
         java.util.Map<Long, CommonInvoice> byId = new java.util.LinkedHashMap<>();
         findActionInvoiceCandidates(manager).stream()
                 .filter(invoice -> !paymentRemindersOnSchedule(invoice, now))
+                .filter(invoice -> !handledAutomatically(invoice, now))
                 .forEach(invoice -> byId.putIfAbsent(invoice.getId(), invoice));
         // Reminders refresh an ordinary invoice every few days, so the stale rule never sees it.
         commonInvoiceRepository.findManagerOverdueApproachingInvoices(
                         manager, PAYMENT_REMINDER_STATUSES, overdueApproachingSince(now), PageRequest.of(0, 10_000))
+                .stream()
+                .filter(invoice -> !overdueOwnedByAutoresponder(invoice, now))
+                .filter(invoice -> !handledAutomatically(invoice, now))
                 .forEach(invoice -> byId.putIfAbsent(invoice.getId(), invoice));
         return List.copyOf(byId.values());
     }
@@ -228,8 +240,11 @@ public class ManagerControlInvoiceDiagnostics {
         if (invoice == null) {
             return false;
         }
+        if (handledAutomatically(invoice, now)) {
+            return false;
+        }
         List<CommonInvoiceOrder> invoiceItems = null;
-        if (hasText(invoice.getLastError())) {
+        if (hasText(invoice.getLastError()) && !deliveryHeldByAutoresponder(invoice, now)) {
             if (!commonInvoiceTechnicalTailRepairable(invoice)) {
                 return true;
             }
@@ -245,7 +260,7 @@ public class ManagerControlInvoiceDiagnostics {
         if (COMMON_INVOICE_CRITICAL_STATUSES.contains(status)) {
             return true;
         }
-        if (overdueApproaching(invoice, now)) {
+        if (overdueApproaching(invoice, now) && !overdueOwnedByAutoresponder(invoice, now)) {
             return true;
         }
         if (paymentRemindersOnSchedule(invoice, now)) {
@@ -286,15 +301,15 @@ public class ManagerControlInvoiceDiagnostics {
      * board when reminders finish or stall, or when the payment overdue period has passed.
      */
     boolean paymentRemindersOnSchedule(CommonInvoice invoice, LocalDateTime now) {
+        LocalDateTime checkTime = now == null ? LocalDateTime.now() : now;
         if (invoice == null || invoice.getId() == null
                 || !PAYMENT_REMINDER_STATUSES.contains(invoice.getStatus())
-                || hasText(invoice.getLastError())
+                || (hasText(invoice.getLastError()) && !deliveryHeldByAutoresponder(invoice, checkTime))
                 || hasText(invoice.getPaymentSuccessNotificationError())
                 || invoice.getSentAt() == null) {
             return false;
         }
-        LocalDateTime checkTime = now == null ? LocalDateTime.now() : now;
-        if (overdueApproaching(invoice, checkTime)) {
+        if (overdueApproaching(invoice, checkTime) && !overdueOwnedByAutoresponder(invoice, checkTime)) {
             return false;
         }
         boolean paperInvoice = invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE;
@@ -312,6 +327,100 @@ public class ManagerControlInvoiceDiagnostics {
         return invoice.getNextReminderAt() != null && invoice.getNextReminderAt().isAfter(staleReminderBefore);
     }
 
+    /**
+     * Situations the system resolves on its own: the card appears only when it could not. An
+     * expired T-Bank link parks the invoice while the old bank session is closed; the check repeats
+     * every 10 minutes and returns the invoice to work, so only a link still open after an hour is
+     * the manager's.
+     */
+    boolean handledAutomatically(CommonInvoice invoice, LocalDateTime now) {
+        LocalDateTime checkTime = now == null ? LocalDateTime.now() : now;
+        return commonInvoiceExpiredLinkAttention(invoice)
+                && invoice.getUpdatedAt() != null
+                && invoice.getUpdatedAt().isAfter(checkTime.minusMinutes(EXPIRED_LINK_SELF_REPAIR_MINUTES));
+    }
+
+    boolean commonInvoiceExpiredLinkAttention(CommonInvoice invoice) {
+        return invoice != null
+                && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && safe(invoice.getLastError()).startsWith(
+                com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService.EXPIRED_LINK_ATTENTION_PREFIX);
+    }
+
+    /**
+     * A reminder waiting in the queue for the autoresponder's business window, daily limit, interval
+     * or pause was never sent and goes out on its own: that is waiting, not a delivery in doubt.
+     * Only a wait longer than {@link #AUTORESPONDER_WAIT_LIMIT_HOURS} reaches the manager.
+     */
+    boolean deliveryHeldByAutoresponder(CommonInvoice invoice, LocalDateTime now) {
+        return autoresponderWait(invoice)
+                .filter(wait -> wait.queuedAt() == null || wait.queuedAt().isAfter(
+                        (now == null ? LocalDateTime.now() : now).minusHours(AUTORESPONDER_WAIT_LIMIT_HOURS)))
+                .isPresent();
+    }
+
+    private java.util.Optional<com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait.Wait> autoresponderWait(CommonInvoice invoice) {
+        if (deliveryWait == null || invoice == null || !hasText(invoice.getPaymentMessageOperationId())) {
+            return java.util.Optional.empty();
+        }
+        String error = safe(invoice.getLastError()).trim().toLowerCase(Locale.ROOT);
+        if (!error.equals("message_send_in_progress") && !error.equals("payment_route_changed_message_in_progress")) {
+            return java.util.Optional.empty();
+        }
+        try {
+            return deliveryWait.autoresponderWait(invoice.getPaymentMessageOperationId());
+        } catch (RuntimeException unavailable) {
+            log.debug("Common invoice {} queue state unavailable: {}", invoice.getId(), unavailable.getMessage());
+            return java.util.Optional.empty();
+        }
+    }
+
+    /**
+     * Once the manager's group has the overdue notice and the autoresponder is going to move the
+     * invoice to "Не оплачено" itself, the invoice is the autoresponder's work. It reaches the board
+     * when the move will not happen (manager's decision), when the notice did not go out within a
+     * day of the notice period starting, or when the move is more than a day late.
+     */
+    boolean overdueOwnedByAutoresponder(CommonInvoice invoice, LocalDateTime now) {
+        if (overdueNotices == null || invoice == null || invoice.getId() == null || invoice.getSentAt() == null) {
+            return false;
+        }
+        LocalDateTime checkTime = now == null ? LocalDateTime.now() : now;
+        if (deliveryHeldByAutoresponder(invoice, checkTime)) {
+            // The queued reminder goes first; the overdue rules see the invoice again once it is sent.
+            return true;
+        }
+        if (hasText(invoice.getLastError()) || hasText(invoice.getPaymentSuccessNotificationError())) {
+            return false;
+        }
+        if (overdueNotices.automaticMoveNotBefore(invoice.getId(), checkTime).isEmpty()) {
+            return false;
+        }
+        LocalDateTime noticeAt = invoice.getOverdueNoticeAt();
+        if (noticeAt == null || noticeAt.isBefore(invoice.getSentAt())) {
+            LocalDateTime noticePeriodStart = invoice.getSentAt().plusDays(Math.max(1, paymentOverdueDays() - OVERDUE_NOTICE_DAYS));
+            return noticePeriodStart.plusHours(OVERDUE_AUTOMATION_GRACE_HOURS).isAfter(checkTime);
+        }
+        return expectedOverdueMove(invoice, noticeAt).plusHours(OVERDUE_AUTOMATION_GRACE_HOURS).isAfter(checkTime);
+    }
+
+    private LocalDateTime expectedOverdueMove(CommonInvoice invoice, LocalDateTime noticeAt) {
+        LocalDateTime overdueAt = invoice.getSentAt().plusDays(paymentOverdueDays());
+        LocalDateTime afterNotice = noticeAt.plusDays(OVERDUE_NOTICE_DAYS);
+        return overdueAt.isAfter(afterNotice) ? overdueAt : afterNotice;
+    }
+
+    static String autoresponderHoldLabel(String code) {
+        return switch (code == null ? "" : code) {
+            case "outside_business_window" -> "вне рабочего окна";
+            case "daily_limit" -> "исчерпан дневной лимит";
+            case "rate_limited" -> "интервал между сообщениями";
+            case "automation_paused" -> "автоответчик на паузе или выключен";
+            case "live_disabled" -> "отправка клиентских сообщений выключена";
+            default -> "ещё не отправлялось";
+        };
+    }
+
     private String commonInvoiceOverdueReason(CommonInvoice invoice, LocalDate today) {
         long unpaidDays = daysSince(invoice.getSentAt().toLocalDate(), today);
         String head = "Почему в замечаниях: общий счёт не оплачен " + unpaidDays + " дн. после выставления"
@@ -320,7 +429,16 @@ public class ManagerControlInvoiceDiagnostics {
                 ? java.util.Optional.empty()
                 : overdueNotices.automaticMoveNotBefore(invoice.getId(), LocalDateTime.now());
         if (move.isPresent()) {
-            return head + "Если оплаты не будет, автоответчик переведёт его в «Не оплачено» и создаст плохие задачи "
+            LocalDateTime noticeAt = invoice.getOverdueNoticeAt();
+            boolean noticed = noticeAt != null && !noticeAt.isBefore(invoice.getSentAt());
+            String stalled = !noticed
+                    ? "Уведомление о просрочке в группу менеджера не ушло больше суток — проверьте группу менеджера и автоответчик. "
+                    : expectedOverdueMove(invoice, noticeAt).plusHours(OVERDUE_AUTOMATION_GRACE_HOURS).isBefore(LocalDateTime.now())
+                    ? "Автоответчик должен был перевести счёт в «Не оплачено» "
+                    + expectedOverdueMove(invoice, noticeAt).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                    + ", но перевод не состоялся — проверьте паузу и переключатели автоответчика. "
+                    : "";
+            return head + stalled + "Если оплаты не будет, автоответчик переведёт его в «Не оплачено» и создаст плохие задачи "
                     + "не раньше " + move.get().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
                     + " — через " + OVERDUE_NOTICE_DAYS + " дня после уведомления в группу менеджера. "
                     + "Свяжитесь с клиентом; если оплата пришла, отметьте её в «Деталях» счёта.";
@@ -551,6 +669,13 @@ public class ManagerControlInvoiceDiagnostics {
             List<CommonInvoiceOrder> items
     ) {
         String error = safe(rawError).toLowerCase(Locale.ROOT);
+        var heldTooLong = autoresponderWait(invoice);
+        if (heldTooLong.isPresent()) {
+            return "Напоминание по счёту ещё не отправлялось: больше " + (AUTORESPONDER_WAIT_LIMIT_HOURS / 24)
+                    + " суток оно ждёт в очереди автоответчика (" + autoresponderHoldLabel(heldTooLong.get().reasonCode())
+                    + "). Проверьте паузу, рабочие окна и дневной лимит автоответчика. Повторно вручную не отправляйте: "
+                    + "сообщение уйдёт само, как только автоответчик его пропустит.";
+        }
         if (error.startsWith("message_send_stale") || error.startsWith("message_send_in_progress")
                 || error.startsWith("message_send_unknown")) {
             return "Результат отправки сообщения по счету не подтвержден. Нажмите «Проверить отправку»: система "
@@ -608,6 +733,11 @@ public class ManagerControlInvoiceDiagnostics {
             return "Сервис сообщений не подтвердил отправку общего счета. Откройте «Счет», проверьте привязку чата "
                     + "и результат существующей операции. До подтверждения отсутствия доставки не отправляйте повторно; "
                     + "если результат недоступен, передайте проверку администратору.";
+        }
+        if (commonInvoiceExpiredLinkAttention(invoice)) {
+            return "Старая ссылка T-Bank истекла, и банк больше часа не подтверждает, что оплаты по ней нет. "
+                    + "Нажмите «Починить»: система спросит банк ещё раз и, если оплаты не было, вернёт счёт в работу. "
+                    + "Если клиент уже заплатил напрямую, отметьте оплату кнопкой «Оплачен» после возврата счёта в работу.";
         }
         if (error.startsWith("payment_init")) {
             if (commonInvoiceUnsentTlsInitRepairable(invoice)) {

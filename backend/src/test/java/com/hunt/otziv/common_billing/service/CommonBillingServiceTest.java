@@ -10922,6 +10922,95 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void cancelRefusedForABankRejectedSessionClosesTheLinkAndReturnsTheInvoiceToWork() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setSentAt(LocalDateTime.now().minusDays(57));
+        invoice.setLastReminderAt(LocalDateTime.now().minusDays(1));
+        invoice.setLastError(CommonInvoiceCancellationService.EXPIRED_LINK_ATTENTION_PREFIX + " и отправлена на отмену");
+        CommonInvoicePaymentRef ref = expiredArchivedRef(invoice, "CANCEL_FAILED", 60);
+        stubArchivedCancel(invoice, ref, false);
+        when(tbankClient.getState(any(), eq("payment-old"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "REJECTED", "payment-old", "old-order", 250_000L));
+
+        assertEquals(1, service.cancelPendingArchivedPayments(20));
+
+        assertEquals("CANCELED", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.REMINDER, invoice.getStatus());
+        assertNull(invoice.getLastError());
+        verify(tbankClient).cancel(any(), any());
+        verify(tbankClient).getState(any(), eq("payment-old"));
+    }
+
+    @Test
+    void cancelRefusedWhileTheBankSessionIsStillOpenKeepsTheInvoiceForTheNextCheck() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setSentAt(LocalDateTime.now().minusDays(57));
+        invoice.setLastError(CommonInvoiceCancellationService.EXPIRED_LINK_ATTENTION_PREFIX + " и отправлена на отмену");
+        CommonInvoicePaymentRef ref = expiredArchivedRef(invoice, "CANCEL_PENDING", 0);
+        stubArchivedCancel(invoice, ref, false);
+        when(tbankClient.getState(any(), eq("payment-old"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "CONFIRMED", "payment-old", "old-order", 250_000L));
+
+        assertEquals(1, service.cancelPendingArchivedPayments(20));
+
+        assertEquals("CANCEL_FAILED", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith(CommonInvoiceCancellationService.EXPIRED_LINK_ATTENTION_PREFIX));
+    }
+
+    @Test
+    void anotherOpenPaymentKeepsTheExpiredLinkInvoiceForAManualCheck() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setSentAt(LocalDateTime.now().minusDays(57));
+        invoice.setLastError(CommonInvoiceCancellationService.EXPIRED_LINK_ATTENTION_PREFIX + " и отправлена на отмену");
+        CommonInvoicePaymentRef ref = expiredArchivedRef(invoice, "CANCEL_PENDING", 0);
+        stubArchivedCancel(invoice, ref, true);
+        when(paymentRefRepository.existsByInvoice_IdAndStatusIn(eq(10L), any())).thenReturn(true);
+
+        assertEquals(1, service.cancelPendingArchivedPayments(20));
+
+        assertEquals("CANCELED", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+    }
+
+    private CommonInvoicePaymentRef expiredArchivedRef(CommonInvoice invoice, String status, int attempts) {
+        CommonInvoicePaymentRef ref = new CommonInvoicePaymentRef();
+        ref.setId(172L);
+        ref.setInvoice(invoice);
+        ref.setStatus(status);
+        ref.setReason("payment_link_expired_before_replacement");
+        ref.setCancelAttempts(attempts);
+        ref.setTbankPaymentId("payment-old");
+        ref.setTbankTerminalKey("terminal");
+        ref.setAmountKopecks(250_000L);
+        return ref;
+    }
+
+    private void stubArchivedCancel(CommonInvoice invoice, CommonInvoicePaymentRef ref, boolean bankAccepts) {
+        when(paymentRefRepository.findCancelableRefs(
+                eq(PaymentProfile.PROVIDER_TBANK), eq("CANCEL_PENDING"), eq("CANCEL_FAILED"), eq("INIT_CONFLICT"),
+                eq("CANCELING"), any(LocalDateTime.class), any(LocalDateTime.class), anyInt(), any(Pageable.class)))
+                .thenReturn(List.of(ref));
+        when(paymentRefRepository.findByIdForUpdate(ref.getId())).thenReturn(Optional.of(ref));
+        when(invoiceRepository.findByIdWithAccountForUpdate(invoice.getId())).thenReturn(Optional.of(invoice));
+        PaymentProfile profile = paymentProfile();
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tbankClient.cancel(any(), any())).thenReturn(new TbankCancelResponse(
+                bankAccepts, bankAccepts ? "0" : "4",
+                bankAccepts ? null : "Не получится изменить статус платежа",
+                bankAccepts ? null : "Невозможно отменить транзакцию в статусе REJECTED",
+                "terminal", bankAccepts ? "CANCELED" : "REJECTED", "payment-old", "old-order",
+                250_000L, 250_000L, 0L));
+    }
+
+    @Test
     void cancelPendingArchivedPaymentsMarksInvoiceAttentionWhenStaleCancelingReachedMaxAttempts() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
