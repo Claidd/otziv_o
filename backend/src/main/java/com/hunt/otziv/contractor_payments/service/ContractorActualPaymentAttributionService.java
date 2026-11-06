@@ -607,17 +607,6 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
         link.setManualActualRecipientFrozenAt(LocalDateTime.now());
     }
 
-    /** Clears an unconsumed owner selection after its approval has been revoked. */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void clearRevokedPaymentLinkRecipientIntent(PaymentLink link) {
-        if (link == null || link.getId() == null || link.getManualActualRecipientFrozenAt() == null) {
-            throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
-                    "Выбор получателя уже изменился");
-        }
-        requireNoFinalAttributionForPaymentLink(link.getId());
-        link.clearManualActualRecipientIntent();
-    }
-
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void requireNoFinalAttributionForPaymentLink(Long paymentLinkId) {

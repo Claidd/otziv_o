@@ -163,7 +163,6 @@ payments -> review-quality
 payroll -> companies
 payroll -> contractor-ledger
 payroll -> identity
-payroll -> leads
 payroll -> orders
 payroll -> platform
 performers -> catalog

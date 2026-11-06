@@ -2,6 +2,9 @@ package com.hunt.otziv.config.jwt.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
@@ -12,8 +15,10 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -73,7 +78,7 @@ class JwtAuthFilterTest {
                 Instant.now().plusSeconds(60).toString()
         );
         LeadDtoTransfer dto = lead();
-        String token = jwtService.generateLegacyTransferToken(dto);
+        String token = legacyTransferToken(dto);
         FilterChain chain = mock(FilterChain.class);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -92,7 +97,7 @@ class JwtAuthFilterTest {
                 Instant.now().minusSeconds(60).toString()
         );
         LeadDtoTransfer dto = lead();
-        String token = jwtService.generateLegacyTransferToken(dto);
+        String token = legacyTransferToken(dto);
         FilterChain chain = mock(FilterChain.class);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -106,7 +111,7 @@ class JwtAuthFilterTest {
     void neverDowngradesAnInvalidDedicatedTokenToLegacyBearer() throws Exception {
         LeadDtoTransfer dto = lead();
         MockHttpServletRequest request = request(dto, LeadIntegrationHeaders.TOKEN, "invalid");
-        request.addHeader("Authorization", "Bearer " + jwtService.generateLegacyTransferToken(dto));
+        request.addHeader("Authorization", "Bearer " + legacyTransferToken(dto));
         FilterChain chain = mock(FilterChain.class);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -175,6 +180,18 @@ class JwtAuthFilterTest {
         request.setContent(objectMapper.writeValueAsBytes(dto));
         request.addHeader(LeadIntegrationHeaders.TOKEN, token);
         return request;
+    }
+
+    /** Token shape still sent by legacy integration clients; built here because production no longer issues it. */
+    private String legacyTransferToken(LeadDtoTransfer dto) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .subject(JwtService.LEAD_TRANSFER_SUBJECT)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(300)))
+                .claim("checksum", jwtService.generateLegacyChecksum(dto))
+                .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256)
+                .compact();
     }
 
     private LeadDtoTransfer lead() {

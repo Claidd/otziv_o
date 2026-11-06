@@ -493,7 +493,6 @@ class OrderStatusNotificationServiceTest {
 
         assertTrue(result);
         verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq(message),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
-        verify(telegramService, never()).sendPublicationProgressMessage(-100L, message, order.getCompany().getId());
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(maxBotClient);
         verifyNoInteractions(orderRepository);

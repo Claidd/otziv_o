@@ -33,16 +33,6 @@ class WorkloadTransferRepositoryContractTest {
         );
         assertQueryContains(
                 WorkloadTransferOfferRepository.class,
-                "findStageCandidates",
-                "candidate_current.manager_id = workflow.manager_id"
-        );
-        assertQueryContains(
-                WorkloadTransferOfferRepository.class,
-                "insertOffer",
-                "candidate_current.manager_id = workflow.manager_id"
-        );
-        assertQueryContains(
-                WorkloadTransferOfferRepository.class,
                 "insertEligibleOfferBatch",
                 "candidate_current.manager_id = workflow.manager_id"
         );
@@ -171,11 +161,6 @@ class WorkloadTransferRepositoryContractTest {
                 WorkloadTransferOfferRepository.class,
                 "skipUnavailableWaitingCandidates",
                 "candidate.response_reason = CASE"
-        );
-        assertQueryContains(
-                WorkloadTransferOfferRepository.class,
-                "findStageCandidates",
-                "earlier.status IN ('WAITING', 'OFFERED', 'ACCEPTED')"
         );
         assertQueryContains(
                 WorkloadTransferWorkflowRepository.class,
@@ -450,18 +435,8 @@ class WorkloadTransferRepositoryContractTest {
     void employeeResponseDeadlineStartsOnlyAfterTelegramDelivery() {
         assertQueryContains(
                 WorkloadTransferOfferRepository.class,
-                "insertOffer",
-                "delivery_deadline_at"
-        );
-        assertQueryContains(
-                WorkloadTransferOfferRepository.class,
                 "insertEligibleOfferBatch",
                 "delivery_deadline_at"
-        );
-        assertQueryContains(
-                WorkloadTransferOfferRepository.class,
-                "insertOffer",
-                ":deliveryDeadlineAt"
         );
         assertQueryContains(
                 WorkloadTransferOfferRepository.class,

@@ -23,7 +23,7 @@ class AppSettingServiceFreshReadTest {
 
         AppSettingService service = new AppSettingService(repository);
         assertThat(service.getBoolean(AppSettingService.REPUTATION_AI_ENABLED, true)).isTrue();
-        assertThat(service.getBooleanFresh(AppSettingService.REPUTATION_AI_ENABLED, true)).isFalse();
+        assertThat(service.getBooleanFreshFailClosed(AppSettingService.REPUTATION_AI_ENABLED, true)).isFalse();
         assertThat(service.getBoolean(AppSettingService.REPUTATION_AI_ENABLED, true)).isFalse();
     }
 

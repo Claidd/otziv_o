@@ -98,7 +98,7 @@ class ManagerSummaryFormatterTest {
 
     @Test
     void richReportUsesNativeTelegramHeadingsTableAndCollapsedDetails() {
-        String message = formatter.formatRich(List.of(row("Вика", "CALCULATED")), true);
+        String message = formatter.formatBoth(List.of(row("Вика", "CALCULATED")), true).richHtml();
 
         assertTrue(message.startsWith("<h2>🧪 Аудит работы менеджеров"));
         assertTrue(message.contains("<h3>👥 Общий разбор команды</h3>"));
@@ -170,7 +170,7 @@ class ManagerSummaryFormatterTest {
                 )
         ));
 
-        String ownerReport = formatter.formatRich(List.of(row("Вика", "CALCULATED")), true);
+        String ownerReport = formatter.formatBoth(List.of(row("Вика", "CALCULATED")), true).richHtml();
         ManagerFormattedReport personalReport = formatter.formatPersonal(row("Вика", "CALCULATED"));
 
         assertTrue(ownerReport.contains("Общая оценка менеджера снизилась: <b>90 → 86 из 100</b>"));
@@ -297,7 +297,7 @@ class ManagerSummaryFormatterTest {
         when(debtTaskDetailsService.completionCriterion(category))
                 .thenReturn("счётчик стал 0");
 
-        String report = formatter.formatRich(List.of(row("Вика", "CALCULATED")), false);
+        String report = formatter.formatBoth(List.of(row("Вика", "CALCULATED")), false).richHtml();
 
         assertTrue(report.contains("<h3>🧾 Что необходимо завершить</h3>"));
         assertTrue(report.contains("Компания Альфа — WhatsApp · 48 мин. без ответа"));

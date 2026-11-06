@@ -76,14 +76,8 @@ public interface ReviewService {
 
     Review save(Review review);
 
-    Review updateReviewPhoto(Long reviewId, String url);
-
     /** Deletes only a review already proven to belong to the caller's locked order aggregate. */
     boolean deleteReviewFromLockedOrder(Long orderId, Long reviewId);
-
-    List<Long> getReviewByWorkerId(Long workerId);
-
-    List<Review> findAllByListId(List<Long> reviewId);
 
     List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId);
 
@@ -94,8 +88,6 @@ public interface ReviewService {
     List<Review> findAllByFilial(Filial filial);
 
     void updateReviewByFilials(Set<Filial> filials, Long categoryId, Long subCategoryId);
-
-    void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
 
     /** Updates a shared review form from one canonical detail fetch. */
     void updateOrderDetailAndReviews(OrderDetailsDTO orderDetailsDTO);

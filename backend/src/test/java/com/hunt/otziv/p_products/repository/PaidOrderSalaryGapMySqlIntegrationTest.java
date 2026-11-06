@@ -77,7 +77,7 @@ class PaidOrderSalaryGapMySqlIntegrationTest {
         assertThat(gaps()).containsExactly(5L);
         jdbc.update("UPDATE contractor_payment_rollout_state SET accounting_authority='LEGACY'");
         assertThat(gaps()).isEmpty();
-        jdbc.update("UPDATE contractor_payment_rollout_state SET accounting_authority='COMPLETION'");
+        jdbc.update("UPDATE contractor_payment_rollout_state SET accounting_authority='PAYMENT'");
         assertThat(gaps()).containsExactly(5L);
     }
 

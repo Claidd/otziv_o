@@ -93,8 +93,6 @@ class OtzivOApplicationTests {
 	@Autowired
 	private com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentExclusionService botAssignmentExclusionService;
 
-	@Autowired
-	private com.hunt.otziv.b_bots.repository.BotsRepository botsRepository;
 
 	@Autowired
 	private com.hunt.otziv.u_users.repository.WorkerRepository workerRepository;
@@ -1715,7 +1713,6 @@ class OtzivOApplicationTests {
 		reviewService.getAllReviewDTOByOrderStatusToAdmin("Не оплачено", 0, 10, "desc", "test");
 		reviewService.getAllReviewDTOAndDateToAdminToVigul(today.plusDays(60), 0, 10, "desc", "test");
 		reviewCityService.getCitiesWithUnpublishedReviews();
-		botsRepository.findAllAdminRows();
 		workerRepository.findWorkerOptions();
 	}
 

@@ -345,81 +345,6 @@ public class ContractorCompletionRewardService {
         return changed;
     }
 
-    /**
-     * A payment made before the completion cutover may only have legacy,
-     * payment-dependent rows. Before canceling that payment, materialize the
-     * equivalent immutable work sources in the same transaction so the earned
-     * obligation is not lost when legacy rows are deactivated.
-     */
-    @Transactional
-    public int migrateLegacyRewardsBeforePaymentCancellation(Long orderId) {
-        if (orderId == null || orderId <= 0) {
-            return 0;
-        }
-        if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
-            return 0;
-        }
-        var accountingAuthority = rolloutStateService.lockAccountingAuthority();
-        if (accountingAuthority == null || !accountingAuthority.paymentBased()) {
-            return 0;
-        }
-        Order order = orderRepository.findByIdForOrderDto(orderId).orElse(null);
-        if (order == null) {
-            return 0;
-        }
-        legacyRewardGuard.requireCancellationClassifiable(orderId);
-        if (!hasLegacyAggregateReward(orderId)) {
-            return 0;
-        }
-        requireActuallyCompleted(order);
-        LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
-        if (attributionStart == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не задана дата начала учета выполненных работ");
-        }
-        LocalDate occurredOn = resolveOrderCompletionDate(order, attributionStart);
-        if (occurredOn == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Дата выполнения исторического заказа не подтверждена. "
-                            + "Перед отменой оплаты нужен датированный перенос начислений"
-            );
-        }
-        if (!occurredOn.isBefore(attributionStart)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Legacy-источник после даты начала учета нельзя переносить автоматически; "
-                            + "нужна датированная ручная корректировка"
-            );
-        }
-        List<BadReviewTask> completedTasks = badReviewTaskRepository.findAllByOrderIdAndStatus(
-                orderId,
-                BadReviewTaskStatus.DONE
-        );
-        requireDatedCompletedTasks(completedTasks);
-        if (completedTasks.stream().anyMatch(task -> !task.getCompletedDate().isBefore(attributionStart))) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "После даты начала учета есть выполненная дополнительная работа, "
-                            + "которая могла войти в ранее созданное начисление; нужна ручная сверка"
-            );
-        }
-        // Legacy order/product sources represent an earned obligation. They
-        // may already be included in the imported opening balance; replacing
-        // them with new post-watermark ids would double-count the debt. Freeze
-        // logical completion markers only and keep the original rows active.
-        freezePreCutoffBaseSources(orderId, occurredOn);
-        for (BadReviewTask task : completedTasks) {
-            saveMarker(
-                    orderId,
-                    ContractorRewardSourceCodes.badReviewDoneMarker(task.getId()),
-                    task.getCompletedDate()
-            );
-        }
-        saveMarker(orderId, ContractorRewardSourceCodes.PERFORMER_PRODUCT_COMPLETION, occurredOn);
-        synchronizeCompletionSources(orderId);
-        return 0;
-    }
-
     public static boolean isCompletionBasedSource(String source) {
         return ContractorRewardSourceCodes.isCompletionBased(source);
     }
@@ -1010,19 +935,6 @@ public class ContractorCompletionRewardService {
         zpRepository.saveAllAndFlush(unexpected);
         rewardLedgerService.synchronizeSources(unexpected);
         return unexpected.size();
-    }
-
-    private boolean hasLegacyAggregateReward(Long orderId) {
-        return zpRepository.existsByOrderIdAndSourceAndActiveTrue(
-                orderId,
-                ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER
-        ) || zpRepository.existsByOrderIdAndSourceAndActiveTrue(
-                orderId,
-                ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST
-        ) || zpRepository.existsByOrderIdAndSourceAndActiveTrue(
-                orderId,
-                ContractorRewardSourceCodes.LEGACY_PERFORMER_PRODUCT
-        );
     }
 
     private boolean hasActiveSource(Long orderId, String source) {

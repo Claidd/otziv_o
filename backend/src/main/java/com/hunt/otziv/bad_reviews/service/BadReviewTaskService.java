@@ -62,9 +62,6 @@ public interface BadReviewTaskService {
 
     BigDecimal getPayableSum(Order order);
 
-    /** One database read for a selected board page; invalid amounts use the existing strict single-order path. */
-    Map<Long, BigDecimal> getPayableSums(Collection<Order> orders);
-
     /** Amounts and task counters from the same fresh read; scoped to this assembly. */
     OrderAmounts prepareOrderAmounts(Collection<Order> orders);
 

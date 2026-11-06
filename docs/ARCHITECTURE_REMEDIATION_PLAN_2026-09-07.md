@@ -287,7 +287,7 @@
 
 Работа:
 
-1. Уточнить нужность и фактическое использование `lead.sync.outbound.enabled` и outreach bridge. Выключенный контур исправлять до включения; если он больше не нужен, его вывод из эксплуатации оформляется с проверкой потребителей и сохранённых очередей.
+1. Уточнить нужность и фактическое использование `lead.sync.outbound.enabled` и outreach bridge. Выключенный контур исправлять до включения; если он больше не нужен, его вывод из эксплуатации оформляется с проверкой потребителей и сохранённых очередей. (2026-11-06: выключенный контур `lead.sync.outbound.enabled` удалён вместе с флагом; обработчик сохранённых команд `LeadCommandWorker` и outreach bridge остаются.)
 2. Описать контракт события/последнего состояния, operation ID, версию entity, порядок применения, idempotency и подтверждение получателя. Договориться с владельцем принимающего приложения о необходимой поддержке.
 3. Записывать intent вместе с бизнес-изменением. Удалить роль log-only трёх попыток как единственного механизма доставки; HTTP выполняется отдельным relay вне пользовательской транзакции/response path. Не передавать managed JPA entity в async-поток до commit: использовать сохранённую команду либо её ID с чтением в собственной согласованной транзакции.
 4. Использовать общий outbox только после проверки условий R6, приведённых ниже. Конкретный producer/handler получает отдельный rollout scope, deadline и проверяемый replay.
@@ -295,7 +295,7 @@
 6. Сначала записывать наблюдаемую теневую команду без второй отправки либо использовать единый бизнес-ключ обеих реализаций при доказанной дедупликации. Две независимые реальные отправки не являются безопасным shadow.
 7. При переключении иметь ровно одного владельца отправки; учитывать in-flight, неполученные подтверждения и очередь от прежней реализации.
 
-Файлы: [LeadUpdateEventListener.java](E:/Works/Projects/otziv/backend/src/main/java/com/hunt/otziv/l_lead/event/LeadUpdateEventListener.java), [LeadTransferServiceImpl.java](E:/Works/Projects/otziv/backend/src/main/java/com/hunt/otziv/l_lead/service/LeadTransferServiceImpl.java), [OutreachBridgeService.java](E:/Works/Projects/otziv/backend/src/main/java/com/hunt/otziv/outreach_bridge/OutreachBridgeService.java).
+Файлы: `LeadUpdateEventListener.java`, `LeadTransferServiceImpl.java` (удалены 2026-11-06, есть в истории Git), [OutreachBridgeService.java](E:/Works/Projects/otziv/backend/src/main/java/com/hunt/otziv/outreach_bridge/OutreachBridgeService.java).
 
 Приёмка: rollback бизнес-транзакции не создаёт внешнего изменения; crash после commit сохраняет задачу; retry не создаёт повторного бизнес-эффекта; новый event type не забирается старым обработчиком. Откат останавливает producer/relay согласованно, сохраняя intents; возврат прямой отправки при неизвестных in-flight исходах требует reconciliation.
 

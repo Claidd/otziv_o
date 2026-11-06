@@ -148,20 +148,6 @@ class TelegramServiceSendRetryTest {
     }
 
     @Test
-    void protectedAuditMessageSetsTelegramContentProtectionFlag() {
-        ProtectedTelegramService service = new ProtectedTelegramService();
-
-        service.sendProtectedMessageWithInlineKeyboardMessageId(
-                794146111L,
-                "Защищённый аудит",
-                "HTML",
-                List.of()
-        );
-
-        assertTrue(service.protectContent);
-    }
-
-    @Test
     void photoNotificationKeepsCaptionParseModeAndKeyboard() {
         CapturingPhotoTelegramService service = new CapturingPhotoTelegramService();
 
@@ -348,35 +334,6 @@ class TelegramServiceSendRetryTest {
         }
     }
 
-    private static final class ProtectedTelegramService extends TelegramService {
-        private boolean protectContent;
-
-        private ProtectedTelegramService() {
-            super(new DefaultBotOptions(),
-                    "123456:abcdefghijklmnopqrstuvwxyz",
-                    "test_bot",
-                    true,
-                    "",
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null);
-        }
-
-        @Override
-        Message executeTelegramMessage(SendMessage message) {
-            protectContent = Boolean.TRUE.equals(message.getProtectContent());
-            Message result = new Message();
-            result.setMessageId(1);
-            return result;
-        }
-    }
 
     private static final class CapturingPhotoTelegramService extends TelegramService {
         private SendPhoto photo;

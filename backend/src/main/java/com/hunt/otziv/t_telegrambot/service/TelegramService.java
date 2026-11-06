@@ -831,18 +831,6 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         return sendMessage(chatId, text, null);
     }
 
-    public boolean sendPublicationProgressMessage(long chatId, String text, Long companyId) {
-        if (publicationProgressPreferenceService == null || companyId == null) {
-            return sendMessage(chatId, text);
-        }
-        return sendMessageWithInlineButton(
-                chatId,
-                publicationProgressPreferenceService.appendTelegramOptOutHint(text),
-                PublicationProgressPreferenceService.DISABLE_BUTTON_TEXT,
-                publicationProgressPreferenceService.disableCallbackData(companyId)
-        );
-    }
-
     public boolean sendMessageWithInlineButton(long chatId, String text, String buttonText, String callbackData) {
         if (!sendingEnabled) {
             log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
@@ -1262,24 +1250,6 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         }
     }
 
-    public Optional<Integer> sendProtectedMessageWithInlineKeyboardMessageId(
-            long chatId,
-            String text,
-            String parseMode,
-            List<List<InlineKeyboardButton>> keyboard
-    ) {
-        if (!sendingEnabled || !looksLikeTelegramBotToken(getBotToken()) || !hasText(text)) {
-            return Optional.empty();
-        }
-        InlineKeyboardMarkup markup = null;
-        if (keyboard != null && !keyboard.isEmpty()) {
-            markup = new InlineKeyboardMarkup();
-            markup.setKeyboard(keyboard);
-        }
-        return sendSingleMessageResult(chatId, text, parseMode, markup, true)
-                .map(Message::getMessageId);
-    }
-
     public boolean editMessageText(
             long chatId,
             int messageId,
@@ -1356,14 +1326,6 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             List<List<InlineKeyboardButton>> keyboard
     ) {
         return sendRichMessageWithInlineKeyboardMessageId(chatId, html, keyboard, false);
-    }
-
-    public Optional<Integer> sendProtectedRichMessageWithInlineKeyboardMessageId(
-            long chatId,
-            String html,
-            List<List<InlineKeyboardButton>> keyboard
-    ) {
-        return sendRichMessageWithInlineKeyboardMessageId(chatId, html, keyboard, true);
     }
 
     private Optional<Integer> sendRichMessageWithInlineKeyboardMessageId(

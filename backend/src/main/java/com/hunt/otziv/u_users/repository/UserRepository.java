@@ -190,15 +190,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByFio(String operator);
 
-    @Query("""
-        SELECT u.fio
-        FROM User u
-        JOIN u.roles r
-        WHERE r.name = :roleName
-          AND u.active = true
-    """)
-    List<String> findAllActiveFioByRole(@Param("roleName") String roleName);
-
     /**
      * Тоже делаем легким.
      */

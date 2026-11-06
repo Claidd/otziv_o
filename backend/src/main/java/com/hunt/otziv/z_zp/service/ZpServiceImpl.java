@@ -1,6 +1,5 @@
 package com.hunt.otziv.z_zp.service;
 
-import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionService;
@@ -31,7 +30,6 @@ import java.util.stream.Stream;
 @Slf4j
 @RequiredArgsConstructor
 public class ZpServiceImpl implements ZpService{
-    private static final BigDecimal LEAD_BONUS = new BigDecimal("1000.00");
 
     private final ZpRepository zpRepository;
     private final ContractorRewardAttributionService contractorRewardAttributionService;
@@ -333,55 +331,6 @@ public class ZpServiceImpl implements ZpService{
                 ? ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST
                 : ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST;
     }
-    @Transactional
-    protected void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД
-        if (lead == null || lead.getMarketolog() == null || lead.getMarketolog().getUser() == null) {
-            log.debug("Вознаграждение маркетолога за лид не начислено: у лида не указан маркетолог");
-            return;
-        }
-
-        try {
-            Marketolog marketolog = lead.getMarketolog();
-            User user = marketolog.getUser();
-            Zp marketologZp = new Zp();
-            marketologZp.setFio(user.getFio());
-            marketologZp.setSum(LEAD_BONUS.multiply(user.getCoefficient()));
-            marketologZp.setUserId(user.getId());
-            marketologZp.setOrderId(0L);
-            marketologZp.setProfessionId(marketolog.getId());
-            marketologZp.setAmount(1);
-            marketologZp.setActive(true);
-            zpRepository.save(marketologZp);
-        } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
-        }
-
-    } // Сохранить ЗП Маркетолога в БД
-
-    @Transactional
-    protected void saveZpOperator(Lead lead){ // Сохранить ЗП Оператора в БД
-        if (lead == null || lead.getOperator() == null || lead.getOperator().getUser() == null) {
-            log.debug("Вознаграждение оператора за лид не начислено: у лида не указан оператор");
-            return;
-        }
-
-        try {
-            Operator operator = lead.getOperator();
-            User user = operator.getUser();
-            Zp operatorZp = new Zp();
-            operatorZp.setFio(user.getFio());
-            operatorZp.setSum(LEAD_BONUS.multiply(user.getCoefficient()));
-            operatorZp.setUserId(user.getId());
-            operatorZp.setProfessionId(operator.getId());
-            operatorZp.setOrderId(0L);
-            operatorZp.setAmount(1);
-            operatorZp.setActive(true);
-            zpRepository.save(operatorZp);
-        } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
-        }
-
-    } // Сохранить ЗП Оператора в БД
 
     private List<ZpDTO> toDTOList(List<Zp> zpList) { // Метод для преобразования из сущности Zp в ZpDTO
         return zpList.stream().map(this::toDTO).collect(Collectors.toList());

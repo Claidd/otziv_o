@@ -131,7 +131,7 @@ class ContractorPaymentSystemAdminServiceTest {
     @Test
     void activatedAccountingIsReportedAsEffectiveLiveAccountingWithRoutingPaused() {
         when(rolloutStateService.currentSnapshot()).thenReturn(snapshot(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 false,
                 CUTOVER,
                 7L
@@ -411,7 +411,7 @@ class ContractorPaymentSystemAdminServiceTest {
     }
 
     private ContractorPaymentRolloutState completionState(boolean routingRequested, long revision) {
-        return state(ContractorPaymentAccountingAuthority.COMPLETION, routingRequested, CUTOVER, revision);
+        return state(ContractorPaymentAccountingAuthority.PAYMENT, routingRequested, CUTOVER, revision);
     }
 
     private ContractorPaymentRolloutState state(

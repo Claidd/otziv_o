@@ -322,9 +322,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
             @Param("workerId") Long workerId
     );
 
-    @Query("SELECT r.id FROM Review r WHERE r.worker.id = :workerId")
-    List<Long> findAllIdByWorkerId(@Param("workerId") Long workerId);
-
     @Query("select COUNT(r) from Review r where r.publishedDate <= :localDate AND r.worker = :worker AND r.publish = false")
     int findAllByReviewsListStatus(@Param("localDate") LocalDate localDate,
                                    @Param("worker") Worker worker);
@@ -395,10 +392,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Modifying
     @Query("DELETE FROM Review r WHERE r.id IN :reviewIds")
     int deleteByIdIn(@Param("reviewIds") List<Long> reviewIds);
-
-    @Modifying
-    @Query("DELETE FROM Review r WHERE r.id = :reviewId")
-    void deleteReviewByReviewId(@Param("reviewId") Long reviewId);
 
     @Query(value = """
         SELECT COUNT(*)

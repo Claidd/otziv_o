@@ -88,7 +88,7 @@ class ContractorPaymentRuntimeHealthMonitorTest {
     private ContractorPaymentRolloutStateService.Snapshot activeRollout() {
         LocalDateTime now = LocalDateTime.of(2026, 8, 26, 4, 0);
         return new ContractorPaymentRolloutStateService.Snapshot(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 true,
                 LocalDate.of(2026, 8, 20),
                 now.minusDays(6),

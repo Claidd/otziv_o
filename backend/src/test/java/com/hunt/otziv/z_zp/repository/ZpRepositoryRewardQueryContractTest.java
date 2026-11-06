@@ -60,18 +60,6 @@ class ZpRepositoryRewardQueryContractTest {
 
     @Test
     void cabinetAndStatisticsQueriesExcludeInactiveRowsWithoutDroppingActiveRewardKinds() throws Exception {
-        assertActiveRewardQuery(query(
-                "getAllWorkerZpInPeriod",
-                Long.class,
-                LocalDate.class,
-                LocalDate.class
-        ));
-        assertActiveRewardQuery(query(
-                "getAllWorkerZp",
-                Long.class,
-                LocalDate.class,
-                LocalDate.class
-        ));
         assertActiveRewardQuery(query("findAllToDate", LocalDate.class, LocalDate.class));
         assertActiveRewardQuery(query("findStatRowsToDate", LocalDate.class, LocalDate.class));
         assertActiveRewardQuery(query(
@@ -95,11 +83,6 @@ class ZpRepositoryRewardQueryContractTest {
         ));
         assertActiveRewardQuery(query("sumByUserAndCreated", Long.class, LocalDate.class));
         assertActiveRewardQuery(query("countByUserAndCreated", Long.class, LocalDate.class));
-
-        String allUsers = query("findAllUsersWithZpToDate", LocalDate.class, LocalDate.class);
-        assertThat(allUsers)
-                .contains("ZP_ACTIVE = 1")
-                .doesNotContain("ZP_CONTRACTOR_ROLE", "ZP_SOURCE", "ZP_ORDER");
     }
 
     @Test

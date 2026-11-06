@@ -3,7 +3,6 @@ package com.hunt.otziv.p_products.application;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
@@ -54,58 +53,6 @@ public class WorkerCredentialCommands {
     private final CredentialRevealService credentialRevealService;
     private final WorkerReviewAccessPolicy reviewAccess;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
-
-    public WorkerCredentialPreparationResponse logReviewCredentialCopyClick(Long reviewId, ReviewCopyClickRequest request, WorkerOrderActor actor) {
-        Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER", "WORKER");
-        Principal principal = authentication;
-        String field = normalizeReviewCopyField(request);
-        Review review = reviewService.getReviewById(reviewId);
-        if (review == null) {
-            throw new WorkerOrderCommandException(WorkerOrderCommandException.Kind.NOT_FOUND, "Отзыв не найден");
-        }
-        reviewAccess.enforceReviewSourceAccess(review, request.sourceSection(), authentication);
-        enforcePublicationSessionIfNeeded(request, principal, authentication);
-
-        Order order = review.getOrderDetails() != null ? review.getOrderDetails().getOrder() : null;
-        Company company = order != null ? order.getCompany() : null;
-        Bot bot = review.getBot();
-
-        log.info(
-                "Специалист {} нажал кнопку \"{}\" для отзыва ID {}, заказа ID {}, компании \"{}\", бота ID {}",
-                principalName(principal),
-                copyFieldLabel(field),
-                review.getId(),
-                order != null ? order.getId() : null,
-                company != null ? safe(company.getTitle()) : "",
-                bot != null ? bot.getId() : null
-        );
-        workerActivityService.recordSafely(authentication,
-                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
-                "review",
-                reviewId,
-                order != null ? order.getId() : null,
-                reviewId,
-                "copy",
-                withSource(credentialCopyDetails(field, bot), request)
-        );
-        boolean preparationRecorded = credentialPreparationService.recordCopy(
-                authentication,
-                review,
-                field,
-                request == null ? null : request.sourcePage(),
-                request == null ? null : request.sourceEntry(),
-                request == null ? null : request.sourceSection()
-        );
-        if (credentialPreparationRequired(request) && !preparationRecorded) {
-            throw new WorkerOrderCommandException(WorkerOrderCommandException.Kind.BAD_REQUEST,
-                    "Сервер не подтвердил подготовку аккаунта. Обновите приложение и повторите копирование."
-            );
-        }
-        recordPublicationActivityIfNeeded(request, principal, authentication);
-        return preparationRecorded
-                ? activeCredentialPreparation(authentication, request == null ? null : request.sourceSection())
-                : null;
-    }
 
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NEVER)
     public CredentialRevealResponse revealReviewCredential(Long reviewId, CredentialRevealRequest request, WorkerOrderActor actor) {
@@ -216,64 +163,6 @@ public class WorkerCredentialCommands {
         return revealed;
     }
 
-    public void logRecoveryTaskCredentialCopyClick(Long taskId, ReviewCopyClickRequest request, WorkerOrderActor actor) {
-        Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER", "WORKER");
-        Principal principal = authentication;
-        workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY, authentication);
-        assignmentMutationGuardService.assertRecoveryTask(taskId, authentication);
-        String field = normalizeReviewCopyField(request);
-        ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
-
-        log.info(
-                "Специалист {} нажал кнопку \"{}\" для задачи восстановления ID {}, исходного отзыва ID {}, заказа ID {}, бота ID {}",
-                principalName(principal),
-                copyFieldLabel(field),
-                task.getId(),
-                reviewId(task),
-                orderId(task),
-                botId(task)
-        );
-        workerActivityService.recordSafely(
-                authentication,
-                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
-                "recovery_task",
-                task.getId(),
-                orderId(task),
-                reviewId(task),
-                SECTION_RECOVERY,
-                withSource(credentialCopyDetails(field, task.getBot()), request)
-        );
-    }
-
-    public void logBadReviewTaskCredentialCopyClick(Long taskId, ReviewCopyClickRequest request, WorkerOrderActor actor) {
-        Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER", "WORKER");
-        Principal principal = authentication;
-        workerCellularAccessService.enforceProtectedAccess(SECTION_BAD, authentication);
-        assignmentMutationGuardService.assertBadTask(taskId, authentication);
-        String field = normalizeReviewCopyField(request);
-        BadReviewTask task = badReviewTaskService.getTask(taskId);
-
-        log.info(
-                "Специалист {} нажал кнопку \"{}\" для плохой задачи ID {}, исходного отзыва ID {}, заказа ID {}, бота ID {}",
-                principalName(principal),
-                copyFieldLabel(field),
-                task.getId(),
-                reviewId(task),
-                orderId(task),
-                botId(task)
-        );
-        workerActivityService.recordSafely(
-                authentication,
-                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
-                "bad_review_task",
-                task.getId(),
-                orderId(task),
-                reviewId(task),
-                SECTION_BAD,
-                withSource(credentialCopyDetails(field, task.getBot()), request)
-        );
-    }
-
     private String normalizeReviewCopyField(ReviewCopyClickRequest request) {
         String field = request == null ? "" : safe(request.field()).trim().toLowerCase(Locale.ROOT);
         if (!REVIEW_CREDENTIAL_COPY_FIELDS.contains(field)) {
@@ -298,10 +187,6 @@ public class WorkerCredentialCommands {
             String entityType, Long entityId, Long orderId, Long reviewId, String section, String details) {
         return () -> workerActivityService.recordSafely(authentication, action, entityType,
                 entityId, orderId, reviewId, section, details);
-    }
-
-    private String copyFieldLabel(String field) {
-        return "password".equals(field) ? "пароль" : "логин";
     }
 
     private String credentialCopyDetails(String field, Bot bot) {

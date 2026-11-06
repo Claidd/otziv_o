@@ -182,9 +182,6 @@ com.hunt.otziv.l_lead.service.LeadImportService -> com.hunt.otziv.u_users.reposi
 com.hunt.otziv.l_lead.service.LeadImportService -> com.hunt.otziv.u_users.repository.MarketologRepository
 com.hunt.otziv.l_lead.service.LeadImportService -> com.hunt.otziv.u_users.repository.OperatorRepository
 com.hunt.otziv.l_lead.service.LeadServiceImpl -> com.hunt.otziv.u_users.repository.UserRepository
-com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repository.ManagerRepository
-com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repository.MarketologRepository
-com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repository.OperatorRepository
 com.hunt.otziv.l_lead.service.TelephoneServiceImpl -> com.hunt.otziv.u_users.repository.OperatorRepository
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.c_companies.repository.CompanyRepository
 com.hunt.otziv.manager.controller.ApiManagerOrderController -> com.hunt.otziv.p_products.repository.OrderRepository

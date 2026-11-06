@@ -28,12 +28,6 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     Optional<Lead> findByIdForWorkTransition(@Param("id") Long id);
 
 
-    @Query("SELECT l FROM Lead l WHERE l.telephone.id = :telephoneId " +
-            "AND l.lidStatus = :status AND l.createDate <= :date ORDER BY l.createDate ASC")
-    List<Lead> findByTelephoneAndStatusBeforeDate(@Param("telephoneId") Long telephoneId,
-                                                  @Param("status") String status,
-                                                  @Param("date") LocalDate date);
-
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.telephone.id = :telephoneId " +
             "AND l.lidStatus = :status AND l.createDate <= :date")
     int countByTelephoneAndStatusBeforeDate(@Param("telephoneId") Long telephoneId,

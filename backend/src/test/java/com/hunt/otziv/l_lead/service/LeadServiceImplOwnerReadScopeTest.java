@@ -74,8 +74,7 @@ class LeadServiceImplOwnerReadScopeTest {
                 gamificationEventService,
                 appSettingService,
                 leadAccessService,
-                org.mockito.Mockito.mock(LeadWorkNotificationService.class),
-                org.mockito.Mockito.mock(com.hunt.otziv.l_lead.repository.LeadInboundCommandRepository.class)
+                org.mockito.Mockito.mock(LeadWorkNotificationService.class)
         );
         owner = new UsernamePasswordAuthenticationToken(
                 "owner-a",

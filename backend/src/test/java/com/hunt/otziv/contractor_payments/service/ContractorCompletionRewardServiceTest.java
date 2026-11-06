@@ -118,7 +118,7 @@ class ContractorCompletionRewardServiceTest {
                 .publishedDate(LocalDate.of(2026, 7, 31))
                 .build();
         org.mockito.Mockito.lenient().when(rolloutStateService.lockAccountingAuthority())
-                .thenReturn(ContractorPaymentAccountingAuthority.COMPLETION);
+                .thenReturn(ContractorPaymentAccountingAuthority.PAYMENT);
         when(orderRepository.findByIdForCounterUpdate(91L)).thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(orderRepository.findByIdForOrderDto(91L))
                 .thenReturn(Optional.of(order));
@@ -593,21 +593,6 @@ class ContractorCompletionRewardServiceTest {
     }
 
     @Test
-    void paymentCancellationFailsBeforeMutationForUnclassifiedHistoricalReward() {
-        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "unclassified"))
-                .when(legacyRewardGuard).requireCancellationClassifiable(91L);
-
-        assertThrows(
-                ResponseStatusException.class,
-                () -> service.migrateLegacyRewardsBeforePaymentCancellation(91L)
-        );
-
-        verify(markerRepository, never()).save(any());
-        verify(zpRepository, never()).save(any(Zp.class));
-        verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
-    }
-
-    @Test
     void directPostCutoffTaskCompletionRejectsLegacyAggregateBeforeAnyWrite() {
         when(reviewRepository.getAllByOrderId(91L)).thenReturn(List.of(boundaryReview()));
         BadReviewTask task = BadReviewTask.builder()
@@ -622,33 +607,6 @@ class ContractorCompletionRewardServiceTest {
                 .when(legacyRewardGuard).requireNoActiveLegacyAggregate(91L);
 
         assertThrows(ResponseStatusException.class, () -> service.ensureCompletedBadReviewTask(task));
-
-        verify(markerRepository, never()).save(any());
-        verify(zpRepository, never()).save(any(Zp.class));
-        verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
-    }
-
-    @Test
-    void cancellationDoesNotFreezePostCutoffTaskIntoPreCutoffLegacyAggregate() {
-        BadReviewTask task = BadReviewTask.builder()
-                .id(706L)
-                .order(order)
-                .status(BadReviewTaskStatus.DONE)
-                .price(new BigDecimal("500.00"))
-                .completedDate(LocalDate.of(2026, 8, 1))
-                .worker(order.getWorker())
-                .build();
-        when(zpRepository.existsByOrderIdAndSourceAndActiveTrue(
-                91L,
-                ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER
-        )).thenReturn(true);
-        when(badReviewTaskRepository.findAllByOrderIdAndStatus(91L, BadReviewTaskStatus.DONE))
-                .thenReturn(List.of(task));
-
-        assertThrows(
-                ResponseStatusException.class,
-                () -> service.migrateLegacyRewardsBeforePaymentCancellation(91L)
-        );
 
         verify(markerRepository, never()).save(any());
         verify(zpRepository, never()).save(any(Zp.class));

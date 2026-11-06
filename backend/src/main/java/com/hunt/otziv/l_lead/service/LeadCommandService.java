@@ -30,9 +30,6 @@ public class LeadCommandService {
     public String enqueueSync(long leadId) { return enqueueCurrent(leadId, "SYNC", null); }
 
     @Transactional
-    public String enqueueUpdate(long leadId) { return enqueueCurrent(leadId, "UPDATE", null); }
-
-    @Transactional
     public String enqueueImport(long leadId, String requestId) {
         if (requestId != null && !requestId.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"LEAD_REQUEST_ID_INVALID");

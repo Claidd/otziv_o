@@ -910,12 +910,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
 
     @Override
     @Transactional(readOnly = true)
-    public Map<Long, BigDecimal> getPayableSums(Collection<Order> orders) {
-        return prepareOrderAmounts(orders).payableSums();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public OrderAmounts prepareOrderAmounts(Collection<Order> orders) {
         if (orders == null || orders.isEmpty()) return new OrderAmounts(Map.of(), Map.of());
         List<Long> ids = orders.stream().filter(Objects::nonNull).map(Order::getId)

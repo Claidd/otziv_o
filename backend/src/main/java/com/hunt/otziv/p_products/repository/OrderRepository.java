@@ -168,101 +168,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         LocalDateTime getStatusChangedAt();
     }
 
-    @Query("""
-        SELECT COUNT(DISTINCT o.id)
-        FROM Order o
-        JOIN o.company c
-        LEFT JOIN c.status cs
-        WHERE o.complete = false
-          AND o.manager = :manager
-          AND (cs.title IS NULL OR cs.title NOT IN ('Бан', 'На стопе'))
-          AND c.urlChat IS NOT NULL
-          AND TRIM(c.urlChat) <> ''
-          AND (
-              (
-                  LOWER(TRIM(c.urlChat)) LIKE 'chat.whatsapp.com/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://chat.whatsapp.com/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://chat.whatsapp.com/%'
-              )
-              AND (c.groupId IS NULL OR TRIM(c.groupId) = '')
-              OR (
-                  LOWER(TRIM(c.urlChat)) LIKE 't.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://t.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://t.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'telegram.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://telegram.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://telegram.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'telegram.dog/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://telegram.dog/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://telegram.dog/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'tg://resolve?%'
-              )
-              AND LOWER(TRIM(c.urlChat)) NOT LIKE '%startgroup=%'
-              AND c.telegramGroupChatId IS NULL
-              OR (
-                  LOWER(TRIM(c.urlChat)) LIKE 'max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'web.max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://web.max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://web.max.ru/%'
-              )
-              AND c.maxGroupChatId IS NULL
-          )
-    """)
-    long countManagerControlChatBindingIssuesByManager(@Param("manager") Manager manager);
-
-    @Query("""
-        SELECT DISTINCT o
-        FROM Order o
-        LEFT JOIN FETCH o.status os
-        LEFT JOIN FETCH o.filial f
-        LEFT JOIN FETCH f.city
-        JOIN FETCH o.company c
-        LEFT JOIN FETCH c.status cs
-        WHERE o.complete = false
-          AND o.manager = :manager
-          AND (cs.title IS NULL OR cs.title NOT IN ('Бан', 'На стопе'))
-          AND c.urlChat IS NOT NULL
-          AND TRIM(c.urlChat) <> ''
-          AND (
-              (
-                  LOWER(TRIM(c.urlChat)) LIKE 'chat.whatsapp.com/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://chat.whatsapp.com/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://chat.whatsapp.com/%'
-              )
-              AND (c.groupId IS NULL OR TRIM(c.groupId) = '')
-              OR (
-                  LOWER(TRIM(c.urlChat)) LIKE 't.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://t.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://t.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'telegram.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://telegram.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://telegram.me/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'telegram.dog/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://telegram.dog/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://telegram.dog/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'tg://resolve?%'
-              )
-              AND LOWER(TRIM(c.urlChat)) NOT LIKE '%startgroup=%'
-              AND c.telegramGroupChatId IS NULL
-              OR (
-                  LOWER(TRIM(c.urlChat)) LIKE 'max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'web.max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://web.max.ru/%'
-                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://web.max.ru/%'
-              )
-              AND c.maxGroupChatId IS NULL
-          )
-        ORDER BY o.changed ASC, o.id ASC
-    """)
-    List<Order> findManagerControlChatBindingIssueOrdersByManager(
-            @Param("manager") Manager manager,
-            Pageable pageable
-    );
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :orderId")
     Optional<Order> findByIdForCounterUpdate(@Param("orderId") Long orderId);
@@ -321,7 +226,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         LEFT JOIN managers manager ON manager.manager_id = o.order_manager
         LEFT JOIN users manager_user ON manager_user.id = manager.user_id
         WHERE s.order_status_title = 'Оплачено'
-          AND rollout.accounting_authority IN ('PAYMENT', 'COMPLETION')
+          AND rollout.accounting_authority = 'PAYMENT'
           AND o.order_pay_day >= rollout.attribution_start_date
           AND o.order_amount > 0
           AND o.order_sum > 0
@@ -765,26 +670,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed, o.id")
     List<Long> findAllIdByOwnerAndStatus(@Param("managers") Set<Manager> managers,
                                          @Param("status") String status);
-
-    @Query(
-            value = """
-                SELECT o.id
-                FROM Order o
-                WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(o.id) = :keyword
-            """,
-            countQuery = """
-                SELECT COUNT(o.id)
-                FROM Order o
-                WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(o.id) = :keyword
-            """
-    )
-    Page<Long> findPageIdByKeyWord(@Param("keyword") String keyword,
-                                   @Param("keyword2") String keyword2,
-                                   Pageable pageable);
 
     @Query(
             value = """

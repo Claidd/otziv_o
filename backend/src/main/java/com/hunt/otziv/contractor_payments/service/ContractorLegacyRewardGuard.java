@@ -50,15 +50,6 @@ public class ContractorLegacyRewardGuard {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
-    public void requireCancellationClassifiable(Long orderId) {
-        boolean ambiguous = activePaymentDependentRows(orderId).stream()
-                .anyMatch(reward -> !ContractorRewardSourceCodes.isLegacyEarnedReward(reward.getSource()));
-        if (ambiguous) {
-            throw reconciliationRequired();
-        }
-    }
-
-    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public void requireNoUnclassifiedActiveRows(Long orderId) {
         boolean ambiguous = activePaymentDependentRows(orderId).stream()
                 .anyMatch(reward -> !ContractorRewardSourceCodes.isLegacyEarnedReward(reward.getSource()));

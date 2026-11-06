@@ -152,13 +152,6 @@ public class OpenAiResponsesClient {
         return useYandex() ? (useYandexResponsesApi() ? "YandexGPT Responses" : "YandexGPT") : "OpenAI";
     }
 
-    public String activeModel() {
-        if (useDeepSeek()) {
-            return properties.getDeepseek().getModel();
-        }
-        return useYandex() ? properties.getYandex().getModel() : properties.getOpenai().getModel();
-    }
-
     public boolean usesExternalSearchContext() {
         return useYandex() || useDeepSeek();
     }

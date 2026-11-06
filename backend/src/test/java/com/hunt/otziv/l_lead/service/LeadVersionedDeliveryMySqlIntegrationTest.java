@@ -52,7 +52,6 @@ class LeadVersionedDeliveryMySqlIntegrationTest {
     LeadCommandService producer;
     LeadCommandReceiver receiver;
     LeadInboundMutationService mutations;
-    LeadServiceImpl legacyPull;
 
     @BeforeAll static void database() throws Exception {
         var ds=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());
@@ -95,13 +94,6 @@ class LeadVersionedDeliveryMySqlIntegrationTest {
         mutations=proxy(new LeadInboundMutationService(leads,new LeadMapper(),mock(OperatorRepository.class),mock(ManagerRepository.class),
                 mock(MarketologRepository.class),mock(TelephoneRepository.class),em));
         receiver=newReceiver();
-        legacyPull=proxy(new LeadServiceImpl(leads,mock(UserRepository.class),mock(com.hunt.otziv.u_users.service.ManagerService.class),
-                mock(com.hunt.otziv.u_users.service.OperatorService.class),mock(com.hunt.otziv.u_users.service.MarketologService.class),
-                mock(com.hunt.otziv.z_zp.service.ZpService.class),mock(com.hunt.otziv.u_users.service.UserService.class),
-                mock(TelephoneService.class),new LeadMapper(),mock(com.hunt.otziv.l_lead.event.LeadEventPublisher.class),
-                mock(com.hunt.otziv.gamification.service.GamificationEventService.class),
-                mock(com.hunt.otziv.config.settings.service.AppSettingService.class),mock(LeadAccessService.class),
-                mock(LeadWorkNotificationService.class),proxy(new LeadInboundCommandRepository(jdbc))));
     }
 
     @Test void duplicateAfterRestartReturnsReceiptWithoutRepeatingBusinessMutation() {
@@ -181,18 +173,6 @@ class LeadVersionedDeliveryMySqlIntegrationTest {
         legacy.setCompanyName("late legacy");
         assertRejected(409,()->receiver.receive("SYNC",legacy,null,null));
         assertRejected(409,()->receiver.receive("IMPORT",legacy,null,null));
-        assertThat(jdbc.queryForObject("SELECT company_name FROM leads",String.class)).isEqualTo("versioned");
-    }
-
-    @Test void reverseGetPullCannotBypassTheVersionedTargetFence() {
-        var incoming=Lead.builder().telephoneLead("79990000001").cityLead("Fixture").companyName("legacy pull")
-                .createDate(LocalDate.of(2026,9,7)).build();
-        legacyPull.saveOrUpdateByTelephoneLead(incoming);
-        assertThat(jdbc.queryForObject("SELECT company_name FROM leads",String.class)).isEqualTo("legacy pull");
-        receive(payload(1,1,"versioned"));
-        incoming.setCompanyName("late pull");
-        assertThatThrownBy(()->legacyPull.saveOrUpdateByTelephoneLead(incoming))
-                .isInstanceOf(LeadInboundCommandRepository.Conflict.class).hasMessage("LEAD_TARGET_REQUIRES_BOUND_SOURCE");
         assertThat(jdbc.queryForObject("SELECT company_name FROM leads",String.class)).isEqualTo("versioned");
     }
 

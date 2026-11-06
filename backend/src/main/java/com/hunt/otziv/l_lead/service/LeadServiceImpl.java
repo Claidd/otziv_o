@@ -14,7 +14,6 @@ import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
-import com.hunt.otziv.l_lead.repository.LeadInboundCommandRepository;
 import com.hunt.otziv.u_users.service.ManagerService;
 import com.hunt.otziv.u_users.service.MarketologService;
 import com.hunt.otziv.u_users.service.OperatorService;
@@ -40,8 +39,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.hunt.otziv.logs.util.LogMasking.maskPhone;
-
 @Service
 @Slf4j
 public class LeadServiceImpl implements LeadService {
@@ -60,9 +57,8 @@ public class LeadServiceImpl implements LeadService {
     private final AppSettingService appSettingService;
     private final LeadAccessService leadAccessService;
     private final LeadWorkNotificationService workNotifications;
-    private final LeadInboundCommandRepository inboundCommands;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, GamificationEventService gamificationEventService, AppSettingService appSettingService, LeadAccessService leadAccessService, LeadWorkNotificationService workNotifications, LeadInboundCommandRepository inboundCommands) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, GamificationEventService gamificationEventService, AppSettingService appSettingService, LeadAccessService leadAccessService, LeadWorkNotificationService workNotifications) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
@@ -77,7 +73,6 @@ public class LeadServiceImpl implements LeadService {
         this.appSettingService = appSettingService;
         this.leadAccessService = leadAccessService;
         this.workNotifications = workNotifications;
-        this.inboundCommands = inboundCommands;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
@@ -1369,11 +1364,6 @@ public class LeadServiceImpl implements LeadService {
     } // Взять одного лида дто - конец
 
     @Override
-    public Optional<Lead> findByIdOptional(Long leadId) { // Взять одного лида дто по id
-        return leadsRepository.findById(leadId);
-    } // Взять одного лида дто - конец
-
-    @Override
     public Optional<Lead> findByIdAndToUpdate(Long id) { // Взять одного юзера - конец
         log.info("Начинается поиск пользователя по id - начало");
         return leadsRepository.findById(id);
@@ -1543,53 +1533,6 @@ public class LeadServiceImpl implements LeadService {
 
     public List<Lead> findModifiedSince(LocalDateTime since) {
         return leadsRepository.findByUpdateStatusAfter(since);
-    }
-
-    @Override
-    @Transactional
-    public void saveOrUpdateByTelephoneLead(Lead incomingLead) {
-        // Reverse GET synchronization is an unversioned external writer too. Serialize
-        // it before loading the target, and never overwrite an already-bound source.
-        inboundCommands.lockTarget(LeadCommandProtocol.phoneKey(incomingLead.getTelephoneLead()), null);
-        log.info("📨 saveOrUpdateByTelephoneLead: {}", maskPhone(incomingLead.getTelephoneLead()));
-
-        Optional<Lead> existing = leadsRepository.findByTelephoneLead(incomingLead.getTelephoneLead());
-
-        if (existing.isPresent()) {
-            Lead lead = existing.get();
-
-            lead.setTelephoneLead(incomingLead.getTelephoneLead());
-            lead.setCompanyName(incomingLead.getCompanyName());
-            lead.setPhones(incomingLead.getPhones());
-            lead.setMobilePhones(incomingLead.getMobilePhones());
-            lead.setWhatsappPhones(incomingLead.getWhatsappPhones());
-            lead.setEmails(incomingLead.getEmails());
-            lead.setWebsites(incomingLead.getWebsites());
-            lead.setVkUrl(incomingLead.getVkUrl());
-            lead.setTelegramUrl(incomingLead.getTelegramUrl());
-            lead.setIndustries(incomingLead.getIndustries());
-            lead.setCompanyType(incomingLead.getCompanyType());
-            lead.setRegion(incomingLead.getRegion());
-            lead.setAddress(incomingLead.getAddress());
-            lead.setCityLead(incomingLead.getCityLead());
-            lead.setCommentsLead(incomingLead.getCommentsLead());
-            lead.setLidStatus(incomingLead.getLidStatus());
-            lead.setCreateDate(incomingLead.getCreateDate());
-            lead.setUpdateStatus(incomingLead.getUpdateStatus());
-            lead.setDateNewTry(incomingLead.getDateNewTry());
-
-            lead.setOperator(incomingLead.getOperator());
-            lead.setManager(incomingLead.getManager());
-            lead.setMarketolog(incomingLead.getMarketolog());
-            lead.setTelephone(incomingLead.getTelephone());
-
-            leadsRepository.save(lead);
-            log.info("🔁 Обновили существующего лида: {}", maskPhone(lead.getTelephoneLead()));
-
-        } else {
-            leadsRepository.save(incomingLead);
-            log.info("🆕 Добавили нового лида: {}", maskPhone(incomingLead.getTelephoneLead()));
-        }
     }
 
 

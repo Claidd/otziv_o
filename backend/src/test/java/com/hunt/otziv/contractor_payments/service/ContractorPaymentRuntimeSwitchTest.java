@@ -99,7 +99,7 @@ class ContractorPaymentRuntimeSwitchTest {
     void completionAuthorityNeverFallsBackToLegacyWhenMutableGatesAreOff() {
         masters(false, false);
         when(rolloutStateService.freshSnapshot()).thenReturn(snapshot(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 false,
                 CUTOVER
         ));
@@ -124,7 +124,7 @@ class ContractorPaymentRuntimeSwitchTest {
     void liveRoutingRequiresEveryDurableDeploymentDatabaseAndReadinessGate(MissingLiveGate missing) {
         masters(true, true);
         lenient().when(rolloutStateService.freshSnapshot()).thenReturn(snapshot(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 true,
                 CUTOVER
         ));
@@ -145,7 +145,7 @@ class ContractorPaymentRuntimeSwitchTest {
 
         switch (missing) {
             case ROUTING_REQUEST -> when(rolloutStateService.freshSnapshot()).thenReturn(snapshot(
-                    ContractorPaymentAccountingAuthority.COMPLETION,
+                    ContractorPaymentAccountingAuthority.PAYMENT,
                     false,
                     CUTOVER
             ));
@@ -183,7 +183,7 @@ class ContractorPaymentRuntimeSwitchTest {
     void liveRoutingIsEnabledOnlyWhenEveryGateIsSatisfied() {
         masters(true, true);
         when(rolloutStateService.freshSnapshot()).thenReturn(snapshot(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 true,
                 CUTOVER
         ));
@@ -209,7 +209,7 @@ class ContractorPaymentRuntimeSwitchTest {
     void clientFacingRoutingFailsClosedWhenImmutableSnapshotOrMessageRouteIsNotReady() {
         masters(true, true);
         when(rolloutStateService.freshSnapshot()).thenReturn(snapshot(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 true,
                 CUTOVER
         ));
@@ -259,7 +259,7 @@ class ContractorPaymentRuntimeSwitchTest {
     @Test
     void immutableCutoverMismatchBlocksCompletionDateWithoutReactivatingLegacy() {
         when(rolloutStateService.freshSnapshot()).thenReturn(snapshot(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 false,
                 CUTOVER
         ));
@@ -273,7 +273,7 @@ class ContractorPaymentRuntimeSwitchTest {
     void databaseReadFailureFailsLiveRoutingClosedButKeepsCompletionAuthority() {
         masters(true, true);
         when(rolloutStateService.freshSnapshot()).thenReturn(snapshot(
-                ContractorPaymentAccountingAuthority.COMPLETION,
+                ContractorPaymentAccountingAuthority.PAYMENT,
                 true,
                 CUTOVER
         ));
@@ -296,8 +296,8 @@ class ContractorPaymentRuntimeSwitchTest {
                 authority,
                 routingRequested,
                 startDate,
-                authority == ContractorPaymentAccountingAuthority.COMPLETION ? now.minusDays(1) : null,
-                authority == ContractorPaymentAccountingAuthority.COMPLETION ? "owner" : null,
+                authority == ContractorPaymentAccountingAuthority.PAYMENT ? now.minusDays(1) : null,
+                authority == ContractorPaymentAccountingAuthority.PAYMENT ? "owner" : null,
                 now,
                 "owner",
                 3L

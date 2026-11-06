@@ -38,9 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StaffDailyProgressService {
 
     private static final ZoneId PROGRESS_ZONE = ZoneId.of("Asia/Irkutsk");
-    private static final long MANAGER_DAILY_GOAL = 3L;
     private static final long SINGLE_ACTION_SESSION_SECONDS = 60L;
-    private static final String ROLE_MANAGER = "MANAGER";
     private static final String ROLE_WORKER = "WORKER";
     private static final String TYPE_ORDER = "order";
     private static final String TYPE_NAGUL = "review_nagul";
@@ -65,66 +63,6 @@ public class StaffDailyProgressService {
     @Transactional(readOnly = true)
     public boolean progressEnabled() {
         return appSettingService.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true);
-    }
-
-    @Transactional(readOnly = true)
-    public Map<Long, DailyWorkProgressResponse> managerProgressByUserIds(Collection<Long> userIds, LocalDate date) {
-        if (!progressEnabled() || userIds == null || userIds.isEmpty()) {
-            return Map.of();
-        }
-        LocalDate safeDate = safeDate(date);
-        Map<Long, Long> todayEvents = new HashMap<>();
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("userIds", userIds)
-                .addValue("from", safeDate.atStartOfDay())
-                .addValue("to", safeDate.plusDays(1).atStartOfDay());
-
-        jdbc.queryForList("""
-                SELECT l.actor_user_id AS user_id, COUNT(*) AS completed
-                FROM gamification_score_ledger l
-                WHERE l.actor_user_id IN (:userIds)
-                  AND l.actor_role = 'MANAGER'
-                  AND l.source_event_created_at >= :from
-                  AND l.source_event_created_at < :to
-                  AND l.points > 0
-                GROUP BY l.actor_user_id
-                """, params).forEach(row -> todayEvents.put(
-                longValue(row.get("user_id")),
-                longValue(row.get("completed"))
-        ));
-
-        Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
-        for (Long userId : userIds) {
-            if (userId == null) {
-                continue;
-            }
-            long completed = todayEvents.getOrDefault(userId, 0L);
-            long total = Math.max(MANAGER_DAILY_GOAL, completed);
-            long active = Math.max(0, MANAGER_DAILY_GOAL - completed);
-            result.put(userId, new DailyWorkProgressResponse(
-                    true,
-                    ROLE_MANAGER,
-                    safeDate,
-                    completed,
-                    active,
-                    total,
-                    percentInt(completed, total),
-                    completed >= MANAGER_DAILY_GOAL,
-                    null,
-                    null,
-                    0,
-                    0,
-                    0,
-                    null,
-                    null,
-                    0,
-                    0,
-                    0,
-                    completed,
-                    percentInt(completed, total)
-            ));
-        }
-        return result;
     }
 
     @Transactional
@@ -448,18 +386,6 @@ public class StaffDailyProgressService {
     public void rebuildMonthlyAggregates(LocalDate monthStart, boolean closed) {
         LocalDate safeMonthStart = safeDate(monthStart).withDayOfMonth(1);
         rebuildMonthly(safeMonthStart, closed);
-    }
-
-    @Transactional
-    public DailyWorkProgressResponse aggregateWorkerProgress(Collection<Worker> workers, LocalDate date) {
-        Map<Long, DailyWorkProgressResponse> progress = workerProgressByWorkers(workers, date);
-        List<Long> workerIds = workers == null ? List.of() : workers.stream()
-                .filter(Objects::nonNull)
-                .map(Worker::getId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        return aggregateTeamProgressResponses(progress.values(), workerIds, date, ROLE_WORKER);
     }
 
     @Transactional(readOnly = true)

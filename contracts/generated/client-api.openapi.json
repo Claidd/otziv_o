@@ -27280,7 +27280,7 @@
   },
   "x-source-sha256" : [ {
     "path" : "backend/pom.xml",
-    "sha256" : "8c4021090bdc40d5198ccb45da2bd2c1646c30bfd57a5997f896f9f33d6a2cd7"
+    "sha256" : "5f92bc761065ebc70df64158e9e9c84a2c7a83de70af17ead5f057dafe7cdaf4"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/admin/controller/ApiCabinetController.java",
     "sha256" : "dcc533ecc4ad81ed51ceedfee47ed99218270c428f3e34b11689046ad1bc38b4"

@@ -92,7 +92,6 @@ class OrderBoardQueryServiceTest {
         assertEquals(1, pageable.getPageSize());
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("changed").getDirection());
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
-        verify(orderRepository, never()).findPageIdByKeyWord(any(), any(), any());
         verify(orderRepository, never()).findPageIdByKeyWordLive(any(), any(), any(), any());
     }
 

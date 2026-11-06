@@ -4,17 +4,9 @@ package com.hunt.otziv.contractor_payments.model;
 public enum ContractorPaymentAccountingAuthority {
     LEGACY,
     /** Canonical writer: an order reward exists only while the order is paid. */
-    PAYMENT,
-    /**
-     * Read compatibility for databases that have not yet applied the PAYMENT
-     * authority migration. New activations never write this value.
-     */
-    @Deprecated
-    COMPLETION
-
-    ;
+    PAYMENT;
 
     public boolean paymentBased() {
-        return this == PAYMENT || this == COMPLETION;
+        return this == PAYMENT;
     }
 }

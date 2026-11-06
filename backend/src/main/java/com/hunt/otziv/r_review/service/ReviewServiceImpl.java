@@ -656,20 +656,6 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    @Transactional
-    public Review updateReviewPhoto(Long reviewId, String url) {
-        orderAggregateMutationLockService.lockForReview(reviewId);
-        assignmentMutationGuardService.assertReview(reviewId);
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
-
-        photoReferences.requireAssignable(url);
-        review.setUrl(url);
-        log.info("Обновляем фото отзыва {}", reviewId);
-        return reviewRepository.save(review);
-    }
-
-    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean deleteReviewFromLockedOrder(Long orderId, Long reviewId) {
         if (orderId == null || reviewId == null) {
@@ -685,19 +671,6 @@ public class ReviewServiceImpl implements ReviewService {
         return true;
     }
 
-
-    @Override
-    public List<Long> getReviewByWorkerId(Long workerId) {
-        return reviewRepository.findAllIdByWorkerId(workerId);
-    }
-
-    @Override
-    public List<Review> findAllByListId(List<Long> reviewId) {
-        if (reviewId == null || reviewId.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return reviewRepository.findAll(reviewId);
-    }
 
     public List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId) {
         return reviewRepository.getAllByOrderId(orderId).stream().map(this::toReviewDTOOne).collect(Collectors.toList());
@@ -1056,67 +1029,6 @@ public class ReviewServiceImpl implements ReviewService {
                     category,
                     subCategory
             );
-        }
-    }
-
-    @Override
-    @Transactional
-    public void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId) {
-        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа");
-        if (orderDetailsDTO == null || orderDetailsDTO.getId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Детали заказа не указаны");
-        }
-        orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
-        Review saveReview = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
-        OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveOrderDetails));
-
-        UUID reviewOrderDetailsId = saveReview.getOrderDetails() == null
-                ? null
-                : saveReview.getOrderDetails().getId();
-        if (saveOrderDetails == null
-                || saveOrderDetails.getId() == null
-                || !Objects.equals(saveOrderDetails.getId(), reviewOrderDetailsId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Отзыв не относится к указанным деталям заказа"
-            );
-        }
-
-        boolean isChanged = false;
-        boolean oldPublish = saveReview.isPublish();
-
-        if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
-            saveReview.setText(reviewDTO.getText());
-            isChanged = true;
-        }
-        if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())) {
-            saveReview.setAnswer(reviewDTO.getAnswer());
-            isChanged = true;
-        }
-        if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
-            saveOrderDetails.setComment(orderDetailsDTO.getComment());
-            orderDetailsService.save(saveOrderDetails);
-            isChanged = true;
-        }
-        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
-            saveReview.setPublish(reviewDTO.isPublish());
-            syncExternalConfirmationState(saveReview, oldPublish);
-            isChanged = true;
-        }
-        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
-            requirePublicationDateIntegrity(saveReview, reviewDTO.getPublishedDate());
-            validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
-            saveReview.setPublishedDate(reviewDTO.getPublishedDate());
-            isChanged = true;
-        }
-
-        if (isChanged) {
-            reviewRepository.save(saveReview);
-            if (!oldPublish && saveReview.isPublish()) {
-                gamificationEventService.recordReviewPublished(saveReview);
-            }
         }
     }
 

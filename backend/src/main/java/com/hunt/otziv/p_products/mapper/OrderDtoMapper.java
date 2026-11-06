@@ -156,17 +156,6 @@ public class OrderDtoMapper {
                 .build();
     }
 
-    public List<OrderDTO> toOrderDTOList(List<Order> orders) {
-        if (orders == null || orders.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return orders.stream()
-                .map(this::toOrderDTO)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-    }
-
     public OrderDTO toOrderDTO(Order order) {
         if (order == null) {
             return null;

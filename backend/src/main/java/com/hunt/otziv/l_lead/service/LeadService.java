@@ -27,7 +27,6 @@ public interface LeadService {
     // метод поиска лидав по id
     Optional<Lead> findByIdAndToUpdate(Long id);
     LeadDTO findById(Long id);
-    Optional<Lead> findByIdOptional(Long leadId);
     Optional<User> findByFio(String operator);
     List<Long> getAllLeadsByDate(LocalDate localDate);
     List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status);
@@ -91,8 +90,6 @@ public interface LeadService {
     int countNewLeadsByClient(Long telephoneId, String status);
 
     List<Lead> findModifiedSince(LocalDateTime since);
-
-    void saveOrUpdateByTelephoneLead(Lead incomingLead);
 
     void changeStatusLeadToWork(Long leadId, String commentsLead);
 

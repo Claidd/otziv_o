@@ -514,7 +514,6 @@ class KeycloakUserProvisioningServiceTest {
         verify(keycloakAdminClient).updateUser(eq("kc-staff"), eq("staff-user"), requestCaptor.capture());
         assertFalse(requestCaptor.getValue().isEnabled());
         verify(keycloakAdminClient).logoutUserSessions("kc-staff");
-        verify(keycloakAdminClient, never()).deleteUserStrict(anyString());
         verify(userRepository, never()).delete(any(User.class));
         verify(managerService, never()).deleteManager(user);
         verify(workerService, never()).deleteWorker(user);

@@ -314,32 +314,6 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     )
     Page<Long> findPageToAdminWithFetchWithKeyWord(String keyword, String keyword2, Pageable pageable);
 
-    @Query(
-            value = """
-                SELECT c.id
-                FROM Company c
-                LEFT JOIN c.status s
-                WHERE (COALESCE(s.title, '') NOT IN :hiddenStatuses OR c.updateStatus >= :liveCutoff)
-                  AND (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(c.id) = :keyword)
-            """,
-            countQuery = """
-                SELECT COUNT(c.id)
-                FROM Company c
-                LEFT JOIN c.status s
-                WHERE (COALESCE(s.title, '') NOT IN :hiddenStatuses OR c.updateStatus >= :liveCutoff)
-                  AND (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(c.id) = :keyword)
-            """
-    )
-    Page<Long> findPageToAdminWithFetchWithKeyWordLive(@Param("keyword") String keyword,
-                                                       @Param("keyword2") String keyword2,
-                                                       @Param("hiddenStatuses") Collection<String> hiddenStatuses,
-                                                       @Param("liveCutoff") LocalDate liveCutoff,
-                                                       Pageable pageable);
-
     @Query("SELECT COUNT(c.id) FROM Company c WHERE c.status.title = :status")
     int countByStatusTitle(String status);
 
@@ -419,8 +393,6 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Query("SELECT COUNT(c.id) FROM Company c WHERE c.manager IN :managers AND c.status.title = :status")
     int countByManagersAndStatusTitle(Set<Manager> managers, String status);
 
-
-    Optional<Company> findByIdAndTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(Long id, String keyword, String keyword2);
 
     @Query("""
     SELECT u.fio, COUNT(c.id)
