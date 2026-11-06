@@ -30,6 +30,22 @@ it does not prevent a repository administrator from deleting the release.
 Historical Git commits still contain the original files; this change does not
 rewrite history or shrink existing clones.
 
+## Removed unread evidence (2026-11-05)
+
+Proof directories of superseded generations that no validator, test, CI step or
+deploy script reads were removed from the working tree (1 279 files, about
+164 MB): monitoring c12/c15/c23/c29/c30/c36 generations, nginx and phpMyAdmin
+c12–c41, mc/S3/node/certbot c14–c33, C7/C12/C14 helper proofs, the
+`proofs/c7-published` subdirectories except `mysql/`, and
+`keycloak/security-generation/proofs/c7-complete`. The active parent chains
+(c14→c48 Keycloak, c14→c46 MySQL, PostgreSQL, current monitoring) and every file
+a test reads are unchanged. Nothing needs to be hydrated. To inspect or restore a
+removed set, check it out from the last commit that contained it, for example:
+
+```sh
+git checkout a7aa87467 -- infrastructure/runtime-security/proofs/c41-nginx
+```
+
 The quality workflow builds the actual backend, web, worker, WhatsApp, Docker-observer and monitoring-publisher Dockerfiles, checks their runtime boundaries and preserves vulnerability reports. Local commands require Node 22.12+ and a local Docker context; remote Docker contexts are rejected. Nothing here starts the application Compose stack, restores production data, logs into WhatsApp or sends provider messages.
 
 ```sh
