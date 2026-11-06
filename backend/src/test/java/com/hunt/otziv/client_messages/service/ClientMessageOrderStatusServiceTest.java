@@ -225,6 +225,28 @@ class ClientMessageOrderStatusServiceTest {
     }
 
     @Test
+    void showsReminderHeldBehindManualMessageAsWaitingWithoutManagerControl() {
+        OrderDTOList order = order(17L, null, null);
+        ScheduledClientMessageState state = activeState(17L)
+                .lastErrorCode("manual_contact_reserved")
+                .lastErrorMessage("Ручная отправка текущего цикла уже сохранена или подтверждена; автоматическое сообщение отложено без отправки")
+                .consecutiveFailures(3)
+                .lastAttemptAt(LocalDateTime.now().minusHours(6))
+                .nextAttemptAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of(state));
+
+        service.enrichOrderList(List.of(order));
+
+        ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
+        assertNotNull(status);
+        assertEquals("scheduled", status.state());
+        assertEquals("wait", status.tone());
+        assertEquals("Отправлено вручную, автоответчик ждёт", status.label());
+        assertEquals("manual_contact_reserved", status.errorCode());
+    }
+
+    @Test
     void ignoresClientTextReminderFromPreviousWaitingCycle() {
         LocalDateTime currentCycle = LocalDateTime.of(2026, 7, 24, 20, 37, 52);
         OrderDTOList order = order(25_442L, null, null);
