@@ -32,10 +32,6 @@ public class ManagerProblemDiagnosticsService {
         if (sourceTaskId != null) events.publishEvent(new RefreshRequested(sourceTaskId));
     }
 
-    public void requestRefreshForEntity(String entityType, Long entityId) {
-        if (entityId != null && entityType != null) events.publishEvent(new EntityRefreshRequested(entityType, entityId));
-    }
-
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void afterEntityChanged(EntityRefreshRequested request) {
         try { collector.sourcesForEntity(request.entityType(), request.entityId()).forEach(this::refresh); }

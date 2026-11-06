@@ -7,7 +7,6 @@ import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.common_billing.service.CommonBillingNextOrderFailureMarker;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestedEvent;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestFailedEvent;
-import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestSummary;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;

@@ -389,7 +389,7 @@ class CommonBillingServiceTest {
         ReflectionTestUtils.setField(service, "invoicePresenter", presenter);
         ReflectionTestUtils.setField(service, "invoiceCancellation", cancellation);
         CommonInvoiceInitializationService initialization = new CommonInvoiceInitializationService(
-                messageQueue, invoiceRouteSelector, cancellation, presenter, settlement, entityManager,
+                messageQueue, invoiceRouteSelector, presenter, settlement, entityManager,
                 invoiceRepository, invoiceOrderRepository, paymentRefRepository, paymentLinkRepository,
                 paymentIssueReminderService, contractorPaymentLiveRoutingService, contractorPaymentShadowService,
                 taskReceiptIntegrationService, runtimeSettingsService, paymentProfileService, properties,

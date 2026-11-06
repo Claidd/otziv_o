@@ -32,8 +32,6 @@ import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
-import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
-import com.hunt.otziv.payments.service.BankPaymentInstructionSource;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
@@ -396,22 +394,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         return "bad-review-invoice:" + (taskId == null ? "unknown" : taskId);
     }
 
-    @Override
-    public String buildBadReviewInvoiceMessage(Order order) {
-        Long orderId = order == null ? null : order.getId();
-        BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
-        return badReviewInvoiceMessage(order, summary);
-    }
-
-    private String badReviewInvoiceMessage(Order order, BadReviewTaskSummary summary) {
-        if (usesBankPaymentInstructionSource()) {
-            return paymentLinkServiceProvider.getObject().createForOrder(order.getId()).copyText();
-        }
-        String heading = orderHeading(order);
-        String paymentText = paymentInstruction(order) + "\n\nК оплате: " + money(payableSum(order, summary)) + " руб.";
-        return heading.isBlank() ? paymentText : heading + "\n\n" + paymentText;
-    }
-
     private String badReviewInvoicePreview(Order order, BadReviewTaskSummary summary) {
         return (orderHeading(order) + " " + managerPayText(order) + " К оплате: " + money(payableSum(order, summary)) + " руб.")
                 .replaceAll("\\s+", " ")
@@ -426,14 +408,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
                     order == null ? null : order.getId(), readableException(e));
             return null;
         }
-    }
-
-    private String paymentInstruction(Order order) {
-        if (!usesBankPaymentInstructionSource()) {
-            return managerPayText(order);
-        }
-        ManagerPaymentLinkResponse link = paymentLinkServiceProvider.getObject().createForOrder(order.getId());
-        return link.instructionText();
     }
 
     private void expireStalePaymentLinks(Order order) {
@@ -454,14 +428,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         } catch (RuntimeException e) {
             log.warn("Не удалось протухлить платежные ссылки после изменения плохих задач: orderId={}", orderId, e);
         }
-    }
-
-    private boolean usesBankPaymentInstructionSource() {
-        String source = appSettingService.getString(
-                AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
-                "MANAGER_TEXT"
-        );
-        return BankPaymentInstructionSource.isBankLink(source);
     }
 
     private String managerPayText(Order order) {
@@ -967,13 +933,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
             }
         }
         return new OrderAmounts(amounts, summaries);
-    }
-
-    @Override
-    public int getPayableAmount(Order order) {
-        int baseAmount = order != null ? order.getAmount() : 0;
-        BadReviewTaskSummary summary = order == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(order.getId());
-        return baseAmount + summary.done();
     }
 
     @Override

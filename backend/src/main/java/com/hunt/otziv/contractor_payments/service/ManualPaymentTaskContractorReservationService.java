@@ -37,7 +37,6 @@ public class ManualPaymentTaskContractorReservationService {
     private final ContractorPaymentAccountingPhaseService accountingPhaseService;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentProfileRepository profileRepository;
-    private final ContractorPaymentProfileService profileService;
     private final ContractorPaymentAccountingService accountingService;
     private final ContractorPaymentTargetAccessPolicy targetAccessPolicy;
     private final ManualPaymentTaskRepository taskRepository;

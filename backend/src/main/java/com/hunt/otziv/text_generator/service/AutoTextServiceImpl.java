@@ -1,27 +1,9 @@
 package com.hunt.otziv.text_generator.service;
 
-import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.c_categories.dto.CategoryDTO;
-import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
-import com.hunt.otziv.c_categories.model.Category;
-import com.hunt.otziv.c_categories.model.SubCategory;
-import com.hunt.otziv.c_categories.service.CategoryService;
-import com.hunt.otziv.c_categories.service.SubCategoryService;
-import com.hunt.otziv.c_companies.dto.CompanyDTO;
-import com.hunt.otziv.c_companies.dto.FilialDTO;
-import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.service.FilialService;
-import com.hunt.otziv.p_products.dto.OrderDTO;
-import com.hunt.otziv.p_products.model.OrderDetails;
-import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
-import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.text_generator.config.PromptFactory;
 import com.hunt.otziv.text_generator.dto.PromptDTO;
-import com.hunt.otziv.text_generator.service.config.ReviewGenerationManager;
-import com.hunt.otziv.text_generator.service.parser.WebsiteParserService;
 import com.hunt.otziv.text_generator.service.gpt.ReviewGeneratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,10 +12,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.net.SocketTimeoutException;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 @Service
 @Slf4j
@@ -42,14 +21,7 @@ public class AutoTextServiceImpl implements AutoTextService{
 
     private final ReviewService reviewService;
     private final ReviewGeneratorService reviewGeneratorService;
-    private final BotAssignmentService botAssignmentService;
-    private final CategoryService categoryService;
-    private final SubCategoryService subCategoryService;
-    private final FilialService filialService;
-    private final ReviewGenerationManager reviewGenerationManager;
     private final PromptFactory promptFactory;
-    private final WebsiteParserService websiteParserService;
-    private final ReviewAccountWalkScheduleService accountWalkScheduleService;
 
 
 //==================================== НАСТРОЙКИ ТЕКСТОВ - НАЧАЛО ==================================================
@@ -221,64 +193,6 @@ public class AutoTextServiceImpl implements AutoTextService{
 
 //==================================== НАСТРОЙКИ ТЕКСТОВ - КОНЕЦ ==================================================
 
-    public List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
-        List<Review> reviewList = new ArrayList<>();
-        String site = parfum;
-        String category = orderDetails.getOrder().getCompany().getSubCategory().getSubCategoryTitle();
-        int totalAmount = orderDTO.getAmount();
-
-        long start = System.nanoTime();
-        int timeoutMillis = 15_000;
-
-        List<CompletableFuture<String>> futureReviews = new ArrayList<>();
-        for (int i = 0; i < totalAmount; i++) {
-            PromptDTO promptDTO = promptFactory.generatePrompt(site, category);
-            futureReviews.add(reviewGenerationManager.generateReviewAsync(promptDTO));
-        }
-
-        List<String> texts = new ArrayList<>();
-        for (CompletableFuture<String> future : futureReviews) {
-            try {
-                String text = future.get(timeoutMillis, TimeUnit.MILLISECONDS);
-                if (text != null && !text.startsWith("⚠️") && !texts.contains(text)) {
-                    texts.add(text);
-                }
-                Thread.sleep(300);
-            } catch (TimeoutException e) {
-                log.warn("⏱ Отзыв не успел сгенерироваться за {} мс", timeoutMillis);
-            } catch (Exception e) {
-                log.error("❌ Ошибка получения результата генерации: {}", e.getMessage());
-            }
-        }
-
-        long durationSec = (System.nanoTime() - start) / 1_000_000_000;
-        log.info("🎯 Сгенерировано {} отзывов за {} сек", texts.size(), durationSec);
-
-        for (String text : texts) {
-            Review review = toEntityReviewFromDTO(
-                    orderDTO.getCompany(),
-                    orderDetails,
-                    orderDTO.getFilial(),
-                    text
-            );
-            Bot selectedBot = botAssignmentService.assignBotForReviewChange(
-                    review,
-                    Set.of(),
-                    ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
-            );
-            review.setBot(selectedBot);
-            botAssignmentService.updateReviewVigulBasedOnBotCounter(review, selectedBot);
-            accountWalkScheduleService.synchronizeAfterAccountChange(review);
-            Review saved = reviewService.save(review);
-            if (saved != null) {
-                reviewList.add(saved);
-            } else {
-                log.warn("⚠️ Отзыв не сохранён (возможно, дубликат): {}", text.length() > 80 ? text.substring(0, 80) + "..." : text);
-            }
-        }
-        return reviewList;
-    }
-
 
 
 
@@ -357,40 +271,8 @@ public class AutoTextServiceImpl implements AutoTextService{
 
 
 
-    private Review toEntityReviewFromDTO(
-            CompanyDTO companyDTO,
-            OrderDetails orderDetails,
-            FilialDTO filialDTO,
-            String textReview // <-- передаём уже готовый текст
-    ) {
-        return Review.builder()
-                .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
-                .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
-                .text(textReview != null ? textReview : "Текст отзыва")
-                .answer("")
-                .orderDetails(orderDetails)
-                .bot(null)
-                .filial(convertFilialDTOToFilial(filialDTO))
-                .publish(false)
-                .worker(orderDetails.getOrder().getWorker())
-                .product(orderDetails.getProduct())
-                .price(orderDetails.getProduct().getPrice())
-                .build();
-    }// Конвертер из DTO для отзыва
 
 
-
-
-    private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){ // Конвертер из DTO для категории
-        return categoryService.getCategoryByIdCategory(categoryDTO.getId());
-    } // Конвертер из DTO для категории
-    private SubCategory convertSubCompanyDTOToSubCompany(SubCategoryDTO subCategoryDTO){// Конвертер из DTO для субкатегории
-        return subCategoryService.getSubCategoryById(subCategoryDTO.getId());
-    } // Конвертер из DTO для субкатегории
-
-    private Filial convertFilialDTOToFilial(FilialDTO filialDTO){// Конвертер из DTO для филиала
-        return filialService.getFilial(filialDTO.getId());
-    } // Конвертер из DTO для филиала
 
 
     private String klishe = "Клишированные фразы, на которые обращает внимание 2гис:"
@@ -489,60 +371,6 @@ public class AutoTextServiceImpl implements AutoTextService{
             "   \n" +
             "18. Срок выполнения: Сроки выполнения заказа согласовываются индивидуально в зависимости от услуги.\n";
 
-
-    String parfum = "1. Название и адрес филиалов:\n" +
-            "   - Название: Parfumerkld\n" +
-            "   - Адреса: \n" +
-            "     - ТЦ Сельма, ул. Генерала Челнокова, 11\n" +
-            "     - Парковый проспект мира, 84\n" +
-            "     - Переулок Виктория, д.1\n" +
-            "     - Ул. Любови Шевцовой, 22\n" +
-            "     - Гранд Советский прт, 159\n" +
-            "\n" +
-            "2. Основная сфера деятельности:\n" +
-            "   - Продажа разливной парфюмерии и подарочных сертификатов.\n" +
-            "\n" +
-            "3. Как давно вы работаете:\n" +
-            "   - Нет информации.\n" +
-            "\n" +
-            "4. Что именно вы предлагаете:\n" +
-            "   - Широкий выбор ароматов различных категорий и флаконов разного объема.\n" +
-            "\n" +
-            "5. Как выглядит вход:\n" +
-            "   - Нет информации.\n" +
-            "\n" +
-            "6. Интерьер:\n" +
-            "   - Нет информации.\n" +
-            "\n" +
-            "7. Парковка и удобства:\n" +
-            "   - Стоимость доставки по Калининграду - 300₽, бесплатно при заказе от 3000₽. По России - 400₽, при заказе от 4000₽ бесплатно.\n" +
-            "\n" +
-            "8. Укажи название каждого товара/услуги и их Цену:\n" +
-            "   - Наименование и цены отсутствуют в данном тексте.\n" +
-            "\n" +
-            "9. Хиты продаж:\n" +
-            "   - Нет конкретной информации о хитах продаж.\n" +
-            "\n" +
-            "10. Уникальные предложения:\n" +
-            "    - Программа бонусов: при покупке 5 ароматов 6-й аромат в подарок.\n" +
-            "    - Бесплатная доставка при заказе от определенной суммы.\n" +
-            "\n" +
-            "11. Имена и должности ключевых сотрудников:\n" +
-            "    - Нет информации.\n" +
-            "\n" +
-            "12. Опыт, специализация:\n" +
-            "    - Продажа разливной парфюмерии и элитных ароматов.\n" +
-            "\n" +
-            "16. Как происходит заказ:\n" +
-            "    - Выбор аромата, его объема, добавление в корзину, оформление заказа с указанием контактных данных.\n" +
-            "\n" +
-            "18. Срок выполнения:\n" +
-            "    - Нет информации о сроках выполнения заказа.\n" +
-            "\n" +
-            "19. Прочая информация:\n" +
-            "    - Продается масляная духи, а также концентраты со стойким качеством.\n" +
-            "    - Еженедельные скидки в выходные.\n" +
-            "    - Отзывы покупателей доступны на сайте.";
 
 
 

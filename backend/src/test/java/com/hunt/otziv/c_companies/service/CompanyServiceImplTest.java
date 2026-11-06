@@ -271,7 +271,6 @@ class CompanyServiceImplTest {
                 companyRepository,
                 companyInfoRepository,
                 new CompanyRecordService(companyRepository, companyInfoRepository),
-                new CompanyStatisticsService(companyRepository),
                 leadService,
                 userService,
                 managerService,

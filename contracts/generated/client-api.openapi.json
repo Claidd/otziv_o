@@ -27475,7 +27475,7 @@
     "sha256" : "9682efb1d84b8f6c568132a324a38170e003498b5e3fb59aa632ac82b9a9f6f6"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager/controller/ApiManagerOrderController.java",
-    "sha256" : "6cd16bf98b8adcfc4ef48bbc992176adc12bfc1f60ba2b60415af1e4322efb02"
+    "sha256" : "2a8069ae6ef096964141bc7506ea5d2a1b113d966df956da3ac1eec81baf9c48"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager/controller/ApiManagerReviewController.java",
     "sha256" : "301be8ceee0aebaa0ede3ee8b8ae566db35afa395bf4411f3a237112a02fa505"
@@ -27595,7 +27595,7 @@
     "sha256" : "28f7dfb73d90d3fca83eb5b5d988fe7d0833afb39a152e1f232377a4f73117ba"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/diagnostics/ManagerProblemDiagnosticsService.java",
-    "sha256" : "fbd9eff5132c35d3d9ee3510bc14fbfc31dfc85416e278f4458eec44a4b4358d"
+    "sha256" : "db8fe14dfbc843bc1acff0be534e1918b55f2398bc6c9b2b2ba264577d52b285"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerClientReplyResolutionRequest.java",
     "sha256" : "9ecbb6e10bd95f6c0b3981c68549a56fa5350f5d8c9a4cbe501e3be401e0926d"
@@ -27763,7 +27763,7 @@
     "sha256" : "5617a31ab398c17b2d0ef43bcd490532c3a3ee692b3d3cfdc8740e419f4d990c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentRecipientMonthlySummaryItem.java",
-    "sha256" : "5ec151f6572fac453ceb7ffccdc077286392a0f2f967b2e0b254b62cd93cfedc"
+    "sha256" : "9a4ef052b1c013fc22ac358ca79cd86ff3a64beda5342f886906f68bb03f19cc"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentRecipientMonthlySummaryResponse.java",
     "sha256" : "43194567bbed23907e29bbaeb7823561fb1806d5052684622342871374e59b9d"

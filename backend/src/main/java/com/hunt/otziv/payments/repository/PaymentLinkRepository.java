@@ -2,7 +2,6 @@ package com.hunt.otziv.payments.repository;
 
 import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
 import com.hunt.otziv.payments.dto.PaymentLinkAdminSummary;
-import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
 import com.hunt.otziv.payments.model.PaymentLink;
@@ -44,8 +43,6 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
 
     @Query("SELECT link.order.id FROM PaymentLink link WHERE link.id = :id")
     Optional<Long> findOrderIdById(@Param("id") Long id);
-
-    List<PaymentLink> findTop100ByOrderByCreatedAtDesc();
 
     boolean existsByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
 
@@ -334,12 +331,6 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
 
     List<PaymentLink> findByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
 
-    Optional<PaymentLink> findFirstByOrder_IdAndStatusAndLastErrorOrderByPaidAtDesc(
-            Long orderId,
-            PaymentLinkStatus status,
-            String lastError
-    );
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<PaymentLink> findFirstByOrder_IdAndStatusAndLastErrorStartingWithOrderByPaidAtDesc(
             Long orderId,
@@ -551,64 +542,6 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             @Param("activeAt") LocalDateTime activeAt,
             @Param("confirmedStatus") PaymentLinkStatus confirmedStatus,
             @Param("excludedLinkId") Long excludedLinkId
-    );
-
-    @Query("""
-        SELECT COUNT(link)
-        FROM PaymentLink link
-        WHERE link.manualPaymentTask.id = :taskId
-          AND link.paymentMethod IN :paymentMethods
-          AND link.status IN :statuses
-          AND link.expiresAt > :activeAt
-    """)
-    long countActiveManualPendingForTask(
-            @Param("taskId") Long taskId,
-            @Param("paymentMethods") Collection<PaymentMethod> paymentMethods,
-            @Param("statuses") Collection<PaymentLinkStatus> statuses,
-            @Param("activeAt") LocalDateTime activeAt
-    );
-
-    @Query("""
-        SELECT new com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem(
-            COALESCE(link.manualRecipientName, ''),
-            COALESCE(link.manualPhone, ''),
-            COALESCE(link.manualPaymentUrl, ''),
-            COALESCE(link.manualPaymentButtonLabel, ''),
-            COALESCE(link.paymentProfileName, ''),
-            link.manualSource,
-            link.manualPaymentType,
-            COUNT(link),
-            COALESCE(SUM(CASE
-                WHEN link.confirmedAmountKopecks IS NOT NULL THEN link.confirmedAmountKopecks
-                WHEN link.reservedAmountKopecks IS NOT NULL THEN link.reservedAmountKopecks
-                ELSE link.amountKopecks
-            END), 0),
-            MIN(COALESCE(link.manualConfirmedAt, link.paidAt)),
-            MAX(COALESCE(link.manualConfirmedAt, link.paidAt))
-        )
-        FROM PaymentLink link
-        WHERE link.status = :confirmedStatus
-          AND link.paymentMethod IN :paymentMethods
-          AND COALESCE(link.manualConfirmedAt, link.paidAt) >= :from
-          AND COALESCE(link.manualConfirmedAt, link.paidAt) < :to
-        GROUP BY link.manualRecipientName,
-                 link.manualPhone,
-                 link.manualPaymentUrl,
-                 link.manualPaymentButtonLabel,
-                 link.paymentProfileName,
-                 link.manualSource,
-                 link.manualPaymentType
-        ORDER BY COALESCE(SUM(CASE
-                WHEN link.confirmedAmountKopecks IS NOT NULL THEN link.confirmedAmountKopecks
-                WHEN link.reservedAmountKopecks IS NOT NULL THEN link.reservedAmountKopecks
-                ELSE link.amountKopecks
-            END), 0) DESC
-    """)
-    List<ManualPaymentRecipientMonthlySummaryItem> summarizeManualConfirmedByRecipientForPeriod(
-            @Param("paymentMethods") Collection<PaymentMethod> paymentMethods,
-            @Param("confirmedStatus") PaymentLinkStatus confirmedStatus,
-            @Param("from") LocalDateTime from,
-            @Param("to") LocalDateTime to
     );
 
     @Query(value = """

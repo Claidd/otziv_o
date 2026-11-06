@@ -708,9 +708,6 @@ public class PersonalServiceImpl implements PersonalService {
         return teamDirectory.allActive(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.OPERATOR).stream().map(this::toOperatorsListDTO).toList();
     }
 
-    public List<ManagersListDTO> getManagersToManager(Principal principal){
-        return managerService.getAllManagers().stream().filter(p -> Objects.equals(p.getUser().getUsername(), principal.getName())).map(this::toManagersListDTO).collect(Collectors.toList());
-    }
     public List<MarketologsListDTO> getMarketologsToManager(Manager manager){
         return marketologService.getAllMarketologs().stream().map(this::toMarketologsListDTO).collect(Collectors.toList());
     }
@@ -752,42 +749,17 @@ public class PersonalServiceImpl implements PersonalService {
         return operatorService.getAllOperatorsToManagerList(managerList);
     }
 
-    public List<ManagersListDTO> getManagersToOwner(List<Manager> managers){
-        return managers.stream().map(this::toManagersListDTO).toList();
-//        return managerService.getAllManagersToOwner(managers).stream().map(this::toManagersListDTO).collect(Collectors.toList());
-//        return managerService.getAllManagers().stream().filter(p -> Objects.equals(p.getUser().getUsername(), principal.getName())).map(this::toManagersListDTO).collect(Collectors.toList());
-    }
-    public List<MarketologsListDTO> getMarketologsToOwner(List<Marketolog> allMarketologs){
-        return allMarketologs.stream().map(this::toMarketologsListDTO).toList();
-    }
 
     @Override
     public List<OperatorsListDTO> gerOperatorsToOwner(List<Operator> allOperators) {
         return allOperators.stream().map(this::toOperatorsListDTO).toList();
     }
 
-    public List<WorkersListDTO> getWorkersToOwner(List<Worker> allWorkers){
-        return allWorkers.stream().map(this::toWorkersListDTO).toList();
-    }
     public List<OperatorsListDTO> gerOperatorsToOwner(Manager manager){
         return operatorService.getAllOperatorsToManager(manager).stream().map(this::toOperatorsListDTO).collect(Collectors.toList());
     }
 
 
-    @Transactional
-    public List<ManagersListDTO> getManagersAndCount(){
-        return managerService.getAllManagers().stream().map(this::toManagersListDTOAndCount).collect(Collectors.toList());
-    }
-    public List<MarketologsListDTO> getMarketologsAndCount(){
-        return marketologService.getAllMarketologs().stream().map(this::toMarketologsListDTOAndCount).collect(Collectors.toList());
-    }
-    @Transactional
-    public List<WorkersListDTO> gerWorkersToAndCount(){
-        return workerService.getAllWorkers().stream().map(this::toWorkersListDTOAndCount).collect(Collectors.toList());
-    }
-    public List<OperatorsListDTO> gerOperatorsAndCount(){
-        return operatorService.getAllOperators().stream().map(this::toOperatorsListDTOAndCount).collect(Collectors.toList());
-    }
 
 
     public Map<String, UserData> getPersonalsAndCountToMap() {

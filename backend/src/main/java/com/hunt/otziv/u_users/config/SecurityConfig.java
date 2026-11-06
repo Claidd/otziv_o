@@ -191,7 +191,6 @@ public class SecurityConfig {
 
     private void configureApiAuthorization(AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
         auth.requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll();
-        auth.requestMatchers("/logs", "/logs/**", "/ws/logs").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/auth", "/api/auth/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/mobile-update", "/api/mobile-update/**").permitAll();
         auth.requestMatchers("/api/me").authenticated();
@@ -284,7 +283,6 @@ public class SecurityConfig {
         auth.requestMatchers("/api/worker/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/performer/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "PERFORMER");
         auth.requestMatchers("/api/bots/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
-        auth.requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/payments/public/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/public/client-offer-files/*").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/payments/tbank/webhook").permitAll();

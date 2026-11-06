@@ -15,13 +15,9 @@ import java.util.Set;
 
 public interface PersonalService {
     List<WorkersListDTO> gerWorkers();
-    List<WorkersListDTO> gerWorkersToAndCount();
     List<MarketologsListDTO> getMarketologs();
-    List<MarketologsListDTO> getMarketologsAndCount();
     List<ManagersListDTO> getManagers();
-    List<ManagersListDTO> getManagersAndCount();
     List<OperatorsListDTO> gerOperators();
-    List<OperatorsListDTO> gerOperatorsAndCount();
     //    StatDTO getStats();
     UserStatDTO getWorkerReviews(User user, LocalDate localDate);
     List<MarketologsListDTO> getMarketologsToManager(Manager manager);
@@ -43,9 +39,6 @@ public interface PersonalService {
     List<WorkersListDTO> gerWorkersToAndCountToDate(LocalDate localdate);
     List<OperatorsListDTO> gerOperatorsAndCountToDate(LocalDate localdate);
 
-    List<ManagersListDTO> getManagersToOwner(List<Manager> managerList);
-    List<WorkersListDTO>  getWorkersToOwner(List<Worker> allWorkers);
-    List<MarketologsListDTO> getMarketologsToOwner(List<Marketolog> allMarketologs);
     List<OperatorsListDTO> gerOperatorsToOwner(List<Operator> allOperators);
 
 

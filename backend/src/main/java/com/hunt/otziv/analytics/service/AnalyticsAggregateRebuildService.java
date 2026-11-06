@@ -54,18 +54,6 @@ public class AnalyticsAggregateRebuildService {
         );
     }
 
-    @Transactional
-    public int rebuildDailyUsers(LocalDate fromInclusive, LocalDate toInclusive) {
-        requirePeriod(fromInclusive, toInclusive);
-        int deletedRows = deleteDailyRows(fromInclusive, toInclusive);
-        upsertDailySalary(fromInclusive, toInclusive);
-        upsertDailyPayments(fromInclusive, toInclusive);
-        upsertDailyNewCompanies(fromInclusive, toInclusive);
-        upsertDailyLeads(fromInclusive, toInclusive);
-        upsertDailyPublishedReviews(fromInclusive, toInclusive);
-        return deletedRows;
-    }
-
     private int deleteDailyRows(LocalDate fromInclusive, LocalDate toInclusive) {
         return jdbc.update("""
                 DELETE FROM analytics_daily_user
@@ -1208,15 +1196,6 @@ public class AnalyticsAggregateRebuildService {
                 .addValue("ownerScopeType", AnalyticsAggregateReadService.SCOPE_TYPE_OWNER)
                 .addValue("ownerScopeRole", "ROLE_OWNER")
                 .addValue("now", Instant.now());
-    }
-
-    private static void requirePeriod(LocalDate fromInclusive, LocalDate toInclusive) {
-        if (fromInclusive == null || toInclusive == null) {
-            throw new IllegalArgumentException("period dates must not be null");
-        }
-        if (fromInclusive.isAfter(toInclusive)) {
-            throw new IllegalArgumentException("fromInclusive must be before or equal to toInclusive");
-        }
     }
 
     public record AnalyticsAggregateRebuildResult(

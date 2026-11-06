@@ -13,7 +13,6 @@ public class PaperBillingWorker {
     private final PaperBillingSettings settings;
     private final PaperBillingBankClient bank;
     private final PaperBillingDelivery delivery;
-    private final com.hunt.otziv.common_billing.api.BankPaperInvoices commonDelivery;
     private final PaperBillingPdfSignature signature;
     @Scheduled(fixedDelay=15000,initialDelay=20000)
     public void tick() {

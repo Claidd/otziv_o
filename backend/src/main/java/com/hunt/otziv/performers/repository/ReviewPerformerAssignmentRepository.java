@@ -2,7 +2,6 @@ package com.hunt.otziv.performers.repository;
 
 import com.hunt.otziv.performers.model.PerformerAssignmentStatus;
 import com.hunt.otziv.performers.model.ReviewPerformerAssignment;
-import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -76,36 +75,6 @@ public interface ReviewPerformerAssignmentRepository extends CrudRepository<Revi
         ORDER BY a.updatedAt DESC, a.id DESC
     """)
     List<ReviewPerformerAssignment> findAllForAdmin(@Param("statuses") Collection<PerformerAssignmentStatus> statuses);
-
-    @Query("""
-        SELECT DISTINCT a
-        FROM ReviewPerformerAssignment a
-        JOIN FETCH a.order o
-        LEFT JOIN FETCH o.company
-        LEFT JOIN FETCH o.status
-        JOIN FETCH a.review r
-        LEFT JOIN FETCH a.filial f
-        LEFT JOIN FETCH f.city
-        LEFT JOIN FETCH a.city
-        WHERE a.status IN :statuses
-        ORDER BY a.createdAt ASC, a.id ASC
-    """)
-    List<ReviewPerformerAssignment> findQueue(
-            @Param("statuses") Collection<PerformerAssignmentStatus> statuses,
-            Pageable pageable
-    );
-
-    @Query("""
-        SELECT a
-        FROM ReviewPerformerAssignment a
-        JOIN FETCH a.performer p
-        JOIN FETCH p.user
-        WHERE a.status = com.hunt.otziv.performers.model.PerformerAssignmentStatus.WAITING_PUBLICATION
-          AND a.publishAvailableAt IS NOT NULL
-          AND a.publishAvailableAt <= :now
-        ORDER BY a.publishAvailableAt ASC, a.id ASC
-    """)
-    List<ReviewPerformerAssignment> findReadyToPublish(@Param("now") LocalDateTime now, Pageable pageable);
 
     @Query("""
         SELECT COUNT(a.id)

@@ -7,7 +7,6 @@ import java.util.List;
 public interface BankPaperInvoiceParts {
     record Position(long orderId,long companyId,String companyTitle,long amountKopecks,boolean ready,boolean paid,String documentId) {}
     List<Position> positions(long invoiceId);
-    List<Long> historyCompanyIds(long invoiceId);
     List<Long> partIds(long invoiceId);
     List<Long> historyInvoiceIds(long invoiceId);
     java.time.LocalDateTime nextReminder(long partId);

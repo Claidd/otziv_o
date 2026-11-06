@@ -17,10 +17,6 @@ public interface OrderDetailsService {
     OrderDetails getOrderDetailForReviewCheckById(UUID orderDetailId);
     List<OrderDetails> getOrderDetailsForReviewCheckByOrderId(Long orderId);
 
-    void deleteOrderDetailsById(UUID orderDetailId);
-
-    void deleteOrderDetails(OrderDetails orderDetails);
-
     void saveOrder(Order order);
 
     List<OrderDetails> findByOrderId(Long orderId);

@@ -72,16 +72,6 @@ public class BankPaperInvoicePartsService implements BankPaperInvoiceParts {
     private Position position(Map<String,Object> r) {return new Position(((Number)r.get("order_id")).longValue(),((Number)r.get("company_id")).longValue(),
             (String)r.get("company_title"),((Number)r.get("amount_kopecks")).longValue(),flag(r.get("ready")),flag(r.get("paid")),(String)r.get("document_id"));}
     private boolean flag(Object v) {return Boolean.TRUE.equals(v) || "1".equals(Objects.toString(v));}
-    @Transactional(readOnly=true)
-    public List<Long> historyCompanyIds(long invoice) {
-        positions(invoice); // Retain account visibility for historical suggestions.
-        return jdbc.queryForList("""
-            SELECT DISTINCT r.order_company FROM common_invoices current_invoice
-            JOIN common_invoices old_invoice ON old_invoice.account_id=current_invoice.account_id
-            JOIN common_invoice_orders o ON o.invoice_id=old_invoice.invoice_id JOIN orders r ON r.order_id=o.order_id
-            WHERE current_invoice.invoice_id=? ORDER BY r.order_company LIMIT 200
-            """,Long.class,invoice);
-    }
     @Transactional
     public void configure(long invoice,Principal actor) {
         var value=invoices.findById(invoice).orElseThrow();

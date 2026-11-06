@@ -45,13 +45,4 @@ public interface GamificationEventRepository extends JpaRepository<GamificationE
             ORDER BY COUNT(e) DESC
             """)
     List<Object[]> topActors(LocalDateTime fromInclusive, LocalDateTime toExclusive, Pageable pageable);
-
-    @Query("""
-            SELECT e.actorUserId, e.actorName, e.actorRole, e.eventType, COUNT(e)
-            FROM GamificationEvent e
-            WHERE e.createdAt >= :fromInclusive
-              AND e.createdAt < :toExclusive
-            GROUP BY e.actorUserId, e.actorName, e.actorRole, e.eventType
-            """)
-    List<Object[]> scorePreviewRows(LocalDateTime fromInclusive, LocalDateTime toExclusive);
 }

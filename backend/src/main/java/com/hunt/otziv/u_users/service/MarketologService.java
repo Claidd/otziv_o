@@ -31,7 +31,6 @@ public interface MarketologService {
 
     // Удалить определенного опретора по юзеру, если такой есть в таблице
     void deleteMarketolog(User user);
-    List<Marketolog> getAllMarketologsToManager(Manager manager);
 
 
     List<Marketolog> getAllMarketologsToOwner(List<Manager> managers);

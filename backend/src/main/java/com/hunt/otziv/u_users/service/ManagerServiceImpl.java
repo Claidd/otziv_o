@@ -78,11 +78,6 @@ public class ManagerServiceImpl implements ManagerService {
     }
 
     @Override
-    public List<Manager> getAllManagersToOwner(List<Manager> managers) {
-        return managerRepository.findAllManagersToOwner(managers);
-    }
-
-    @Override
     public List<Manager> findAllManagersWorkers(List<Manager> managers) {
         return managerRepository.findAllManagersWorkers(managers);
     }

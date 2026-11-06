@@ -45,6 +45,4 @@ public interface PromoTextAssignmentRepository extends CrudRepository<PromoTextA
             @Param("sectionCode") String sectionCode,
             @Param("buttonKey") String buttonKey
     );
-
-    boolean existsByPromoText_Id(Long promoTextId);
 }

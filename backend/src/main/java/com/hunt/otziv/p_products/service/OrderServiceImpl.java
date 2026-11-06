@@ -123,11 +123,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public List<OrderDTO> getAllOrderDTO() {
-        return orderDtoMapper.toOrderDTOList(orderRepository.findAll());
-    }
-
-    @Override
     public Page<OrderDTOList> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize) {
         return orderBoardQueryService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize);
     }

@@ -160,7 +160,6 @@ payments -> orders
 payments -> payroll
 payments -> platform
 payments -> review-quality
-payroll -> administration
 payroll -> companies
 payroll -> contractor-ledger
 payroll -> identity

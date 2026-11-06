@@ -1,7 +1,6 @@
 package com.hunt.otziv.r_review.controller;
 
 import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.service.CompanyService;
@@ -71,9 +70,6 @@ class ApiReviewCheckControllerTest {
 
     @Mock
     private ReviewCheckArchiveService reviewCheckArchiveService;
-
-    @Mock
-    private BusinessAuditService businessAuditService;
 
     @Mock
     private OrderPublicationApprovalService publicationApprovalService;
@@ -1032,7 +1028,6 @@ class ApiReviewCheckControllerTest {
                 reviewService,
                 companyService,
                 reviewCheckArchiveService,
-                businessAuditService,
                 publicationApprovalService,
                 mutationLockService,
                 managerAccessService,

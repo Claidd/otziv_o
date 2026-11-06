@@ -65,7 +65,6 @@ class ManagerReportReviewReminderJobTest {
         ManagerReportReviewReminderJob job = new ManagerReportReviewReminderJob(
                 repository,
                 eventRepository,
-                telegramService,
                 notificationMediaDeliveryService,
                 settings,
                 accessPolicy,
@@ -113,7 +112,6 @@ class ManagerReportReviewReminderJobTest {
         ManagerReportReviewReminderJob job = new ManagerReportReviewReminderJob(
                 repository,
                 eventRepository,
-                telegramService,
                 notificationMediaDeliveryService,
                 settings,
                 accessPolicy,
@@ -256,7 +254,7 @@ class ManagerReportReviewReminderJobTest {
         }
 
         ManagerReportReviewReminderJob job() {
-            return new ManagerReportReviewReminderJob(repository, events, mock(TelegramService.class), media,
+            return new ManagerReportReviewReminderJob(repository, events, media,
                     settings, mock(ManagerReportReviewAccessPolicy.class), quality, availability,
                     mock(ManagerReportReviewRolloutPolicy.class), transactions());
         }

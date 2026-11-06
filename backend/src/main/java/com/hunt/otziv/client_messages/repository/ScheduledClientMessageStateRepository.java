@@ -30,30 +30,6 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     """)
     List<Long> findSilenceArchiveCandidates(@Param("afterId") long afterId, Pageable pageable);
 
-    interface ReviewApprovalCandidate {
-        Long getStateId();
-        Long getInvoiceId();
-    }
-
-    @Query("""
-        SELECT s.id AS stateId, invoice.id AS invoiceId
-        FROM ScheduledClientMessageState s, CommonInvoiceOrder item
-        JOIN item.invoice invoice
-        JOIN item.order o
-        JOIN o.status orderStatus
-        WHERE s.orderId = o.id
-          AND s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER
-          AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
-          AND s.sentCount >= 7
-          AND s.id > :afterId
-          AND item.activeMembership = TRUE
-          AND invoice.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.COLLECTING
-          AND invoice.sentAt IS NULL
-          AND orderStatus.title = 'На проверке'
-        ORDER BY s.id
-    """)
-    List<ReviewApprovalCandidate> findReviewApprovalCandidates(@Param("afterId") long afterId, Pageable pageable);
-
     @Query("""
         SELECT s.id FROM ScheduledClientMessageState s
         WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION
@@ -550,33 +526,6 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
                                                       Pageable pageable);
 
     @Query("""
-        SELECT s
-        FROM ScheduledClientMessageState s
-        WHERE s.status = :status
-          AND s.nextAttemptAt IS NOT NULL
-          AND s.nextAttemptAt <= :now
-          AND (s.lockedUntil IS NULL OR s.lockedUntil < :now)
-        ORDER BY
-          CASE s.scenario
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_INVOICE_RETRY THEN 0
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.BAD_REVIEW_INVOICE THEN 1
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_REMINDER THEN 2
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION THEN 3
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_RECOVERY_NOTICE THEN 4
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.CLIENT_TEXT_REMINDER THEN 5
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY THEN 6
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER THEN 7
-            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.ARCHIVE_REORDER_OFFER THEN 20
-            ELSE 10
-          END ASC,
-          s.nextAttemptAt ASC,
-          s.id ASC
-    """)
-    List<ScheduledClientMessageState> findDue(@Param("status") ScheduledMessageStateStatus status,
-                                              @Param("now") LocalDateTime now,
-                                              Pageable pageable);
-
-    @Query("""
         SELECT s.id
         FROM ScheduledClientMessageState s
         WHERE s.status = :status
@@ -614,19 +563,6 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     """)
     List<ScheduledClientMessageState> findMonitorQueue(@Param("status") ScheduledMessageStateStatus status,
                                                        Pageable pageable);
-
-    @Query("""
-        SELECT s
-        FROM ScheduledClientMessageState s
-        WHERE s.scenario = :scenario
-          AND s.status = :status
-          AND s.targetKey IN :targetKeys
-    """)
-    List<ScheduledClientMessageState> findActiveByScenarioAndTargetKeys(
-            @Param("scenario") ClientMessageScenario scenario,
-            @Param("status") ScheduledMessageStateStatus status,
-            @Param("targetKeys") Collection<String> targetKeys
-    );
 
     @Modifying
     @Query(value = """

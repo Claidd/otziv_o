@@ -30,21 +30,6 @@ public interface WorkerActivityEventRepository extends JpaRepository<WorkerActiv
             LocalDateTime since
     );
 
-    boolean existsByWorkerUserIdAndActionInAndReviewIdAndCreatedAtGreaterThanEqual(
-            Long workerUserId,
-            Collection<WorkerActivityAction> actions,
-            Long reviewId,
-            LocalDateTime since
-    );
-
-    boolean existsByWorkerUserIdAndActionAndReviewIdAndCreatedAtGreaterThanEqualAndDetailsContaining(
-            Long workerUserId,
-            WorkerActivityAction action,
-            Long reviewId,
-            LocalDateTime since,
-            String botToken
-    );
-
     boolean existsByWorkerUserIdAndActionAndReviewIdAndCreatedAtBetweenAndDetailsContaining(
             Long workerUserId,
             WorkerActivityAction action,

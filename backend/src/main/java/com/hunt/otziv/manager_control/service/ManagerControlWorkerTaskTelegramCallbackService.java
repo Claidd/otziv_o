@@ -65,13 +65,6 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
     private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final ManagerControlTransactionRunner transactions;
 
-    public static InlineKeyboardButton acceptButton(Long concreteItemId) {
-        InlineKeyboardButton button = new InlineKeyboardButton();
-        button.setText("Принял");
-        button.setCallbackData(CALLBACK_PREFIX + concreteItemId);
-        return button;
-    }
-
     public static InlineKeyboardButton explanationButton(Long concreteItemId) {
         InlineKeyboardButton button = new InlineKeyboardButton();
         button.setText("Пояснить");

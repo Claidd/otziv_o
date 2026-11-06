@@ -1156,10 +1156,6 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         return sendForceReplyMessageId(chatId, text, false);
     }
 
-    public Optional<Integer> sendProtectedForceReplyMessageId(long chatId, String text) {
-        return sendForceReplyMessageId(chatId, text, true);
-    }
-
     private Optional<Integer> sendForceReplyMessageId(long chatId, String text, boolean protectContent) {
         if (!sendingEnabled) {
             log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);

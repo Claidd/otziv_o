@@ -22,8 +22,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, Long> {
 
-    Optional<CommonInvoice> findByCycleIdempotencyKey(String cycleIdempotencyKey);
-
     boolean existsBySupersedesInvoice_Id(Long invoiceId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -726,20 +724,6 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
           AND invoice.paidKopecks >= invoice.amountKopecks
     """)
     long sumConfirmedPaymentRouteForTask(@Param("taskId") Long taskId);
-
-    @Query("""
-        SELECT COUNT(invoice)
-        FROM CommonInvoice invoice
-        WHERE invoice.paymentRouteManualTaskId = :taskId
-          AND invoice.paymentRouteSelectedAt IS NOT NULL
-          AND invoice.paymentRouteAmountKopecks > 0
-          AND invoice.status IN :activeStatuses
-          AND invoice.paidKopecks < invoice.amountKopecks
-    """)
-    long countActivePaymentRoutesForTask(
-            @Param("taskId") Long taskId,
-            @Param("activeStatuses") Collection<CommonInvoiceStatus> activeStatuses
-    );
 
     @Query("""
         SELECT COALESCE(SUM(invoice.paymentRouteAmountKopecks), 0)

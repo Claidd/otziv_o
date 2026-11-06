@@ -95,21 +95,11 @@ public class WorkerServiceImpl implements WorkerService {
                 .collect(Collectors.toSet());
     }
 
-    @Override
-    public Worker getWorkerByUsername(String login) {
-        return workerRepository.findByUsername(login);
-    }
-
     private WorkerDTO toDTO(Worker worker) {
         WorkerDTO workerDTO = new WorkerDTO();
         workerDTO.setWorkerId(worker.getId());
         workerDTO.setUser(worker.getUser());
         return workerDTO;
-    }
-
-    @Override
-    public Worker getWorkerByUserIdToDelete(Long userId) {
-        return workerRepository.findById(userId).orElse(null);
     }
 
     @Override

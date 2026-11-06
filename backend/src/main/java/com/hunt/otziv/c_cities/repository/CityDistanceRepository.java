@@ -12,8 +12,6 @@ public interface CityDistanceRepository extends CrudRepository<CityDistance, Lon
 
     long countByFromCityId(Long fromCityId);
 
-    long countByFromCityIdGreaterThanEqualAndToCityIdGreaterThanEqual(Long fromCityId, Long toCityId);
-
     void deleteByFromCityIdGreaterThanEqualAndToCityIdGreaterThanEqual(Long fromCityId, Long toCityId);
 
     void deleteByFromCityIdOrToCityId(Long fromCityId, Long toCityId);

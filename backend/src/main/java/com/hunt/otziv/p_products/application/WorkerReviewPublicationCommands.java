@@ -5,7 +5,6 @@ import com.hunt.otziv.exceptions.NagulTooFastException;
 import com.hunt.otziv.p_products.service.OrderService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
-import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.u_users.model.Worker;
@@ -30,7 +29,6 @@ public class WorkerReviewPublicationCommands {
 
     private final com.hunt.otziv.p_products.api.ReviewPublicationCommands publication;
     private final ReviewService reviewService;
-    private final WorkerPublicationGateService workerPublicationGateService;
     private final WorkerActivityService workerActivityService;
     private final WorkerCredentialPreparationService credentialPreparationService;
     private final WorkerCellularAccessService workerCellularAccessService;

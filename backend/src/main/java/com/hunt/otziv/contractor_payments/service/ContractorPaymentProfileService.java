@@ -363,10 +363,6 @@ public class ContractorPaymentProfileService {
         return accountingService.netReceived(profile, ContractorAllocationMode.LIVE);
     }
 
-    public long simulatedReceived(ContractorPaymentProfile profile) {
-        return accountingService.netReceived(profile, ContractorAllocationMode.SHADOW);
-    }
-
     public long available(ContractorPaymentProfile profile, ContractorAllocationMode mode) {
         return Math.max(0L, capacityPosition(profile, mode));
     }

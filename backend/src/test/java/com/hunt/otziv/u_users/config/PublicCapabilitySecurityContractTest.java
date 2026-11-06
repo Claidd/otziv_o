@@ -207,19 +207,6 @@ class PublicCapabilitySecurityContractTest {
     }
 
     @Test
-    void liveLogsRequireAdminOrOwnerEvenForAuthenticatedUsers() throws Exception {
-        stubJwt("worker-token", "WORKER");
-        stubJwt("owner-token", "OWNER");
-
-        mockMvc.perform(get("/ws/logs")
-                        .header("Authorization", "Bearer worker-token"))
-                .andExpect(status().isForbidden());
-        mockMvc.perform(get("/ws/logs")
-                        .header("Authorization", "Bearer owner-token"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
     void anonymousPaymentLinkCanBeReadAndInitialized() throws Exception {
         mockMvc.perform(get("/api/payments/public/payment-token"))
                 .andExpect(status().isOk());
@@ -524,11 +511,6 @@ class PublicCapabilitySecurityContractTest {
                 "/api/manager/orders/{orderId}/review-check-capabilities/{capabilityId}/rotate"
         })
         void manageSecureLink() {
-        }
-
-        @GetMapping("/ws/logs")
-        Map<String, String> liveLogsHandshake() {
-            return Map.of("status", "ok");
         }
 
         @GetMapping("/api/leads/modified")

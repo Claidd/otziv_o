@@ -523,7 +523,6 @@ public class ReputationAiProperties {
         private Duration timeout = Duration.ofSeconds(60);
         private int maxOutputTokens = 6000;
         private Proxy proxy = new Proxy();
-        private DeepResearch deepResearch = new DeepResearch();
         private ResearchReport researchReport = new ResearchReport();
 
         public String getApiKey() {
@@ -574,14 +573,6 @@ public class ReputationAiProperties {
 
         public void setProxy(Proxy proxy) {
             this.proxy = proxy == null ? new Proxy() : proxy;
-        }
-
-        public DeepResearch getDeepResearch() {
-            return deepResearch;
-        }
-
-        public void setDeepResearch(DeepResearch deepResearch) {
-            this.deepResearch = deepResearch == null ? new DeepResearch() : deepResearch;
         }
 
         public ResearchReport getResearchReport() {
@@ -637,54 +628,6 @@ public class ReputationAiProperties {
 
             public void setPassword(String password) {
                 this.password = password == null ? "" : password;
-            }
-        }
-
-        public static class DeepResearch {
-            private String model = "o4-mini-deep-research";
-            private Duration timeout = Duration.ofMinutes(8);
-            private int maxToolCalls = 40;
-            private int maxOutputTokens = 24000;
-            private boolean background = false;
-
-            public String getModel() {
-                return model;
-            }
-
-            public void setModel(String model) {
-                this.model = model == null || model.isBlank() ? "o4-mini-deep-research" : model.trim();
-            }
-
-            public Duration getTimeout() {
-                return timeout;
-            }
-
-            public void setTimeout(Duration timeout) {
-                this.timeout = timeout == null ? Duration.ofMinutes(8) : timeout;
-            }
-
-            public int getMaxToolCalls() {
-                return maxToolCalls;
-            }
-
-            public void setMaxToolCalls(int maxToolCalls) {
-                this.maxToolCalls = Math.max(1, Math.min(200, maxToolCalls));
-            }
-
-            public int getMaxOutputTokens() {
-                return maxOutputTokens;
-            }
-
-            public void setMaxOutputTokens(int maxOutputTokens) {
-                this.maxOutputTokens = Math.max(2000, Math.min(100000, maxOutputTokens));
-            }
-
-            public boolean isBackground() {
-                return background;
-            }
-
-            public void setBackground(boolean background) {
-                this.background = background;
             }
         }
 

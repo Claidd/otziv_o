@@ -19,8 +19,6 @@ import jakarta.persistence.LockModeType;
 
 public interface ContractorPaymentAllocationRepository extends JpaRepository<ContractorPaymentAllocation, Long> {
 
-    boolean existsByMode(ContractorAllocationMode mode);
-
     @Query(value = "SELECT CURRENT_TIMESTAMP(6)", nativeQuery = true)
     LocalDateTime currentDatabaseTime();
 
@@ -427,34 +425,6 @@ public interface ContractorPaymentAllocationRepository extends JpaRepository<Con
             Long sourceId
     );
 
-    @Query("""
-        SELECT COALESCE(SUM(a.amountKopecks), 0)
-        FROM ContractorPaymentAllocation a
-        WHERE a.recipientProfile.id = :profileId
-          AND a.mode = :mode
-          AND a.status IN :statuses
-    """)
-    long sumByProfileAndModeAndStatusIn(@Param("profileId") Long profileId,
-                                        @Param("mode") ContractorAllocationMode mode,
-                                        @Param("statuses") Collection<ContractorAllocationStatus> statuses);
-
-    @Query("""
-        SELECT COALESCE(SUM(a.amountKopecks), 0)
-        FROM ContractorPaymentAllocation a
-        WHERE a.recipientProfile.id = :profileId
-          AND a.mode = :mode
-          AND a.status IN :statuses
-          AND a.confirmedAt >= :from
-          AND a.confirmedAt < :to
-    """)
-    long sumByProfileAndModeAndStatusInAndConfirmedPeriod(
-            @Param("profileId") Long profileId,
-            @Param("mode") ContractorAllocationMode mode,
-            @Param("statuses") Collection<ContractorAllocationStatus> statuses,
-            @Param("from") LocalDateTime from,
-            @Param("to") LocalDateTime to
-    );
-
     /**
      * Bounded, fair polling queue. Non-terminal allocations rotate through
      * lastReconciledAt; terminal allocations re-enter only when the payment
@@ -596,17 +566,6 @@ public interface ContractorPaymentAllocationRepository extends JpaRepository<Con
     List<ContractorPaymentAllocation> findActiveByOrderId(@Param("orderId") Long orderId,
                                                           @Param("mode") ContractorAllocationMode mode,
                                                           @Param("statuses") Collection<ContractorAllocationStatus> statuses);
-
-    @Query("""
-        SELECT COALESCE(SUM(a.amountKopecks), 0)
-        FROM ContractorPaymentAllocation a
-        WHERE a.recipientProfile.id = :profileId
-          AND a.mode = :mode
-          AND a.status = :status
-    """)
-    long sumByProfileAndModeAndStatus(@Param("profileId") Long profileId,
-                                      @Param("mode") ContractorAllocationMode mode,
-                                      @Param("status") ContractorAllocationStatus status);
 
     @Query("""
         SELECT COALESCE(SUM(

@@ -3,7 +3,6 @@ package com.hunt.otziv.worker_activity.service;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskEventType;
@@ -37,7 +36,6 @@ public class WorkerRiskResponseSlaJob {
     private final WorkerRiskIncidentRepository incidentRepository;
     private final WorkerRiskEventService eventService;
     private final UserService userService;
-    private final TelegramService telegramService;
     private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final AppSettingService appSettingService;
     private final PlatformTransactionManager transactionManager;

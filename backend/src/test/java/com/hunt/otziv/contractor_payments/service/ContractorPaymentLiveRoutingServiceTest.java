@@ -101,7 +101,6 @@ class ContractorPaymentLiveRoutingServiceTest {
                 runtimeSwitch,
                 allocationRepository,
                 profileRepository,
-                profileService,
                 routingLimitService,
                 accountingService,
                 commonInvoiceRepository,

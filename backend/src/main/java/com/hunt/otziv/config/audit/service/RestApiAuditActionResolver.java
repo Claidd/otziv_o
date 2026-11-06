@@ -436,9 +436,6 @@ public class RestApiAuditActionResolver {
         put(actions, "PUT", "/api/worker/orders/{orderId}/company-note", "редактирование заметки компании в заказе {orderId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/change-bot", "смена аккаунта отзыва {reviewId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/bots/{botId}/deactivate", "деактивация аккаунта {botId} отзыва {reviewId}");
-        put(actions, "POST", "/api/worker/reviews/{reviewId}/copy-click", "нажатие кнопки копирования данных аккаунта в отзыве {reviewId}");
-        put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в плохом отзыве {taskId}");
-        put(actions, "POST", "/api/worker/recovery-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в восстановлении {taskId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/credential-reveal", "защищенное раскрытие данных аккаунта отзыва {reviewId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/credential-reveal", "защищенное раскрытие данных аккаунта плохого отзыва {taskId}");
         put(actions, "POST", "/api/worker/recovery-tasks/{taskId}/credential-reveal", "защищенное раскрытие данных аккаунта восстановления {taskId}");
@@ -467,7 +464,6 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/leads/{id}/status/to-work", "смена статуса лида {id} на \"В работу\"");
         put(actions, "POST", "/api/leads/{id}/status/new", "смена статуса лида {id} на \"Новый\"");
         put(actions, "GET", "/api/leads/modified", "выгрузка измененных лидов");
-        put(actions, "POST", "/api/leads/sendToServer", "отправка лида {leadId} на сервер");
         put(actions, "POST", "/api/leads/sync", "синхронизация лида");
         put(actions, "POST", "/api/leads/update", "синхронизация обновления лида");
         put(actions, "POST", "/api/leads/import", "импорт лида");
@@ -491,7 +487,6 @@ public class RestApiAuditActionResolver {
 
         put(actions, "POST", "/api/bots/{botId}/browser/open", "открытие браузера аккаунта {botId}");
         put(actions, "POST", "/api/bots/{botId}/browser/close", "закрытие браузера аккаунта {botId}");
-        put(actions, "GET", "/api/review", "генерация текста отзыва");
 
         put(actions, "GET", "/api/ai/reputation/status", "загрузка статуса AI-помощника репутации");
         put(actions, "POST", "/api/ai/reputation/status/openai-check", "проверка маршрута OpenAI для AI-помощника репутации");
@@ -535,16 +530,10 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/dispatch-settings/cron", "загрузка cron-настройки рассылки");
         put(actions, "GET", "/categories/getSubcategories", "подгрузка подкатегорий для категории {categoryId}");
         put(actions, "GET", "/companies/getSubcategories", "подгрузка подкатегорий компании для категории {categoryId}");
-        put(actions, "GET", "/sendEmail", "отправка тестового email");
         put(actions, "GET", "/images/{id}", "загрузка изображения {id}");
         put(actions, "POST", "/webhook/whatsapp-group-reply", "получение группового ответа WhatsApp");
         put(actions, "GET", "/webhook/health", "проверка webhook health");
         put(actions, "POST", "/telephone/device-token", "создание токена телефона {telephoneId}");
-        put(actions, "GET", "/logs", "просмотр логов системы");
-        put(actions, "GET", "/logs/tail", "загрузка новых строк лога");
-        put(actions, "POST", "/logs/clear", "очистка текущего файла лога");
-        put(actions, "POST", "/logs/clear/all", "очистка основных файлов логов");
-        put(actions, "GET", "/logs/ui", "открытие страницы живых логов");
 
         return Map.copyOf(actions);
     }

@@ -5,7 +5,6 @@ import com.hunt.otziv.archive.service.ReviewCheckArchiveService;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCheck;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCheckReview;
 import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.service.CompanyService;
@@ -75,7 +74,6 @@ public class ApiReviewCheckController {
     private final ReviewService reviewService;
     private final CompanyService companyService;
     private final ReviewCheckArchiveService reviewCheckArchiveService;
-    private final BusinessAuditService businessAuditService;
     private final OrderPublicationApprovalService publicationApprovalService;
     private final ReviewCheckMutationLockService mutationLockService;
     private final ManagerAccessService managerAccessService;

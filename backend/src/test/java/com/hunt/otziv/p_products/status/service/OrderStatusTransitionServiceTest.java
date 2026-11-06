@@ -10,7 +10,6 @@ import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
-import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -169,9 +168,6 @@ class OrderStatusTransitionServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
-
-    @Mock
-    private ContractorCompletionRewardService contractorCompletionRewardService;
 
     @Mock
     private ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
@@ -1398,7 +1394,6 @@ class OrderStatusTransitionServiceTest {
                 appSettingService,
                 businessAuditService,
                 contractorPaymentShadowService,
-                contractorCompletionRewardService,
                 contractorRouteAssignmentGuard,
                 commonBillingServiceProvider,
                 recoveryGateService,

@@ -352,13 +352,6 @@ public class ManualCardPaymentWorkflow {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    void prepareSpecialistReviewRecipient(Long orderId, PaymentLink link, Long recipientProfileId,
-                                          String recipientKey, String reason, String receiptUrl, String actor) {
-        prepareReviewRecipient(orderId, link, "SPECIALIST", recipientProfileId,
-                recipientKey, reason, receiptUrl, actor);
-    }
-
-    @Transactional(propagation = Propagation.MANDATORY)
     void prepareReviewRecipient(Long orderId, PaymentLink link, String recipientTypeName,
             Long recipientProfileId, String recipientKey, String reason, String receiptUrl, String actor) {
         ContractorRecipientType recipientType = ContractorRecipientType.valueOf(recipientTypeName);

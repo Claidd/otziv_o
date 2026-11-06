@@ -156,10 +156,6 @@ public class OrderStatusNotificationService {
     public boolean sendProgressMessageToClientChat(Order order,String clientId,String groupId,String message,boolean includePreferenceControls) {
         return dispatch(order,clientId,groupId,message,null,"progress:"+order.getCounter(),order.getClientMessageGeneration(),true,includePreferenceControls).sent();
     }
-    public boolean sendPublicationProgressForOccurrence(Order order,String clientId,String groupId,String message,boolean includePreferenceControls,String occurrence) {
-        if(occurrence==null||occurrence.isBlank())return false;
-        return dispatch(order,clientId,groupId,message,null,"progress:"+occurrence,1,true,includePreferenceControls).sent();
-    }
 
     private ClientMessageSendResult dispatch(Order order,String clientId,String groupId,String message,String copy,String kind,long generation,boolean progress,boolean controls) {
         if(order==null||order.getId()==null)return ClientMessageSendResult.failed("order_missing","Заказ не найден");

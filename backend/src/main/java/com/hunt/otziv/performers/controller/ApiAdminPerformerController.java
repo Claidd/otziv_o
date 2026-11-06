@@ -80,11 +80,6 @@ public class ApiAdminPerformerController {
         return adminPerformerService.runSchedulerOnce();
     }
 
-    @GetMapping("/rollout")
-    public PerformerRolloutSettingsResponse rollout() {
-        return rolloutService.settings();
-    }
-
     @PutMapping("/rollout")
     public PerformerRolloutSettingsResponse updateRollout(@RequestBody PerformerRolloutSettingsRequest request) {
         return rolloutService.update(request);

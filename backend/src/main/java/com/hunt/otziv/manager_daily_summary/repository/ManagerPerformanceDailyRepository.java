@@ -10,8 +10,6 @@ public interface ManagerPerformanceDailyRepository extends JpaRepository<Manager
     Optional<ManagerPerformanceDaily> findBySummaryDateAndManager_Id(LocalDate date, Long managerId);
     List<ManagerPerformanceDaily> findBySummaryDateOrderByAdjustedScoreDesc(LocalDate date);
     List<ManagerPerformanceDaily> findBySummaryDateBetweenOrderByManager_IdAscSummaryDateAsc(LocalDate from, LocalDate to);
-    boolean existsBySummaryDateAndAggregationStatusIn(LocalDate date, java.util.Collection<String> statuses);
-    Optional<ManagerPerformanceDaily> findTopByManager_IdAndSummaryDateLessThanOrderBySummaryDateDesc(Long managerId, LocalDate date);
     Optional<ManagerPerformanceDaily> findTopByOrderBySummaryDateAsc();
     List<ManagerPerformanceDaily> findByManager_IdAndSummaryDateBetween(Long managerId, LocalDate from, LocalDate to);
 }

@@ -337,11 +337,6 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<String> getAllUsersByFio(String roleName) {
-        return userRepository.findAllActiveFioByRole(roleName);
-    }
-
-    @Override
     public Optional<User> findByFio(String operator) {
         return userRepository.findByFio(operator);
     }

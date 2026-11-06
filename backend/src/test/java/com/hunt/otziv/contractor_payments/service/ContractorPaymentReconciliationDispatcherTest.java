@@ -34,7 +34,7 @@ class ContractorPaymentReconciliationDispatcherTest {
     private final AppSettingService appSettingService = mock(AppSettingService.class);
     private final ContractorPaymentReconciliationDispatcher dispatcher =
             new ContractorPaymentReconciliationDispatcher(
-                    repository, claimService, shadowService, appSettingService
+                    repository, claimService, shadowService
             );
 
     @BeforeEach

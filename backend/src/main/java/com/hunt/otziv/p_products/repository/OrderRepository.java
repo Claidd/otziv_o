@@ -654,16 +654,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Long> findPageIdToAdminLive(@Param("liveStatuses") Collection<String> liveStatuses,
                                      Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.manager = :manager ORDER BY o.changed, o.id")
-    List<Long> findAllIdToManager(@Param("manager") Manager manager);
-
-    @Query(
-            value = "SELECT o.id FROM Order o WHERE o.manager = :manager",
-            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.manager = :manager"
-    )
-    Page<Long> findPageIdToManager(@Param("manager") Manager manager,
-                                   Pageable pageable);
-
     @Query(
             value = """
                 SELECT o.id
@@ -681,40 +671,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Long> findPageIdToManagerLive(@Param("manager") Manager manager,
                                        @Param("liveStatuses") Collection<String> liveStatuses,
                                        Pageable pageable);
-
-    @Query("SELECT o.id FROM Order o WHERE o.worker = :worker ORDER BY o.changed, o.id")
-    List<Long> findAllIdToWorker(@Param("worker") Worker worker);
-
-    @Query(
-            value = """
-                SELECT o.id
-                FROM Order o
-                WHERE o.worker = :worker
-                ORDER BY o.changed ASC, o.id ASC
-            """,
-            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker"
-    )
-    Page<Long> findPageIdToWorkerForBoard(@Param("worker") Worker worker,
-                                          Pageable pageable);
-
-    @Query(
-            value = """
-                SELECT o.id
-                FROM Order o
-                WHERE o.worker = :worker
-                  AND o.status.title IN :liveStatuses
-                ORDER BY o.changed ASC, o.id ASC
-            """,
-            countQuery = """
-                SELECT COUNT(o.id)
-                FROM Order o
-                WHERE o.worker = :worker
-                  AND o.status.title IN :liveStatuses
-            """
-    )
-    Page<Long> findPageIdToWorkerForBoardLive(@Param("worker") Worker worker,
-                                              @Param("liveStatuses") Collection<String> liveStatuses,
-                                              Pageable pageable);
 
     @Query(
             value = """
@@ -778,10 +734,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Long> findPageIdByStatus(@Param("status") String status,
                                   Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.manager = :manager AND o.status.title = :status ORDER BY o.changed, o.id")
-    List<Long> findAllIdByManagerAndStatus(@Param("manager") Manager manager,
-                                           @Param("status") String status);
-
     @Query(
             value = "SELECT o.id FROM Order o WHERE o.manager = :manager AND o.status.title = :status",
             countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.manager = :manager AND o.status.title = :status"
@@ -789,10 +741,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Long> findPageIdByManagerAndStatus(@Param("manager") Manager manager,
                                             @Param("status") String status,
                                             Pageable pageable);
-
-    @Query("SELECT o.id FROM Order o WHERE o.worker = :worker AND o.status.title = :status ORDER BY o.changed, o.id")
-    List<Long> findAllIdByWorkerAndStatus(@Param("worker") Worker worker,
-                                          @Param("status") String status);
 
     @Query(
             value = "SELECT o.id FROM Order o WHERE o.worker = :worker AND o.status.title = :status",
@@ -817,16 +765,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed, o.id")
     List<Long> findAllIdByOwnerAndStatus(@Param("managers") Set<Manager> managers,
                                          @Param("status") String status);
-
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByKeyWord(@Param("keyword") String keyword,
-                                  @Param("keyword2") String keyword2);
 
     @Query(
             value = """
@@ -873,41 +811,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                        @Param("liveStatuses") Collection<String> liveStatuses,
                                        Pageable pageable);
 
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE o.manager = :manager
-          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByByManagerAndKeyWord(@Param("manager") Manager manager,
-                                              @Param("keyword") String keyword,
-                                              @Param("keyword2") String keyword2);
-
-    @Query(
-            value = """
-                SELECT o.id
-                FROM Order o
-                WHERE o.manager = :manager
-                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(o.id) = :keyword)
-            """,
-            countQuery = """
-                SELECT COUNT(o.id)
-                FROM Order o
-                WHERE o.manager = :manager
-                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(o.id) = :keyword)
-            """
-    )
-    Page<Long> findPageIdByByManagerAndKeyWord(@Param("manager") Manager manager,
-                                               @Param("keyword") String keyword,
-                                               @Param("keyword2") String keyword2,
-                                               Pageable pageable);
-
     @Query(
             value = """
                 SELECT o.id
@@ -935,69 +838,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                                    @Param("keyword2") String keyword2,
                                                    @Param("liveStatuses") Collection<String> liveStatuses,
                                                    Pageable pageable);
-
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE o.worker = :worker
-          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByByWorkerAndKeyWord(@Param("worker") Worker worker,
-                                             @Param("keyword") String keyword,
-                                             @Param("keyword2") String keyword2);
-
-    @Query(
-            value = """
-                SELECT o.id
-                FROM Order o
-                WHERE o.worker = :worker
-                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(o.id) = :keyword)
-                ORDER BY o.changed ASC, o.id ASC
-            """,
-            countQuery = """
-                SELECT COUNT(o.id)
-                FROM Order o
-                WHERE o.worker = :worker
-                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(o.id) = :keyword)
-            """
-    )
-    Page<Long> findPageIdByByWorkerAndKeyWordForBoard(@Param("worker") Worker worker,
-                                                      @Param("keyword") String keyword,
-                                                      @Param("keyword2") String keyword2,
-                                                      Pageable pageable);
-
-    @Query(
-            value = """
-                SELECT o.id
-                FROM Order o
-                WHERE o.worker = :worker
-                  AND o.status.title IN :liveStatuses
-                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(o.id) = :keyword)
-                ORDER BY o.changed ASC, o.id ASC
-            """,
-            countQuery = """
-                SELECT COUNT(o.id)
-                FROM Order o
-                WHERE o.worker = :worker
-                  AND o.status.title IN :liveStatuses
-                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR STR(o.id) = :keyword)
-            """
-    )
-    Page<Long> findPageIdByByWorkerAndKeyWordForBoardLive(@Param("worker") Worker worker,
-                                                          @Param("keyword") String keyword,
-                                                          @Param("keyword2") String keyword2,
-                                                          @Param("liveStatuses") Collection<String> liveStatuses,
-                                                          Pageable pageable);
 
     @Query(
             value = """
@@ -1031,41 +871,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                                                 @Param("sortDirection") String sortDirection,
                                                                 Pageable pageable);
 
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE (o.manager IN :managers
-          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-            OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))))
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByOwnerAndKeyWord(@Param("managers") List<Manager> managers,
-                                          @Param("keyword") String keyword,
-                                          @Param("keyword2") String keyword2);
-
-    @Query(
-            value = """
-                SELECT o.id
-                FROM Order o
-                WHERE (o.manager IN :managers
-                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                    OR STR(o.id) = :keyword))
-            """,
-            countQuery = """
-                SELECT COUNT(o.id)
-                FROM Order o
-                WHERE (o.manager IN :managers
-                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                    OR STR(o.id) = :keyword))
-            """
-    )
-    Page<Long> findPageIdByOwnerAndKeyWord(@Param("managers") List<Manager> managers,
-                                           @Param("keyword") String keyword,
-                                           @Param("keyword2") String keyword2,
-                                           Pageable pageable);
-
     @Query(
             value = """
                 SELECT o.id
@@ -1094,18 +899,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                                @Param("liveStatuses") Collection<String> liveStatuses,
                                                Pageable pageable);
 
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-           OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByKeyWordAndStatus(@Param("keyword") String keyword,
-                                           @Param("status") String status,
-                                           @Param("keyword2") String keyword2,
-                                           @Param("status2") String status2);
-
     @Query(
             value = """
                 SELECT o.id
@@ -1127,20 +920,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                             @Param("keyword2") String keyword2,
                                             @Param("status2") String status2,
                                             Pageable pageable);
-
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE o.manager = :manager
-          AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-           OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByManagerAndKeyWordAndStatus(@Param("manager") Manager manager,
-                                                     @Param("keyword") String keyword,
-                                                     @Param("status") String status,
-                                                     @Param("keyword2") String keyword2,
-                                                     @Param("status2") String status2);
 
     @Query(
             value = """
@@ -1167,20 +946,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                                       @Param("status2") String status2,
                                                       Pageable pageable);
 
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE o.worker = :worker
-          AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-           OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByWorkerAndKeyWordAndStatus(@Param("worker") Worker worker,
-                                                    @Param("keyword") String keyword,
-                                                    @Param("status") String status,
-                                                    @Param("keyword2") String keyword2,
-                                                    @Param("status2") String status2);
-
     @Query(
             value = """
                 SELECT o.id
@@ -1206,19 +971,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                                      @Param("status2") String status2,
                                                      Pageable pageable);
 
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE (o.manager IN :managers AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status))
-           OR (o.manager IN :managers AND (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByOwnerAndKeyWordAndStatus(@Param("managers") List<Manager> managers,
-                                                   @Param("keyword") String keyword,
-                                                   @Param("status") String status,
-                                                   @Param("keyword2") String keyword2,
-                                                   @Param("status2") String status2);
-
     @Query(
             value = """
                 SELECT o.id
@@ -1241,9 +993,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                                     @Param("keyword2") String keyword2,
                                                     @Param("status2") String status2,
                                                     Pageable pageable);
-
-    @Query("SELECT o.id FROM Order o WHERE o.company.id = :companyId ORDER BY o.changed, o.id")
-    List<Long> findAllIdByCompanyId(@Param("companyId") long companyId);
 
     @Query(
             value = "SELECT o.id FROM Order o WHERE o.company.id = :companyId",
@@ -1381,18 +1130,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("companyId") Long companyId,
             @Param("statuses") Collection<String> statuses
     );
-
-    @Query("""
-        SELECT o.id
-        FROM Order o
-        WHERE o.company.id = :companyId
-          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
-        ORDER BY o.changed, o.id
-    """)
-    List<Long> findAllIdByCompanyIdAndKeyWord(@Param("companyId") long companyId,
-                                              @Param("keyword") String keyword,
-                                              @Param("keyword2") String keyword2);
 
     @Query(
             value = """
@@ -2183,15 +1920,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     """)
     List<Object[]> countGroupedByActionableStatusAndManagers(@Param("managers") Set<Manager> managers,
                                                              @Param("liveStatuses") Collection<String> liveStatuses);
-
-    @Query("""
-        SELECT COALESCE(s.title, ''), COUNT(o.id)
-        FROM Order o
-        LEFT JOIN o.status s
-        WHERE o.worker = :worker
-        GROUP BY s.id, s.title
-    """)
-    List<Object[]> countGroupedByStatusAndWorker(@Param("worker") Worker worker);
 
     @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id)

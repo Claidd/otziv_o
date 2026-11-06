@@ -85,8 +85,6 @@ public class CommonInvoiceInitializationService {
 
     private final com.hunt.otziv.payments.service.CommonInvoiceRouteSelector invoiceRouteSelector;
 
-    private final CommonInvoiceCancellationService invoiceCancellation;
-
     private final CommonInvoicePresenter invoicePresenter;
 
     private final CommonInvoiceSettlementService settlementService;

@@ -68,7 +68,6 @@ public class ContractorPaymentLiveRoutingService {
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentProfileRepository profileRepository;
-    private final ContractorPaymentProfileService profileService;
     private final ContractorPaymentRoutingLimitService routingLimitService;
     private final ContractorPaymentAccountingService accountingService;
     private final CommonInvoiceRepository commonInvoiceRepository;

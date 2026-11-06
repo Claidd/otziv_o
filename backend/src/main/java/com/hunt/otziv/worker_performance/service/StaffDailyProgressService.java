@@ -1,7 +1,6 @@
 package com.hunt.otziv.worker_performance.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
-import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
@@ -126,128 +125,6 @@ public class StaffDailyProgressService {
             ));
         }
         return result;
-    }
-
-    @Transactional(readOnly = true)
-    public DailyWorkProgressResponse aggregateManagerProgressByUserIds(Collection<Long> userIds, LocalDate date) {
-        LocalDate safeDate = safeDate(date);
-        Map<Long, DailyWorkProgressResponse> progress = managerProgressByUserIds(userIds, safeDate);
-        if (progress.isEmpty()) {
-            return DailyWorkProgressResponse.hidden(ROLE_MANAGER, safeDate);
-        }
-
-        long completed = progress.values().stream().mapToLong(DailyWorkProgressResponse::completed).sum();
-        long active = progress.values().stream().mapToLong(DailyWorkProgressResponse::active).sum();
-        long total = progress.values().stream().mapToLong(DailyWorkProgressResponse::total).sum();
-        int percent = percentInt(completed, total);
-
-        return new DailyWorkProgressResponse(
-                true,
-                ROLE_MANAGER,
-                safeDate,
-                completed,
-                active,
-                total,
-                percent,
-                total == 0 || active == 0,
-                null,
-                null,
-                0,
-                0,
-                0,
-                null,
-                null,
-                0,
-                0,
-                0,
-                completed,
-                percent
-        );
-    }
-
-    public DailyWorkProgressResponse managerProgressFromPerformance(
-            ManagerPerformanceScoreResponse performance,
-            LocalDate date
-    ) {
-        if (performance == null) {
-            return null;
-        }
-        LocalDate safeDate = safeDate(date);
-        long completed = Math.max(0, performance.handledCount());
-        long active = Math.max(0, performance.openCount());
-        long total = completed + active;
-        int percent = total == 0 ? 100 : percentInt(completed, total);
-
-        return new DailyWorkProgressResponse(
-                true,
-                ROLE_MANAGER,
-                safeDate,
-                completed,
-                active,
-                total,
-                percent,
-                active == 0,
-                null,
-                null,
-                0,
-                0,
-                0,
-                null,
-                null,
-                0,
-                0,
-                0,
-                performance.actionTotal(),
-                performance.loadAdjustedPerformanceScore()
-        );
-    }
-
-    public DailyWorkProgressResponse aggregateManagerProgressFromPerformance(
-            Collection<ManagerPerformanceScoreResponse> performances,
-            LocalDate date
-    ) {
-        if (performances == null || performances.isEmpty()) {
-            return DailyWorkProgressResponse.hidden(ROLE_MANAGER, safeDate(date));
-        }
-        LocalDate safeDate = safeDate(date);
-        List<ManagerPerformanceScoreResponse> visible = performances.stream()
-                .filter(Objects::nonNull)
-                .toList();
-        if (visible.isEmpty()) {
-            return DailyWorkProgressResponse.hidden(ROLE_MANAGER, safeDate);
-        }
-
-        long completed = visible.stream().mapToLong(ManagerPerformanceScoreResponse::handledCount).sum();
-        long active = visible.stream().mapToLong(ManagerPerformanceScoreResponse::openCount).sum();
-        long total = completed + active;
-        int percent = total == 0 ? 100 : percentInt(completed, total);
-        int efficiency = (int) Math.round(visible.stream()
-                .mapToInt(ManagerPerformanceScoreResponse::loadAdjustedPerformanceScore)
-                .average()
-                .orElse(0));
-
-        return new DailyWorkProgressResponse(
-                true,
-                ROLE_MANAGER,
-                safeDate,
-                completed,
-                active,
-                total,
-                percent,
-                active == 0,
-                null,
-                null,
-                0,
-                0,
-                0,
-                null,
-                null,
-                0,
-                0,
-                0,
-                visible.stream().mapToLong(ManagerPerformanceScoreResponse::actionTotal).sum(),
-                efficiency
-        );
     }
 
     @Transactional
@@ -597,14 +474,6 @@ public class StaffDailyProgressService {
     @Transactional(readOnly = true)
     public DailyWorkProgressResponse aggregateWorkerProgressSnapshotByIds(Collection<Long> workerIds, LocalDate date) {
         return aggregateProgressResponses(workerProgressSnapshotByIds(workerIds, date).values(), date, ROLE_WORKER, null);
-    }
-
-    @Transactional
-    public Map<Long, DailyWorkProgressResponse> monthlyWorkerProgressBySubjects(
-            Collection<WorkerProgressSubject> workers,
-            LocalDate monthStart
-    ) {
-        return monthlyWorkerProgress(workers, monthStart, true);
     }
 
     @Transactional(readOnly = true)

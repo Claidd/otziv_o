@@ -1,6 +1,5 @@
 package com.hunt.otziv.l_lead.service;
 
-import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Telephone;
@@ -295,27 +294,7 @@ public class LeadServiceImpl implements LeadService {
         return userRepository.findByFio(operator);
     } // Взять лида по ФИО
 
-    @Override
-    @Transactional
-    public void markOfferSentAndPublish(Long leadId) {
-        Lead lead = leadsRepository.findById(leadId)
-                .orElseThrow(() -> new IllegalArgumentException("Lead not found: " + leadId));
-
-        lead.setOffer(true);
-        lead.setUpdateStatus(LocalDateTime.now());
-        leadsRepository.save(lead);
-
-        // событие публикуется ВНУТРИ той же транзакции
-        leadEventPublisher.publishUpdate(lead);
-    }
-
     //    =============================== ОБНОВИТЬ ЮЗЕРА - КОНЕЦ =========================================
-
-    @Override
-    public List<Lead> findNewLeadsByClient(Long telephoneId, String status) {
-        return leadsRepository.findByTelephoneAndStatusBeforeDate(
-                telephoneId, status, LocalDate.now());
-    }
 
     public int countNewLeadsByClient(long telephoneId, String status) {
         return leadsRepository.countByTelephoneAndStatusBeforeDate(
@@ -1118,31 +1097,6 @@ public class LeadServiceImpl implements LeadService {
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
 
-    //    =============================== В DTO - НАЧАЛО =========================================
-    // Метод конвертации из класса Lead в класс LeadDTO
-    public LeadDTO convertFromLead(Lead lead) {
-        log.info("Перевод лида в дто");
-        LeadDTO leadDTO = new LeadDTO();
-        leadDTO.setId(lead.getId());
-        leadDTO.setTelephoneLead(lead.getTelephoneLead());
-        leadDTO.setCityLead(lead.getCityLead());
-        leadDTO.setCommentsLead(lead.getCommentsLead());
-        leadDTO.setLidStatus(lead.getLidStatus());
-        leadDTO.setCreateDate(lead.getCreateDate());
-        leadDTO.setUpdateStatus(lead.getUpdateStatus());
-        leadDTO.setDateNewTry(lead.getDateNewTry());
-        // Обратите внимание, что здесь мы присваиваем идентификатор пользователя вместо всего объекта User
-        // Если нужно больше данных о пользователе, то можно добавить соответствующие поля в LeadDTO
-        leadDTO.setOperator(lead.getOperator() != null ? lead.getOperator() : null);
-        leadDTO.setManager(lead.getManager() != null ? lead.getManager() : null);
-        leadDTO.setMarketolog(lead.getMarketolog() != null ? lead.getMarketolog() : null);
-        leadDTO.setTelephone(lead.getTelephone() != null ? lead.getTelephone() : null);
-        leadDTO.setTelephoneId(lead.getTelephone() != null ? lead.getTelephone().getId() : null);
-        return leadDTO;
-    }
-    //    =============================== В DTO - КОНЕЦ =========================================
-
-
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
     // меняем статус с нового на отправленное - начало
@@ -1523,16 +1477,6 @@ public class LeadServiceImpl implements LeadService {
         return leadsRepository.findIdListByDateToOwner(monthStart(localDate), nextMonthStart(localDate), status, managerList);
     }
 
-    public List<Long> getAllLeadsByDate2Month(LocalDate localDate){
-        LocalDate localDate1 = localDate.minusMonths(1);
-        return leadsRepository.findIdListByDate(monthStart(localDate1), nextMonthStart(localDate1));
-    }
-
-    public List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status){
-        LocalDate localDate1 = localDate.minusMonths(1);
-        return leadsRepository.findIdListByDate(monthStart(localDate1), nextMonthStart(localDate1), status);
-    }
-
 
     @Override
     public List<Long> getAllLeadsByDateAndStatusToOwnerForTelegram(LocalDate localDate, String status, Set<Manager> managerList) {
@@ -1587,11 +1531,6 @@ public class LeadServiceImpl implements LeadService {
 
 
     @Override
-    public Optional<Lead> getByTelephoneLead(String telephoneNumber) {
-        return leadsRepository.findByTelephoneLead(telephoneNumber);
-    }
-
-    @Override
     public void saveLead(Lead lead) {
         leadsRepository.save(lead);
     }
@@ -1599,11 +1538,6 @@ public class LeadServiceImpl implements LeadService {
     @Override
     public int countNewLeadsByClient(Long telephoneId, String status) {
         return leadsRepository.countByTelephone_IdAndCreateDateLessThanEqualAndLidStatus(telephoneId, LocalDate.now() , status);
-    }
-
-    @Override
-    public LeadDtoTransfer findByIdToTransfer(Long leadId) {
-        return leadMapper.toDtoTransfer(leadsRepository.findById(leadId).orElseThrow());
     }
 
 

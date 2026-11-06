@@ -5,7 +5,6 @@ import com.hunt.otziv.manager_daily_summary.model.*;
 import com.hunt.otziv.manager_daily_summary.repository.*;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.security.credentials.CredentialCipher;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import jakarta.persistence.EntityManager;
@@ -305,7 +304,7 @@ class ManagerReportReviewSessionConcurrencyMySqlIntegrationTest {
         when(settings.getInt("manager.report-review.reminder-three-minutes", 180)).thenReturn(180);
         when(settings.getBoolean("manager.report-review.restriction-enabled", true)).thenReturn(true);
         var quality = mock(ManagerReportReviewQualityService.class); when(quality.aiAvailable()).thenReturn(true);
-        return new ManagerReportReviewReminderJob(sessions, events, mock(TelegramService.class), delivery,
+        return new ManagerReportReviewReminderJob(sessions, events, delivery,
                 settings, access, quality, availability, mock(ManagerReportReviewRolloutPolicy.class), transactions);
     }
 

@@ -8,6 +8,4 @@ public interface ContractorPaymentProfileAdjustmentRepository
         extends JpaRepository<ContractorPaymentProfileAdjustment, Long> {
 
     List<ContractorPaymentProfileAdjustment> findAllByProfileIdOrderByEffectiveAtDescIdDesc(Long profileId);
-
-    boolean existsByProfileId(Long profileId);
 }

@@ -6,7 +6,6 @@ import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 
-import java.security.Principal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -25,22 +24,16 @@ public interface BotService {
 
     // Найти бота по id
     BotDTO findById(Long id, Authentication authentication);
-    BotDTO findByWorker(Principal principal);
 
     // Найти бота по id
     Bot findBotById(Long id);
     // Найти всех ботов
     List<BotDTO> getAllBots(Authentication authentication);
 
-    List<Bot> getAllBotsByWorkerId(Long id);
-
-    List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id);
-
     List<BotDTO> getAllBotsByWorkerActiveIsTrue(Authentication authentication);
 
     Bot save(Bot bot);
 
-    List<Bot> getAllBotsByWorker(Principal principal);
     StatusBot changeStatus(String status);
 
     List<Bot> getFindAllByFilialCityId(Long cityId);

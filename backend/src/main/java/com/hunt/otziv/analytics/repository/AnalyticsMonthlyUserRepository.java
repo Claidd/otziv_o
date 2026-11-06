@@ -34,17 +34,4 @@ public interface AnalyticsMonthlyUserRepository extends JpaRepository<AnalyticsM
             @Param("fromMonthInclusive") LocalDate fromMonthInclusive,
             @Param("toMonthInclusive") LocalDate toMonthInclusive
     );
-
-    @Query("""
-            select monthly
-            from AnalyticsMonthlyUser monthly
-            where monthly.roleName = :roleName
-              and monthly.monthStart between :fromMonthInclusive and :toMonthInclusive
-            order by monthly.monthStart, monthly.user.id
-            """)
-    List<AnalyticsMonthlyUser> findByRoleNameInMonthPeriod(
-            @Param("roleName") String roleName,
-            @Param("fromMonthInclusive") LocalDate fromMonthInclusive,
-            @Param("toMonthInclusive") LocalDate toMonthInclusive
-    );
 }

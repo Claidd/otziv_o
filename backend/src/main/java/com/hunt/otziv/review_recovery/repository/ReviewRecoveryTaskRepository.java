@@ -95,17 +95,6 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
     @Query("""
         SELECT MAX(t.scheduledDate)
         FROM ReviewRecoveryTask t
-        WHERE t.batch.id = :batchId
-          AND t.status <> :excludedStatus
-    """)
-    LocalDate maxScheduledDateByBatchId(
-            @Param("batchId") Long batchId,
-            @Param("excludedStatus") ReviewRecoveryTaskStatus excludedStatus
-    );
-
-    @Query("""
-        SELECT MAX(t.scheduledDate)
-        FROM ReviewRecoveryTask t
         WHERE t.order.id = :orderId
           AND t.status <> :excludedStatus
     """)
@@ -138,19 +127,6 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
             @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus
     );
 
-    @Query("""
-        SELECT COUNT(t.id)
-        FROM ReviewRecoveryTask t
-        WHERE t.archiveOrderId = :archiveOrderId
-          AND t.status = :taskStatus
-          AND t.batch.status = :batchStatus
-    """)
-    long countByArchiveOrderIdAndStatusAndBatchStatus(
-            @Param("archiveOrderId") Long archiveOrderId,
-            @Param("taskStatus") ReviewRecoveryTaskStatus taskStatus,
-            @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus
-    );
-
     long countByBatchIdAndStatus(Long batchId, ReviewRecoveryTaskStatus status);
 
     @Query("""
@@ -169,25 +145,6 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
     """)
     List<ReviewRecoveryTask> findByOrderIdAndBatchStatusIn(
             @Param("orderId") Long orderId,
-            @Param("batchStatuses") Collection<ReviewRecoveryBatchStatus> batchStatuses
-    );
-
-    @Query("""
-        SELECT t
-        FROM ReviewRecoveryTask t
-        JOIN FETCH t.batch b
-        LEFT JOIN FETCH t.order o
-        LEFT JOIN FETCH t.sourceReview r
-        LEFT JOIN FETCH r.bot rb
-        LEFT JOIN FETCH t.worker w
-        LEFT JOIN FETCH w.user
-        LEFT JOIN FETCH t.bot bot
-        WHERE t.archiveOrderId = :archiveOrderId
-          AND b.status IN :batchStatuses
-        ORDER BY t.scheduledDate ASC, t.id ASC
-    """)
-    List<ReviewRecoveryTask> findByArchiveOrderIdAndBatchStatusIn(
-            @Param("archiveOrderId") Long archiveOrderId,
             @Param("batchStatuses") Collection<ReviewRecoveryBatchStatus> batchStatuses
     );
 

@@ -282,33 +282,6 @@ public interface WorkloadTransferOfferRepository
 
     @Modifying
     @Query(value = """
-            UPDATE workload_transfer_workflows workflow
-            JOIN workload_transfer_offers offer
-              ON offer.workflow_id =
-                 workflow.workload_transfer_workflow_id
-             AND offer.offer_token = :offerToken
-            JOIN workload_transfer_workflow_candidates candidate
-              ON candidate.workload_transfer_workflow_candidate_id =
-                 offer.workflow_candidate_id
-            SET workflow.status = 'OFFERED',
-                workflow.current_offer_id = offer.workload_transfer_offer_id,
-                workflow.workflow_version = workflow.workflow_version + 1,
-                workflow.last_transition_at = :now,
-                workflow.updated_at = :now,
-                candidate.status = 'OFFERED',
-                candidate.last_offered_at = :now,
-                candidate.response_reason = NULL,
-                candidate.updated_at = :now
-            WHERE workflow.status = 'READY_TO_OFFER'
-              AND offer.status = 'READY'
-            """, nativeQuery = true)
-    int markWorkflowOffered(
-            @Param("offerToken") String offerToken,
-            @Param("now") LocalDateTime now
-    );
-
-    @Modifying
-    @Query(value = """
             INSERT IGNORE INTO workload_transfer_offers (
                 workflow_id,
                 workflow_candidate_id,
@@ -1190,7 +1163,6 @@ public interface WorkloadTransferOfferRepository
         Long getBadCount();
         String getSourceWorkerName();
         String getCandidateWorkerName();
-        LocalDateTime getDeliveryDeadlineAt();
     }
 
     interface CallbackProjection {
@@ -1201,7 +1173,6 @@ public interface WorkloadTransferOfferRepository
         Integer getTelegramMessageId();
         LocalDateTime getExpiresAt();
         Long getCandidateWorkerId();
-        Long getCandidateUserId();
         Long getCandidateTelegramId();
         Long getWorkflowId();
         Long getManagerId();

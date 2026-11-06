@@ -91,10 +91,6 @@ public class OutboundUrlGuard {
         return normalized;
     }
 
-    public String normalizeHttpUrl(String value) {
-        return parseHttpUri(value).toString();
-    }
-
     private static URI parseHttpUri(String value) {
         if (!hasText(value)) {
             throw new IllegalArgumentException("URL is empty");

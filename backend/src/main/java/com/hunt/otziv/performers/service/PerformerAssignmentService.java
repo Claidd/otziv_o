@@ -66,7 +66,6 @@ public class PerformerAssignmentService {
     private final PerformerTaskEvidenceRepository evidenceRepository;
     private final PerformerPayoutRepository payoutRepository;
     private final PerformerAssignmentMapper mapper;
-    private final PerformerTelegramNotificationService telegramNotificationService;
     private final OrderStatusTransitionService orderStatusTransitionService;
     private final PerformerRolloutService rolloutService;
     private final PerformerAssignmentScreenshotStorage screenshotStorage;

@@ -64,7 +64,7 @@ class LeadVersionedDeliveryMySqlIntegrationTest {
                 "hibernate.resource.beans.container",new SpringBeanContainer(beans)));
         factory.afterPropertiesSet();em=SharedEntityManagerCreator.createSharedEntityManager(factory.getObject());
         manager=new JpaTransactionManager(factory.getObject());manager.setDataSource(ds);tx=new TransactionTemplate(manager);jdbc=new JdbcTemplate(ds);
-        jdbc.execute("DROP TABLE lead_command_queue");
+        jdbc.execute("DROP TABLE IF EXISTS lead_command_queue");
         new ResourceDatabasePopulator(
                 new ClassPathResource("db/migration/V1_2_9__lead_sync_queue.sql"),
                 new ClassPathResource("db/migration/V1_2_91__lead_sync_queue.sql"),

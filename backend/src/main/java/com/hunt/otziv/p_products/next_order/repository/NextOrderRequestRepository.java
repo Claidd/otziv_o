@@ -97,17 +97,6 @@ public interface NextOrderRequestRepository extends CrudRepository<NextOrderRequ
     @Query("""
         SELECT r
         FROM NextOrderRequest r
-        JOIN FETCH r.company c
-        LEFT JOIN FETCH r.filial
-        WHERE c.id IN :companyIds
-          AND r.status IN :statuses
-    """)
-    List<NextOrderRequest> findByCompanyIdInAndStatusIn(@Param("companyIds") Collection<Long> companyIds,
-                                                        @Param("statuses") Collection<NextOrderRequestStatus> statuses);
-
-    @Query("""
-        SELECT r
-        FROM NextOrderRequest r
         JOIN r.sourceOrder sourceOrder
         LEFT JOIN sourceOrder.worker sourceWorker
         WHERE r.company.id = :companyId

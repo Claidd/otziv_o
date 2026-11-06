@@ -50,12 +50,6 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
 
     boolean existsByOrderIdAndSourceAndActiveTrue(Long orderId, String source);
 
-    boolean existsByOrderIdAndSourceAndContractorRoleAndActiveTrue(
-            Long orderId,
-            String source,
-            ContractorRole contractorRole
-    );
-
     Optional<Zp> findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
             Long orderId,
             String source,
@@ -64,54 +58,6 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
     );
 
     List<Zp> findByOrderIdAndSourceAndActiveTrue(Long orderId, String source);
-
-    @Query("""
-        SELECT z
-        FROM Zp z
-        WHERE z.userId = :userId
-          AND z.contractorRole = :role
-          AND z.id > :startZpId
-        ORDER BY z.created, z.id
-    """)
-    List<Zp> findContractorRewards(@Param("userId") Long userId,
-                                   @Param("role") ContractorRole role,
-                                   @Param("startZpId") long startZpId);
-
-    @Query("""
-        SELECT z
-        FROM Zp z
-        WHERE z.contractorRole = :role
-          AND z.id > :startZpId
-        ORDER BY z.id
-    """)
-    List<Zp> findContractorRewardsByRoleAfterId(@Param("role") ContractorRole role,
-                                                @Param("startZpId") long startZpId);
-
-    @Query("""
-        SELECT z
-        FROM Zp z
-        WHERE z.contractorRole = :role
-          AND z.updatedAt >= :updatedSince
-          AND z.id <= :maxZpId
-        ORDER BY z.id
-    """)
-    List<Zp> findChangedContractorRewardsByRole(@Param("role") ContractorRole role,
-                                                @Param("updatedSince") LocalDateTime updatedSince,
-                                                @Param("maxZpId") long maxZpId);
-
-    @Query("""
-        SELECT z
-        FROM Zp z
-        WHERE z.userId = :userId
-          AND z.contractorRole = :role
-          AND z.updatedAt >= :updatedSince
-          AND z.id <= :maxZpId
-        ORDER BY z.id
-    """)
-    List<Zp> findChangedContractorRewards(@Param("userId") Long userId,
-                                          @Param("role") ContractorRole role,
-                                          @Param("updatedSince") LocalDateTime updatedSince,
-                                          @Param("maxZpId") long maxZpId);
 
     /**
      * Rewards whose ledger marker is missing or stale. The marker is unique per

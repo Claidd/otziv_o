@@ -9,7 +9,7 @@ class PaperBillingWorkerTest {
     @Test void uncertainCreateCannotBeSubmittedAgain() {
         var store=mock(PaperBillingStore.class); var service=mock(PaperBillingService.class);
         var bank=mock(PaperBillingBankClient.class);
-        var worker=new PaperBillingWorker(store,service,new PaperBillingSettings(),bank,mock(PaperBillingDelivery.class),mock(com.hunt.otziv.common_billing.api.BankPaperInvoices.class),mock(PaperBillingPdfSignature.class));
+        var worker=new PaperBillingWorker(store,service,new PaperBillingSettings(),bank,mock(PaperBillingDelivery.class),mock(PaperBillingPdfSignature.class));
         var r=new HashMap<String,Object>(); r.put("stage","PENDING"); r.put("payer_json","{}");
         when(store.row("doc")).thenReturn(r);
         when(store.move("doc","PENDING","INVOICE_CREATING")).thenAnswer(call -> {r.put("stage","INVOICE_CREATING"); return true;});
@@ -25,7 +25,7 @@ class PaperBillingWorkerTest {
         when(store.row("doc")).thenReturn(row);when(store.claimMessage("doc")).thenReturn(true);
         when(delivery.sendIntro(row)).thenReturn(com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("operation_unknown","unknown"));
         doAnswer(call -> {row.put("message_delivery",call.getArgument(1));return null;}).when(store).messageDelivery(eq("doc"),anyString(),any());
-        var worker=new PaperBillingWorker(store,mock(PaperBillingService.class),settings,mock(PaperBillingBankClient.class),delivery,mock(com.hunt.otziv.common_billing.api.BankPaperInvoices.class),mock(PaperBillingPdfSignature.class));
+        var worker=new PaperBillingWorker(store,mock(PaperBillingService.class),settings,mock(PaperBillingBankClient.class),delivery,mock(PaperBillingPdfSignature.class));
         worker.process("doc");worker.process("doc");
         verify(delivery,times(1)).sendIntro(row);verify(delivery,never()).send(any(),anyBoolean());
         assertEquals("UNKNOWN",row.get("message_delivery"));

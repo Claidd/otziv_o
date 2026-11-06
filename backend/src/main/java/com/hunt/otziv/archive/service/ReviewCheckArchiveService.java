@@ -109,23 +109,6 @@ public class ReviewCheckArchiveService {
         return restoreService.restoreOrder(candidate.orderId(), targetStatus, restoredBy, true);
     }
 
-    @Transactional(readOnly = true)
-    public Optional<Long> findOrderIdByOrderDetailId(UUID orderDetailId) {
-        if (orderDetailId == null) {
-            return Optional.empty();
-        }
-
-        List<Long> ids = jdbc.queryForList("""
-                SELECT aod.order_detail_order
-                FROM archive_order_details aod
-                JOIN archive_orders ao ON ao.order_id = aod.order_detail_order
-                WHERE aod.order_detail_id = UUID_TO_BIN(:orderDetailId)
-                  AND ao.restored_at IS NULL
-                LIMIT 1
-                """, orderDetailParams(orderDetailId), Long.class);
-        return ids.stream().findFirst();
-    }
-
     private Optional<ArchivedRestoreCandidate> findRestoreCandidate(UUID orderDetailId) {
         if (orderDetailId == null) {
             return Optional.empty();

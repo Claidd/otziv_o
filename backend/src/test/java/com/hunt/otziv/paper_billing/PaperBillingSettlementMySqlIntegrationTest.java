@@ -60,7 +60,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
         var settings=new PaperBillingSettings();settings.setDeliveryEnabled(true);
         var delivery=mock(PaperBillingDelivery.class);
         when(delivery.send(anyMap(),eq(false))).thenReturn(com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("gateway_not_ready","Unavailable"));
-        var worker=new PaperBillingWorker(store,mock(PaperBillingService.class),settings,mock(PaperBillingBankClient.class),delivery,mock(BankPaperInvoices.class),mock(PaperBillingPdfSignature.class));
+        var worker=new PaperBillingWorker(store,mock(PaperBillingService.class),settings,mock(PaperBillingBankClient.class),delivery,mock(PaperBillingPdfSignature.class));
         worker.process(id);
         var after=store.row(id);
         for(int i=0;i<20;i++) {assertFalse(store.pending().contains(id));worker.process(id);}

@@ -18,8 +18,6 @@ public interface ContractorActualPaymentAttributionRepository
 
     Optional<ContractorActualPaymentAttribution> findByAttributionKey(String attributionKey);
 
-    boolean existsByEvidenceId(Long evidenceId);
-
     boolean existsBySourceKindAndSourceIdAndEvidenceId(
             ContractorActualPaymentSourceKind sourceKind,
             Long sourceId,

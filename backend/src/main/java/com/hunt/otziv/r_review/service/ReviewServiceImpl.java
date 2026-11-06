@@ -134,21 +134,6 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    public int countBoardReviewsToPublish(LocalDate localDate, Principal principal, String role) {
-        return countBoardReviews(ReviewBoardMode.PUBLISH, localDate, null, principal, role);
-    }
-
-    @Override
-    public int countBoardReviewsToVigul(LocalDate localDate, Principal principal, String role) {
-        return countBoardReviews(ReviewBoardMode.VIGUL, localDate, null, principal, role);
-    }
-
-    @Override
-    public int countBoardReviewsByOrderStatus(String status, Principal principal, String role) {
-        return countBoardReviews(ReviewBoardMode.ORDER_STATUS, null, status, principal, role);
-    }
-
-    @Override
     public Map<String, Integer> countBoardReviewMetrics(
             LocalDate publishDate,
             LocalDate vigulDate,
@@ -503,57 +488,6 @@ public class ReviewServiceImpl implements ReviewService {
         return new PageImpl<>(reviewDTOOnes, reviewIds.getPageable(), reviewIds.getTotalElements());
     }
 
-    private int countBoardReviews(
-            ReviewBoardMode mode,
-            LocalDate localDate,
-            String status,
-            Principal principal,
-            String role
-    ) {
-        if (mode == ReviewBoardMode.ORDER_STATUS && !hasText(status)) {
-            return 0;
-        }
-
-        ReviewBoardScope scope = ReviewBoardScope.fromRole(role);
-        Worker worker = null;
-        Manager manager = null;
-        Set<Worker> workers = null;
-
-        switch (scope) {
-            case WORKER -> {
-                User user = requireUser(principal);
-                worker = workerService.getWorkerByUserId(user.getId());
-                if (worker == null) {
-                    return 0;
-                }
-            }
-            case MANAGER -> {
-                User user = requireUser(principal);
-                manager = managerService.getManagerByUserId(user.getId());
-                if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
-                    return 0;
-                }
-                workers = manager.getUser().getWorkers();
-            }
-            case OWNER -> {
-                User user = requireUser(principal);
-                List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
-                if (managerList.isEmpty()) {
-                    return 0;
-                }
-                workers = workerService.getAllWorkersToManagerList(managerList);
-            }
-            case ADMIN -> {
-            }
-        }
-
-        if ((scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) && (workers == null || workers.isEmpty())) {
-            return 0;
-        }
-
-        return toIntCount(reviewBoardQueryService.countReviewIdsForBoard(mode, scope, localDate, status, worker, manager, workers));
-    }
-
     private Map<String, Integer> countBoardReviewMetrics(
             ReviewBoardScope scope,
             LocalDate publishDate,
@@ -735,27 +669,6 @@ public class ReviewServiceImpl implements ReviewService {
         return reviewRepository.save(review);
     }
 
-    @Transactional
-    public boolean deleteReview(Long reviewId) {
-        orderAggregateMutationLockService.lockForReview(reviewId);
-        assignmentMutationGuardService.assertReview(reviewId);
-        Review review = reviewRepository.findById(reviewId).orElse(null);
-        if (review == null) {
-            return false;
-        }
-        Long orderId = orderId(review);
-        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId);
-        OrderDetails orderDetails = review.getOrderDetails();
-        reviewRepository.delete(review);
-        if (orderDetails != null) {
-            List<Review> remaining = new ArrayList<>(safeReviews(orderDetails));
-            remaining.removeIf(candidate -> Objects.equals(reviewId, candidate.getId()));
-            orderDetails.setReviews(remaining);
-            payableRecalculationService.recalculate(orderDetails);
-        }
-        return true;
-    }
-
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean deleteReviewFromLockedOrder(Long orderId, Long reviewId) {
@@ -770,16 +683,6 @@ public class ReviewServiceImpl implements ReviewService {
         }
         reviewRepository.delete(review);
         return true;
-    }
-
-    @Override
-    public List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId) {
-        return reviewRepository.findAllByOrderDetailsId(orderDetailsId);
-    }
-
-    public List<Review> getAllWorkerReviews(Long workerId) {
-        List<Long> reviewId = getReviewByWorkerId(workerId);
-        return findAllByListId(reviewId);
     }
 
 
@@ -1124,22 +1027,6 @@ public class ReviewServiceImpl implements ReviewService {
         Worker worker = workerService.getWorkerByUserId(userService.findByUserName(username).orElseThrow().getId());
         LocalDate localDate = LocalDate.now();
         return reviewRepository.findAllByReviewsListStatus(localDate, worker);
-    }
-
-    @Transactional
-    public void deleteReviewsByOrderId(Long reviewId) {
-        orderAggregateMutationLockService.lockForReview(reviewId);
-        assignmentMutationGuardService.assertReview(reviewId);
-        Review review = reviewRepository.findById(reviewId).orElse(null);
-        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(review));
-        OrderDetails orderDetails = review != null ? review.getOrderDetails() : null;
-        reviewRepository.deleteReviewByReviewId(reviewId);
-        if (orderDetails != null) {
-            List<Review> remaining = new ArrayList<>(safeReviews(orderDetails));
-            remaining.removeIf(candidate -> Objects.equals(reviewId, candidate.getId()));
-            orderDetails.setReviews(remaining);
-            payableRecalculationService.recalculate(orderDetails);
-        }
     }
 
     @Override

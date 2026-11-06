@@ -112,11 +112,6 @@ public class JwtService {
         return claims;
     }
 
-    /** Retained for diagnostics/tests; validates the complete token contract. */
-    public String extractChecksum(String token) {
-        return parseAndValidate(token, LEAD_TRANSFER_SUBJECT, IMPORT_SCOPE).get("checksum", String.class);
-    }
-
     public String generateChecksum(Object payload) {
         if (payload == null) {
             throw new IllegalArgumentException("Payload is required");

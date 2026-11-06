@@ -34,17 +34,4 @@ public interface AnalyticsDailyUserRepository extends JpaRepository<AnalyticsDai
             @Param("fromInclusive") LocalDate fromInclusive,
             @Param("toInclusive") LocalDate toInclusive
     );
-
-    @Query("""
-            select daily
-            from AnalyticsDailyUser daily
-            where daily.roleName = :roleName
-              and daily.metricDate between :fromInclusive and :toInclusive
-            order by daily.metricDate, daily.user.id
-            """)
-    List<AnalyticsDailyUser> findByRoleNameInPeriod(
-            @Param("roleName") String roleName,
-            @Param("fromInclusive") LocalDate fromInclusive,
-            @Param("toInclusive") LocalDate toInclusive
-    );
 }

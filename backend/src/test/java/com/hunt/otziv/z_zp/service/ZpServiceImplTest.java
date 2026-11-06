@@ -16,7 +16,6 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
-import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.ZpRepository;
 import java.math.BigDecimal;
@@ -32,7 +31,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ZpServiceImplTest {
 
     @Mock private ZpRepository zpRepository;
-    @Mock private UserService userService;
     @Mock private ContractorRewardAttributionService attributionService;
     @Mock private ContractorPaymentRuntimeSwitch runtimeSwitch;
     @Mock private ContractorRewardLedgerService ledgerService;
@@ -43,7 +41,6 @@ class ZpServiceImplTest {
     void setUp() {
         service = new ZpServiceImpl(
                 zpRepository,
-                userService,
                 attributionService,
                 runtimeSwitch,
                 ledgerService

@@ -1548,15 +1548,6 @@ public interface WorkloadShadowProjectionRepository
 
     @Modifying
     @Query(value = """
-            UPDATE workload_shadow_worker_current current
-            JOIN workload_shadow_freeze_accounts account ON account.worker_id = current.worker_id
-            SET current.freeze_credits = account.available_credits
-            WHERE current.progress_date = :progressDate
-            """, nativeQuery = true)
-    int refreshCurrentFreezeCredits(@Param("progressDate") LocalDate progressDate);
-
-    @Modifying
-    @Query(value = """
             INSERT INTO workload_shadow_events (
                 deduplication_key, severity, event_type, manager_id, worker_id,
                 title, message, target_group_type, target_group_chat_id,
