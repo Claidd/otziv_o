@@ -9,7 +9,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
-  ApiService,
   CommonInvoiceDetailsResponse,
   CommonInvoiceOrderResponse,
   CommonInvoicePaymentRouteChangeTarget,
@@ -1612,7 +1611,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   private async runOrderMutation(
     ticket: RouteEpochTicket,
     key: string,
-    request: () => ReturnType<ApiService['getCommonInvoice']>
+    request: () => ReturnType<CommonBillingApi['getCommonInvoice']>
   ): Promise<void> {
     this.readRun += 1;
     this.mutating.set(key);
@@ -1663,7 +1662,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     action: InvoiceAction,
     paymentEvidenceToken: string | null = null,
     manualPaymentEvidence: ManualPaymentConfirmationRequest | null = null
-  ): ReturnType<ApiService['getCommonInvoice']> {
+  ): ReturnType<CommonBillingApi['getCommonInvoice']> {
     switch (action) {
       case 'send':
         return this.commonBillingApi.sendCommonInvoice(invoiceId);

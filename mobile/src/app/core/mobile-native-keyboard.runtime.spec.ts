@@ -7,9 +7,7 @@ import { MobileThemeService } from '../shared/mobile-theme.service';
 import { MobileNativeService } from './mobile-native.service';
 
 vi.mock('@capacitor/keyboard', () => ({
-  Keyboard: { addListener: vi.fn() },
-  KeyboardResize: { Ionic: 'ionic' },
-  KeyboardStyle: { Default: 'DEFAULT' }
+  Keyboard: { addListener: vi.fn() }
 }));
 
 describe('native keyboard layout event ordering', () => {

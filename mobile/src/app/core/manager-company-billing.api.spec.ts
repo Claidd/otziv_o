@@ -2,7 +2,6 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { ApiService } from './api.service';
 import { ManagerCompanyBillingApi } from './manager-company-billing.api';
 
 describe('company billing HTTP boundary', () => {
@@ -21,15 +20,15 @@ describe('company billing HTTP boundary', () => {
     expect(await result).toEqual([]);
   });
 
-  it('preserves the legacy create command and current-invoice detach choice', async () => {
-    const legacy = TestBed.inject(ApiService);
+  it('preserves the create command and current-invoice detach choice', async () => {
+    const api = TestBed.inject(ManagerCompanyBillingApi);
     const command = { name: 'Общий счет', enabled: true, autoRepeatOrders: false, managerId: null, invoiceCompanyId: 91, companyIds: [91, 92] };
-    const created = firstValueFrom(legacy.createCommonBillingAccount(command));
+    const created = firstValueFrom(api.createCommonBillingAccount(command));
     const create = requests.expectOne('/api/common-billing/accounts');
     expect(create.request.method).toBe('POST');
     expect(create.request.body).toEqual(command);
     create.flush({ id: 7 }); await created;
-    const detached = firstValueFrom(legacy.removeCommonBillingCompany(7, 91, true));
+    const detached = firstValueFrom(api.removeCommonBillingCompany(7, 91, true));
     const detach = requests.expectOne(request => request.url.includes('/api/common-billing/accounts/7/companies/91'));
     expect(detach.request.method).toBe('DELETE');
     expect(detach.request.params.get('detachCurrent')).toBe('true');

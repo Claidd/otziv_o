@@ -18,7 +18,6 @@ npm run verify
 npm run verify:prod
 npm run cap:sync:prod
 npm run cap:android:prod
-npm run cap:ios:prod
 ```
 
 Before store publication, verify Keycloak allows the mobile redirect URI:

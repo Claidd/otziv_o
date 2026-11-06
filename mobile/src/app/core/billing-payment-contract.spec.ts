@@ -2,8 +2,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { ApiService } from './api.service';
 import { ManagerCompanyBillingApi } from './manager-company-billing.api';
+import { PublicPaymentsApi } from './public-payments.api';
 
 describe('billing/payment read contracts at the Angular HTTP boundary', () => {
   let requests: HttpTestingController;
@@ -13,7 +13,7 @@ describe('billing/payment read contracts at the Angular HTTP boundary', () => {
   });
   afterEach(() => requests.verify());
   it('keeps the public token encoded and disables an unknown payment state', async () => {
-    const result = firstValueFrom(TestBed.inject(ApiService).getPublicPaymentLink('a/b'));
+    const result = firstValueFrom(TestBed.inject(PublicPaymentsApi).getPublicPaymentLink('a/b'));
     const request = requests.expectOne('/api/payments/public/a%2Fb');
     request.flush({ token: 'a/b', companyTitle: '', filialTitle: '', serviceTitle: '', amount: 10, amountKopecks: 1000, description: '', status: 'FUTURE', expiresAt: null, payable: true });
     const value = await result;

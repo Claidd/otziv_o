@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { Device, type DeviceInfo } from '@capacitor/device';
-import { Keyboard, KeyboardResize, KeyboardStyle, type KeyboardInfo } from '@capacitor/keyboard';
+import { Keyboard, type KeyboardInfo } from '@capacitor/keyboard';
 import { Network, type ConnectionStatus } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -207,15 +207,6 @@ export class MobileNativeService {
   private async configureKeyboard(): Promise<void> {
     if (!Capacitor.isPluginAvailable('Keyboard')) {
       return;
-    }
-
-    if (Capacitor.getPlatform() === 'ios') {
-      await Promise.all([
-        Keyboard.setResizeMode({ mode: KeyboardResize.Ionic }).catch(() => undefined),
-        Keyboard.setScroll({ isDisabled: false }).catch(() => undefined),
-        Keyboard.setAccessoryBarVisible({ isVisible: true }).catch(() => undefined),
-        Keyboard.setStyle({ style: KeyboardStyle.Default }).catch(() => undefined)
-      ]);
     }
 
     const showHandle = await Keyboard.addListener('keyboardWillShow', (info) => this.setKeyboardState(true, info));

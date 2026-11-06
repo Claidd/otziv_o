@@ -2,7 +2,6 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { ApiService } from './api.service';
 import { ManagerCompanyEditorApi } from './manager-company-editor.api';
 
 describe('company editor HTTP boundary', () => {
@@ -13,10 +12,10 @@ describe('company editor HTTP boundary', () => {
   });
   afterEach(() => requests.verify());
 
-  it('preserves the company and branch IDs in the legacy adapter and exact branch update body', async () => {
-    const legacy = TestBed.inject(ApiService);
+  it('preserves the company and branch IDs and exact branch update body', async () => {
+    const api = TestBed.inject(ManagerCompanyEditorApi);
     const requestBody = { title: 'Филиал', url: 'https://example.test', cityId: 17 };
-    const result = firstValueFrom(legacy.updateManagerCompanyFilial(91, 5, requestBody));
+    const result = firstValueFrom(api.updateManagerCompanyFilial(91, 5, requestBody));
     const request = requests.expectOne('/api/manager/companies/91/filials/5');
     expect(request.request.method).toBe('PUT');
     expect(request.request.body).toEqual(requestBody);

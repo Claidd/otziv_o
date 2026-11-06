@@ -232,14 +232,6 @@ describe('native auth storage durability through the real services', () => {
     expect(await storage.readTokens()).toEqual(tokens('next'));
   });
 
-  it('keeps iOS storage behavior without calling the Android bridge', async () => {
-    vi.mocked(Capacitor.getPlatform).mockReturnValue('ios'); storage = new MobileAuthStorageService();
-    await storage.writeTokens(tokens()); await storage.writePendingLogin(pending); await storage.clearTokens();
-    expect(bridge.flush).not.toHaveBeenCalled();
-    expect(await storage.readTokens()).toBeNull();
-    expect(await storage.readPendingLogin()).toEqual(pending);
-  });
-
   it('keeps web tokens in memory and PKCE in sessionStorage without either native plugin', async () => {
     vi.mocked(Capacitor.getPlatform).mockReturnValue('web');
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false); storage = new MobileAuthStorageService();

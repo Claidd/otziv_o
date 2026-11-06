@@ -26,7 +26,6 @@ import {
 } from '@ionic/angular';
 import { Observable, Subscription, finalize, firstValueFrom } from 'rxjs';
 import {
-  type ApiService,
   BadReviewTaskItem,
   ManagerPaymentLinkResponse,
   PaymentRouteChangeTarget,
@@ -4044,7 +4043,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   private runDetailsMutation(
     key: string,
-    request: () => ReturnType<ApiService['addManagerOrderReview']>,
+    request: () => ReturnType<ManagerReviewActionsApi['addManagerOrderReview']>,
     fallback: string,
     afterSuccess?: (details: OrderDetailsPayload, routeTicket: RouteEpochTicket) => void,
     existingRouteTicket?: RouteEpochTicket
@@ -4082,7 +4081,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   private runReviewMutation(
     key: string,
-    request: () => ReturnType<ApiService['changeManagerOrderReviewBot']>,
+    request: () => ReturnType<ManagerReviewActionsApi['changeManagerOrderReviewBot']>,
     fallback: string,
     existingRouteTicket?: RouteEpochTicket
   ): void {
