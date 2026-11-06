@@ -132,6 +132,10 @@ public class CommonInvoice {
     @Column(name = "next_reminder_at")
     private LocalDateTime nextReminderAt;
 
+    /** Manager notice before the automatic move to "Не оплачено"; valid only when not before sentAt. */
+    @Column(name = "overdue_notice_at")
+    private LocalDateTime overdueNoticeAt;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 

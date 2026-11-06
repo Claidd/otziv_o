@@ -599,6 +599,90 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             Pageable pageable
     );
 
+    /** Invoices the manager must see before or after the automatic move to "Не оплачено". */
+    @Query("""
+        SELECT invoice
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN FETCH account.manager manager
+        LEFT JOIN FETCH manager.user
+        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
+        LEFT JOIN FETCH invoiceCompany.manager invoiceManager
+        LEFT JOIN FETCH invoiceManager.user
+        WHERE (
+            account.manager = :manager
+            OR invoiceCompany.manager = :manager
+            OR EXISTS (
+                SELECT invoiceOrder.id
+                FROM CommonInvoiceOrder invoiceOrder
+                JOIN invoiceOrder.order linkedOrder
+                WHERE invoiceOrder.invoice = invoice
+                  AND linkedOrder.manager = :manager
+            )
+        )
+          AND invoice.status IN :statuses
+          AND invoice.sentAt IS NOT NULL
+          AND invoice.sentAt <= :sentBefore
+        ORDER BY invoice.sentAt ASC, invoice.id ASC
+    """)
+    List<CommonInvoice> findManagerOverdueApproachingInvoices(
+            @Param("manager") Manager manager,
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            @Param("sentBefore") LocalDateTime sentBefore,
+            Pageable pageable
+    );
+
+    /**
+     * Unpaid automatic-route invoices whose current sending cycle has no manager notice yet. Each
+     * row is {@code [CommonInvoice, Long managerId]}; the manager is the account's, else the
+     * invoice company's.
+     */
+    @Query("""
+        SELECT invoice, COALESCE(manager.id, invoiceManager.id)
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN account.manager manager
+        LEFT JOIN account.invoiceCompany invoiceCompany
+        LEFT JOIN invoiceCompany.manager invoiceManager
+        WHERE invoice.status IN :statuses
+          AND invoice.invoicePaymentMode <> com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE
+          AND invoice.paperInvoiceAutomationHold = false
+          AND invoice.sentAt IS NOT NULL
+          AND invoice.sentAt <= :sentBefore
+          AND (invoice.overdueNoticeAt IS NULL OR invoice.overdueNoticeAt < invoice.sentAt)
+          AND TRIM(COALESCE(invoice.lastError, '')) = ''
+          AND TRIM(COALESCE(invoice.paymentSuccessNotificationError, '')) = ''
+        ORDER BY invoice.sentAt ASC, invoice.id ASC
+    """)
+    List<Object[]> findOverdueNoticeCandidates(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            @Param("sentBefore") LocalDateTime sentBefore,
+            Pageable pageable
+    );
+
+    /** Noticed invoices whose notice period has passed; the move re-checks each under its lock. */
+    @Query("""
+        SELECT invoice.id
+        FROM CommonInvoice invoice
+        WHERE invoice.status IN :statuses
+          AND invoice.invoicePaymentMode <> com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE
+          AND invoice.paperInvoiceAutomationHold = false
+          AND invoice.sentAt IS NOT NULL
+          AND invoice.sentAt <= :sentBefore
+          AND invoice.overdueNoticeAt IS NOT NULL
+          AND invoice.overdueNoticeAt >= invoice.sentAt
+          AND invoice.overdueNoticeAt <= :noticedBefore
+          AND TRIM(COALESCE(invoice.lastError, '')) = ''
+          AND TRIM(COALESCE(invoice.paymentSuccessNotificationError, '')) = ''
+        ORDER BY invoice.id ASC
+    """)
+    List<Long> findOverdueEscalationCandidateIds(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            @Param("sentBefore") LocalDateTime sentBefore,
+            @Param("noticedBefore") LocalDateTime noticedBefore,
+            Pageable pageable
+    );
+
     Optional<CommonInvoice> findByTbankOrderId(String tbankOrderId);
 
     Optional<CommonInvoice> findByTbankPaymentId(String tbankPaymentId);

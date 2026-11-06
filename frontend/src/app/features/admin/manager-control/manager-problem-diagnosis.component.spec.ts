@@ -56,6 +56,15 @@ describe('ManagerProblemDiagnosisComponent', () => {
     expect(element.querySelector('dl, .technical-details, .evidence-ref')).toBeNull();
   });
 
+  it('starts collapsed so the card reason and the client message stay in view', () => {
+    const element: HTMLElement = render(fixtureView()).nativeElement;
+    const toggle = element.querySelector<HTMLDetailsElement>('details.diagnosis-toggle')!;
+    expect(toggle.open).toBe(false);
+    expect(toggle.querySelector(':scope > summary')?.textContent).toContain('Разбор замечания');
+    expect(toggle.querySelector(':scope > summary')?.textContent).toContain('22.10.2026 10:00');
+    expect(toggle.querySelector('.business-diagnosis')).not.toBeNull();
+  });
+
   it('keeps administrator evidence out of the DOM until explicitly expanded', () => {
     const fixture = render(fixtureView(), true);
     expect(fixture.nativeElement.textContent).toContain('Технические данные для администратора');

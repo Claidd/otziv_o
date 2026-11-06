@@ -77,7 +77,10 @@ class MaxGroupLinkServiceTest {
         when(companyRepository.findById(235L)).thenReturn(Optional.of(company));
         String inviteUrl = service.buildInviteUrl(235L, company.getUrlChat(), null);
         String payload = inviteUrl.substring(inviteUrl.indexOf("start=") + "start=".length());
-        service.handleBotStarted(203090551L, payload);
+        String started = service.handleBotStarted(203090551L, payload).orElse("");
+        // The private reply names the group command: MAX never repeats "bot added" for a served group.
+        assertTrue(started.contains("Если бот уже состоит в этой группе"), started);
+        assertTrue(started.endsWith("команду:\n/start " + payload), started);
         when(companyRepository.findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(203090551L))
                 .thenReturn(Optional.of(company));
 

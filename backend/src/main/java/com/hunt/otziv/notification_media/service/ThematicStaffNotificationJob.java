@@ -61,6 +61,65 @@ public class ThematicStaffNotificationJob {
     private final AppSettingService appSettingService;
     private final org.springframework.context.ApplicationEventPublisher mediaEvents;
     private final MandatoryAccountBlockers accountBlockers;
+    /** Field-injected to keep the constructor of narrow tests unchanged. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices overdueNotices;
+    private static final String COMMON_INVOICE_OVERDUE_NOTICE_ENABLED = "manager.common-invoice-overdue-notice.enabled";
+
+    /**
+     * Manager-group notice before the autoresponder moves unpaid common invoices to "Не оплачено".
+     * The move waits for the recorded notice, so an invoice whose manager has no reachable chat
+     * is not moved automatically and stays a Control card for the manager's decision.
+     */
+    @Scheduled(
+            cron = "${manager.common-invoice-overdue-notice.cron:0 */15 10-19 * * *}",
+            zone = "${worker.progress.zone:Asia/Irkutsk}"
+    )
+    public void dispatchCommonInvoiceOverdueNotices() {
+        if (overdueNotices == null
+                || !appSettingService.getBoolean(ENABLED, true)
+                || !appSettingService.getBoolean(COMMON_INVOICE_OVERDUE_NOTICE_ENABLED, true)) {
+            return;
+        }
+        try {
+            dispatchCommonInvoiceOverdueNoticesAt(LocalDate.now(DEFAULT_ZONE), LocalDateTime.now());
+        } catch (RuntimeException exception) {
+            log.warn("Common invoice overdue notices skipped: {}", exception.getMessage());
+        }
+    }
+
+    void dispatchCommonInvoiceOverdueNoticesAt(LocalDate date, LocalDateTime storageNow) {
+        var pending = overdueNotices.pendingNotices(storageNow);
+        if (pending.isEmpty()) {
+            return;
+        }
+        Map<Long, List<com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.Approaching>> byManager =
+                new java.util.LinkedHashMap<>();
+        pending.forEach(invoice -> byManager.computeIfAbsent(invoice.managerId(), id -> new java.util.ArrayList<>())
+                .add(invoice));
+        String eventCode = NotificationMediaEventCatalog.MANAGER_COMMON_INVOICE_OVERDUE_SOON.code();
+        int notified = 0;
+        for (var entry : byManager.entrySet()) {
+            Manager manager = managerRepository.findByIdWithUser(entry.getKey()).orElse(null);
+            User user = manager == null ? null : manager.getUser();
+            long chatId = manager == null || !eligibleUser(user) ? 0L : managerChatId(manager, user);
+            if (chatId == 0L) {
+                log.warn("Common invoice overdue notice has no manager chat: managerId={}, invoices={}",
+                        entry.getKey(), entry.getValue().size());
+                continue;
+            }
+            if (send(eventCode, user, chatId, date, OPERATIONAL_NOTICE_CAP,
+                    CommonInvoiceOverdueNoticeText.manager(entry.getValue()))) {
+                LocalDateTime noticeAt = LocalDateTime.now();
+                entry.getValue().forEach(invoice ->
+                        overdueNotices.recordNotice(invoice.invoiceId(), invoice.sentAt(), noticeAt));
+                notified++;
+            }
+        }
+        if (notified > 0) {
+            log.info("Common invoice overdue notices sent: managers={}, invoices={}", notified, pending.size());
+        }
+    }
 
     @Scheduled(
             cron = "${worker.thematic-notifications.cron:0 0 11,13,16,17 * * *}",

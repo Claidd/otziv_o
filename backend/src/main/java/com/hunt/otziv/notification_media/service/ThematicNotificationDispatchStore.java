@@ -23,7 +23,8 @@ public class ThematicNotificationDispatchStore {
      */
     static final java.util.Set<String> OPERATIONAL_EVENT_CODES = java.util.Set.of(
             NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code(),
-            NotificationMediaEventCatalog.MANAGER_WORKER_ACCOUNT_BLOCKED.code()
+            NotificationMediaEventCatalog.MANAGER_WORKER_ACCOUNT_BLOCKED.code(),
+            NotificationMediaEventCatalog.MANAGER_COMMON_INVOICE_OVERDUE_SOON.code()
     );
 
     private final NamedParameterJdbcTemplate jdbc;

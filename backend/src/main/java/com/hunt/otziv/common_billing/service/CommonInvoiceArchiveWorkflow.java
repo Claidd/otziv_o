@@ -100,6 +100,28 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
         CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        moveLockedInvoiceToUnpaid(invoiceId, invoice, "manual_unpaid");
+        return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    /**
+     * The autoresponder's move after the payment overdue period: the same business action as the
+     * manual one (orders to "Не оплачено", bad review tasks, reminders stopped), taken only when
+     * {@code stillDue} confirms the conditions again under the invoice lock.
+     */
+    @Transactional
+    public boolean markUnpaidAfterOverdue(Long invoiceId, java.util.function.Predicate<CommonInvoice> stillDue) {
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
+        if (invoice == null || stillDue == null || !stillDue.test(invoice)) {
+            return false;
+        }
+        moveLockedInvoiceToUnpaid(invoiceId, invoice, "overdue_unpaid");
+        log.info("Common invoice {} moved to Не оплачено after the payment overdue period", invoiceId);
+        return true;
+    }
+
+    private void moveLockedInvoiceToUnpaid(Long invoiceId, CommonInvoice invoice, String archiveReason) {
         ensureCommonInvoiceNotNeedsAttention(invoice);
         ensureCommonInvoiceCanBeMarkedUnpaid(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
@@ -130,14 +152,13 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
         ensureBadReviewTasksForItems(changedItems);
         taskReceiptIntegrationService.release(invoice, "Общий счет переведен в статус Не оплачено");
         changedItems.forEach(item -> item.setUnpaid(true));
-        archiveAndClearCurrentPaymentRef(invoice, "manual_unpaid");
+        archiveAndClearCurrentPaymentRef(invoice, archiveReason);
         invoice.setStatus(CommonInvoiceStatus.UNPAID);
         invoice.setNextReminderAt(null);
         invoice.setLastError(null);
         invoiceOrderRepository.saveAll(items);
         invoiceRepository.save(invoice);
         scheduleContractorShadowRelease(invoiceId);
-        return invoiceAfterOrderPrelude(invoiceId);
     }
 
     @Transactional(readOnly = true)
