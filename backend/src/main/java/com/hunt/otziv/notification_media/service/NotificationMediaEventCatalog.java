@@ -148,6 +148,12 @@ public enum NotificationMediaEventCatalog {
             "К середине дня у специалистов менеджера остались задачи без рабочего аккаунта",
             false
     ),
+    MANAGER_COMMON_INVOICE_OVERDUE_SOON(
+            NotificationRecipientType.MANAGER,
+            "Общие счета скоро в «Не оплачено»",
+            "За два дня до автоматического перевода неоплаченных общих счетов в «Не оплачено»",
+            true
+    ),
     MANAGER_REPORT_REMINDER(
             NotificationRecipientType.MANAGER,
             "Напоминание менеджеру о разборе",

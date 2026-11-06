@@ -256,6 +256,56 @@ class ManagerControlInvoiceDiagnosticsTest {
         assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
     }
 
+    @Test
+    void longUnpaidInvoiceIsARemarkEvenWhileRemindersKeepItFresh() {
+        overdueDays(30);
+        var invoice = invoice(CommonInvoiceStatus.REMINDER, null);
+        invoice.setSentAt(LocalDateTime.now().minusDays(40));
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        invoice.setUpdatedAt(LocalDateTime.now().minusHours(3));
+        given(invoice, List.of(position("Напоминание", false, true)));
+        var notices = overdueNotices();
+        when(notices.automaticMoveNotBefore(eq(invoice.getId()), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(LocalDateTime.of(2026, 11, 8, 12, 0)));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(reason(invoice, List.of())).contains("не оплачен 40 дн.", "не раньше 08.11.2026",
+                "создаст плохие задачи", "уведомления в группу менеджера").doesNotContain("Нажмите «Починить»");
+    }
+
+    @Test
+    void cardStartsWhenTheTwoDayNoticePeriodBegins() {
+        overdueDays(30);
+        var invoice = invoice(CommonInvoiceStatus.INVOICED, null);
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        given(invoice, List.of(position("Выставлен счет", false, true)));
+
+        invoice.setSentAt(LocalDateTime.now().minusDays(27));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isTrue();
+        invoice.setSentAt(LocalDateTime.now().minusDays(28).minusMinutes(1));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+    }
+
+    @Test
+    void invoiceTheAutoresponderWillNotMoveIsLeftToTheManagersDecision() {
+        overdueDays(30);
+        var invoice = invoice(CommonInvoiceStatus.PARTIALLY_PAID, null);
+        invoice.setSentAt(LocalDateTime.now().minusDays(35));
+        invoice.setAmountKopecks(500000);
+        invoice.setPaidKopecks(100000);
+        var notices = overdueNotices();
+        when(notices.automaticMoveNotBefore(anyLong(), any(LocalDateTime.class))).thenReturn(Optional.empty());
+
+        assertThat(reason(invoice, List.of())).contains("оплачен частично", "Автоматического перевода",
+                "(есть частичная оплата)", "Решение за менеджером");
+    }
+
+    private com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices overdueNotices() {
+        var notices = mock(com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.class);
+        ReflectionTestUtils.setField(diagnostics, "overdueNotices", notices);
+        return notices;
+    }
+
     private com.hunt.otziv.payments.api.PaperInvoiceReminderProgress paperProgress(boolean onSchedule) {
         overdueDays(30);
         var progress = mock(com.hunt.otziv.payments.api.PaperInvoiceReminderProgress.class);

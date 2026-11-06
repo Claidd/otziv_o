@@ -52,6 +52,9 @@ public class ManagerControlInvoiceDiagnostics {
     /** Field-injected like the revival seam; absent in narrow tests. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hunt.otziv.payments.api.PaperInvoiceReminderProgress paperReminderProgress;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices overdueNotices;
+    private static final int OVERDUE_NOTICE_DAYS = com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.NOTICE_DAYS;
 
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
     /** A due reminder may wait for business windows and the shared limit; a day late means stalled. */
@@ -158,9 +161,27 @@ public class ManagerControlInvoiceDiagnostics {
 
     private List<CommonInvoice> findActionInvoices(Manager manager) {
         LocalDateTime now = LocalDateTime.now();
-        return findActionInvoiceCandidates(manager).stream()
+        java.util.Map<Long, CommonInvoice> byId = new java.util.LinkedHashMap<>();
+        findActionInvoiceCandidates(manager).stream()
                 .filter(invoice -> !paymentRemindersOnSchedule(invoice, now))
-                .toList();
+                .forEach(invoice -> byId.putIfAbsent(invoice.getId(), invoice));
+        // Reminders refresh an ordinary invoice every few days, so the stale rule never sees it.
+        commonInvoiceRepository.findManagerOverdueApproachingInvoices(
+                        manager, PAYMENT_REMINDER_STATUSES, overdueApproachingSince(now), PageRequest.of(0, 10_000))
+                .forEach(invoice -> byId.putIfAbsent(invoice.getId(), invoice));
+        return List.copyOf(byId.values());
+    }
+
+    /** Sent before this moment: the manager notice period before the automatic move has begun. */
+    private LocalDateTime overdueApproachingSince(LocalDateTime now) {
+        return (now == null ? LocalDateTime.now() : now).minusDays(Math.max(1, paymentOverdueDays() - OVERDUE_NOTICE_DAYS));
+    }
+
+    private boolean overdueApproaching(CommonInvoice invoice, LocalDateTime now) {
+        return invoice != null
+                && PAYMENT_REMINDER_STATUSES.contains(invoice.getStatus())
+                && invoice.getSentAt() != null
+                && !invoice.getSentAt().isAfter(overdueApproachingSince(now));
     }
 
     private List<CommonInvoice> findActionInvoiceCandidates(Manager manager) {
@@ -224,6 +245,9 @@ public class ManagerControlInvoiceDiagnostics {
         if (COMMON_INVOICE_CRITICAL_STATUSES.contains(status)) {
             return true;
         }
+        if (overdueApproaching(invoice, now)) {
+            return true;
+        }
         if (paymentRemindersOnSchedule(invoice, now)) {
             return false;
         }
@@ -270,7 +294,7 @@ public class ManagerControlInvoiceDiagnostics {
             return false;
         }
         LocalDateTime checkTime = now == null ? LocalDateTime.now() : now;
-        if (!invoice.getSentAt().isAfter(checkTime.minusDays(paymentOverdueDays()))) {
+        if (overdueApproaching(invoice, checkTime)) {
             return false;
         }
         boolean paperInvoice = invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE;
@@ -288,10 +312,35 @@ public class ManagerControlInvoiceDiagnostics {
         return invoice.getNextReminderAt() != null && invoice.getNextReminderAt().isAfter(staleReminderBefore);
     }
 
+    private String commonInvoiceOverdueReason(CommonInvoice invoice, LocalDate today) {
+        long unpaidDays = daysSince(invoice.getSentAt().toLocalDate(), today);
+        String head = "Почему в замечаниях: общий счёт не оплачен " + unpaidDays + " дн. после выставления"
+                + (invoice.getPaidKopecks() > 0 ? " (оплачен частично)" : "") + ". ";
+        java.util.Optional<LocalDateTime> move = overdueNotices == null || invoice.getId() == null
+                ? java.util.Optional.empty()
+                : overdueNotices.automaticMoveNotBefore(invoice.getId(), LocalDateTime.now());
+        if (move.isPresent()) {
+            return head + "Если оплаты не будет, автоответчик переведёт его в «Не оплачено» и создаст плохие задачи "
+                    + "не раньше " + move.get().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                    + " — через " + OVERDUE_NOTICE_DAYS + " дня после уведомления в группу менеджера. "
+                    + "Свяжитесь с клиентом; если оплата пришла, отметьте её в «Деталях» счёта.";
+        }
+        return head + "Автоматического перевода в «Не оплачено» для этого счёта не будет"
+                + (invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE ? " (банковский счёт)"
+                : invoice.getPaidKopecks() > 0 ? " (есть частичная оплата)"
+                : invoice.getClientReportedAt() != null ? " (клиент сообщил об оплате)" : "")
+                + ". Решение за менеджером: свяжитесь с клиентом, отметьте оплату или переведите счёт "
+                + "в «Не оплачено» вручную в «Деталях».";
+    }
+
     private int paymentOverdueDays() {
         int configured = appSettingService.getInt(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, DEFAULT_PAYMENT_OVERDUE_DAYS);
-        return Math.max(1, Math.min(365, configured));
+        // Same reading as CommonInvoiceOverdueEscalation, so the card and the move agree on the date.
+        if (configured <= 0) {
+            return DEFAULT_PAYMENT_OVERDUE_DAYS;
+        }
+        return Math.max(OVERDUE_NOTICE_DAYS + 1, Math.min(365, configured));
     }
 
     private boolean pausedForBankPaperDocuments(CommonInvoice invoice) {
@@ -349,6 +398,8 @@ public class ManagerControlInvoiceDiagnostics {
                 .orElse(invoice.getUpdatedAt());
         if (isPaperInvoiceDeliveryOverdue(invoice, LocalDateTime.now())) {
             attentionStartedAt = invoice.getSentAt();
+        } else if (overdueApproaching(invoice, LocalDateTime.now()) && !hasText(invoice.getLastError())) {
+            attentionStartedAt = invoice.getSentAt().plusDays(Math.max(1, paymentOverdueDays() - OVERDUE_NOTICE_DAYS));
         }
         return new ManagerControlConcreteItemResponse(
                 null,
@@ -434,6 +485,9 @@ public class ManagerControlInvoiceDiagnostics {
                     + "не подтверждена более 24 часов. Отправьте документ в клиентский чат, затем откройте "
                     + "«Детали» и нажмите «Счёт отправлен клиенту». До подтверждения клиентские напоминания "
                     + "и отметка оплаты заблокированы.";
+        }
+        if (overdueApproaching(invoice, LocalDateTime.now())) {
+            return commonInvoiceOverdueReason(invoice, today);
         }
         if (publicationBlockers != null && !publicationBlockers.isEmpty()) {
             String blockers = publicationBlockers.stream()

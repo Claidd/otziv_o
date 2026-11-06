@@ -68,7 +68,7 @@ class ThematicStaffNotificationJobTest {
                 org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
                 accountBlockers
         );
-        when(appSettingService.getInt(anyString(), anyInt()))
+        lenient().when(appSettingService.getInt(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
         lenient().when(dispatchStore.claim(anyString(), anyLong(), any(), anyInt())).thenReturn(true);
         lenient().when(mediaDeliveryService.send(anyString(), anyLong(), anyLong(), anyString(), anyString(), any()))
@@ -380,6 +380,56 @@ class ThematicStaffNotificationJobTest {
         verify(mediaDeliveryService, never()).send(
                 eq(NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code()),
                 anyLong(), anyLong(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void managerGroupHearsAboutCommonInvoicesBeforeTheyMoveToUnpaidAndOnlyDeliveredNoticesCount() {
+        var notices = org.mockito.Mockito.mock(com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(job, "overdueNotices", notices);
+        LocalDateTime now = LocalDateTime.of(2026, 11, 6, 11, 0);
+        var due = new com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.Approaching(
+                4L, 21L, "Априори <Банкет22>", 2_300_000, now.minusDays(92), 92, now.plusDays(2));
+        var unreachable = new com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.Approaching(
+                150L, 22L, "Совёнок", 250_000, now.minusDays(73), 73, now.plusDays(2));
+        when(notices.pendingNotices(now)).thenReturn(List.of(due, unreachable));
+        User managerUser = User.builder().id(201L).username("manager").active(true).telegramChatId(201L).build();
+        Manager manager = Manager.builder().id(21L).user(managerUser).auditTelegramGroupChatId(-2100L).build();
+        when(managerRepository.findByIdWithUser(21L)).thenReturn(java.util.Optional.of(manager));
+        when(managerRepository.findByIdWithUser(22L)).thenReturn(java.util.Optional.empty());
+
+        job.dispatchCommonInvoiceOverdueNoticesAt(now.toLocalDate(), now);
+
+        verify(mediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.MANAGER_COMMON_INVOICE_OVERDUE_SOON.code()),
+                eq(-2100L),
+                eq(201L),
+                argThat(text -> text.contains("Априори &lt;Банкет22&gt;") && text.contains("23 000 ₽")
+                        && text.contains("92 дн. без оплаты") && text.contains("перевод не раньше 08.11.2026")
+                        && text.contains("создаст плохие задачи")),
+                eq("HTML"),
+                eq(List.of()));
+        verify(notices).recordNotice(eq(4L), eq(due.sentAt()), any());
+        // No reachable chat: no notice is recorded, so the invoice is not moved automatically.
+        verify(notices, never()).recordNotice(eq(150L), any(), any());
+    }
+
+    @Test
+    void failedDeliveryLeavesTheNoticeUnrecordedForTheNextRun() {
+        var notices = org.mockito.Mockito.mock(com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(job, "overdueNotices", notices);
+        LocalDateTime now = LocalDateTime.of(2026, 11, 6, 11, 0);
+        when(notices.pendingNotices(now)).thenReturn(List.of(new com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.Approaching(
+                4L, 21L, "Аркада", 300_000, now.minusDays(46), 46, now.plusDays(2))));
+        User managerUser = User.builder().id(201L).username("manager").active(true).telegramChatId(201L).build();
+        when(managerRepository.findByIdWithUser(21L))
+                .thenReturn(java.util.Optional.of(Manager.builder().id(21L).user(managerUser).build()));
+        when(mediaDeliveryService.send(anyString(), anyLong(), anyLong(), anyString(), anyString(), any())).thenReturn(false);
+
+        job.dispatchCommonInvoiceOverdueNoticesAt(now.toLocalDate(), now);
+
+        verify(dispatchStore).release(NotificationMediaEventCatalog.MANAGER_COMMON_INVOICE_OVERDUE_SOON.code(), 201L,
+                now.toLocalDate());
+        verify(notices, never()).recordNotice(anyLong(), any(), any());
     }
 
     private void prepare(Worker worker, DailyWorkProgressResponse progress) {
