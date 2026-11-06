@@ -33,7 +33,9 @@ public GET, denied anonymous private GET, authenticated bytes, version IDs and
 old/latest version reads, and object copy restoration. This mc proof does not
 claim that server data upgrades or physical production backups were rehearsed.
 
-The retained C14 proof is in `../../proofs/c14-minio-mc/`. Publication must rebuild
+The C14 proof and its test were removed from the working tree on 2026-11-06; restore
+them with `git checkout 179ca19a9 -- infrastructure/runtime-security/proofs/c14-minio-mc
+infrastructure/runtime-security/builds/minio/mc-candidate.test.mjs`. Publication must rebuild
 the committed recipe, scan the actual resulting image again, and retain registry
 provenance/SBOM and the immutable registry digest. Local evidence alone does not
 activate an image in production. The upstream project is archived; this narrow

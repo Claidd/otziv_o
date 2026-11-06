@@ -7,8 +7,6 @@ import { assertLocalDocker } from '../recovery/drill.mjs';
 import { buildTriage } from './triage-report.mjs';
 import { adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
 import { adjudicateAlloyImage, adjudicatePostgresImage } from './ssl-refresh.mjs';
-import { adjudicateAlloyC29Image, C29_ALLOY_PROOF_LABEL } from './alloy-c29-adjudication.mjs';
-import { adjudicateAlloyC36Image, C36_ALLOY_PROOF_LABEL } from './alloy-c36-adjudication.mjs';
 import { adjudicateAlloyC43Image, C43_ALLOY_PROOF_LABEL } from './alloy-c43-adjudication.mjs';
 import { adjudicatePostgresGosu } from './postgres-gosu-adjudication.mjs';
 import { adjudicatePostgresC36Image } from './postgres-c36-adjudication.mjs';
@@ -103,11 +101,7 @@ export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
     const alloyProofLabel = report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'];
     const alloy = kind === 'image' ? await (alloyProofLabel === C43_ALLOY_PROOF_LABEL
       ? adjudicateAlloyC43Image(report, reportBytes, immutableImageId, scratch)
-      : alloyProofLabel === C36_ALLOY_PROOF_LABEL
-        ? adjudicateAlloyC36Image(report, reportBytes, immutableImageId, scratch)
-      : alloyProofLabel === C29_ALLOY_PROOF_LABEL
-        ? adjudicateAlloyC29Image(report, reportBytes, immutableImageId, scratch)
-        : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
+      : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
     const postgresC36 = alloyProofLabel === 'postgres-c36-gosu-go1273';
     const postgres = kind === 'image' ? await (postgresC36
       ? adjudicatePostgresC36Image(report, reportBytes, immutableImageId, scratch)

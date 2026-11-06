@@ -1,19 +1,9 @@
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { run } from '../recovery/process.mjs';
-import { labelsOf } from './go-binary-inspection.mjs';
+import { createHash } from 'node:crypto';
 
-export const C29_ALLOY_PROOF_LABEL = 'alloy-daemon-c29';
-export const C29_ALLOY_BUILD_INFO_READER = 'golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61';
-const READER = C29_ALLOY_BUILD_INFO_READER;
-const SOURCE = 'https://github.com/grafana/alloy';
-const REVISION = 'becfd489a7bb459c0496893b555fb87a003296b1';
-const VERSION = '1.19.2-otziv.2';
+// The C29 Alloy adjudicator was retired with its generation. These exact-binary
+// inspectors remain shared by the C43 Alloy adjudication.
 const MODULE = 'github.com/docker/docker';
-const MODULE_VERSION = 'v28.5.2+incompatible';
-const CVES = new Set(['CVE-2026-41567', 'CVE-2026-42306']);
 const DAEMON = ['github.com/docker/docker/daemon', 'github.com/moby/moby/daemon', 'github.com/moby/moby/v2/daemon'];
 const isDaemon = name => DAEMON.some(prefix => name === prefix || name.startsWith(prefix + '/') || name.startsWith(prefix + '.'));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -98,69 +88,4 @@ export function inspectAlloyC29Closure(bytes) {
     packages.includes(MODULE + '/client'), 'alloy_c29_closure_positive_control');
   assert.ok(!packages.some(isDaemon), 'alloy_c29_daemon_package_present');
   return { packageCount: packages.length, daemonPackages: 0, closureSha256: sha256(bytes) };
-}
-
-export async function adjudicateAlloyC29Image(report, reportBytes, immutableImageId, scratch) {
-  const base = { schema: 'otziv-alloy-c29-adjudication-v1', rawReportSha256: sha256(reportBytes),
-    imageConfigId: report.Metadata?.ImageID, immutableImageId, rawReportModified: false, decisions: [] };
-  if (labelsOf(report)['com.otziv.security.proof'] !== C29_ALLOY_PROOF_LABEL) {
-    return { ...base, status: 'NOT_APPLICABLE' };
-  }
-  try {
-    const labels = labelsOf(report);
-    assert.equal(labels['org.opencontainers.image.source'], SOURCE, 'alloy_c29_source');
-    assert.equal(labels['org.opencontainers.image.revision'], REVISION, 'alloy_c29_revision');
-    assert.equal(labels['org.opencontainers.image.version'], VERSION, 'alloy_c29_version');
-    assert.match(immutableImageId, /^sha256:[a-f0-9]{64}$/, 'alloy_c29_image_id');
-    const decisions = [];
-    for (const [resultIndex, result] of (report.Results || []).entries()) {
-      if (result.Target !== 'usr/bin/alloy' || result.Type !== 'gobinary') continue;
-      for (const [findingIndex, finding] of (result.Vulnerabilities || []).entries()) {
-        if (!CVES.has(finding.VulnerabilityID) || finding.PkgName !== MODULE ||
-          finding.InstalledVersion !== MODULE_VERSION) continue;
-        decisions.push({ resultIndex, findingIndex, cve: finding.VulnerabilityID, target: result.Target,
-          package: finding.PkgName, version: finding.InstalledVersion, state: 'not_affected',
-          justification: 'vulnerable_code_not_present',
-          fixedHighOrCritical: ['HIGH', 'CRITICAL'].includes(finding.Severity) && Boolean(finding.FixedVersion),
-          unfixedHighOrCritical: ['HIGH', 'CRITICAL'].includes(finding.Severity) && !finding.FixedVersion });
-      }
-    }
-    assert.ok(decisions.length > 0 && decisions.length <= 2 &&
-      new Set(decisions.map(item => item.cve)).size === decisions.length, 'alloy_c29_findings');
-    const inspect = JSON.parse(await run('docker', ['image', 'inspect', immutableImageId]))[0];
-    assert.equal(inspect.Id, immutableImageId, 'alloy_c29_immutable_image_identity');
-    assert.match(report.Metadata.ImageID || '', /^sha256:[a-f0-9]{64}$/, 'alloy_c29_image_config_id');
-    assert.deepEqual(inspect.Config.Labels, labels, 'alloy_c29_image_labels');
-    assert.deepEqual(inspect.RootFS.Layers, report.Metadata.ImageConfig.rootfs.diff_ids, 'alloy_c29_image_rootfs');
-    const directory = join(scratch, 'alloy-c29-' + randomUUID());
-    await mkdir(directory);
-    let container;
-    try {
-      container = (await run('docker', ['create', '--network', 'none', '--entrypoint', '/not-executed',
-        immutableImageId])).trim();
-      assert.match(container, /^[a-f0-9]{64}$/, 'alloy_c29_container_identity');
-      const binary = join(directory, 'alloy'), closure = join(directory, 'alloy.packages.txt');
-      await run('docker', ['cp', container + ':/usr/bin/alloy', binary], { timeoutMs: 120_000 });
-      await run('docker', ['cp', container + ':/usr/share/otziv-build/alloy.packages.txt', closure],
-        { timeoutMs: 120_000 });
-      const binaryBytes = await readFile(binary);
-      const functions = inspectAlloyC29Functions(binaryBytes);
-      const packages = inspectAlloyC29Closure(await readFile(closure));
-      const buildInfo = await run('docker', ['run', '--rm', '--network', 'none', '--read-only',
-        '--cap-drop=ALL', '--security-opt=no-new-privileges:true', '--memory', '512m', '--pids-limit', '64',
-        '--mount', `type=bind,source=${directory},target=/input,readonly`, READER,
-        'go', 'version', '-m', '/input/alloy'], { timeoutMs: 120_000 });
-      assert.ok(buildInfo.split(/\r?\n/)[0].endsWith(': go1.27.2') &&
-        buildInfo.includes(`\tdep\t${MODULE}\t${MODULE_VERSION}\t`), 'alloy_c29_build_info');
-      return { ...base, status: 'EXACT_BINARY_AFFECTED_CODE_ABSENT', binarySha256: sha256(binaryBytes),
-        buildInfoSha256: sha256(Buffer.from(buildInfo)), buildInfoReader: READER,
-        inspectedBinaryExecuted: false, ...functions, ...packages, decisions };
-    } finally {
-      if (container) await run('docker', ['rm', '-f', container]).catch(() => {});
-      await rm(directory, { recursive: true, force: true });
-    }
-  } catch (error) {
-    return { ...base, status: 'REJECTED',
-      reason: /^alloy_c29_[a-z_]+$/.test(error.message) ? error.message : 'alloy_c29_proof_failed' };
-  }
 }
