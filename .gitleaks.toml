@@ -2533,3 +2533,17 @@ regexes = [
   '''^f4d6f25bf0c3fa12d4968320a45685947756a22a$''',
   '''^fd6b4d94ff013dc7ed680d4e864610da5b9751f1$''',
 ]
+
+[[allowlists]]
+description = "C49 Grafana reviewed public publication/vulnerabilities.sbom.cdx.json"
+# Public upstream fix commits cited as advisory URLs in the scanner SBOM:
+# musl 7813e911 (git.musl-libc.org, CVE-2026-107891) and grafana/tempo 650eb198, bb8ca663.
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c49\-grafana/publication/vulnerabilities\.sbom\.cdx\.json$''']
+regexes = [
+  '''^650eb1985a0776789c8564122990f588a742356f$''',
+  '''^7813e9119eb5fe681b6750b8a033a0490bca0941$''',
+  '''^bb8ca663db34a0980c9758b40d918fda3b4dbec3$''',
+]

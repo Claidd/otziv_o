@@ -96,7 +96,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:a28faa872c401b182e11021fc1cb2c20d10c4ade88dabf8d6be49c7a0660004b
+    image: ghcr.io/claidd/otziv-security@sha256:2f4863a2cca459beb732b9081588cec9f411ac68e83d2cddf2609b16cd708c27
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -183,7 +183,7 @@ services:
 
   minio:
     # Retain the service alias used by local S3 clients; keep old MinIO data separately.
-    image: ghcr.io/claidd/otziv-security@sha256:bdbacc1acd769119b1456b830196041eecb4ed50bcb8a5e03d9812e309c6309c
+    image: ghcr.io/claidd/otziv-security@sha256:860e028744b41222a75dce94ce5c31572364a90787ccf478be95f575da6ad9a3
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 768m
@@ -864,7 +864,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:07233e89f1964d967e516a7b97856011a502213194a27c941fc5cf5d052208fa
+    image: ghcr.io/claidd/otziv-security@sha256:a9eb6567dc0fceb41dbe6225f49e80a39db9e1b9d5f82abb5003ee69fe4a5688
     # Builds the Telegram contact point for the alert rules, then runs the image entrypoint.
     entrypoint: ["/bin/sh", "/etc/otziv/grafana-alerting-entrypoint.sh"]
     profiles: ["observability"]

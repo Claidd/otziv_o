@@ -1,0 +1,19 @@
+{
+  "component": "phpmyadmin",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:2f4863a2cca459beb732b9081588cec9f411ac68e83d2cddf2609b16cd708c27",
+  "commit": "1cf595a0f79c021feaf30107137611d63b271a19",
+  "run": "42232330242",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c49-phpmyadmin.json",
+    "sha256": "468132ccec57bf1c5875a037969ae7b219ca75745f212f19f51fb2e8374a124a"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c49-phpmyadmin/publication/publication.json",
+    "sha256": "8906310d6a94c0ef820c49d7523fd250cc2b7516e77f454cc89bfca84bbd51fe"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c49-phpmyadmin/anonymous/anonymous-download.json",
+    "sha256": "88e4be09de6c7e7bac1f2a6ac79e32aff0008ce190dba7b3122a8587a56accfa"
+  }
+}
