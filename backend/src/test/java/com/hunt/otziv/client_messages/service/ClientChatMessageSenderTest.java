@@ -581,6 +581,61 @@ class ClientChatMessageSenderTest {
         return new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(1L, "Компания", urlChat, telegramChatId, maxChatId);
     }
 
+    @Test
+    void refusedGroupMessageHoldsTheGroupBeforeTheRefusalIsReported() {
+        var blocks = mock(com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.class);
+        sender.useGroupDeliveryBlocks(blocks);
+        var frozen = new com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations.FrozenMessage(
+                "stable-operation", "client", "send-group", "1234567890@g.us", "text");
+        when(businessOperations.findFrozen("stable-operation")).thenReturn(java.util.Optional.of(frozen));
+        when(whatsAppService.recoverOperationFromHistory("client", "stable-operation", "send-group", "1234567890@g.us", "text"))
+                .thenReturn(ClientMessageSendResult.failed("whatsapp_delivery_rejected", "refused"));
+        var result = sender.recoverRecordedOutcomeFromChat("stable-operation", null);
+        assertTrue(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isDeliveryRejected(result));
+        assertFalse(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result));
+        verify(blocks).recordRejected("client", "1234567890@g.us", "stable-operation");
+        verify(whatsAppService, never()).sendMessageToGroup(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void refusalStaysUnresolvedWhenTheGroupHoldCannotBeRecorded() {
+        var blocks = mock(com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.class);
+        sender.useGroupDeliveryBlocks(blocks);
+        var frozen = new com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations.FrozenMessage(
+                "stable-operation", "client", "send-group", "1234567890@g.us", "text");
+        when(businessOperations.findFrozen("stable-operation")).thenReturn(java.util.Optional.of(frozen));
+        when(whatsAppService.recoverOperationFromHistory("client", "stable-operation", "send-group", "1234567890@g.us", "text"))
+                .thenReturn(ClientMessageSendResult.failed("whatsapp_delivery_rejected", "refused"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("db")).when(blocks)
+                .recordRejected("client", "1234567890@g.us", "stable-operation");
+        var result = sender.recoverRecordedOutcomeFromChat("stable-operation", null);
+        assertFalse(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isDeliveryRejected(result));
+        assertEquals("whatsapp_history_unavailable", result.errorCode());
+    }
+
+    @Test
+    void heldGroupStopsANewOperationBeforeAnyProviderCallButNeverMasksAReplay() {
+        var blocks = mock(com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.class);
+        sender.useGroupDeliveryBlocks(blocks);
+        lenient().when(blocks.isBlocked("client", "1234567890@g.us")).thenReturn(true);
+        Company company = company("https://chat.whatsapp.com/VerifiedInvite1234", null, null);
+        var held = sender.sendWithOperationId(company, "client", "1234567890@g.us", "text", null, "new-operation");
+        assertFalse(held.sent());
+        assertEquals("whatsapp_group_unavailable", held.errorCode());
+        assertTrue(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(held));
+        verify(whatsAppService, never()).sendMessageToGroup(anyString(), anyString(), anyString(), anyString());
+        var target = new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(
+                company.getId(), company.getTitle(), company.getUrlChat(), null, null);
+        assertEquals("whatsapp_group_unavailable", sender.route(target, "client", "1234567890@g.us").unavailableCode());
+
+        var frozen = new com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations.FrozenMessage(
+                "stable-operation", "client", "send-group", "1234567890@g.us", "text");
+        when(businessOperations.findFrozen("stable-operation")).thenReturn(java.util.Optional.of(frozen));
+        when(whatsAppService.sendMessageToGroup("client", "1234567890@g.us", "text", "stable-operation"))
+                .thenReturn(receipt("stable-operation"));
+        assertTrue(sender.sendWithOperationId(company, "client", "1234567890@g.us", "text", null, "stable-operation").sent());
+    }
+
     private String receipt(String token) {
         return "{\"status\":\"ok\",\"operationId\":\"" + token + "\",\"state\":\"SUCCEEDED\",\"messageId\":\"fixture\"}";
     }

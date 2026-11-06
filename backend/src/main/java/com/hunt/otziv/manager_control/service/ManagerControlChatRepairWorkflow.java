@@ -61,6 +61,9 @@ public class ManagerControlChatRepairWorkflow {
 
     private final MaxGroupLinkService maxGroupLinkService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks groupDeliveryBlocks;
+
     void ensureAutomationChatReady(ManagerAutomationFailureService.AutomationFailureIssue issue) {
         if (issue == null || issue.stateId() == null) {
             return;
@@ -74,6 +77,12 @@ public class ManagerControlChatRepairWorkflow {
         if (company != null && "chat_platform_unknown".equals(errorCode) && !supportedChat) {
             String companyName = safe(company.getTitle()).trim();
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У компании" + (companyName.isBlank() ? "" : " «" + companyName + "»") + (chat.isBlank() ? " не указана ссылка на клиентский чат. " : " указана неподдерживаемая ссылка на чат: " + chat + ". ") + "Автоматическая отправка работает только с WhatsApp, Telegram и MAX. " + "Замените ссылку на поддерживаемый чат либо обработайте предложение вручную; " + "после изменения ссылки нажмите «Починить» ещё раз.");
+        }
+        if (company != null && com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_CODE.equals(errorCode)
+                && groupDeliveryBlocks != null && !safe(company.getGroupId()).isBlank()) {
+            // The manager reports the chat fixed: allow one new attempt. If the number is still outside the
+            // group, WhatsApp refuses it again and the hold returns with the card.
+            groupDeliveryBlocks.clearGroup(company.getGroupId());
         }
         if (company == null || !isTelegramChat(normalizedChat) || company.getTelegramGroupChatId() != null) {
             return;

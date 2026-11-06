@@ -45,6 +45,21 @@ public class GroupReplyServiceImpl implements GroupReplyService {
     private final WhatsAppInboundReplyOutbox replyOutbox;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
     private final WhatsAppUnlinkedEventStore unlinkedEvents;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks groupDeliveryBlocks;
+
+    /** Only a group member receives a client's message, so it ends a hold set after a refused delivery. */
+    private void releaseGroupDeliveryHold(WhatsAppGroupReplyDTO reply) {
+        if (groupDeliveryBlocks == null || reply.isFromMe() || Boolean.TRUE.equals(reply.getSystemGenerated())) {
+            return;
+        }
+        try {
+            groupDeliveryBlocks.clear(reply.getClientId(), reply.getGroupId());
+        } catch (RuntimeException unavailable) {
+            log.warn("WhatsApp group delivery hold was not released: groupId={}, errorType={}",
+                    reply.getGroupId(), unavailable.getClass().getSimpleName());
+        }
+    }
 
     @Override
     @Transactional
@@ -62,6 +77,7 @@ public class GroupReplyServiceImpl implements GroupReplyService {
         }
         log.info("WhatsApp group reply received: groupId={}, groupNamePresent={}, from={}, messageLength={}",
                 reply.getGroupId(), hasText(reply.getGroupName()), maskPhone(reply.getFrom()), textLength(reply.getMessage()));
+        releaseGroupDeliveryHold(reply);
 
         Optional<Company> optCompany = companyService.findByGroupId(reply.getGroupId());
         if (optCompany.isPresent()) {

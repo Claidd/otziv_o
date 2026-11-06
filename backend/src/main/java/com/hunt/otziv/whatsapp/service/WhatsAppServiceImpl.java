@@ -289,6 +289,8 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             String code = switch (receipt.path("recoveryCode").asText()) {
                 case "history_no_receipt" -> "whatsapp_history_checked_no_receipt";
                 case "history_ambiguous" -> "whatsapp_history_evidence_ambiguous";
+                // WhatsApp itself refused this group message (settled ACK -1): it was not delivered.
+                case "history_provider_rejected" -> "send-group".equals(kind) ? "whatsapp_delivery_rejected" : "operation_unknown";
                 case "history_incomplete" -> "whatsapp_history_incomplete";
                 case "history_sync_requested", "history_sync_pending" -> "whatsapp_history_sync_pending";
                 case "history_sync_unavailable" -> "whatsapp_history_sync_unavailable";

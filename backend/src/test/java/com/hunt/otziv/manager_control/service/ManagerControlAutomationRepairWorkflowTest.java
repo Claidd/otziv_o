@@ -135,6 +135,46 @@ class ManagerControlAutomationRepairWorkflowTest {
         verifyNoInteractions(repairOutcome);
     }
 
+    @Test void refusedGroupMessageExplainsTheUnreachableGroupWithoutRetry() {
+        var stateRepository = mock(ScheduledClientMessageStateRepository.class);
+        var scheduledMessages = mock(ScheduledClientMessageService.class);
+        var failures = mock(ManagerAutomationFailureService.class);
+        var repairOutcome = mock(ManagerControlRepairOutcome.class);
+        var workflow = new ManagerControlAutomationRepairWorkflow(
+                mock(ManagerControlChatRepairWorkflow.class), repairOutcome,
+                mock(ManagerControlProblemExamples.class), mock(ManagerControlOrderAutomationDiagnostics.class),
+                scheduledMessages, stateRepository, mock(ClientChatMessageReconciliationService.class), failures,
+                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(stateRepository, mock(org.springframework.jdbc.core.JdbcTemplate.class)), mock(ManagerControlManualDeliveryRepair.class), mock(ManagerControlReminderRestart.class));
+        var manager = new Manager();
+        manager.setId(3L);
+        var control = new ManagerDailyControl();
+        control.setManager(manager);
+        var item = new ManagerDailyControlConcreteItem(); item.setId(1L);
+        item.setEntityType(ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE);
+        item.setEntityId(2228076L);
+        var issue = new ManagerAutomationFailureService.AutomationFailureIssue(
+                "AUTOMATION_FAILURE:2228076", item.getEntityType(), 2228076L, 2228076L, null,
+                "Мастерская", "Предложение нового заказа", "Сверка доставки · система", "state_transaction_outcome_uncertain",
+                "/orders", null, ClientMessageScenario.ARCHIVE_REORDER_OFFER, 0,
+                LocalDateTime.now().minusDays(1), LocalDateTime.now().minusHours(8), null);
+        var state = ScheduledClientMessageState.builder().id(2228076L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .lastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN).build();
+        when(failures.findIssue(manager, item.getEntityType(), item.getEntityId())).thenReturn(Optional.of(issue));
+        when(stateRepository.findById(2228076L)).thenReturn(Optional.of(state));
+        when(scheduledMessages.recoverUncertainOrdinaryDelivery(2228076L)).thenReturn(
+                ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.PROVIDER_REJECTED);
+
+        var failure = assertThrows(ResponseStatusException.class,
+                () -> workflow.repairAutomationFailureConcreteItem(item, control, () -> "admin"));
+
+        assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
+        assertTrue(failure.getReason().contains("WhatsApp не доставил это сообщение"));
+        assertTrue(failure.getReason().contains("повтор не отправлялся"));
+        verify(scheduledMessages, never()).retryNow(anyLong());
+        verifyNoInteractions(repairOutcome);
+    }
+
     @Test void lateHandoffReceiptResolvesOnlyTheDisappearedAutomationCauseWithoutRetryOrChatRepair() {
         var states = mock(ScheduledClientMessageStateRepository.class);
         var messages = mock(ScheduledClientMessageService.class);

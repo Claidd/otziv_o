@@ -61,13 +61,26 @@ public interface ClientMessageDelivery {
                 .contains(result.errorCode().trim().toLowerCase(java.util.Locale.ROOT));
     }
 
+    /**
+     * Result code of a saved WhatsApp group operation whose message WhatsApp refused (settled ACK -1). The
+     * old message was not delivered; it is not a generic known-unsent result, because a replay of the same
+     * operation is still answered by the gateway ledger. Callers that understand it close the old operation.
+     */
+    String DELIVERY_REJECTED = "whatsapp_delivery_rejected";
+
+    static boolean isDeliveryRejected(ClientMessageSendResult result) {
+        return result != null && !result.sent() && DELIVERY_REJECTED.equals(result.errorCode());
+    }
+
     static boolean isKnownUnsent(ClientMessageSendResult result) {
         return result != null && !result.sent() && result.errorCode() != null
                 && java.util.Set.of("company_missing", "message_empty", "chat_platform_missing", "chat_platform_unknown",
                 "whatsapp_client_missing", "whatsapp_group_missing", "telegram_group_missing", "max_group_missing",
                 "gateway_not_ready", "not_ready", "whatsapp_not_ready", "gateway_busy", "operation_ledger_full",
                 "draining", "unauthorized", "invalid_request", "payload_too_large", "invalid_json",
-                "invalid_operation_id", "invalid_operation_envelope", "max_not_configured")
+                "invalid_operation_id", "invalid_operation_envelope", "max_not_configured",
+                // Held before any provider call for a new operation (never for a replay).
+                "whatsapp_group_unavailable")
                 .contains(result.errorCode().trim().toLowerCase(java.util.Locale.ROOT));
     }
 }

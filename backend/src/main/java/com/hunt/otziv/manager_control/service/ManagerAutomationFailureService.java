@@ -179,6 +179,10 @@ public class ManagerAutomationFailureService {
         } else if (!paymentInstructionFailure && !policy.requiresDeliveryReceipt(state)) {
             reasonParts.add(switch (errorCode.toLowerCase(java.util.Locale.ROOT)) {
                 case "whatsapp_group_missing", "missing_group_id" -> "Группа WhatsApp не привязана к компании; проверьте чат в карточке компании";
+                case "whatsapp_group_unavailable" -> "WhatsApp не доставил сообщение в группу клиента: номер менеджера, похоже, "
+                        + "больше не состоит в группе или ссылка-приглашение сброшена. Клиент сообщение не получил, "
+                        + "новые сообщения в эту группу приостановлены. Попросите клиента снова добавить номер "
+                        + "или прислать новую ссылку и сохраните её в карточке компании";
                 case "max_group_missing" -> "Группа MAX не привязана к компании; проверьте чат в карточке компании";
                 case "whatsapp_client_missing", "unknown_client", "missing_client" -> "Канал связи с клиентом недоступен; передайте проверку подключения администратору";
                 case "empty_client_url", "chat_platform_unknown" -> "Не удалось определить чат клиента; проверьте ссылку в карточке компании";
@@ -202,6 +206,10 @@ public class ManagerAutomationFailureService {
                     + "После подтверждения задача повторится автоматически");
         } else if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(errorCode)) {
             reasonParts.add("Эта карточка остаётся открытой до завершения общения с клиентом");
+        } else if ("whatsapp_group_unavailable".equalsIgnoreCase(errorCode)) {
+            reasonParts.add("Когда номер вернут в группу или новая ссылка будет сохранена, нажмите «Починить»: "
+                    + "система снимет приостановку и отправит сообщение один раз. Если номер всё ещё не в группе, "
+                    + "WhatsApp снова откажет, и карточка вернётся");
         } else if (policy.isLegacyPreparationFailure(state)) {
             reasonParts.add("Нажмите «Починить»: система проверит цикл заказа и журнал операций. "
                     + "Задача вернется в очередь только при подтверждении, что отправка еще не начиналась");

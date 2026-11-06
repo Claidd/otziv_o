@@ -60,6 +60,16 @@ class WhatsAppServiceTest {
                 + hash + "\",\"state\":\"" + state + "\"" + extra + "}";
     }
 
+    private String phoneHistoryStatus() {
+        return phoneHistoryStatusWith("");
+    }
+
+    private String phoneHistoryStatusWith(String extra) {
+        String hash = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.phoneHash("fixture", "79990000000", "saved");
+        return "{\"operationId\":\"saved\",\"receiptBindingVersion\":1,\"historyReconciliationVersion\":1,\"envelopeHash\":\""
+                + hash + "\",\"state\":\"UNKNOWN\"" + extra + "}";
+    }
+
     private void historyClient() {
         var config = new WhatsAppProperties.ClientConfig(); config.setId("fixture"); config.setUrl("http://fixture:3000");
         when(properties.getClients()).thenReturn(List.of(config));
@@ -92,11 +102,22 @@ class WhatsAppServiceTest {
         org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(anyString(), any(), eq(String.class));
     }
 
+    @Test
+    void refusalOfADirectMessageIsNeverReportedAsAGroupRefusal() {
+        historyClient();
+        when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class)).thenReturn(phoneHistoryStatus());
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(phoneHistoryStatusWith(",\"recoveryCode\":\"history_provider_rejected\"")));
+        var result = service.recoverOperationFromHistory("fixture", "saved", "send", "79990000000", "saved");
+        assertEquals("operation_unknown", result.errorCode());
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({"history_incomplete,whatsapp_history_incomplete",
             "history_ambiguous,whatsapp_history_evidence_ambiguous", "history_no_receipt,whatsapp_history_checked_no_receipt",
             "history_sync_requested,whatsapp_history_sync_pending", "history_sync_pending,whatsapp_history_sync_pending",
-            "history_sync_unavailable,whatsapp_history_sync_unavailable"})
+            "history_sync_unavailable,whatsapp_history_sync_unavailable",
+            "history_provider_rejected,whatsapp_delivery_rejected"})
     void automatedHistoryUncertaintyCannotBeTreatedAsKnownUnsent(String reason, String expected) {
         historyClient();
         when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class)).thenReturn(historyStatus("UNKNOWN", ""));

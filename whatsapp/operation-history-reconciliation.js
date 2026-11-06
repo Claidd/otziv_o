@@ -7,9 +7,15 @@ const { requestHistorySynchronization } = require("./operation-history-sync");
 
 // Read the saved operation's chat, never the current company route. Neither an
 // empty nor a partial history authorizes sending. Ledger binding is the only write.
+//
+// WhatsApp marks a message it refused (for example to a group the account was
+// removed from) with ACK -1. Such a group message still exists in the local
+// history, so it can never be bound as SUCCEEDED. Once the refusal has settled,
+// it is reported as history_provider_rejected without changing the ledger.
+const REJECTED_SETTLE_MS = 10 * 60 * 1000;
 function createOperationHistoryReconciliationHandler({ ledger, clientId, getChat, getMessage, canRead,
   normalizeGroup, normalizePhone, maximumChars = 65536, timeoutMs = 25000, maxMessages = 10000,
-  getDirectMappings, onReconciled = async () => {} }) {
+  getDirectMappings, onReconciled = async () => {}, now = () => Date.now(), rejectedSettleMs = REJECTED_SETTLE_MS }) {
   const inFlight = new Map();
   return async (req, res) => {
     const operationId = req.params.operationId;
@@ -35,6 +41,19 @@ function createOperationHistoryReconciliationHandler({ ledger, clientId, getChat
     const requireLive = () => {
       if (expired || !canRead()) throw new OperationLedgerError("operation_history_unavailable");
     };
+    const providerRejected = async id => {
+      if (kind !== "send-group" || !id || now() - record.startedAt < rejectedSettleMs) return null;
+      const fresh = await getMessage(id);
+      requireLive();
+      const sentAt = Number(fresh?.timestamp) * 1000;
+      const target = serializedId(fresh?.id?.remote) || serializedId(fresh?.to);
+      if (!fresh || fresh.fromMe !== true || serializedId(fresh.id) !== id || Number(fresh.ack) !== -1
+          || target !== destination || !Number.isFinite(sentAt)
+          || typeof fresh.body !== "string" || fresh.body.trim() !== message) return null;
+      // A competing operation with the same envelope keeps the refusal ambiguous.
+      ledger.assertReceiptWindow(record, sentAt);
+      return { ...ledger.lookup(operationId), recoveryCode: "history_provider_rejected", providerAck: -1 };
+    };
     const work = Promise.resolve().then(async () => {
       requireLive();
       if (record.receiptCandidateConflict || (record.receiptCandidates?.length || 0) > 1)
@@ -54,6 +73,8 @@ function createOperationHistoryReconciliationHandler({ ledger, clientId, getChat
           if (error.code !== "operation_evidence_mismatch") throw error;
           // A queued message with ACK=0 is not a confirmed send. History may
           // become readable later; never submit that message a second time.
+          const rejected = await providerRejected(record.receiptCandidates[0].messageId);
+          if (rejected) return rejected;
         }
       }
       const directIdentity = async id => {
@@ -103,6 +124,8 @@ function createOperationHistoryReconciliationHandler({ ledger, clientId, getChat
       }
       if (matches.size > 1) return { ...ledger.lookup(operationId), recoveryCode: "history_ambiguous" };
       if (matches.size === 0) return unresolved("history_no_receipt");
+      const rejected = await providerRejected(matches.keys().next().value);
+      if (rejected) return rejected;
       let result;
       const handler = createOperationReconciliationHandler({ ledger, clientId,
         canRead: () => !expired && canRead(),
