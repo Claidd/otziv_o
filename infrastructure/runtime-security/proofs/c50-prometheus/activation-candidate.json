@@ -1,0 +1,19 @@
+{
+  "component": "prometheus",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:3631f3ba94633e919ffdd1f581d6a4164b9057259bfcdc09a2e00b773c42fe8c",
+  "commit": "92a317a0d9ef5f25833ecdb9e338050f5991a266",
+  "run": "42297016621",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c50-prometheus.json",
+    "sha256": "7bf8acb42c1ea65cb7c85fd981a7c966a722247cfe7f7b4c6241cbf6db629ce6"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c50-prometheus/publication/publication.json",
+    "sha256": "35bf9be5f3c0d5bf79435121d17b3d65e83b487f937ef3d5d9496238e5c90e59"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c50-prometheus/anonymous/anonymous-download.json",
+    "sha256": "aef4c97dc5b1d75a04582d86d91f1b7a790f3ff81104ca7f886b0174d570d5f2"
+  }
+}

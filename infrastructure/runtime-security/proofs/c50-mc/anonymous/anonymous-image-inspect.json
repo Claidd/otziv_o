@@ -1,0 +1,80 @@
+[
+    {
+        "Id": "sha256:9399dde56b63476214d834732f20bf260bc132bbaa703cc2deb7fd73e8cda14a",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:e14ca80eab665beb2d68c8fdce19fcc98e799844c34c7a104895d133a55ca567"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-06T21:23:41.448268837Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "MC_CONFIG_DIR=/tmp/.mc"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/usr/bin/mc"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.corresponding-source": "/usr/share/otziv-build/mc/corresponding-source.tar.gz",
+                "com.otziv.publication.revision": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "mc",
+                "com.otziv.security.c50": "C50: official musl security package; golang.org/x/net v0.62.0; required x/* dependency closure",
+                "com.otziv.upstream.archived": "true",
+                "org.opencontainers.image.licenses": "AGPL-3.0-or-later",
+                "org.opencontainers.image.revision": "77f82e18b5401a65958f1619df6ebb994634bd88",
+                "org.opencontainers.image.source": "https://github.com/Claidd/otziv_o",
+                "org.opencontainers.image.version": "RELEASE.2025-11-06T16-25-29Z.otziv-c36.1"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 82889583,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/627d830d79b01da1f798b06a7344e18c77979dec614785dd3e024e0a807b3844/diff:/var/lib/docker/overlay2/6d3494c407c252dd289da5c9c59d06165974a6d4783b9ccf73fba75b86723a8e/diff:/var/lib/docker/overlay2/c1199abed633dfb9d10eb2150e75bee9dfc47021f75624ad509b0649c7878d70/diff:/var/lib/docker/overlay2/574116b6a66cee526bb732fd1d8381402b9ed2fe291052990e6007e85843d49d/diff:/var/lib/docker/overlay2/f2990e49ea15ceaab7822790feb48c39e7ce0a01ac31773fa912ae867138d3ac/diff:/var/lib/docker/overlay2/e0e7cc508896fbeb0f0fb103e14db7669dd19805be83c9f733bf6246e0d747f2/diff:/var/lib/docker/overlay2/8411c546f7e5bfb3fd526f5f3758f6a45d44c6eb7d75acb9dd8f3103c00a239c/diff:/var/lib/docker/overlay2/37ef7d5ba7b37e43c905068a3241a46c5cbbfdf06987f2211d2fee8b654f8146/diff:/var/lib/docker/overlay2/952b9a3d75f4cf76a2bf15ce1df9db4f6abf9bda1b84bcdd52b2910f1aa2441c/diff:/var/lib/docker/overlay2/841f2738e32124dbfd544e705574e88445bd068e88b0a5a6e60e35653a625837/diff",
+                "MergedDir": "/var/lib/docker/overlay2/f2c7debf80226f5b0ae79a670aaaa63951c34871c1d94228e1bcd4bb6ef53e20/merged",
+                "UpperDir": "/var/lib/docker/overlay2/f2c7debf80226f5b0ae79a670aaaa63951c34871c1d94228e1bcd4bb6ef53e20/diff",
+                "WorkDir": "/var/lib/docker/overlay2/f2c7debf80226f5b0ae79a670aaaa63951c34871c1d94228e1bcd4bb6ef53e20/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:967c0c5f55043a3d734c8d2a722d015b63da1f318e2a5f9ed18eb41a8fb2f025",
+                "sha256:d316faba97ac1a4e2ff2b1e3346f4adb31c9d783c7f70ded9a92f20e23257ca2",
+                "sha256:f7ffb0c2ae35a9224e4477d9387a93d57f0b7875dc7d48b95128e87b8b64f7b8",
+                "sha256:227d23a2012926f421ef3b70d681a34d77452f5b2220fa14ad2e2385fd954a38",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:e5c3da6d4f31312be84eb5be491ddd142ecba717a68321e2fe018053ab64ce55",
+                "sha256:1e2d5d81caa9b3e5a2ef55b813c23ed1193ba134b0907ab3b27e4c21272a2b0e",
+                "sha256:7625ad154b6383386f9b29ca8f880c979bce6253b60f34e5de075720115a2dc4",
+                "sha256:450eff4c1c1d330a2eaa06dd0a6dae25eafe9b5051da7d0dbea7ff22379aeef7",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

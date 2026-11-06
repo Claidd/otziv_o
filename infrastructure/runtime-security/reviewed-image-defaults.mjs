@@ -18,6 +18,7 @@ import {validateBrotliC45Activation,couplePostgresC36WithKeycloakC45} from './br
 import {validateAptC48Activation,couplePostgresC36WithKeycloakC48} from './apt-c48-activation.mjs';
 import {overlayForSet, overlayForManifest, overlayCompressedProofs} from './os-package-overlay-registry.mjs';
 import {validateOverlayActivation, coupleOverlayKeycloak} from './os-package-overlay.mjs';
+import {validateC50ActivationScan} from './c50-refresh.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 import { validateDatabaseTransitionReadiness } from './mysql-c46-readiness.mjs';
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
@@ -47,6 +48,14 @@ const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-
 // that resemble credentials. Retain their exact bytes compressed and verify them
 // before any publication or registry checks consume them.
 const COMPRESSED_PROOFS = new Map([
+  ["infrastructure/runtime-security/proofs/c50-grafana/publication/vulnerabilities.json", "db4eb2d77e518dd32795896baccbcc963b106c9dfcbe5cfec5ee8642c2b42f21"],
+  ["infrastructure/runtime-security/proofs/c50-alloy/publication/vulnerabilities.sbom.cdx.json", "78eac3613dc4bd4278e928549a6ecfd639494ffbb6a3489f60d4dd598c774c8f"],
+  ["infrastructure/runtime-security/proofs/c50-alloy/publication/vulnerabilities.json", "51a2a9b6d518ac81ccb0625b0648bee6cbec4f3d9f847fb2da12d2c9ad084dba"],
+  ["infrastructure/runtime-security/proofs/c50-grafana/publication/registry-attestation-0-payload-0.json", "77cf45521c340f04fc894caa3b9fa06acce37827ef1392e0e23a056094d86f3e"],
+  ["infrastructure/runtime-security/proofs/c50-grafana/anonymous/registry-attestation-0-payload-0.json", "77cf45521c340f04fc894caa3b9fa06acce37827ef1392e0e23a056094d86f3e"],
+  ["infrastructure/runtime-security/proofs/c50-alloy/publication/registry-attestation-0-payload-0.json", "0b6765cd1d12f2e169e3409ec7aef59638fd480841074026e77f47d910548d79"],
+  ["infrastructure/runtime-security/proofs/c50-alloy/anonymous/registry-attestation-0-payload-0.json", "0b6765cd1d12f2e169e3409ec7aef59638fd480841074026e77f47d910548d79"],
+  ["infrastructure/runtime-security/proofs/c50-grafana/publication/vulnerabilities.sbom.cdx.json", "903008f4641dc5722f314cd22673b1cae36ec2efd19f37f659bb02b9a680b5fc"],
   ["infrastructure/runtime-security/proofs/c48-keycloak/publication/registry-attestation-0-payload-0.json", "efaa0ffa79581f91289fa34ef9b7ab99dfa775a56685f38379213d2179f6c3e2"],
   ["infrastructure/runtime-security/proofs/c48-keycloak/anonymous/registry-attestation-0-payload-0.json", "efaa0ffa79581f91289fa34ef9b7ab99dfa775a56685f38379213d2179f6c3e2"],
   ["infrastructure/runtime-security/proofs/c48-keycloak/publication/vulnerabilities.json", "dac0c359e05677b7e7cb3af6c9450992a84d05c469cd03dd94354b9f28663d76"],
@@ -183,13 +192,14 @@ export function assertGrafanaC30KinOpenApi(raw) {
   assert.equal(modules[0].Version, 'v0.149.0', 'activation_grafana_c30_kin_openapi_version');
 }
 
-export async function validateGrafanaC43ActivationScan(publication, publicationPath, read) {
+export async function validateGrafanaC43ActivationScan(publication, publicationPath, read, generation = 'c43') {
+  assert.ok(['c43', 'c50'].includes(generation), 'activation_grafana_review_generation');
   assert.equal(publication.component, 'grafana', 'activation_grafana_c43_component');
   const directory = dirname(publicationPath).replaceAll('\\', '/');
   const [rawBytes, receiptBytes] = await Promise.all([
     read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
   const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
-  const { review, reviewSha256 } = await loadReviewedProof('c43');
+  const { review, reviewSha256 } = await loadReviewedProof(generation);
   assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c43_report_image');
   assertGrafanaC30KinOpenApi(raw);
   assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c43_schema');
@@ -249,6 +259,15 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if (['c43-grafana', 'c44-grafana', 'c49-grafana'].includes(selected.manifestSet)) {
     await validateGrafanaC43ActivationScan(publication.value, entry.publication.path, read);
+  }
+  if (selected.manifestSet === 'c50-grafana') {
+    await validateGrafanaC43ActivationScan(publication.value, entry.publication.path, read, 'c50');
+  }
+  if (selected.manifestSet === 'c50-alloy') {
+    await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read);
+  }
+  if (selected.manifestSet.startsWith('c50-')) {
+    await validateC50ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet === 'c43-keycloak') {
     await validateGuavaC43Activation(publication.value, entry, read, validateActivation);

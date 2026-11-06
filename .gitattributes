@@ -190,3 +190,8 @@ infrastructure/runtime-security/fixtures/os-overlay-*.parity.json text eol=lf
 # Preserve C49 zlib (and phpMyAdmin expression-language) recipes and publication manifest hashes.
 infrastructure/runtime-security/builds/c49-*/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c49-*.json text eol=lf
+
+# C50 manifests/recipes and the inspected Grafana identity must survive Windows checkouts unchanged.
+infrastructure/runtime-security/builds/c50-*/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c50-*.json text eol=lf
+infrastructure/runtime-security/adjudications/grafana-tempo-c50/** -text

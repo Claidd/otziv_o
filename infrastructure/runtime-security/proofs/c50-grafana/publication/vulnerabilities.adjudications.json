@@ -1,0 +1,53 @@
+{
+  "schema": "otziv-image-adjudication-v1",
+  "rawReportSha256": "db4eb2d77e518dd32795896baccbcc963b106c9dfcbe5cfec5ee8642c2b42f21",
+  "imageConfigId": "sha256:4f14d876bafac2b029b69bc40aaa6ee5769f30024ade2e2226d3ce933f8f189e",
+  "immutableImageId": "sha256:4f14d876bafac2b029b69bc40aaa6ee5769f30024ade2e2226d3ce933f8f189e",
+  "rawReportModified": false,
+  "decisions": [
+    {
+      "resultIndex": 2,
+      "findingIndex": 0,
+      "cve": "CVE-2026-21728",
+      "target": "usr/share/grafana/bin/grafana",
+      "package": "github.com/grafana/tempo",
+      "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+      "state": "not_affected",
+      "justification": "fixed_code_present",
+      "fixCommit": "650eb1985a0776789c8564122990f588a742356f",
+      "fixedHighOrCritical": true
+    },
+    {
+      "resultIndex": 2,
+      "findingIndex": 1,
+      "cve": "CVE-2026-28377",
+      "target": "usr/share/grafana/bin/grafana",
+      "package": "github.com/grafana/tempo",
+      "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+      "state": "not_affected",
+      "justification": "fixed_code_present",
+      "fixCommit": "bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+      "fixedHighOrCritical": true
+    }
+  ],
+  "status": "EXACT_BINARY_FIXED_CODE_PROVEN",
+  "reviewSha256": "f39a5ee06b13fa86ef5f353350751accc4680d4c5563455994b0ce461fbc59fe",
+  "binarySha256": "da0f3712ee9bc67e02f77a3c5bc37875fde71042c9ba5f53ab99c5a4da69ffd5",
+  "canonicalBuildInfoSha256": "a9c6674f35f55f4f8d36c8b0d103dbce1716647c029eb00a9275173374b5258c",
+  "buildInfoReader": "golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132",
+  "inspectedBinaryExecuted": false,
+  "module": {
+    "name": "github.com/grafana/tempo",
+    "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+    "sum": "h1:kE5kdMnyPJmlNUdWhahfzqPYB3vM8DtAxgWymbB8nOA="
+  },
+  "alloy": {
+    "schema": "otziv-alloy-adjudication-v1",
+    "rawReportSha256": "db4eb2d77e518dd32795896baccbcc963b106c9dfcbe5cfec5ee8642c2b42f21",
+    "imageConfigId": "sha256:4f14d876bafac2b029b69bc40aaa6ee5769f30024ade2e2226d3ce933f8f189e",
+    "immutableImageId": "sha256:4f14d876bafac2b029b69bc40aaa6ee5769f30024ade2e2226d3ce933f8f189e",
+    "rawReportModified": false,
+    "decisions": [],
+    "status": "NOT_APPLICABLE"
+  }
+}

@@ -116,6 +116,18 @@ const EXPLICIT_RELEASE_SETS = {
   'c49-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c49-grafana.json', context: 'infrastructure/runtime-security/builds/c49-grafana', dockerfile: 'infrastructure/runtime-security/builds/c49-grafana/Dockerfile' },
   'c49-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c49-minio.json', context: 'infrastructure/runtime-security/builds/c49-minio', dockerfile: 'infrastructure/runtime-security/builds/c49-minio/Dockerfile' },
   'c49-certbot': { component: 'certbot', path: 'infrastructure/runtime-security/reviewed-images-c49-certbot.json', context: 'infrastructure/runtime-security/builds/c49-certbot', dockerfile: 'infrastructure/runtime-security/builds/c49-certbot/Dockerfile' },
+  // C50 fixes musl CVE-2026-107891 and rebuilds Go programs with x/net v0.62.0.
+  'c50-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c50-nginx.json', context: 'infrastructure/runtime-security/builds/c50-nginx', dockerfile: 'infrastructure/runtime-security/builds/c50-nginx/Dockerfile' },
+  'c50-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c50-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c50-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c50-phpmyadmin/Dockerfile' },
+  'c50-certbot': { component: 'certbot', path: 'infrastructure/runtime-security/reviewed-images-c50-certbot.json', context: 'infrastructure/runtime-security/builds/c50-certbot', dockerfile: 'infrastructure/runtime-security/builds/c50-certbot/Dockerfile' },
+  'c50-prometheus': { component: 'prometheus', path: 'infrastructure/runtime-security/reviewed-images-c50-prometheus.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-prometheus/Dockerfile' },
+  'c50-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c50-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-loki/Dockerfile' },
+  'c50-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c50-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-tempo/Dockerfile' },
+  'c50-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c50-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-alloy/Dockerfile' },
+  'c50-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c50-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-grafana/Dockerfile' },
+  'c50-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c50-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-dozzle/Dockerfile' },
+  'c50-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c50-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-mc/Dockerfile' },
+  'c50-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c50-minio.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-minio/Dockerfile' },
 };
 // Later official OS package overlays are registered data (os-package-overlays.json).
 const RELEASE_SETS = Object.freeze({ ...EXPLICIT_RELEASE_SETS, ...overlayReleaseSets(EXPLICIT_RELEASE_SETS) });

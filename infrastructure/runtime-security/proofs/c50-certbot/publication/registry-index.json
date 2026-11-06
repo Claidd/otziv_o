@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.index.v1+json",
+  "manifests": [
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:efbabcaa69372ae049a5f9b042236b7d2fa283505951b71dcd3a3da0bb4e2bfe",
+      "size": 4289,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:dee7de515a1f29af105d2c7df74cc96505077961e2ea07c2ca91105bf1fd74df",
+      "size": 1112,
+      "annotations": {
+        "vnd.docker.reference.digest": "sha256:efbabcaa69372ae049a5f9b042236b7d2fa283505951b71dcd3a3da0bb4e2bfe",
+        "vnd.docker.reference.type": "attestation-manifest"
+      },
+      "platform": {
+        "architecture": "unknown",
+        "os": "unknown"
+      }
+    }
+  ]
+}

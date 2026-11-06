@@ -1,0 +1,94 @@
+[
+    {
+        "Id": "sha256:2f836c0132c1f7de09deae23f635fff72f5ea692e1891f8ea1f72fa88b696fc3",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:c706f8a2e448bef0ec1cd92749967ed7accccb2b53fe21de9b5ca53694ce12f3"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-06T21:44:35.188792646Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "ALLOY_DEPLOY_MODE=docker"
+            ],
+            "Cmd": [
+                "run",
+                "/etc/alloy/config.alloy",
+                "--storage.path=/var/lib/alloy/data"
+            ],
+            "ArgsEscaped": true,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/bin/alloy"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "92a317a0d9ef5f25833ecdb9e338050f5991a266",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "alloy",
+                "com.otziv.security.c50": "C50: golang.org/x/net v0.62.0; required x/* dependency closure",
+                "com.otziv.security.patch": "go-jose/v4 4.1.6; Go1.27.3; google.golang.org/grpc1.83.2; original UI lock and vendor build tags",
+                "com.otziv.security.proof": "alloy-daemon-c43",
+                "org.opencontainers.image.revision": "becfd489a7bb459c0496893b555fb87a003296b1",
+                "org.opencontainers.image.source": "https://github.com/grafana/alloy",
+                "org.opencontainers.image.version": "1.19.2-otziv.4",
+                "otziv.apt": "2.8.4ubuntu0.1",
+                "otziv.apt-advisory": "CVE-2026-109518"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 2305555065,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/aa469ad25bab7d7bbd26edf19e545792910e7a6467f6c8725d421086f4dfa76c/diff:/var/lib/docker/overlay2/463d4c220a50e51013af83dcec367b54b3188e2ecff5474d11a44e95f2a10cff/diff:/var/lib/docker/overlay2/3655f6fe6eec0ee482f045820d3ef3a257b25f835247b16385cdf05f79898746/diff:/var/lib/docker/overlay2/3014eb6fb9a483b765680d8e669c7e6ce243791f16b9e1be48e7de0b624bab35/diff:/var/lib/docker/overlay2/743e8604bf55df2042164212d5b89a96c95dcf84b7a4248d4e9c75dc86158a47/diff:/var/lib/docker/overlay2/21a7ec1408e4764d6aca5895e0055db41dc4461ad21a5694a6da746808517fb5/diff:/var/lib/docker/overlay2/b38fb313df349bc5139b58f0ee63809e62610c9bcac16f476e7b70bb456891be/diff:/var/lib/docker/overlay2/00b18e7123733976865aea6938c90e419f1bdd27593431aa312ab0f29bd60176/diff:/var/lib/docker/overlay2/154925f082aa42344af2b1f782acea178f619e413cbc5ebe4ca3e98eaf7bab7a/diff:/var/lib/docker/overlay2/b07958e306c83674d2de16ffde19f225dfbd50a1fcfe064109a90ba98a00d275/diff:/var/lib/docker/overlay2/856d8da1d619cf7b49539fa37b5f4b6cde39f0cf72e33fce1e478dc7228b6255/diff:/var/lib/docker/overlay2/1fc3c97c894f9650c54b784962dc7ff11a30a9af9782b6e7ca73ff5cc52ce89e/diff:/var/lib/docker/overlay2/b309e9b9d472b0689103bfdfe13f6a48ae29fd847749ed53273ba3f069f8d93b/diff:/var/lib/docker/overlay2/2aa2e2883c08f78572aa6c4a4fd267ccacab7907899ebfda5409288e1abb00b4/diff:/var/lib/docker/overlay2/9247a5c8f749e904c70082fa9500589f2ae591fa8906bd41d8e90532cf621ce2/diff:/var/lib/docker/overlay2/12a3a8d0162ffb184a70401e4ee79bedddb064ca42e927323f2fbb03e2ec1ee1/diff:/var/lib/docker/overlay2/890792183df264f4b7edf4ecf6d4a050eb470e160d7885c45adf2e47dbd8f227/diff:/var/lib/docker/overlay2/201a04b2385adda66b9b74405514a1a55d6a78a6b0a86518b5fd80c342b6014c/diff",
+                "MergedDir": "/var/lib/docker/overlay2/11d6dd4f58f62f2f345eda9cea1906a95417014df4f5f1514b194749373f1860/merged",
+                "UpperDir": "/var/lib/docker/overlay2/11d6dd4f58f62f2f345eda9cea1906a95417014df4f5f1514b194749373f1860/diff",
+                "WorkDir": "/var/lib/docker/overlay2/11d6dd4f58f62f2f345eda9cea1906a95417014df4f5f1514b194749373f1860/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:538812a4b9bd45adaac2b5e5b967daa6999aa44eb110aa32ae7c69702b906475",
+                "sha256:9c37a913490f54b19ed0b7adb27bbbb1977e9e8b1efde260f6518e7f66946be7",
+                "sha256:3811aad73903fceb82a51458fe600c12a78d741d6bbd031bd87e7589e41a6d8d",
+                "sha256:4502af2c8dcd9cc2c4fc5b04a5b0a7a746ac9500be97fd2b0a59a692304bb442",
+                "sha256:16240de67cd4f746c51e41736cfaf5d8344b3330a1dd53239f3177d3ad99265b",
+                "sha256:2eaa7339e917e84cdf320a367113f59b8b24d57f5e9eaa6ca311b1cd528a7407",
+                "sha256:6dc3d145ddf72e263546e156710268581d13524319f7ab644744e8fa8ffe5107",
+                "sha256:45eadccc303c879365ed980fe4ed21262b0bd1a4957c8f8b2f357d40e4ec1d62",
+                "sha256:396cc1480c006362620aeb035c50470a0ecb100a2776e984ecdde2f590d44968",
+                "sha256:897b9c539878bf6e79564fc72d74d45f24d619607ee87704d665956dcca40651",
+                "sha256:cbb45aa622be58af54ed4fc2c0da6a596c288c81d2816a0fb5f188799b93d48f",
+                "sha256:1aa620e64f71e6b4232c5565159d0e85b80b9f0603e533ef7e9a79c50fcb93b4",
+                "sha256:3c362907395766015592194a371d44fa97f23e26186826e83f3a5aed30818b35",
+                "sha256:09331416dc1f0d2e23e5998fc91f9da3133e629eed23925934c5ad158e6b8929",
+                "sha256:faba12ddbbdcb63054eb87ce7dd9dd04596c09cfb9958869fb3c64a5b68f7d68",
+                "sha256:6861963181b97360c27816b7e96265b4954aad5259a93c60a034ac7d3ece7679",
+                "sha256:8897a41a93fda8bac88377d05fc521febad95367b9736658ac767a56a25adcb8",
+                "sha256:3acee8e23c327fd69fbf108b2bdd2167214c1ea19c20b184b4e767973e369eeb",
+                "sha256:8d8ba7357c2ff11b9142cb7430c1fad8a52a4dcd0f83b1766004a5ccd0d3ba22"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

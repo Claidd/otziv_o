@@ -1,0 +1,83 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "minio",
+  "commit": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+  "run": "42295920038",
+  "attempt": "1",
+  "manifestSet": "c50-minio",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c50-minio.json",
+  "runner": "GitHub Actions 1000031959",
+  "startedAt": "2026-11-06T21:23:26.458Z",
+  "sourcePublicationSha256": "a819e87e8f72227007ed096770b3d604e3be841caca6a6497bf87d3fd7fba5b1",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:5209b4ef86d3c35dd1696bbc5b9aaf2414105c8872a932ebe71dea802a8bb21d",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:3af4f9b4906769dae5f599d45e93cf85193dd657a5d23d8c1e372549484a87d2",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:5209b4ef86d3c35dd1696bbc5b9aaf2414105c8872a932ebe71dea802a8bb21d",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:3af4f9b4906769dae5f599d45e93cf85193dd657a5d23d8c1e372549484a87d2",
+        "size": 2953
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:54d6db9018bd8ca88cb9360ac0890a08df5c61f8c5f9caf4b8538baafaf76aa0",
+        "size": 10045
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:b8cb62b369bc8fba5d3abe8836509e8b92de66c02bcea25a3e213f905acd85e9",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:736382728131d79b4fe510e4570b3ffe2d6babb5b956bf6321cf1d69fbd736de",
+        "size": 211908
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:d866cbd503b8daae62d13e3ba846821c91e930839865f48ee7465d8d9811a3b9",
+        "size": 31766
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:54d6db9018bd8ca88cb9360ac0890a08df5c61f8c5f9caf4b8538baafaf76aa0",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.derivative": "Alpine vendor libssl3/libcrypto3 package update only; Versity v1.8.0 binary unchanged",
+    "com.otziv.publication.revision": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "minio",
+    "com.otziv.security.c50": "C50: official musl security package; golang.org/x/net v0.62.0; required x/* dependency closure",
+    "com.otziv.security.patch": "Go1.27.3; x/net0.62.0; parent Alpine security packages preserved",
+    "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; C36 versitygw executable and unrelated packages unchanged",
+    "com.otziv.upstream.image": "ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499",
+    "org.opencontainers.image.created": "2026-09-04T23:12:05.588Z",
+    "org.opencontainers.image.description": "A simple to deploy but feature rich S3 object storage server for your filesystem",
+    "org.opencontainers.image.licenses": "Apache-2.0",
+    "org.opencontainers.image.revision": "fd04bc1df2656298577b82667a4195c77f8c7563",
+    "org.opencontainers.image.source": "https://github.com/versity/versitygw",
+    "org.opencontainers.image.title": "versitygw",
+    "org.opencontainers.image.url": "https://github.com/versity/versitygw",
+    "org.opencontainers.image.version": "v1.8.0-otziv.c36"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-06T21:23:36.756Z"
+}

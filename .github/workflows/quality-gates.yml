@@ -73,6 +73,17 @@ on:
           - c49-grafana
           - c49-minio
           - c49-certbot
+          - c50-nginx
+          - c50-phpmyadmin
+          - c50-certbot
+          - c50-prometheus
+          - c50-loki
+          - c50-tempo
+          - c50-alloy
+          - c50-grafana
+          - c50-dozzle
+          - c50-mc
+          - c50-minio
           - c41-grafana
           - c29-dozzle
           - c29-prometheus

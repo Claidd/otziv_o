@@ -1,0 +1,74 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "dozzle",
+  "commit": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+  "run": "42295916893",
+  "attempt": "1",
+  "manifestSet": "c50-dozzle",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c50-dozzle.json",
+  "runner": "GitHub Actions 1000031962",
+  "startedAt": "2026-11-06T21:25:22.811Z",
+  "sourcePublicationSha256": "576aa303c34688f28405e78d4da19a3ed074f6f1105daa162710c5365dfd64bb",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:200bb7e67947397b154106e962fcb7e73883624229ee876a9ef644a5a0090cc7",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:efafa9fa206fbed3df24fb5eaf33aa8c27d5bb7c5c70e603131cc86894ac975b",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:200bb7e67947397b154106e962fcb7e73883624229ee876a9ef644a5a0090cc7",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:efafa9fa206fbed3df24fb5eaf33aa8c27d5bb7c5c70e603131cc86894ac975b",
+        "size": 1425
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:275d75535d1d64d2bcfbdbaaec100112e610ad8f179c10038edb83dcbb454578",
+        "size": 2860
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:8e4123618f656a4a8ad360f018006e6d41c2a708803e1db9e515cc10b3169c89",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:6d9956b4bbccbd76f109dc561415d2efee9d530d9edd2b4cc1f332b550c61d4c",
+        "size": 168131
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:683d5b0f398ce072b2fb3c2d1fd96f0f5b96f38b1d9b062eedca1d4cb1c1b944",
+        "size": 22902
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:275d75535d1d64d2bcfbdbaaec100112e610ad8f179c10038edb83dcbb454578",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "159ccd92d78fb02d78f6388a4b6b31ae08bbd7a4",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "dozzle",
+    "com.otziv.security.c50": "C50: golang.org/x/net v0.62.0; required x/* dependency closure",
+    "com.otziv.security.patch": "Go1.27.3; golang.org/x/net0.62.0",
+    "org.opencontainers.image.source": "https://github.com/amir20/dozzle",
+    "org.opencontainers.image.version": "v11.3.1-otziv.2"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-06T21:25:26.204Z"
+}

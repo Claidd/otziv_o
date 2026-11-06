@@ -104,7 +104,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:2f4863a2cca459beb732b9081588cec9f411ac68e83d2cddf2609b16cd708c27
+    image: ghcr.io/claidd/otziv-security@sha256:374430936cad1fcc6ea665ce93aa12314d980f35f623938b4d9c821a720322e5
     oom_score_adj: 600
     profiles: ["db-admin"]
     restart: unless-stopped
@@ -904,7 +904,7 @@ services:
       - internal_net
 
   certbot:
-    image: ghcr.io/claidd/otziv-security@sha256:93cf11b11f3bc0f1795da45dc024f8246a5e7bdbc70b11755e5678f1fbbfd708
+    image: ghcr.io/claidd/otziv-security@sha256:ba8083c2e4ed8eb3ade559c2bb1f72a2ff3ae62847f7601c5729910026bd1fc7
     logging: *default-logging
     profiles:
       - certbot
@@ -916,7 +916,7 @@ services:
       - internal_net
 
   dozzle:
-    image: ghcr.io/claidd/otziv-security@sha256:704cb4424920407d43d1eebd1782af56f3fd1b65648530aeae6f3ad6e34f3f92
+    image: ghcr.io/claidd/otziv-security@sha256:200bb7e67947397b154106e962fcb7e73883624229ee876a9ef644a5a0090cc7
     oom_score_adj: 500
     container_name: log-viewer
     restart: unless-stopped
@@ -943,7 +943,7 @@ services:
       start_period: 10s
 
   prometheus:
-    image: ghcr.io/claidd/otziv-security@sha256:1b317647ec6d8a34e3041ca625a658da2c83c774bb43b125612a237fbed58aec
+    image: ghcr.io/claidd/otziv-security@sha256:3631f3ba94633e919ffdd1f581d6a4164b9057259bfcdc09a2e00b773c42fe8c
     oom_score_adj: 300
     container_name: prometheus
     restart: unless-stopped
@@ -977,7 +977,7 @@ services:
       - observer_metrics_net
 
   loki:
-    image: ghcr.io/claidd/otziv-security@sha256:87d426476ddadecd314b8c7e0064df618c84b6461be52d05c830be9095e3c14e
+    image: ghcr.io/claidd/otziv-security@sha256:9a0dcfd9845f89e1bbc282b32eb9b62122fbe7f43d01a633fe88690f8e86a531
     oom_score_adj: 500
     container_name: loki
     restart: unless-stopped
@@ -999,7 +999,7 @@ services:
       - internal_net
 
   tempo:
-    image: ghcr.io/claidd/otziv-security@sha256:4d64639afbe1d54b305ce72c1964141ec0cc63a1506eae5f70340d8b82b8d4b9
+    image: ghcr.io/claidd/otziv-security@sha256:32eb442b4b2f0cb86c7bc2d4254d46011e472eed228232ae6404d39c67a0e974
     oom_score_adj: 500
     stop_grace_period: 30s
     container_name: tempo
@@ -1022,7 +1022,7 @@ services:
       - internal_net
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:6010376795977db1a66670feab760e710f70a330f16aa8b2c088367f7ef5861d
+    image: ghcr.io/claidd/otziv-security@sha256:c706f8a2e448bef0ec1cd92749967ed7accccb2b53fe21de9b5ca53694ce12f3
     oom_score_adj: 500
     container_name: alloy
     restart: unless-stopped
@@ -1055,7 +1055,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:a9eb6567dc0fceb41dbe6225f49e80a39db9e1b9d5f82abb5003ee69fe4a5688
+    image: ghcr.io/claidd/otziv-security@sha256:b6b50b514ad8af7881deb8d0f0a764be651bb95f155900fd6f57324e1e2c6892
     # Builds the Telegram contact point for the alert rules, then runs the image entrypoint.
     entrypoint: ["/bin/sh", "/etc/otziv/grafana-alerting-entrypoint.sh"]
     oom_score_adj: 400

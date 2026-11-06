@@ -63,3 +63,13 @@ test('library patch candidates retain published monitoring verification and comp
  assert.equal(isPublishedMonitoringOverlayManifest('grafana','infrastructure/runtime-security/reviewed-images-c44-grafana.json'),true);
  assert.equal(isPublishedMonitoringOverlayManifest('tempo','infrastructure/runtime-security/reviewed-images-c44-grafana.json'),false);
 });
+
+test('C50 verifies every exact published monitoring image rather than rebuilding an older recipe',()=>{
+ const components=['prometheus','loki','tempo','alloy','grafana'];
+ for(const component of components){
+  const path=`infrastructure/runtime-security/reviewed-images-c50-${component}.json`;
+  assert.equal(isPublishedMonitoringOverlayManifest(component,path),true);
+  for(const other of components.filter(value=>value!==component))assert.equal(isPublishedMonitoringOverlayManifest(other,path),false);
+ }
+ assert.equal(isPublishedMonitoringOverlayManifest('grafana','infrastructure/runtime-security/reviewed-images-c51-grafana.json'),false);
+});

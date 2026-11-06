@@ -1,0 +1,80 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "grafana",
+  "commit": "b03d2be8329ee043ae780d78528a8b131fc0375e",
+  "run": "42299465269",
+  "attempt": "1",
+  "manifestSet": "c50-grafana",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c50-grafana.json",
+  "runner": "GitHub Actions 1000031977",
+  "startedAt": "2026-11-06T22:02:16.069Z",
+  "sourcePublicationSha256": "d2c0a4a3cfbba3ef34036f86cad0a9d351073ff93932b369bb4e2ce2dee3856f",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:b6b50b514ad8af7881deb8d0f0a764be651bb95f155900fd6f57324e1e2c6892",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:a70f952c13fc88f98175aaeb9a728106f3c5115cf63d663d88110057c4e3c879",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:b6b50b514ad8af7881deb8d0f0a764be651bb95f155900fd6f57324e1e2c6892",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:a70f952c13fc88f98175aaeb9a728106f3c5115cf63d663d88110057c4e3c879",
+        "size": 5437
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:4f14d876bafac2b029b69bc40aaa6ee5769f30024ade2e2226d3ce933f8f189e",
+        "size": 21071
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:8a9e6a7e536fd25374c3abec47ceb4f5b2051aa6bc5c231e3c996019255a9cef",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:77cf45521c340f04fc894caa3b9fa06acce37827ef1392e0e23a056094d86f3e",
+        "size": 1602062
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:01d6d78e4e1c4346b6bbfcc898725f8f76ed65fe47ffc5ed00d5d4a3d5cf7e3b",
+        "size": 63323
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:4f14d876bafac2b029b69bc40aaa6ee5769f30024ade2e2226d3ce933f8f189e",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "b03d2be8329ee043ae780d78528a8b131fc0375e",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "grafana",
+    "com.otziv.security.brotli-refresh": "C40: official Alpine3.24 brotli-libs1.2.1-r0; exact C36 Grafana executable/config/assets and unrelated packages unchanged",
+    "com.otziv.security.c50": "C50: official musl security package; golang.org/x/net v0.62.0; required x/* dependency closure",
+    "com.otziv.security.curl-refresh": "C41: official Alpine3.24 curl/libcurl8.23.0-r0; C40 application/config/assets, exact C36 Grafana executable and unrelated packages unchanged",
+    "com.otziv.security.patch": "go-jose/v4 4.1.6; Go1.27.3; grpc1.83.2; thrift0.24.0; x/net0.62.0; kin-openapi0.149.0; jsonschema/v6 6.0.3; exact required MVS; OpenSSL3.5.9; official CGO0 modernc SQLite",
+    "com.otziv.security.review": "C44: exact C43 Grafana executable retained; go-jose/v4 4.1.6; independent binary identity and fixed Tempo source ancestry",
+    "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; exact C44 Grafana executable, configuration and unrelated packages unchanged",
+    "maintainer": "Grafana Labs <hello@grafana.com>",
+    "org.opencontainers.image.revision": "81407c71e96e8351b4600164c1b4d30c8baf41d6",
+    "org.opencontainers.image.source": "https://github.com/grafana/grafana",
+    "org.opencontainers.image.version": "12.4.10+otziv.6"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-06T22:02:46.161Z"
+}
