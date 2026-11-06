@@ -189,7 +189,80 @@ public class ClientChatMessageTrackerService {
                     command.platform(), command.chatId(), savedMessage.getId());
             return;
         }
-        openOrRefresh(savedMessage, company, manager);
+        closeIfAlreadyAnswered(openOrRefresh(savedMessage, company, manager));
+    }
+
+    /**
+     * A client message can reach us after the reply to it (history sync after a gateway restart,
+     * delayed webhooks). The live close happens only when the reply arrives, so the late question
+     * is checked against replies already stored, with the same rules as the live close.
+     */
+    private void closeIfAlreadyAnswered(ClientChatUnansweredItem item) {
+        if (item == null || item.getStatus() != ClientChatUnansweredStatus.OPEN) {
+            return;
+        }
+        ClientChatMessage reply = countedStaffReplyAfter(item);
+        if (reply == null) {
+            return;
+        }
+        ClientChatReplyQualityService.Result quality = quality(item.getLastMessageText(), reply.getMessageText());
+        close(
+                item,
+                ClientChatUnansweredStatus.ANSWERED,
+                "Ответ сотрудника",
+                ClientChatResolutionType.ANSWERED,
+                reply,
+                "OUTGOING_STAFF_MESSAGE",
+                null,
+                null,
+                false,
+                quality.quality(),
+                quality.reason()
+        );
+        resolveAuditsWithStaffReply(reply);
+    }
+
+    /**
+     * Open items of the manager whose stored chat history already holds a reply that the live close
+     * would have counted. Used by «Проверить ответ» after the chat history is synchronized.
+     */
+    @Transactional
+    public int closeOpenItemsAnsweredInHistory(Manager manager) {
+        if (!enabled() || manager == null || manager.getId() == null) {
+            return 0;
+        }
+        int closed = 0;
+        for (ClientChatPlatform platform : ClientChatPlatform.values()) {
+            for (ClientChatUnansweredItem item : unansweredRepository.findByManagerAndPlatformAndStatus(
+                    manager, platform, ClientChatUnansweredStatus.OPEN)) {
+                closeIfAlreadyAnswered(item);
+                if (item.getStatus() != ClientChatUnansweredStatus.OPEN) {
+                    closed++;
+                }
+            }
+        }
+        return closed;
+    }
+
+    /** First reply at or after the client's message that the live close counts as an answer. */
+    private ClientChatMessage countedStaffReplyAfter(ClientChatUnansweredItem item) {
+        if (item == null || item.getPlatform() == null || !hasText(item.getChatId())
+                || item.getLastClientMessageAt() == null) {
+            return null;
+        }
+        return messageRepository
+                .findByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+                        item.getPlatform(),
+                        item.getChatId(),
+                        ClientChatSenderRole.STAFF,
+                        item.getLastClientMessageAt().minusNanos(1)
+                )
+                .stream()
+                .filter(message -> !ClientChatContentClassifier.reactionOnly(message.getMessageText()))
+                .filter(message -> !(message.getDirection() == ClientChatDirection.INCOMING
+                        && isOwnerOrAdmin(message.getActorUser())))
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -632,13 +705,20 @@ public class ClientChatMessageTrackerService {
         unansweredRepository.save(item);
     }
 
-    private void openOrRefresh(ClientChatMessage message, Company company, Manager manager) {
-        ClientChatUnansweredItem item = unansweredRepository
+    private ClientChatUnansweredItem openOrRefresh(ClientChatMessage message, Company company, Manager manager) {
+        var existing = unansweredRepository
                 .findFirstByPlatformAndChatIdAndStatusOrderByLastClientMessageAtDesc(
                         message.getPlatform(),
                         message.getChatId(),
                         ClientChatUnansweredStatus.OPEN
-                )
+                );
+        if (existing.isPresent() && existing.get().getLastClientMessageAt() != null
+                && message.getMessageAt() != null
+                && message.getMessageAt().isBefore(existing.get().getLastClientMessageAt())) {
+            // A late copy of an older client message must not replace the newer question on the card.
+            return existing.get();
+        }
+        ClientChatUnansweredItem item = existing
                 .orElseGet(() -> {
                     ClientChatUnansweredItem created = new ClientChatUnansweredItem();
                     created.setPlatform(message.getPlatform());
@@ -669,6 +749,7 @@ public class ClientChatMessageTrackerService {
         item.setAuditRequired(false);
         unansweredRepository.save(item);
         events.publishEvent(new ClientChatReviewPrefetch.Requested(item.getId()));
+        return item;
     }
 
     private void closeOpenItems(
