@@ -29,7 +29,7 @@ generation и последовательная запись SecureStorage не �
 Проверка: реальные Keycloak protocol tests, MySQL races, Angular runtime и signed
 native upgrade/resume. Локальный Keycloak или debug APK не закрывают весь release gate.
 Решение и текущая приёмка: [runbook](AUTH_EPOCH_PUSH_REVOKE_ROLLOUT.md),
-[native evidence](NATIVE_ANDROID_VERIFICATION_2026-09-07.md).
+native evidence (`NATIVE_ANDROID_VERIFICATION_2026-09-07.md`, удалён 2026-11-06, есть в истории Git).
 
 Отвергнуты: только проверка JWT expiry, удаление mobile session при любом timeout,
 SecurityContext как неявная замена переданного actor и требование login для всех

@@ -122,10 +122,10 @@ Keycloak runtime отдельно выполнен успешно (online/offlin
 
 Подробности: [финансовые сценарии](FINANCIAL_SCENARIO_BOUNDARIES.md),
 [ManagerControl](MANAGER_CONTROL_SCENARIO_BOUNDARIES.md),
-[worker commands](WORKER_COMMAND_BOUNDARIES_2026-09-07.md),
-[клиентские границы](CLIENT_DICTIONARY_BOUNDARIES_2026-09-07.md),
-[Android](NATIVE_ANDROID_VERIFICATION_2026-09-07.md),
-[локальный recovery CLI](RECOVERY_CLI_LOCAL_VERIFICATION_2026-09-07.md),
+worker commands (`WORKER_COMMAND_BOUNDARIES_2026-09-07.md`, удалён 2026-11-06, есть в истории Git),
+клиентские границы (`CLIENT_DICTIONARY_BOUNDARIES_2026-09-07.md`, удалён 2026-11-06, есть в истории Git),
+Android (`NATIVE_ANDROID_VERIFICATION_2026-09-07.md`, удалён 2026-11-06, есть в истории Git),
+локальный recovery CLI (`RECOVERY_CLI_LOCAL_VERIFICATION_2026-09-07.md`, удалён 2026-11-06, есть в истории Git),
 [правила выпуска](ARCHITECTURE_ROLLOUT.md),
 [ADR-001](ADR-001-MODULE-BOUNDARIES.md).
 

@@ -17,7 +17,7 @@ HTTP permissions metadata. Метаданные прав документиру�
 SDK остаётся независимым от транспорта. Angular clients используют существующие
 HttpClient/interceptors, public capability и native networking. Generated fetch
 не создаёт второй путь авторизации. Feature API получает самостоятельного владельца;
-старый общий ApiService может временно делегировать, но не сохраняет вторую реализацию.
+старый общий ApiService не делегирует feature API (делегаты удалены 2026-11-06): вызывающий код использует feature API напрямую.
 Изменяемое состояние редактора принадлежит экземпляру страницы, включая Ionic
 leave/enter и reconciliation поздней записи.
 

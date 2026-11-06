@@ -29,7 +29,7 @@ callers и проверки HTTP/permissions/transaction regressions.
 обращения к чужим внутренним классам и новые циклы даже через разрешённые API.
 Существующие legacy exceptions имеют владельца в карте и удаляются вместе со связью.
 
-Опора: [worker commands](WORKER_COMMAND_BOUNDARIES_2026-09-07.md),
+Опора: worker commands (`WORKER_COMMAND_BOUNDARIES_2026-09-07.md`, удалён 2026-11-06, есть в истории Git),
 [module ownership](ADR-001-MODULE-BOUNDARIES.md),
 [manager scenarios](MANAGER_CONTROL_SCENARIO_BOUNDARIES.md).
 Отвергнуты: перенос всего controller в один такой же god-service, копирование

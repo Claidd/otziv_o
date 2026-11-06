@@ -26,7 +26,6 @@ test("WhatsApp image upgrades reproducibly and runs as the non-root Node user", 
   assert.equal(rawDockerfile.split(/\r?\n/u)[0], `FROM ${node22Base}@${node22Digest}`);
   const dockerfile = rawDockerfile.replace(`@${node22Digest}`, "");
   const deployScript = read("infrastructure/scripts/prod/deploy-prod.ps1");
-  const legacyDeployScript = read("infrastructure/scripts/prod/deploy-prod-ssh-images.ps1");
   assert.match(dockerfile, /^FROM node:22\.23\.4-trixie-slim$/mu);
   assert.match(dockerfile, /sha256sum --check --strict/u);
   assert.match(dockerfile, /PUPPETEER_EXECUTABLE_PATH=\/usr\/bin\/google-chrome-stable/u);
@@ -34,10 +33,6 @@ test("WhatsApp image upgrades reproducibly and runs as the non-root Node user", 
   assert.match(dockerfile, /npm ci --omit=dev/u);
   assert.match(dockerfile, /^USER node$/mu);
   assert.match(dockerfile, /chown -R node:node \/app \/auth/u);
-  for (const script of [legacyDeployScript]) {
-    assert.match(script, /--entrypoint sh whatsapp_lika -c 'node_uid=.*id -u node.*node_gid=.*id -g node.*chown -R .*\/auth'/u);
-    assert.match(script, /--entrypoint sh whatsapp_vika -c 'node_uid=.*id -u node.*node_gid=.*id -g node.*chown -R .*\/auth'/u);
-  }
   assert.match(deployScript, /for gateway in whatsapp_lika whatsapp_vika; do\s+if ! service_unchanged "`\$gateway"; then/u);
   assert.match(deployScript, /--cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh "`\$gateway" -c 'node_uid=.*id -u node.*node_gid=.*id -g node.*chown -R .*\/auth'/u);
   const stop = deployScript.indexOf('compose stop "`$gateway"');

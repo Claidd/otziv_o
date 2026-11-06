@@ -38,8 +38,7 @@ try {
     $fixtureActivation = @{ schema = 'otziv-reviewed-image-activations-v1'; images = @($entry) }
     [IO.File]::WriteAllText((Join-Path $fixture $activationPath), ($fixtureActivation | ConvertTo-Json -Depth 20))
     $null = Get-OtzivCoordinatedMysqlBundlePaths -Repository $fixture
-    $helpers = @('infrastructure/scripts/prod/coordinated_mysql_refresh.py',
-        'infrastructure/scripts/prod/coordinated_mysql_brotli_refresh.py',
+    $helpers = @('infrastructure/scripts/prod/coordinated_mysql_brotli_refresh.py',
         'infrastructure/scripts/prod/coordinated_mysql_curl_refresh.py',
         'infrastructure/scripts/prod/coordinated_mysql_cutover.py')
     foreach ($helper in $helpers) {
