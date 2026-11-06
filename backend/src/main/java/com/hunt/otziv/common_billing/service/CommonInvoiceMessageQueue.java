@@ -16,10 +16,31 @@ import org.springframework.transaction.annotation.Transactional;
 /** Billing owns its frozen commands. Claims are short; UNKNOWN is receipt-only. */
 @Service
 @RequiredArgsConstructor
-public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages.api.DeliveryQueueHealth {
+public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages.api.DeliveryQueueHealth,
+        com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final CredentialCipher cipher;
+
+    @Override @Transactional(readOnly = true, timeout = 3)
+    public Optional<Wait> autoresponderWait(String operationId) {
+        if (operationId == null || operationId.isBlank()) return Optional.empty();
+        return jdbc.query("""
+                SELECT state,error_code,created_at,lease_until>CURRENT_TIMESTAMP(6) FROM common_invoice_message_queue
+                WHERE operation_id=?
+                """, (rs, row) -> {
+            String state = rs.getString(1);
+            String code = rs.getString(2) == null ? "" : rs.getString(2).trim();
+            java.time.LocalDateTime queuedAt = rs.getTimestamp(3) == null ? null : rs.getTimestamp(3).toLocalDateTime();
+            boolean leased = rs.getBoolean(4);
+            // A held message is QUEUED/RETRYABLE between tries and briefly SENDING while the worker
+            // re-checks the rules; a SENDING row past its lease or with another code is a send in doubt.
+            boolean neverTried = "QUEUED".equals(state) && code.isEmpty();
+            boolean held = AUTORESPONDER_HOLD_CODES.contains(code)
+                    && ("QUEUED".equals(state) || "RETRYABLE".equals(state) || ("SENDING".equals(state) && leased));
+            return neverTried || held ? new Wait(code, queuedAt) : null;
+        }, operationId).stream().filter(Objects::nonNull).findFirst();
+    }
 
     @Override public String queueName() { return "common_invoice"; }
     @Override @Transactional(readOnly = true, timeout = 3)

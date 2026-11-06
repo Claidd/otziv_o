@@ -41,6 +41,13 @@ public class ManagerControlInvoiceRepairWorkflow {
         CommonInvoice invoice = commonInvoiceRepository.findByIdWithAccount(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         String deliveryError = safe(invoice.getLastError()).toLowerCase(Locale.ROOT);
+        if (invoiceDiagnostics.deliveryHeldByAutoresponder(invoice, LocalDateTime.now())) {
+            return new Outcome(
+                    "Напоминание по счёту ещё не отправлялось: оно ждёт в очереди автоответчика (рабочее окно, "
+                            + "дневной лимит, интервал или пауза) и уйдёт автоматически. Ничего делать не нужно.",
+                    "Напоминание общего счёта ждёт очереди автоответчика"
+            );
+        }
         if (deliveryError.startsWith("message_send_in_progress") || deliveryError.startsWith("message_send_stale")
                 || deliveryError.startsWith("message_send_unknown") || deliveryError.startsWith("payment_route_changed_message_in_progress")) {
             var recovery = commonBillingService.recoverPendingMessageReceipt(invoiceId);
@@ -52,6 +59,19 @@ public class ManagerControlInvoiceRepairWorkflow {
             return new Outcome(recovery.message(), recovery.nextReminderAt() == null
                     ? "Восстановлено подтверждение исходной отправки общего счёта"
                     : "Восстановлен следующий срок планового напоминания общего счёта");
+        }
+        if (invoiceDiagnostics.commonInvoiceExpiredLinkAttention(invoice)) {
+            if (!commonBillingService.releaseExpiredPaymentLink(invoiceId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Банк ещё не подтвердил, что по старой ссылке T-Bank оплаты нет. Система проверяет это "
+                                + "автоматически каждые 10 минут. Если клиент уже заплатил вам напрямую, дождитесь "
+                                + "возврата счёта в работу и отметьте оплату; повторно ссылку клиенту не отправляйте.");
+            }
+            return new Outcome(
+                    "Старая ссылка T-Bank закрыта банком без оплаты, счёт возвращён в работу. Клиент может оплатить "
+                            + "по новой ссылке, а полученную напрямую оплату можно отметить кнопкой «Оплачен».",
+                    "Возвращён в работу общий счёт после истёкшей ссылки T-Bank"
+            );
         }
         if (invoice.getStatus() == CommonInvoiceStatus.PARTIALLY_PAID
                 && invoiceDiagnostics.commonInvoiceRequiresCompositionReview(invoice,

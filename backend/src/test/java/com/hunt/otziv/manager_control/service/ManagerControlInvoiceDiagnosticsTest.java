@@ -300,6 +300,119 @@ class ManagerControlInvoiceDiagnosticsTest {
                 "(есть частичная оплата)", "Решение за менеджером");
     }
 
+    @Test
+    void reminderHeldByTheAutoresponderIsWaitingNotAnUnconfirmedSend() {
+        overdueDays(30);
+        var invoice = queuedReminder(LocalDateTime.now().minusHours(4));
+        var wait = deliveryWait();
+        when(wait.autoresponderWait("invoice-message:175:op")).thenReturn(Optional.of(
+                new com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait.Wait("outside_business_window",
+                        LocalDateTime.now().minusHours(4))));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isTrue();
+        assertThat(diagnostics.deliveryHeldByAutoresponder(invoice, LocalDateTime.now())).isTrue();
+    }
+
+    @Test
+    void reminderHeldForMoreThanTwoDaysReachesTheManagerWithTheQueueReason() {
+        overdueDays(30);
+        var invoice = queuedReminder(LocalDateTime.now().minusHours(50));
+        var wait = deliveryWait();
+        when(wait.autoresponderWait("invoice-message:175:op")).thenReturn(Optional.of(
+                new com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait.Wait("daily_limit",
+                        LocalDateTime.now().minusHours(50))));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(reason(invoice, List.of())).contains("ещё не отправлялось", "очереди автоответчика",
+                "исчерпан дневной лимит").doesNotContain("не подтвержден");
+    }
+
+    @Test
+    void sendInDoubtIsStillAnUnconfirmedDelivery() {
+        overdueDays(30);
+        var invoice = queuedReminder(LocalDateTime.now().minusHours(4));
+        var wait = deliveryWait();
+        when(wait.autoresponderWait("invoice-message:175:op")).thenReturn(Optional.empty());
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(reason(invoice, List.of())).contains("Результат отправки сообщения по счету не подтвержден");
+    }
+
+    @Test
+    void overdueInvoiceWhoseNoticeWentToTheManagerIsTheAutorespondersWork() {
+        overdueDays(30);
+        var invoice = invoice(CommonInvoiceStatus.REMINDER, null);
+        invoice.setSentAt(LocalDateTime.now().minusDays(29));
+        invoice.setOverdueNoticeAt(LocalDateTime.now().minusHours(20));
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        given(invoice, List.of(position("Напоминание", false, true)));
+        when(overdueNotices().automaticMoveNotBefore(eq(invoice.getId()), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(LocalDateTime.now().plusDays(1)));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isTrue();
+    }
+
+    @Test
+    void overdueInvoiceComesBackWhenTheAutomaticMoveIsMoreThanADayLate() {
+        overdueDays(30);
+        var invoice = invoice(CommonInvoiceStatus.REMINDER, null);
+        invoice.setSentAt(LocalDateTime.now().minusDays(40));
+        invoice.setOverdueNoticeAt(LocalDateTime.now().minusDays(5));
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        given(invoice, List.of(position("Напоминание", false, true)));
+        when(overdueNotices().automaticMoveNotBefore(eq(invoice.getId()), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(LocalDateTime.now().plusMinutes(5)));
+
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(reason(invoice, List.of())).contains("перевод не состоялся", "не оплачен 40 дн.");
+    }
+
+    @Test
+    void overdueNoticeGetsADayBeforeTheMissingNoticeReachesTheBoard() {
+        overdueDays(30);
+        var invoice = invoice(CommonInvoiceStatus.REMINDER, null);
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        given(invoice, List.of(position("Напоминание", false, true)));
+        when(overdueNotices().automaticMoveNotBefore(eq(invoice.getId()), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(LocalDateTime.now().plusDays(2)));
+
+        invoice.setSentAt(LocalDateTime.now().minusDays(28).minusHours(3));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).as("the notice job runs later today").isTrue();
+        invoice.setSentAt(LocalDateTime.now().minusDays(29).minusHours(1));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(reason(invoice, List.of())).contains("не ушло больше суток");
+    }
+
+    @Test
+    void expiredLinkIsLeftToTheAutomaticBankCheckForAnHour() {
+        var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION,
+                com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService.EXPIRED_LINK_ATTENTION_PREFIX
+                        + " и отправлена на отмену");
+        given(invoice, List.of(position("Напоминание", false, true)));
+
+        invoice.setUpdatedAt(LocalDateTime.now().minusMinutes(20));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isTrue();
+        invoice.setUpdatedAt(LocalDateTime.now().minusMinutes(70));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(reason(invoice, List.of())).contains("Нажмите «Починить»", "Оплачен")
+                .doesNotContain("Проблема при создании платежной ссылки");
+    }
+
+    private CommonInvoice queuedReminder(LocalDateTime dueAt) {
+        var invoice = invoice(CommonInvoiceStatus.REMINDER, "message_send_in_progress");
+        invoice.setSentAt(LocalDateTime.now().minusDays(10));
+        invoice.setNextReminderAt(dueAt);
+        invoice.setPaymentMessageOperationId("invoice-message:175:op");
+        given(invoice, List.of(position("Напоминание", false, true)));
+        return invoice;
+    }
+
+    private com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait deliveryWait() {
+        var wait = mock(com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait.class);
+        ReflectionTestUtils.setField(diagnostics, "deliveryWait", wait);
+        return wait;
+    }
+
     private com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices overdueNotices() {
         var notices = mock(com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.class);
         ReflectionTestUtils.setField(diagnostics, "overdueNotices", notices);

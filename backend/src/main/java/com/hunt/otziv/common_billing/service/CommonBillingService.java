@@ -265,6 +265,11 @@ public class CommonBillingService {
         return invoiceCancellation.cancelPendingArchivedPayments(limit);
     }
 
+    /** Closes an expired link's old bank session now; true when the invoice is back in work. */
+    public boolean releaseExpiredPaymentLink(Long invoiceId) {
+        return invoiceCancellation.releaseExpiredLinkNow(invoiceId);
+    }
+
     /**
      * Reconciles Tochka attempts without ever inventing a local cancel. A CREATED payment remains
      * blocking until GET reports EXPIRED. APPROVED cancellation attempts are refunded once and

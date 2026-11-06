@@ -578,6 +578,7 @@ com.hunt.otziv.common_billing.service.CommonInvoiceBoardWorkflow -> com.hunt.otz
 com.hunt.otziv.common_billing.service.CommonInvoiceBoardWorkflow -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService -> com.hunt.otziv.payments.dto.TbankCancelCommand
 com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService -> com.hunt.otziv.payments.dto.TbankCancelResponse
+com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService -> com.hunt.otziv.payments.dto.TbankGetStateResponse
 com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService -> com.hunt.otziv.payments.dto.TbankPaymentProfile
 com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService -> com.hunt.otziv.payments.service.PaymentProfileService
 com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService -> com.hunt.otziv.payments.service.TbankClient
