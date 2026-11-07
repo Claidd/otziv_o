@@ -372,6 +372,26 @@ class ContinuityTests(unittest.TestCase):
                 self.state["containers"]["1" * 64]["Image"] = guard.REVIEWED_MYSQL_C42_CONFIG
                 self.reject("Database image change refused")
 
+    def test_c51_postgres_needs_no_allowance_and_replaces_c36_only_through_the_coordinated_refresh(self):
+        # The C51 zlib overlay keeps the C36 launch contract, so the ordinary guard
+        # needs no C51 entry: it restarts an activated C51 database unchanged and
+        # refuses Compose pointing C51 at a running C36 container.
+        c36 = ("ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+               "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc")
+        c51 = ("ghcr.io/claidd/otziv-security@sha256:13d2e1ba01b593f1f284d5d7869a9994f5251f036355e90064406ca4e7d809fc",
+               "sha256:ceffd72a35bc4a20a9588f71deaf98cc145ba6832104a8b539a63395ce341975")
+        self.assertFalse({c51[1], "sha256:" + c51[0].split("@sha256:")[1]} & set(guard.REVIEWED_MYSQL_NATIVE_IDS))
+        for running in (c51[1], "sha256:" + c51[0].split("@sha256:")[1]):
+            with self.subTest(running=running):
+                self.state = fixture()
+                image = self.state["images"].pop("keycloak-postgres:reviewed")
+                self.state["images"][c51[0]] = {**image, "Id": running}
+                self.state["config"]["services"]["keycloak-postgres"]["image"] = c51[0]
+                self.state["containers"]["2" * 64]["Image"] = running
+                self.assertEqual(self.evaluate()["services"]["keycloak-postgres"], {"pull_policy": "never"})
+                self.state["containers"]["2" * 64]["Image"] = c36[1]
+                self.reject("Database image change refused for keycloak-postgres")
+
     def test_native_contract_is_bound_to_actual_immutable_image_and_platform_not_a_tag_or_label(self):
         self.state = native_mysql_fixture()
         image = self.state["images"][guard.REVIEWED_MYSQL_REFERENCE]

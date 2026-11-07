@@ -1,0 +1,155 @@
+{
+  "advisories": [
+    "CVE-2026-76844",
+    "CVE-2026-85091"
+  ],
+  "architecture": "amd64",
+  "builder": "node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284",
+  "bytes": 88720,
+  "component": "postgres",
+  "conffiles": [],
+  "control": {
+    "control": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "e604c036c60223ccd46f34981d2e804fe653872dfaede6e40eabbeb673c3c5e5",
+      "uid": 0
+    },
+    "md5sums": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "7201f98bda871448292d21454638b9aec9a6ced2b0f2417b9a8196b7bb5b69ba",
+      "uid": 0
+    },
+    "shlibs": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "b83364c157bf331505e018105935763d36db4e070e26d1f7d6c08ea576fc7d5c",
+      "uid": 0
+    },
+    "symbols": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "59df14756eb30dbb5f3dfd195f25bd93f3e9573eab752017a79ec5098ba262b7",
+      "uid": 0
+    },
+    "triggers": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "c67ab4558a59eb1e96d899a5bdbb153d6a2ab0e580f4acf5bfb1e4e6150ad2f4",
+      "uid": 0
+    }
+  },
+  "controlFields": {
+    "Architecture": "amd64",
+    "Depends": "libc6 (>= 2.14)",
+    "Multi-Arch": "same",
+    "Package": "zlib1g",
+    "Source": "zlib",
+    "Version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+  },
+  "distribution": "debian-13 trixie-security",
+  "dpkgInfoFiles": {
+    "var/lib/dpkg/info/zlib1g:amd64.list": "e7b6e172574ac027318b30079cbeaa1d3c28f0a860265ea409c4a98a12d3ef2f",
+    "var/lib/dpkg/info/zlib1g:amd64.md5sums": "7201f98bda871448292d21454638b9aec9a6ced2b0f2417b9a8196b7bb5b69ba",
+    "var/lib/dpkg/info/zlib1g:amd64.shlibs": "b83364c157bf331505e018105935763d36db4e070e26d1f7d6c08ea576fc7d5c",
+    "var/lib/dpkg/info/zlib1g:amd64.symbols": "59df14756eb30dbb5f3dfd195f25bd93f3e9573eab752017a79ec5098ba262b7",
+    "var/lib/dpkg/info/zlib1g:amd64.triggers": "c67ab4558a59eb1e96d899a5bdbb153d6a2ab0e580f4acf5bfb1e4e6150ad2f4"
+  },
+  "dpkgInfoName": "zlib1g:amd64",
+  "dpkgList": "/.\n/usr\n/usr/lib\n/usr/lib/x86_64-linux-gnu\n/usr/lib/x86_64-linux-gnu/libz.so.1.3.1\n/usr/share\n/usr/share/doc\n/usr/share/doc/zlib1g\n/usr/share/doc/zlib1g/changelog.Debian.gz\n/usr/share/doc/zlib1g/changelog.gz\n/usr/share/doc/zlib1g/copyright\n/usr/lib/x86_64-linux-gnu/libz.so.1\n",
+  "dpkgStatusRecord": "Package: zlib1g\nSource: zlib\nVersion: 1:1.3.dfsg+really1.3.1-1+deb13u1\nArchitecture: amd64\nMaintainer: Mark Brown <broonie@debian.org>\nInstalled-Size: 172\nDepends: libc6 (>= 2.14)\nConflicts: zlib1 (<= 1:1.0.4-7)\nBreaks: libxml2 (<< 2.7.6.dfsg-2), texlive-binaries (<< 2023.20230311.66589-8)\nProvides: libz1\nSection: libs\nPriority: required\nMulti-Arch: same\nHomepage: http://zlib.net/\nDescription: compression library - runtime\n zlib is a library implementing the deflate compression method found\n in gzip and PKZIP.  This package includes the shared library.\nStatus: install ok installed",
+  "package": "zlib1g",
+  "parent": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+  "payload": {
+    "usr": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/lib": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu/libz.so.1": {
+      "gid": 0,
+      "kind": "symlink",
+      "mode": 511,
+      "target": "libz.so.1.3.1",
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu/libz.so.1.3.1": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "6c13931760210e8b391b63a337dfe4071346c4ad6e3827694edb7b6989bb16dd",
+      "uid": 0
+    },
+    "usr/share": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/share/doc": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/share/doc/zlib1g": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/share/doc/zlib1g/changelog.Debian.gz": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "afa2c7ceb7497edf51945e4abbd5fb65e45cb258a23be9f1b4b2f0a0d3a1989e",
+      "uid": 0
+    },
+    "usr/share/doc/zlib1g/changelog.gz": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "a697e1cefca8aa7ad377a5a46b941f7ccb8c15686d781f74c923c7ecf46afd5b",
+      "uid": 0
+    },
+    "usr/share/doc/zlib1g/copyright": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "9e5b96d63773a5d177ba264254390f792be07e41748ebd94730981c6cac31cc6",
+      "uid": 0
+    }
+  },
+  "previousVersion": "1:1.3.dfsg+really1.3.1-1+b1",
+  "schema": "otziv-official-debian-package-v1",
+  "sha256": "8c27c342230503b73dfde629642c3b352e87b554e06d60cf58772f236a305ceb",
+  "signedArchiveIndex": {
+    "filename": "pool/updates/main/z/zlib/zlib1g_1.3.dfsg+really1.3.1-1+deb13u1_amd64.deb",
+    "sha256": "8c27c342230503b73dfde629642c3b352e87b554e06d60cf58772f236a305ceb",
+    "size": 88720,
+    "suite": "trixie-security",
+    "uri": "http://deb.debian.org/debian-security/pool/updates/main/z/zlib/zlib1g_1.3.dfsg%2breally1.3.1-1%2bdeb13u1_amd64.deb",
+    "verifiedWith": "apt-get update, apt-get download --print-uris and apt-cache show in the disposable pinned trixie build image"
+  },
+  "url": "https://deb.debian.org/debian-security/pool/updates/main/z/zlib/zlib1g_1.3.dfsg%2breally1.3.1-1%2bdeb13u1_amd64.deb",
+  "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+}

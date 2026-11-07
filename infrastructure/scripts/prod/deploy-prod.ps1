@@ -44,6 +44,7 @@ param(
     [switch]$FullRollout,
     [switch]$CoordinatedMysqlRefresh,
     [switch]$CoordinatedSslRefresh,
+    [switch]$CoordinatedPostgresRefresh,
     [switch]$Help
 )
 
@@ -78,6 +79,7 @@ Useful options:
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
   -CoordinatedMysqlRefresh       Exact reviewed MySQL OS-package cutover after the protected backup.
   -CoordinatedSslRefresh         Reviewed C23-to-C36 PostgreSQL cutover after protected backups.
+  -CoordinatedPostgresRefresh    Reviewed C36-to-C51 PostgreSQL zlib refresh on the same volume after protected backups.
   -NoBuildCache                  Build images without Docker cache.
   -AllowDirtyWorktree            Emergency only: bypass the clean automatic snapshot.
   -SkipAutoSnapshotValidation    Emergency only: skip local gates for an automatic snapshot.
@@ -773,7 +775,7 @@ if (-not (Test-Path -LiteralPath $snapshotLibraryPath -PathType Leaf)) {
 . $snapshotLibraryPath
 
 $canonicalMainWorkspace = ''
-if (($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh) -and -not $RequireMainCi) {
+if (($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh -or $CoordinatedPostgresRefresh) -and -not $RequireMainCi) {
     throw 'Explicit reviewed database cutover requires protected main CI and the mandatory backup.'
 }
 if ($RequireMainCi) {
@@ -1099,6 +1101,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\coordinated_mysql_curl_refresh.py",
     "infrastructure\scripts\prod\coordinated_mysql_cutover.py",
     "infrastructure\scripts\prod\coordinated_ssl_refresh.py",
+    "infrastructure\scripts\prod\coordinated_postgres_zlib_refresh.py",
     "infrastructure\scripts\prod\deployment_capacity.py",
     "infrastructure\scripts\prod\whatsapp_deploy_state.py",
     "infrastructure\scripts\prod\image_layer_capacity.py",
@@ -1111,8 +1114,8 @@ $deployBundlePaths = @(
 )
 # The early prepared archive and installation use the same bounded evidence list.
 $effectiveDeployBundlePaths = @($deployBundlePaths)
-if ($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh) {
-    $effectiveDeployBundlePaths = @(Get-OtzivDeployBundlePaths -Repository $repoRoot -CoordinatedMysqlRefresh:$CoordinatedMysqlRefresh -CoordinatedSslRefresh:$CoordinatedSslRefresh)
+if ($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh -or $CoordinatedPostgresRefresh) {
+    $effectiveDeployBundlePaths = @(Get-OtzivDeployBundlePaths -Repository $repoRoot -CoordinatedMysqlRefresh:$CoordinatedMysqlRefresh -CoordinatedSslRefresh:$CoordinatedSslRefresh -CoordinatedPostgresRefresh:$CoordinatedPostgresRefresh)
 }
 $remote = "${VpsUser}@${VpsHost}"
 $remoteDeployLockToken = [System.Guid]::NewGuid().ToString('N')
@@ -1859,7 +1862,8 @@ retain_deploy_lock="1"
     $fullRolloutArgument = if ($FullRollout) { "--full" } else { "" }
     $coordinatedMysqlEnabled = if ($CoordinatedMysqlRefresh) { '1' } else { '0' }
     $coordinatedSslEnabled = if ($CoordinatedSslRefresh) { '1' } else { '0' }
-    $coordinatedMainRevisionQuoted = if ($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh) { ConvertTo-BashSingleQuoted $preparedSnapshotRevision } else { "''" }
+    $coordinatedPostgresEnabled = if ($CoordinatedPostgresRefresh) { '1' } else { '0' }
+    $coordinatedMainRevisionQuoted = if ($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh -or $CoordinatedPostgresRefresh) { ConvertTo-BashSingleQuoted $preparedSnapshotRevision } else { "''" }
     $remoteScript = @"
 set -Eeuo pipefail
 umask 077
@@ -1904,6 +1908,7 @@ capacity_check_dir=""
 database_image_override=""
 coordinated_mysql_enabled=$coordinatedMysqlEnabled
 coordinated_ssl_enabled=$coordinatedSslEnabled
+coordinated_postgres_enabled=$coordinatedPostgresEnabled
 
 assert_self_heal_stopped() {
   for unit in "`$self_heal_timer" "`$self_heal_service"; do
@@ -3247,6 +3252,16 @@ if [ "`$coordinated_ssl_enabled" = "1" ]; then
     --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
     --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
     --explicit-reviewed-ssl-cutover
+fi
+# The reviewed C36-to-C51 PostgreSQL zlib refresh keeps the active C48 Keycloak.
+# It follows the verified main DB backup and both earlier cutovers, writes its own
+# encrypted PostgreSQL backup, recreates only keycloak-postgres on the same volume
+# and restores C36 through its checked override on any failed check.
+if [ "`$coordinated_postgres_enabled" = "1" ]; then
+  python3 infrastructure/scripts/prod/coordinated_postgres_zlib_refresh.py \
+    --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
+    --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
+    --explicit-reviewed-postgres-refresh
 fi
 # Refuse ordinary database image/storage changes before rollout startup or retry.
 guard_database_images
