@@ -147,9 +147,13 @@ public class ManagerControlChatRepairWorkflow {
             return resolveRepairedConcreteItem(concreteItem, control, "Компания в статусе «Бан»: привязка группы не требуется, карточка скрыта из контроля", principal, "Закрыта лишняя карточка привязки соцсети");
         }
         String before = clientTextChatBindingProblem(company);
+        String replacedInvite = "";
         if (before.isBlank() && "COMPANY_CHAT_BINDING".equals(concreteItem.getEntityType())
                 && isWhatsAppChat(safe(company.getUrlChat()).toLowerCase(Locale.ROOT))) {
-            requireWorkingWhatsAppInvite(concreteItem, company);
+            replacedInvite = requireWorkingWhatsAppInvite(concreteItem, company);
+        }
+        if (before.isBlank() && !replacedInvite.isBlank()) {
+            return resolveRepairedConcreteItem(concreteItem, control, replacedInvite, principal, "Ссылка WhatsApp заменена актуальной ссылкой группы");
         }
         if (before.isBlank()) {
             return resolveRepairedConcreteItem(concreteItem, control, "Группа уже привязана, карточка скрыта из контроля", principal, "Проверена привязка соцсети");
@@ -177,12 +181,19 @@ public class ManagerControlChatRepairWorkflow {
     }
 
     /**
-     * A bound group whose stored invite no longer opens it stays on the card until the manager saves
-     * the right link in the company; the check reads only and never changes the link or the group.
+     * A bound group whose stored invite no longer opens it: when the connected account reads the group's
+     * current invite, the check has already put it in the company (returns the card's comment; the
+     * bound group never changes). Otherwise the card stays until the manager saves the right link.
+     * Returns "" when nothing was replaced.
      */
-    void requireWorkingWhatsAppInvite(ManagerDailyControlConcreteItem concreteItem, Company company) {
+    String requireWorkingWhatsAppInvite(ManagerDailyControlConcreteItem concreteItem, Company company) {
         var recheck = problemExamples.recheckWhatsAppInvite(company);
         var result = recheck == null ? null : recheck.result();
+        if (result == com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.RecheckResult.REFRESHED) {
+            String current = safe(recheck.currentInviteLink());
+            return "Ссылка-приглашение WhatsApp в карточке компании заменена актуальной ссылкой той же группы"
+                    + (current.isBlank() ? "" : ": " + current) + ". Привязка группы не менялась, клиентам ничего не отправлялось.";
+        }
         boolean staleCard = safe(concreteItem.getReason()).contains(ManagerControlProblemExamples.STALE_WHATSAPP_INVITE_REASON);
         if (result == com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.RecheckResult.STALE
                 || (result == com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.RecheckResult.UNKNOWN && staleCard)) {
@@ -195,6 +206,7 @@ public class ManagerControlChatRepairWorkflow {
                     + "Сохраните правильную ссылку на чат в карточке компании и нажмите «Починить» ещё раз. "
                     + "Привязка группы автоматически не меняется, клиентам ничего не отправляется.");
         }
+        return "";
     }
 
     /** The gateway's reason why the connected number cannot read the group's invite, for the manager. */

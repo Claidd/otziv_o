@@ -139,12 +139,22 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void finish(Claim claim, String state, String errorCode, int delaySeconds) {
+        finish(claim, state, errorCode, delaySeconds, "live_disabled".equals(errorCode));
+    }
+
+    /**
+     * held: the message was kept without a send attempt (master switch, autoresponder pause, business
+     * window, daily limit or interval). The claim's attempt is given back, so a night spent waiting for
+     * the window never uses up the retries of the real send that follows.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void finish(Claim claim, String state, String errorCode, int delaySeconds, boolean held) {
         jdbc.update("""
                 UPDATE common_invoice_message_queue SET state=?,error_code=?,claim_token=NULL,lease_until=NULL,
                     next_attempt_at=TIMESTAMPADD(SECOND,?,CURRENT_TIMESTAMP(6)),updated_at=CURRENT_TIMESTAMP(6),
                     attempts=GREATEST(0,attempts-?)
                 WHERE operation_id=? AND claim_token=?
-                """, state, errorCode, delaySeconds, "live_disabled".equals(errorCode) && claim.mayDispatch() ? 1 : 0, claim.operationId(), claim.token());
+                """, state, errorCode, delaySeconds, held && claim.mayDispatch() ? 1 : 0, claim.operationId(), claim.token());
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

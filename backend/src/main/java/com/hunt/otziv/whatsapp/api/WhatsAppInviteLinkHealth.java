@@ -4,10 +4,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Read-only health of the companies' stored WhatsApp invite links. A link is stale when the
- * connected account sees a different current invite for the company's bound group (confirmed by two
- * different group snapshots). Nothing here changes a company's link or bound group, fires the
- * link-changed flow or sends anything; callers own the presentation and the manager's repair.
+ * Health of the companies' stored WhatsApp invite links. A link is stale when the connected account
+ * sees a different current invite for the company's bound group (confirmed by two different group
+ * snapshots). When the account reads the group's current invite, the stored link is replaced with it:
+ * the same group, so the bound group, the binding state and the link-changed flow stay untouched and
+ * nothing is sent. Only a stale link that cannot be replaced that way reaches the manager.
  */
 public interface WhatsAppInviteLinkHealth {
 
@@ -15,7 +16,8 @@ public interface WhatsAppInviteLinkHealth {
     record StaleInvite(Long companyId, String storedInviteCode, String currentInviteLink, LocalDateTime staleSince) {
     }
 
-    enum RecheckResult { VALID, STALE, UNKNOWN, NOT_APPLICABLE }
+    /** REFRESHED: the stale link was replaced with the group's current invite (in currentInviteLink). */
+    enum RecheckResult { VALID, STALE, UNKNOWN, NOT_APPLICABLE, REFRESHED }
 
     /**
      * unreadableReason explains an UNKNOWN result when the gateway reported why the connected
@@ -37,7 +39,8 @@ public interface WhatsAppInviteLinkHealth {
 
     /**
      * Manager's repair of one company: checks the stored link now (invite lookup, then the group list).
-     * VALID and NOT_APPLICABLE clear the recorded state; STALE records it at once.
+     * VALID and NOT_APPLICABLE clear the recorded state; a stale link whose group's current invite is
+     * readable is replaced (REFRESHED); otherwise STALE records it at once.
      */
     Recheck recheck(Long companyId);
 }

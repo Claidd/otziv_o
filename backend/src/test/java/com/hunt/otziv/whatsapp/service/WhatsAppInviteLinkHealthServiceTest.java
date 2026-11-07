@@ -46,11 +46,96 @@ class WhatsAppInviteLinkHealthServiceTest {
         client.setId("whatsapp_lika");
         client.setUrl("http://whatsapp_lika:3000");
         properties.setClients(List.of(client));
-        service = new WhatsAppInviteLinkHealthService(properties, whatsAppService, linker, store, true, 20);
+        service = new WhatsAppInviteLinkHealthService(properties, whatsAppService, linker, store, true, 20, true);
         company = company(191L, "https://chat.whatsapp.com/" + STORED + "?s=cl&p=a&iam=2", GROUP, "В работе");
         when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
         when(companyRepository.findById(191L)).thenReturn(Optional.of(company));
+        when(companyRepository.findByIdForUpdate(191L)).thenReturn(Optional.of(company));
         when(store.all()).thenReturn(rows);
+    }
+
+    @Test
+    void theSameCurrentInviteSeenTwiceReplacesTheStaleLinkOfTheBoundGroup() {
+        LocalDateTime now = LocalDateTime.of(2026, 11, 7, 12, 0);
+        rows.put(191L, new WhatsAppInviteLinkCheckStore.Row(191L, GROUP, STORED, "https://chat.whatsapp.com/" + CURRENT,
+                WhatsAppInviteLinkCheckStore.SUSPECTED, now.minusMinutes(30), "whatsapp_lika@2026-11-07T11:30:00Z", null));
+        snapshot(CURRENT, "2026-11-07T11:59:00Z", false);
+
+        var summary = service.check(now);
+
+        assertEquals(1, summary.replaced());
+        assertEquals(0, summary.stale());
+        assertEquals("https://chat.whatsapp.com/" + CURRENT, company.getUrlChat());
+        // The same group: the binding stays, no new-link confirmation starts, nothing is sent.
+        assertEquals(GROUP, company.getGroupId());
+        assertEquals(false, company.isWhatsAppInvitePending());
+        verify(companyRepository).save(company);
+        verify(store).delete(191L);
+        verify(store, never()).confirm(any(), any(), any(), any(), any());
+        verify(whatsAppService, never()).listGroups(anyString(), anyBoolean());
+        verify(whatsAppService, never()).resolveGroupByInvite(anyString(), anyString());
+    }
+
+    @Test
+    void anAlreadyStaleLinkIsReplacedOnlyWhileTheGroupKeepsTheSameCurrentInvite() {
+        LocalDateTime now = LocalDateTime.of(2026, 11, 7, 12, 0);
+        // The group's invite changed again since the last run: wait for one more agreeing observation.
+        rows.put(191L, new WhatsAppInviteLinkCheckStore.Row(191L, GROUP, STORED, "https://chat.whatsapp.com/EarlierCode12345",
+                WhatsAppInviteLinkCheckStore.STALE, now.minusHours(3), null, now.minusHours(2)));
+        snapshot(CURRENT, "2026-11-07T11:59:00Z", false);
+        assertEquals(1, service.check(now).stale());
+        verify(store).observeAgain(191L, "https://chat.whatsapp.com/" + CURRENT, now);
+        verify(companyRepository, never()).save(any());
+
+        rows.put(191L, new WhatsAppInviteLinkCheckStore.Row(191L, GROUP, STORED, "https://chat.whatsapp.com/" + CURRENT,
+                WhatsAppInviteLinkCheckStore.STALE, now.minusHours(3), null, now.minusHours(2)));
+        var next = service.check(now.plusMinutes(30));
+        assertEquals(1, next.replaced());
+        assertEquals(0, next.stale());
+        assertEquals("https://chat.whatsapp.com/" + CURRENT, company.getUrlChat());
+        verify(store).delete(191L);
+    }
+
+    @Test
+    void aCompanyChangedSinceTheCheckOrReplacementSwitchedOffKeepsTheCardForTheManager() {
+        LocalDateTime now = LocalDateTime.of(2026, 11, 7, 12, 0);
+        rows.put(191L, new WhatsAppInviteLinkCheckStore.Row(191L, GROUP, STORED, "https://chat.whatsapp.com/" + CURRENT,
+                WhatsAppInviteLinkCheckStore.STALE, now.minusHours(3), null, now.minusHours(2)));
+        snapshot(CURRENT, "2026-11-07T11:59:00Z", false);
+
+        // Under the lock the company is no longer the checked target: the manager saved a link meanwhile.
+        Company saved = company(191L, "https://chat.whatsapp.com/ManagerSavedCode1", GROUP, "В работе");
+        when(companyRepository.findByIdForUpdate(191L)).thenReturn(Optional.of(saved));
+        assertEquals(1, service.check(now).stale());
+        // Rebound to another group meanwhile.
+        when(companyRepository.findByIdForUpdate(191L)).thenReturn(Optional.of(
+                company(191L, company.getUrlChat(), "120363000000000000@g.us", "В работе")));
+        assertEquals(1, service.check(now).stale());
+        // A failed write never breaks the check.
+        when(companyRepository.findByIdForUpdate(191L)).thenThrow(new IllegalStateException("lock wait timeout"));
+        assertEquals(1, service.check(now).stale());
+
+        var switchedOff = new WhatsAppInviteLinkHealthService(properties, whatsAppService, linker, store, true, 20, false);
+        assertEquals(1, switchedOff.check(now).stale());
+        assertEquals(WhatsAppInviteLinkHealth.RecheckResult.STALE, switchedOff.recheck(191L).result());
+
+        assertEquals("https://chat.whatsapp.com/" + STORED + "?s=cl&p=a&iam=2", company.getUrlChat());
+        verify(store, never()).delete(191L);
+        neverChangesBindingsOrRefreshesTheGateway();
+    }
+
+    @Test
+    void managersRepairPutsTheGroupsCurrentInviteInTheCompany() {
+        snapshot(CURRENT, "2026-11-07T12:01:00Z", false);
+
+        var repaired = service.recheck(191L);
+
+        assertEquals(WhatsAppInviteLinkHealth.RecheckResult.REFRESHED, repaired.result());
+        assertEquals("https://chat.whatsapp.com/" + CURRENT, repaired.currentInviteLink());
+        assertEquals("https://chat.whatsapp.com/" + CURRENT, company.getUrlChat());
+        assertEquals(GROUP, company.getGroupId());
+        verify(store).delete(191L);
+        verify(store, never()).confirm(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -124,6 +209,8 @@ class WhatsAppInviteLinkHealthServiceTest {
 
     @Test
     void managersRecheckUsesAFreshListOrTheInviteLookupAndOtherwiseStaysUnknown() {
+        // The verdicts themselves, with the automatic replacement switched off.
+        service = new WhatsAppInviteLinkHealthService(properties, whatsAppService, linker, store, true, 20, false);
         snapshot(STORED, "2026-11-05T12:00:00Z", false);
         assertEquals(WhatsAppInviteLinkHealth.RecheckResult.VALID, service.recheck(191L).result());
 

@@ -425,7 +425,7 @@ class CommonBillingServiceTest {
         lenient().doAnswer(inv -> {
             CommonInvoiceMessageQueue.Claim claim = inv.getArgument(0);
             queuedStates.put(claim.operationId(), inv.getArgument(1)); return null;
-        }).when(messageQueue).finish(any(), anyString(), nullable(String.class), anyInt());
+        }).when(messageQueue).finish(any(), anyString(), nullable(String.class), anyInt(), anyBoolean());
         lenient().when(messageQueue.status(nullable(String.class))).thenAnswer(inv -> {
             String id = inv.getArgument(0);
             return queuedStates.containsKey(id) ? new com.hunt.otziv.client_messages.api.DeliveryOperation(id, queuedStates.get(id), 1, null) : null;
@@ -7625,6 +7625,38 @@ class CommonBillingServiceTest {
         assertFalse(invoice.isPaymentMessageConfirmed());
         assertEquals("message_send_in_progress", invoice.getLastError());
         verifyNoInteractions(messageSender);
+    }
+
+    @Test
+    void automaticReminderHeldForTheBusinessWindowGivesItsAttemptBack() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        invoice.setNextReminderAt(LocalDateTime.now().minusMinutes(5));
+        Order order = order(101L);
+        when(invoiceRepository.findReminderCandidates(any(), any(), any())).thenReturn(List.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        lenient().when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item(invoice, order)));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        lenient().when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        lenient().when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        lenient().when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        var budget = org.mockito.Mockito.mock(com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.class);
+        when(budget.reserveForSender(any(), anyString(), anyLong(),
+                any(com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target.class), nullable(String.class)))
+                .thenReturn(new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(
+                        false, "outside_business_window", "Вне рабочего окна автоответчика", null));
+        ReflectionTestUtils.setField(messageWorker, "dispatchBudget", budget);
+
+        service.sendDueReminders(10);
+        drainMessages();
+
+        // Waiting for the window is not a send: the queue gets the claim's attempt back.
+        verify(messageQueue).finish(any(), eq("RETRYABLE"), eq("outside_business_window"), eq(300), eq(true));
+        assertEquals("RETRYABLE", queuedStates.get(invoice.getPaymentMessageOperationId()));
+        verify(messageSender, never()).deliverWithOperationId(any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     private CommonInvoice liveMessageInvoice() {

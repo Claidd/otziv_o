@@ -507,7 +507,9 @@ public class CommonInvoiceDeliveryService {
             } else {
                 state = "UNKNOWN";
             }
-            messageQueue.finish(claim, state, code, pausedBeforeDispatch || "UNKNOWN".equals(state) ? 300 : Math.min(300, 15 << Math.min(claim.previousAttempts(), 4)));
+            // A hold is not a send attempt: only real sends count towards the retry limit.
+            messageQueue.finish(claim, state, code, pausedBeforeDispatch || "UNKNOWN".equals(state) ? 300 : Math.min(300, 15 << Math.min(claim.previousAttempts(), 4)),
+                    pausedBeforeDispatch && "RETRYABLE".equals(state));
             return null;
         });
     }

@@ -426,15 +426,23 @@ public class ManagerControlProblemExamples {
         String status = company.getStatus() == null ? "" : safe(company.getStatus().getTitle());
         String specialistName = concretePresenter.companySpecialistName(company);
         String current = invite == null ? "" : safe(invite.currentInviteLink());
+        // Readable current invites are put in the company automatically; a card means that did not work.
         String reason = "Почему в контроле: " + STALE_WHATSAPP_INVITE_REASON + ". "
-                + (current.isBlank() ? "" : "Подключённый аккаунт видит актуальную ссылку: " + current + ". ")
-                + "Сохраните правильную ссылку на чат в компании и нажмите «Починить». Привязка группы не менялась, клиентам ничего не отправлялось.";
+                + (current.isBlank()
+                        ? "Подключённый аккаунт не видит актуальную ссылку группы, поэтому система не может заменить её сама. "
+                                + "Сохраните правильную ссылку на чат в компании и нажмите «Починить». "
+                        : "Актуальная ссылка группы: " + current + ". Система не смогла заменить её сама: нажмите «Починить», "
+                                + "чтобы повторить замену, или сохраните эту ссылку в компании вручную. ")
+                + "Привязка группы не менялась, клиентам ничего не отправлялось.";
         return new ManagerControlConcreteItemResponse(null, "COMPANY_CHAT_BINDING", company.getId(), safe(company.getTitle()).isBlank() ? "Компания #" + company.getId() : company.getTitle(), specialistName.isBlank() ? "Специалист не назначен" : specialistName, status, company.getUpdateStatus() == null ? null : daysSince(company.getUpdateStatus(), today), reason, companyTargetUrl(manager, company), null, current.isBlank() ? company.getUrlChat() : current, null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null, null, null, null, null, null, null, null, specialistName);
     }
 
     static final String STALE_WHATSAPP_INVITE_REASON = "ссылка-приглашение WhatsApp в карточке компании больше не открывает привязанную группу";
 
-    /** The manager's «Починить» on a stale invite card: checks the stored link now, changes nothing. */
+    /**
+     * The manager's «Починить» on a stale invite card: checks the stored link now and, when the group's
+     * current invite is readable, puts it in the company (the bound group never changes).
+     */
     WhatsAppInviteLinkHealth.Recheck recheckWhatsAppInvite(Company company) {
         if (company == null || company.getId() == null || whatsAppInviteLinkHealth == null) {
             return new WhatsAppInviteLinkHealth.Recheck(WhatsAppInviteLinkHealth.RecheckResult.NOT_APPLICABLE, null);
