@@ -128,6 +128,8 @@ const EXPLICIT_RELEASE_SETS = {
   'c50-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c50-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-dozzle/Dockerfile' },
   'c50-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c50-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-mc/Dockerfile' },
   'c50-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c50-minio.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c50-minio/Dockerfile' },
+  // C51 overlays only the official Debian zlib1g fix (CVE-2026-76844, CVE-2026-85091) on the accepted C36 PostgreSQL.
+  'c51-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c51-postgres.json', context: 'infrastructure/runtime-security/builds/c51-postgres', dockerfile: 'infrastructure/runtime-security/builds/c51-postgres/Dockerfile' },
 };
 // Later official OS package overlays are registered data (os-package-overlays.json).
 const RELEASE_SETS = Object.freeze({ ...EXPLICIT_RELEASE_SETS, ...overlayReleaseSets(EXPLICIT_RELEASE_SETS) });

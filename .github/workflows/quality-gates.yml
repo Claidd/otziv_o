@@ -104,6 +104,7 @@ on:
           - c36-mc
           - c36-minio
           - c36-postgres
+          - c51-postgres
           - c43-tempo
           - c43-loki
           - c43-alloy

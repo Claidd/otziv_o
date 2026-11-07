@@ -10,6 +10,7 @@ import { adjudicateAlloyImage, adjudicatePostgresImage } from './ssl-refresh.mjs
 import { adjudicateAlloyC43Image, C43_ALLOY_PROOF_LABEL } from './alloy-c43-adjudication.mjs';
 import { adjudicatePostgresGosu } from './postgres-gosu-adjudication.mjs';
 import { adjudicatePostgresC36Image } from './postgres-c36-adjudication.mjs';
+import { adjudicatePostgresC51Image, C51_POSTGRES_PROOF_LABEL } from './postgres-c51-adjudication.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
@@ -103,10 +104,13 @@ export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
       ? adjudicateAlloyC43Image(report, reportBytes, immutableImageId, scratch)
       : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
     const postgresC36 = alloyProofLabel === 'postgres-c36-gosu-go1273';
-    const postgres = kind === 'image' ? await (postgresC36
-      ? adjudicatePostgresC36Image(report, reportBytes, immutableImageId, scratch)
-      : adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch)) : null;
-    const gosu = kind === 'image' && !postgresC36
+    const postgresC51 = alloyProofLabel === C51_POSTGRES_PROOF_LABEL;
+    const postgres = kind === 'image' ? await (postgresC51
+      ? adjudicatePostgresC51Image(report, reportBytes, immutableImageId, scratch)
+      : postgresC36
+        ? adjudicatePostgresC36Image(report, reportBytes, immutableImageId, scratch)
+        : adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch)) : null;
+    const gosu = kind === 'image' && !postgresC36 && !postgresC51
       ? await adjudicatePostgresGosu(report, reportBytes, immutableImageId, scratch, postgres) : null;
     for (const receipt of [alloy, postgres]) if (receipt?.sslRefresh) {
       await copyFile(join(scratch, receipt.sslRefresh.component + '-runtime-refresh.json.gz'),
@@ -115,6 +119,10 @@ export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
     if (postgresC36 && postgres?.runtimeProofSha256) {
       await copyFile(join(scratch, 'postgres-runtime-c36.json.gz'),
         destination.replace(/\.json$/, '') + '.runtime-c36.json.gz');
+    }
+    if (postgresC51 && postgres?.runtimeProofSha256) {
+      await copyFile(join(scratch, 'postgres-runtime-c51.json.gz'),
+        destination.replace(/\.json$/, '') + '.runtime-c51.json.gz');
     }
     if (adjudication) await writeFile(destination.replace(/\.json$/, '') + '.adjudications.json',
       JSON.stringify({ ...adjudication, alloy, ...(postgres?.status !== 'NOT_APPLICABLE' && postgres ? { postgres } : {}), ...(gosu ? { gosu } : {}) }, null, 2) + '\n');
