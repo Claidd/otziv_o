@@ -120,6 +120,23 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
         assertThat(queue.snapshot(claim.operationId())).isEqualTo(draft("original"));
     }
 
+    @Test void aNightWaitingForTheBusinessWindowKeepsEveryRetryForTheRealSend() {
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        for (int hold = 0; hold < 150; hold++) {
+            var waiting = instance().claim().orElseThrow();
+            assertThat(waiting.mayDispatch()).isTrue();
+            tx.executeWithoutResult(status -> queue.finish(waiting, "RETRYABLE", "outside_business_window", 0, true));
+        }
+        assertThat(queue.status("invoice-message:test").attempts()).isZero();
+        assertThat(queue.status("invoice-message:test").errorCode()).isEqualTo("outside_business_window");
+
+        // The window opens and the first real send fails: that one counts, and the retries remain.
+        var send = instance().claim().orElseThrow();
+        tx.executeWithoutResult(status -> queue.finish(send, "RETRYABLE", "gateway_unavailable", 0, false));
+        assertThat(queue.status("invoice-message:test").attempts()).isEqualTo(1);
+        assertThat(queue.snapshot("invoice-message:test")).isEqualTo(draft("original"));
+    }
+
     @Test void repairClaimIsBoundToInvoiceNeverDispatchesAndCannotStealALiveLease() {
         tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
         String id = draft("original").operationId();

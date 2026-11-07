@@ -133,7 +133,32 @@ class ManagerControlStaleWhatsAppInviteTest {
         assertDoesNotThrow(() -> repair.requireWorkingWhatsAppInvite(unboundCard, company));
 
         when(health.recheck(191L)).thenReturn(new WhatsAppInviteLinkHealth.Recheck(WhatsAppInviteLinkHealth.RecheckResult.VALID, null));
-        assertDoesNotThrow(() -> repair.requireWorkingWhatsAppInvite(staleCard, company));
+        assertEquals("", assertDoesNotThrow(() -> repair.requireWorkingWhatsAppInvite(staleCard, company)));
+
+        // The group's current invite was readable: the check put it in the company, the card closes with it.
+        when(health.recheck(191L)).thenReturn(new WhatsAppInviteLinkHealth.Recheck(
+                WhatsAppInviteLinkHealth.RecheckResult.REFRESHED, "https://chat.whatsapp.com/NewInviteCode12345"));
+        String replaced = assertDoesNotThrow(() -> repair.requireWorkingWhatsAppInvite(staleCard, company));
+        assertTrue(replaced.contains("заменена актуальной ссылкой той же группы: https://chat.whatsapp.com/NewInviteCode12345"));
+        assertTrue(replaced.contains("Привязка группы не менялась"));
+    }
+
+    @Test
+    void aCardSaysWhyTheSystemCouldNotReplaceTheLinkItself() {
+        Company readable = company(191L, manager, "https://chat.whatsapp.com/Bxdmj71FH80B0BxZksCLAj", "В работе");
+        Company unreadable = company(192L, manager, "https://chat.whatsapp.com/OtherStoredCode1", "На стопе");
+        when(health.staleInvites()).thenReturn(List.of(
+                invite(191L, "Bxdmj71FH80B0BxZksCLAj", "https://chat.whatsapp.com/NewInviteCode12345"),
+                invite(192L, "OtherStoredCode1", null)));
+        when(companyRepository.findAllById(anyCollection())).thenReturn(List.of(readable, unreadable));
+        when(companyRepository.findChatBindingIssuesByManager(manager)).thenReturn(List.of());
+
+        var cards = examples.chatBindingIssueExamples(manager, LocalDate.now(), 10);
+
+        assertEquals(2, cards.size());
+        assertTrue(cards.get(0).reason().contains("Система не смогла заменить её сама"));
+        assertTrue(cards.get(1).reason().contains("не видит актуальную ссылку группы"));
+        cards.forEach(card -> assertTrue(card.reason().length() <= 500, card.reason()));
     }
 
     private static WhatsAppInviteLinkHealth.StaleInvite invite(Long companyId, String code, String current) {

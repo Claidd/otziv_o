@@ -18,6 +18,7 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
@@ -243,6 +244,36 @@ public class WhatsAppGroupCompanyLinker {
         }
         return whatsAppInviteCode(company.getUrlChat())
                 .map(code -> new InviteTarget(company.getId(), company.getGroupId().trim(), code, company.getUrlChat().trim()));
+    }
+
+    /**
+     * Replaces a company's stale WhatsApp invite with the current invite of its bound group: the repair
+     * the manager would otherwise make by hand. Only the stored link changes. The confirmed groupId, the
+     * binding state and the link-changed flow stay as they are (the group is the same, nothing needs
+     * rebinding) and nothing is sent. The company row is locked and must still be the checked target:
+     * the same bound group and stored invite, not waiting for a newly saved link, still eligible.
+     * Otherwise nothing changes and false is returned.
+     */
+    @Transactional
+    public boolean replaceStaleInviteLink(Long companyId, String groupId, String storedInviteCode, String currentInviteCode) {
+        Optional<String> current = whatsAppInviteCode(currentInviteCode);
+        if (companyId == null || !hasText(groupId) || !hasText(storedInviteCode) || current.isEmpty()
+                || current.get().equals(storedInviteCode)) {
+            return false;
+        }
+        Company company = companyRepository.findByIdForUpdate(companyId).orElse(null);
+        Optional<InviteTarget> target = inviteTarget(company);
+        if (target.isEmpty() || !groupId.trim().equals(target.get().groupId())
+                || !storedInviteCode.equals(target.get().inviteCode())) {
+            return false;
+        }
+        String previousLink = company.getUrlChat();
+        String canonicalLink = "https://chat.whatsapp.com/" + current.get();
+        company.setUrlChat(canonicalLink);
+        companyRepository.save(company);
+        log.info("WhatsApp invite link for company id={} title='{}' replaced with the current invite of its bound group {}: {} -> {}",
+                company.getId(), company.getTitle(), target.get().groupId(), previousLink, canonicalLink);
+        return true;
     }
 
     static Optional<String> whatsAppInviteCode(String value) {

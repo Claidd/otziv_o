@@ -29,8 +29,11 @@ import org.springframework.stereotype.Service;
  * link the manager has just replaced is never reported. A bound group whose invite no account can
  * read is counted by the gateway's reason (not a member, not an admin, refused, timeout, ...), logged
  * every run and given to the manager's re-check, so an unreadable list never looks like a clean one.
- * Nothing changes a company's link or bound group, nothing fires the link-changed flow and nothing is
- * sent.
+ * When two observations agree on the group's current invite, the stale stored link is replaced with
+ * it: the bound group is the one messages already go to, so the bound group, the binding state and the
+ * link-changed flow stay untouched and nothing is sent. Only a stale link the check cannot replace
+ * (unreadable current invite, a company changed meanwhile, replacement switched off) stays STALE for
+ * the manager.
  */
 @Service
 @Slf4j
@@ -49,6 +52,7 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
 
     private final boolean enabled;
     private final Duration confirmAfter;
+    private final boolean replaceStale;
 
     public WhatsAppInviteLinkHealthService(
             WhatsAppProperties properties,
@@ -56,7 +60,8 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
             WhatsAppGroupCompanyLinker groupCompanyLinker,
             WhatsAppInviteLinkCheckStore store,
             @Value("${whatsapp.invite-check.enabled:true}") boolean enabled,
-            @Value("${whatsapp.invite-check.confirm-after-minutes:20}") long confirmAfterMinutes
+            @Value("${whatsapp.invite-check.confirm-after-minutes:20}") long confirmAfterMinutes,
+            @Value("${whatsapp.invite-check.replace-stale:true}") boolean replaceStale
     ) {
         this.properties = properties;
         this.whatsAppService = whatsAppService;
@@ -64,6 +69,7 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
         this.store = store;
         this.enabled = enabled;
         this.confirmAfter = Duration.ofMinutes(Math.max(1, confirmAfterMinutes));
+        this.replaceStale = replaceStale;
     }
 
     @Scheduled(
@@ -76,8 +82,8 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
         }
         try {
             CheckSummary summary = check(LocalDateTime.now());
-            log.info("WhatsApp invite link check finished: stale={}, targets={}, readable={}, unreadable={}",
-                    summary.stale(), summary.targets(), summary.readable(), summary.unreadable());
+            log.info("WhatsApp invite link check finished: stale={}, replaced={}, targets={}, readable={}, unreadable={}",
+                    summary.stale(), summary.replaced(), summary.targets(), summary.readable(), summary.unreadable());
             if (summary.observed() && summary.targets() > 0 && summary.readable() == 0) {
                 // Nothing can become stale while no invite is readable: say why instead of a silent zero.
                 log.warn("WhatsApp invite link check read no invite for any of {} bound companies: {}",
@@ -98,8 +104,13 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
      * the companies whose group's invite no account could read, by the
      * gateway's reason ({@code not_member}, {@code not_admin}, {@code refused}, {@code timeout}, ...),
      * {@code not_listed} when no account lists the group and {@code unreported} from an older gateway.
+     * replaced counts the stale links replaced with their group's current invite in this run.
      */
-    record CheckSummary(boolean observed, int stale, int targets, int readable, Map<String, Integer> unreadable) {
+    record CheckSummary(boolean observed, int stale, int targets, int readable, Map<String, Integer> unreadable,
+                        int replaced) {
+        CheckSummary(boolean observed, int stale, int targets, int readable, Map<String, Integer> unreadable) {
+            this(observed, stale, targets, readable, unreadable, 0);
+        }
     }
 
     CheckSummary check(LocalDateTime now) {
@@ -113,6 +124,7 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
         Map<String, Integer> unreadable = new TreeMap<>();
         int stale = 0;
         int readable = 0;
+        int replaced = 0;
         for (WhatsAppGroupCompanyLinker.InviteTarget target : groupCompanyLinker.inviteTargets()) {
             eligible.add(target.companyId());
             WhatsAppInviteLinkCheckStore.Row row = rows.get(target.companyId());
@@ -133,13 +145,23 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
                 continue;
             }
             String currentLink = inviteLink(current);
+            // The previous observation already saw this same current invite: it is the group's link.
+            boolean settled = row != null && currentLink.equals(row.currentInviteLink());
             if (row == null) {
                 store.suspect(target.companyId(), target.groupId(), target.inviteCode(), currentLink, observation.snapshotAt(), now);
             } else if (WhatsAppInviteLinkCheckStore.STALE.equals(row.status())) {
+                if (settled && replaceStaleLink(target, current)) {
+                    replaced++;
+                    continue;
+                }
                 store.observeAgain(target.companyId(), currentLink, now);
                 stale++;
             } else if (!Objects.equals(row.firstSnapshotAt(), observation.snapshotAt())
                     && row.firstSeenAt() != null && !row.firstSeenAt().plus(confirmAfter).isAfter(now)) {
+                if (settled && replaceStaleLink(target, current)) {
+                    replaced++;
+                    continue;
+                }
                 store.confirm(target.companyId(), target.groupId(), target.inviteCode(), currentLink, now);
                 stale++;
                 log.info("WhatsApp invite link is stale: companyId={}, groupId={}", target.companyId(), target.groupId());
@@ -149,7 +171,29 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
         }
         // Banned, inactive, unbound or relinked companies no longer need the check.
         rows.keySet().stream().filter(companyId -> !eligible.contains(companyId)).forEach(store::delete);
-        return new CheckSummary(true, stale, eligible.size(), readable, java.util.Collections.unmodifiableMap(unreadable));
+        return new CheckSummary(true, stale, eligible.size(), readable, java.util.Collections.unmodifiableMap(unreadable), replaced);
+    }
+
+    /**
+     * Writes the group's current invite into the company in place of its stale link and drops the
+     * record. False keeps the stale record (and the manager's card): replacement switched off, the
+     * company changed since it was read, or the write failed.
+     */
+    private boolean replaceStaleLink(WhatsAppGroupCompanyLinker.InviteTarget target, String currentCode) {
+        if (!replaceStale) {
+            return false;
+        }
+        try {
+            if (!groupCompanyLinker.replaceStaleInviteLink(target.companyId(), target.groupId(), target.inviteCode(), currentCode)) {
+                return false;
+            }
+        } catch (RuntimeException failure) {
+            log.warn("WhatsApp stale invite link was not replaced: companyId={}, groupId={}, error={}",
+                    target.companyId(), target.groupId(), failure.getMessage());
+            return false;
+        }
+        store.delete(target.companyId());
+        return true;
     }
 
     @Override
@@ -176,6 +220,10 @@ public class WhatsAppInviteLinkHealthService implements WhatsAppInviteLinkHealth
             if (current.equals(target.inviteCode())) {
                 store.delete(target.companyId());
                 return new Recheck(RecheckResult.VALID, null);
+            }
+            // The fresh list shows the group's current invite: put it in the company, as the manager would.
+            if (replaceStaleLink(target, current)) {
+                return new Recheck(RecheckResult.REFRESHED, inviteLink(current));
             }
             store.confirm(target.companyId(), target.groupId(), target.inviteCode(), inviteLink(current), now);
             return new Recheck(RecheckResult.STALE, inviteLink(current));
