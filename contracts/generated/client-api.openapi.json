@@ -6371,6 +6371,128 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/common-billing/invoices/{invoiceId}/overdue-term" : {
+      "get" : {
+        "operationId" : "CommonBillingAdminController_overdueTerm",
+        "x-java-handler" : "com.hunt.otziv.common_billing.controller.CommonBillingAdminController#overdueTerm",
+        "parameters" : [ {
+          "name" : "invoiceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CommonInvoiceOverdueTermResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      },
+      "put" : {
+        "operationId" : "CommonBillingAdminController_extendOverdueTerm",
+        "x-java-handler" : "com.hunt.otziv.common_billing.controller.CommonBillingAdminController#extendOverdueTerm",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CommonInvoiceOverdueExtensionRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "invoiceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CommonInvoiceOverdueTermResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/common-billing/invoices/{invoiceId}/paid" : {
       "post" : {
         "operationId" : "CommonBillingAdminController_markPaid",
@@ -15145,6 +15267,78 @@
           }
         },
         "required" : [ "amount", "amountKopecks", "companyId", "companyTitle", "detachBlockedReason", "detachable", "filialTitle", "orderId", "orderStatus", "ordinaryAfterPaperCancel", "originalOrderStatus", "paid", "paidAt", "paidBy", "paymentComment", "paymentMethod", "paymentReceiptUrl", "ready", "unpaid" ],
+        "additionalProperties" : true
+      },
+      "CommonInvoiceOverdueExtensionRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.common_billing.dto.CommonInvoiceOverdueExtensionRequest",
+        "type" : "object",
+        "properties" : {
+          "extensionDays" : {
+            "type" : "integer"
+          }
+        },
+        "required" : [ "extensionDays" ],
+        "additionalProperties" : true
+      },
+      "CommonInvoiceOverdueTermResponseOutput" : {
+        "x-java-type" : "com.hunt.otziv.common_billing.dto.CommonInvoiceOverdueTermResponse",
+        "type" : "object",
+        "properties" : {
+          "automaticMoveNotBefore" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "editable" : {
+            "type" : "boolean"
+          },
+          "extensionAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "extensionBy" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "extensionDays" : {
+            "type" : "integer"
+          },
+          "invoiceId" : {
+            "type" : "integer"
+          },
+          "note" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "overdueDays" : {
+            "type" : "integer"
+          },
+          "paperDelivery" : {
+            "type" : "boolean"
+          },
+          "termStart" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "automaticMoveNotBefore", "editable", "extensionAt", "extensionBy", "extensionDays", "invoiceId", "note", "overdueDays", "paperDelivery", "termStart" ],
         "additionalProperties" : true
       },
       "CommonInvoicePaymentInitCheckRequestInput" : {
@@ -27340,7 +27534,7 @@
     "sha256" : "05942b0d4f2864de138264dc5b85be9dd18c3b85b6b4760bdfa504f0f5089a3c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java",
-    "sha256" : "efbca2a0cc6f1511e23ed15b7e1d3e1015c4b89bd6ba9ef1be8219d41667b300"
+    "sha256" : "a19339914af717f10242b9299aa4bcd941af12592871b6e5199b0abe879dc77c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonInvoiceArchiveController.java",
     "sha256" : "c641daee6dbb7b81406e67f3fb245c6e142dbadce839675e1d39711cae48382b"
@@ -27392,6 +27586,12 @@
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceOrderResponse.java",
     "sha256" : "4a0cec5e1bee7c81222298eb771c809c8522b6bd7bd6831f5b96485385e58bb9"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceOverdueExtensionRequest.java",
+    "sha256" : "4e53a014fde1fa8a99310cf5dc31dfcc033054bbb5ab553a6a9f15e6039700bf"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceOverdueTermResponse.java",
+    "sha256" : "b6c02ec2c6853731995a0e467901fe886492657cc5da02dd8375e1c43da2d24c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoicePaymentInitCheckRequest.java",
     "sha256" : "9f52f08940b4751e92a7906a08a80cf73bf84a9202e201e9174e92338c62a6d1"
@@ -27994,6 +28194,8 @@
     "CommonInvoiceManualCardPaymentRequestInput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceManualCardPaymentRequest",
     "CommonInvoiceNextCycleResponseOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceNextCycleResponse",
     "CommonInvoiceOrderResponseOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceOrderResponse",
+    "CommonInvoiceOverdueExtensionRequestInput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceOverdueExtensionRequest",
+    "CommonInvoiceOverdueTermResponseOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceOverdueTermResponse",
     "CommonInvoicePaymentInitCheckRequestInput" : "com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest",
     "CommonInvoicePaymentRefResponseOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRefResponse",
     "CommonInvoicePaymentRouteChangeContextResponseOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeContextResponse",

@@ -301,6 +301,12 @@
           }
         }
 
+        @if (invoice && ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status)) {
+          <app-common-invoice-overdue-term
+            [invoiceId]="invoice.id"
+            [revision]="invoice.status + '|' + invoice.sentAt + '|' + invoice.paperInvoiceIssuedAt + '|' + paperWorkflow().delivered" />
+        }
+
         @if (invoiceProblem()) {
           <section class="invoice-problem" aria-label="Проблема общего счета">
             <span class="material-icons-sharp" aria-hidden="true">report_problem</span>

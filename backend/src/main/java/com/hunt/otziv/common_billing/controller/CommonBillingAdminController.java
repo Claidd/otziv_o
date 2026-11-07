@@ -42,6 +42,7 @@ public class CommonBillingAdminController {
     private final CommonBillingPublicationApprovalFailureMarker publicationApprovalFailureMarker;
     private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
     private final ContractorActualPaymentAttributionFlowPolicy actualPaymentFlowPolicy;
+    private final com.hunt.otziv.common_billing.service.CommonInvoiceOverdueTerm overdueTerm;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/common-billing/accounts")
@@ -350,6 +351,23 @@ public class CommonBillingAdminController {
     public CommonInvoiceDetailsResponse archiveDisputedOrder(@PathVariable Long invoiceId, @PathVariable Long orderId) {
         requireCanMutateInvoice(invoiceId);
         return disputedOrderArchiveWorkflow.archive(invoiceId, orderId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @GetMapping("/api/common-billing/invoices/{invoiceId}/overdue-term")
+    public com.hunt.otziv.common_billing.dto.CommonInvoiceOverdueTermResponse overdueTerm(@PathVariable Long invoiceId) {
+        return overdueTerm.view(invoiceId);
+    }
+
+    /** N extra days are added to the autoresponder's term before "Не оплачено" (replaces the previous value). */
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PutMapping("/api/common-billing/invoices/{invoiceId}/overdue-term")
+    public com.hunt.otziv.common_billing.dto.CommonInvoiceOverdueTermResponse extendOverdueTerm(
+            @PathVariable Long invoiceId,
+            @Valid @RequestBody com.hunt.otziv.common_billing.dto.CommonInvoiceOverdueExtensionRequest request,
+            Principal principal) {
+        requireCanMutateInvoice(invoiceId);
+        return overdueTerm.extend(invoiceId, request.extensionDays(), principal);
     }
 
     private void requireCanMutateInvoice(Long invoiceId) {

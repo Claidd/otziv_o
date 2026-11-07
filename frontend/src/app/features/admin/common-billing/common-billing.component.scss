@@ -116,6 +116,81 @@
   --billing-toolbar-disabled-text: #6f7a83;
 }
 
+/* Dark theme: the account list and settings panels used the light card fallback (white). */
+:host-context(body.otziv-dark-theme) .accounts-panel,
+:host-context(body.otziv-dark-theme) .settings-panel {
+  border: 1px solid var(--billing-panel-border);
+  background: var(--billing-panel-surface);
+  box-shadow: none;
+}
+
+:host-context(body.otziv-dark-theme) .panel-head small {
+  color: var(--otziv-muted);
+}
+
+:host-context(body.otziv-dark-theme) .icon-action {
+  border-color: var(--billing-action-border);
+  background: var(--billing-action-surface);
+  color: #8ab8f0;
+}
+
+:host-context(body.otziv-dark-theme) .account-row {
+  border-color: var(--billing-panel-border);
+  background: var(--billing-summary-surface);
+  color: var(--otziv-text);
+}
+
+:host-context(body.otziv-dark-theme) .account-row.active {
+  border-color: rgba(138, 184, 240, 0.55);
+  background: #263342;
+}
+
+:host-context(body.otziv-dark-theme) .account-row .material-icons-sharp {
+  color: #8ab8f0;
+}
+
+:host-context(body.otziv-dark-theme) .toggle-line,
+:host-context(body.otziv-dark-theme) .linked-company-list article,
+:host-context(body.otziv-dark-theme) .invoice-orders article,
+:host-context(body.otziv-dark-theme) .company-search-results button {
+  border-color: var(--billing-panel-border);
+  background: var(--billing-summary-surface);
+  color: var(--otziv-text);
+}
+
+:host-context(body.otziv-dark-theme) .invoice-orders article.paid {
+  border-color: var(--billing-action-success-soft-border);
+  background: var(--billing-action-success-soft);
+}
+
+:host-context(body.otziv-dark-theme) .company-search-results button:hover:not(:disabled) {
+  border-color: rgba(138, 184, 240, 0.55);
+  background: #263342;
+}
+
+:host-context(body.otziv-dark-theme) .company-search-results button:disabled {
+  color: var(--billing-action-disabled-text);
+  background: var(--billing-action-disabled-bg);
+}
+
+:host-context(body.otziv-dark-theme) .linked-company-list button,
+:host-context(body.otziv-dark-theme) .invoice-orders button,
+:host-context(body.otziv-dark-theme) .invoice-orders .order-details-link {
+  border: 1px solid var(--billing-action-border);
+  background: var(--billing-action-surface);
+}
+
+:host-context(body.otziv-dark-theme) .linked-company-list button {
+  color: var(--billing-action-muted);
+}
+
+:host-context(body.otziv-dark-theme) .settings-form input,
+:host-context(body.otziv-dark-theme) .company-search input {
+  border-color: var(--billing-toolbar-control-border);
+  background: var(--billing-toolbar-control-surface);
+  color: var(--otziv-text);
+}
+
 .mobile-invoice-pager {
   display: none;
 }

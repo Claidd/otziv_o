@@ -21,7 +21,7 @@ export function orderDetailsSendToCheckBusyLabel(targetStatus: string): string {
 export function orderDetailsSendToCheckSuccessDetail(targetStatus: string): string {
   return targetStatus === ORDER_STATUS_IN_CHECK
     ? 'Статус изменен на "На проверке" без повторной отправки в чат'
-    : 'Статус изменен на "В проверку"';
+    : 'Статус изменен на "В проверку". Ссылка уходит клиенту в фоне, после доставки заказ сам перейдет в "На проверке"';
 }
 
 function normalizeStatus(value: string | null | undefined): string {

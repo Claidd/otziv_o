@@ -123,4 +123,24 @@ describe('Paper invoice asynchronous lifecycle', () => {
     c.poll();http.expectOne('/api/paper-invoices/documents/2').flush(doc('2','WAITING_PAYMENT'));
     expect(c.error()).toBe('Уже оплачено');
   });
+  it('an unconfirmed automatic send can be closed by confirming the manual delivery',()=>{
+    const stuck={...doc('7','FILES_READY'),messageDelivery:'SENT',invoiceDelivery:'UNKNOWN',actDelivery:'UNKNOWN',deliveryCompleted:false};
+    open(7,stuck);const c=fixture.componentInstance;
+    expect(c.canConfirmManualDelivery()).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain('Документы отправлены вручную');
+    c.confirmManualDelivery();http.expectNone('/api/paper-invoices/documents/7/manual-delivery');
+    c.manualDeliveryConfirmed=true;c.confirmManualDelivery();
+    http.expectOne({method:'POST',url:'/api/paper-invoices/documents/7/manual-delivery'})
+      .flush({...stuck,stage:'WAITING_PAYMENT',invoiceDelivery:'SENT',actDelivery:'SENT',deliveryCompleted:true});
+    fixture.detectChanges();
+    expect(c.context()?.document?.stage).toBe('WAITING_PAYMENT');expect(c.canConfirmManualDelivery()).toBe(false);
+    expect(fixture.nativeElement.textContent).not.toContain('Документы отправлены вручную');
+  });
+  it('a routine send in progress offers no manual confirmation',()=>{
+    open(8,{...doc('8','FILES_READY'),messageDelivery:'SENT',invoiceDelivery:'SENDING',actDelivery:'UNKNOWN'} as any);
+    expect(fixture.componentInstance.canConfirmManualDelivery()).toBe(false);
+    fixture.componentInstance.close();
+    open(9,{...doc('9','FILES_READY'),messageDelivery:'PENDING'} as any);
+    expect(fixture.componentInstance.canConfirmManualDelivery()).toBe(false);
+  });
 });

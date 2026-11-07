@@ -26,9 +26,24 @@ function createSignedWebhookPoster({ timeoutMs = 10000, fetchImpl = fetch } = {}
       });
       await response.body?.cancel();
       // A browser-style opaque redirect has status 0, which is also a retry.
-      return { status: response.type === "opaqueredirect" ? 0 : response.status };
+      const status = response.type === "opaqueredirect" ? 0 : response.status;
+      // A receiver that is shedding load says when to come back; the inbox pauses for that long.
+      const retryAfter = status === 429 || status === 503
+        ? retryAfterMs(response.headers?.get?.("retry-after"), Date.now()) : undefined;
+      return retryAfter === undefined ? { status } : { status, retryAfterMs: retryAfter };
     } finally { clearTimeout(timeout); }
   };
 }
 
-module.exports = { createSignedWebhookPoster };
+// Retry-After is either delay seconds or an HTTP date; anything else is ignored.
+function retryAfterMs(value, now) {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const text = value.trim();
+  if (/^\d{1,9}$/u.test(text)) return Number(text) * 1000;
+  // IMF-fixdate only ("Sun, 06 Nov 1994 08:49:37 GMT"): Date.parse accepts far too much else.
+  if (!/^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/u.test(text)) return undefined;
+  const at = Date.parse(text);
+  return Number.isFinite(at) ? Math.max(0, at - now) : undefined;
+}
+
+module.exports = { createSignedWebhookPoster, retryAfterMs };

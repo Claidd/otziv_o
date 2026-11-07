@@ -26,8 +26,11 @@ final class CommonInvoiceOverdueNoticeText {
             }
             text.append("• <b>").append(escape(invoice.accountName())).append("</b> — ")
                     .append(rubles(invoice.remainingKopecks()))
-                    .append(", выставлен ").append(DATE.format(invoice.sentAt()))
-                    .append(" (").append(invoice.unpaidDays()).append(" дн. без оплаты)")
+                    .append(invoice.paperDelivery() ? ", бумажный счёт доставлен " : ", выставлен ")
+                    .append(DATE.format(invoice.termStart() == null ? invoice.sentAt() : invoice.termStart()))
+                    .append(" (").append(invoice.unpaidDays()).append(" дн. без оплаты")
+                    .append(invoice.extensionDays() > 0 ? ", отсрочка " + invoice.extensionDays() + " дн." : "")
+                    .append(")")
                     .append(", перевод не раньше ").append(DATE.format(invoice.moveNotBefore()))
                     .append('\n');
             listed++;

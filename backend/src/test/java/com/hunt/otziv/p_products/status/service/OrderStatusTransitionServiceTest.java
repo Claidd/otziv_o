@@ -727,28 +727,23 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
-    void toCheckWithoutClientDeliveryKeepsToCheckStatusAndReturnsTrue() throws Exception {
+    void toCheckFreezesTheLinkAndSendsItAfterCommitWithoutWaitingForWhatsApp() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(5L, "Новый", "Компания", " ");
         order.setWaitingForClient(true);
         order.setWaitingForClientChangedAt(LocalDateTime.of(2026, 7, 20, 10, 0));
         order.setClientTextExpected(true);
         OrderStatus toCheck = status("В проверку");
+        var prepared = new OrderStatusNotificationService.PreparedAction(5L, "В проверку", "На проверке", 1,
+                "action:В проверку:На проверке", "operation-5", null, "client", " ", "Проверьте отзывы",
+                null, null, null, List.of());
 
         enableImmediateMessages();
         when(orderRepository.findByIdForMutation(5L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("В проверку")).thenReturn(toCheck);
         when(orderReviewCheckMessageBuilder.reviewCheckMessage(order)).thenReturn("Проверьте отзывы");
-        when(orderStatusNotificationService.sendMessageToClientChat(
-                eq("В проверку"),
-                same(order),
-                eq("client"),
-                eq(" "),
-                contains("Проверьте отзывы"),
-                eq("На проверке")
-        )).thenAnswer(invocation -> {
-            order.setStatus(toCheck);
-            return "В проверку";
-        });
+        when(orderStatusNotificationService.prepareAction(eq("В проверку"), same(order), eq("client"), eq(" "),
+                contains("Проверьте отзывы"), eq("На проверке"), isNull())).thenReturn(prepared);
 
         assertTrue(service.changeStatusForOrder(5L, "В проверку"));
 
@@ -758,16 +753,19 @@ class OrderStatusTransitionServiceTest {
         assertTrue(order.isClientTextExpected());
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "В проверку");
-        verify(orderStatusNotificationService).sendMessageToClientChat(
-                eq("В проверку"),
-                same(order),
-                eq("client"),
-                eq(" "),
-                contains("Проверьте отзывы"),
-                eq("На проверке")
-        );
-        verify(paymentInvoiceRetryScheduler).scheduleReviewCheckRetry(order);
-        verify(orderRepository, never()).save(order);
+        // Status, frozen link, durable retry and the post-commit request commit together, in this order.
+        InOrder transition = inOrder(orderRepository, orderStatusNotificationService, paymentInvoiceRetryScheduler, eventPublisher);
+        transition.verify(orderRepository).save(order);
+        transition.verify(orderStatusNotificationService).prepareAction(eq("В проверку"), same(order), eq("client"),
+                eq(" "), contains("Проверьте отзывы"), eq("На проверке"), isNull());
+        transition.verify(paymentInvoiceRetryScheduler).scheduleReviewCheckRetry(order);
+        transition.verify(eventPublisher).publishEvent(new OrderReviewCheckDeliveryWorker.Requested(prepared));
+        // No provider I/O inside the manager's request.
+        verify(orderStatusNotificationService, never()).dispatchPreparedAction(org.mockito.ArgumentMatchers.any());
+        verify(orderStatusNotificationService, never()).sendMessageToClientChat(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(mobilePushBusinessNotificationService).notifyManagerOrderReadyForReview(order);
     }
 
     @Test

@@ -890,8 +890,11 @@ if (-not $SkipDownload) {
         $sshArgs += @("-i", $SshKey)
         $scpArgs += @("-i", $SshKey)
     }
-    $sshArgs += @("-p", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new")
-    $scpArgs += @("-P", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new")
+    # The dump runs silently for minutes; the route to the VPS drops idle connections
+    # (seen after ~35 s), so keep the channel alive while mysqldump and scp work.
+    $keepAlive = @("-o", "ServerAliveInterval=20", "-o", "ServerAliveCountMax=6")
+    $sshArgs += @("-p", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new") + $keepAlive
+    $scpArgs += @("-P", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new") + $keepAlive
 
     $remoteCommand = @'
 set -Eeuo pipefail

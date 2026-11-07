@@ -913,31 +913,26 @@ public class OrderStatusTransitionService {
                 return true;
             }
 
-            log.info("Отправляем сообщение клиенту для заказа ID: {}", order.getId());
-            String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
+            // The manager does not wait for WhatsApp: the link is frozen here, under the order
+            // lock, and sent after commit by OrderReviewCheckDeliveryWorker. Its confirmed delivery
+            // moves the order to "На проверке"; a failed or lost send is repeated by the durable
+            // review-check retry with this same operation id.
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
+            orderRepository.save(order);
+            var prepared = orderStatusNotificationService.prepareAction(
                     STATUS_TO_CHECK,
                     order,
                     clientId,
                     groupId,
                     message,
-                    STATUS_IN_CHECK
+                    STATUS_IN_CHECK,
+                    null
             );
-
-            if (STATUS_IN_CHECK.equals(appliedStatus)) {
-                log.info("✅ Заказ ID {} переведен в статус 'На проверку' (сообщение отправлено)", order.getId());
-                mobilePushBusinessNotificationService.notifyManagerOrderReadyForReview(order);
-                return true;
-            }
-
-            if (STATUS_TO_CHECK.equals(appliedStatus)) {
-                paymentInvoiceRetryScheduler.scheduleReviewCheckRetry(order);
-                log.warn("⚠️ Заказ ID {} оставлен в статусе 'В проверку': клиентское сообщение не отправлено", order.getId());
-                mobilePushBusinessNotificationService.notifyManagerOrderReadyForReview(order);
-                return true;
-            } else {
-                log.error("❌ Неожиданный статус после отправки сообщения для заказа ID {}: {}", order.getId(), appliedStatus);
-                return false;
-            }
+            paymentInvoiceRetryScheduler.scheduleReviewCheckRetry(order);
+            eventPublisher.publishEvent(new OrderReviewCheckDeliveryWorker.Requested(prepared));
+            log.info("Заказ ID {} переведен в статус 'В проверку'; ссылка клиенту отправляется в фоне", order.getId());
+            mobilePushBusinessNotificationService.notifyManagerOrderReadyForReview(order);
+            return true;
 
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===", e);

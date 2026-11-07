@@ -29,8 +29,9 @@ import static com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.*;
  * announced to its manager {@link CommonInvoiceOverdueNotices#NOTICE_DAYS} days before the move,
  * and the autoresponder moves it to "Не оплачено" (with bad review tasks) once the overdue period
  * and the notice period have both passed. Every move re-reads the autoresponder switches fresh
- * and re-checks the invoice under its lock; bank paper invoices and part-paid invoices stay a
- * manager decision on the Control board.
+ * and re-checks the invoice under its lock. The term runs from the sending, or for a bank paper
+ * invoice from the confirmed delivery of all its documents, for the autoresponder's overdue days
+ * plus the invoice's own extension. Part-paid invoices stay a manager decision on the Control board.
  */
 @Service
 @Slf4j
@@ -48,6 +49,7 @@ public class CommonInvoiceOverdueEscalation implements CommonInvoiceOverdueNotic
     private final CommonInvoiceArchiveWorkflow archiveWorkflow;
     private final BackgroundAutomationSettings automation;
     private final SchedulerLeaseService leases;
+    private final CommonInvoiceOverdueClock clock;
     private final TransactionTemplate perInvoice;
 
     public CommonInvoiceOverdueEscalation(
@@ -55,12 +57,14 @@ public class CommonInvoiceOverdueEscalation implements CommonInvoiceOverdueNotic
             CommonInvoiceArchiveWorkflow archiveWorkflow,
             BackgroundAutomationSettings automation,
             SchedulerLeaseService leases,
+            CommonInvoiceOverdueClock clock,
             PlatformTransactionManager transactionManager
     ) {
         this.invoices = invoices;
         this.archiveWorkflow = archiveWorkflow;
         this.automation = automation;
         this.leases = leases;
+        this.clock = clock;
         this.perInvoice = new TransactionTemplate(transactionManager);
         this.perInvoice.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.perInvoice.setTimeout(60);
@@ -117,9 +121,19 @@ public class CommonInvoiceOverdueEscalation implements CommonInvoiceOverdueNotic
                         PageRequest.of(0, 500))
                 .stream()
                 .filter(row -> row != null && row.length >= 2 && row[0] instanceof CommonInvoice
-                        && row[1] instanceof Number && eligible((CommonInvoice) row[0]))
-                .map(row -> approaching((CommonInvoice) row[0], ((Number) row[1]).longValue(), now, days))
+                        && row[1] instanceof Number)
+                .map(row -> noticeDue((CommonInvoice) row[0], ((Number) row[1]).longValue(), now, days))
+                .flatMap(java.util.Optional::stream)
                 .toList();
+    }
+
+    /** Listed once the notice period of the current term has begun and no notice was recorded for it. */
+    private java.util.Optional<Approaching> noticeDue(CommonInvoice invoice, long managerId, LocalDateTime now, int days) {
+        if (!eligible(invoice)) return java.util.Optional.empty();
+        return clock.start(invoice)
+                .filter(start -> !noticedForCurrentTerm(invoice, start))
+                .filter(start -> !overdueAt(invoice, start, days).minusDays(NOTICE_DAYS).isAfter(now))
+                .map(start -> approaching(invoice, managerId, start, now, days));
     }
 
     @Override
@@ -127,8 +141,11 @@ public class CommonInvoiceOverdueEscalation implements CommonInvoiceOverdueNotic
     public boolean recordNotice(long invoiceId, LocalDateTime listedSentAt, LocalDateTime noticeAt) {
         CommonInvoice invoice = invoices.findByIdForUpdate(invoiceId).orElse(null);
         if (invoice == null || noticeAt == null || !eligible(invoice)
-                || !Objects.equals(invoice.getSentAt(), listedSentAt)
-                || noticedForCurrentCycle(invoice)) {
+                || !Objects.equals(invoice.getSentAt(), listedSentAt)) {
+            return false;
+        }
+        var start = clock.start(invoice);
+        if (start.isEmpty() || noticedForCurrentTerm(invoice, start.get()) || noticeAt.isBefore(start.get())) {
             return false;
         }
         invoice.setOverdueNoticeAt(noticeAt);
@@ -148,14 +165,21 @@ public class CommonInvoiceOverdueEscalation implements CommonInvoiceOverdueNotic
             return java.util.Optional.empty();
         }
         LocalDateTime resume = paused == null ? now : paused;
-        return invoices.findById(invoiceId).filter(this::eligible).map(invoice -> {
-            LocalDateTime overdueAt = invoice.getSentAt().plusDays(overdueDays());
-            LocalDateTime afterNotice = noticedForCurrentCycle(invoice)
+        int days = overdueDays();
+        return invoices.findById(invoiceId).filter(this::eligible).flatMap(invoice -> clock.start(invoice).map(start -> {
+            LocalDateTime overdueAt = overdueAt(invoice, start, days);
+            // Before its notice the move waits for a notice at the start of the notice period (or now).
+            LocalDateTime afterNotice = noticedForCurrentTerm(invoice, start)
                     ? invoice.getOverdueNoticeAt().plusDays(NOTICE_DAYS)
-                    : resume.plusDays(NOTICE_DAYS);
-            LocalDateTime earliest = overdueAt.isAfter(afterNotice) ? overdueAt : afterNotice;
-            return earliest.isAfter(resume) ? earliest : resume;
-        });
+                    : max(resume, overdueAt.minusDays(NOTICE_DAYS)).plusDays(NOTICE_DAYS);
+            return max(max(overdueAt, afterNotice), resume);
+        }));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Optional<LocalDateTime> termStart(long invoiceId) {
+        return invoices.findById(invoiceId).flatMap(clock::start);
     }
 
     @Scheduled(
@@ -210,19 +234,25 @@ public class CommonInvoiceOverdueEscalation implements CommonInvoiceOverdueNotic
         return archiveWorkflow.markUnpaidAfterOverdue(invoiceId, invoice -> stillDue(invoice, now, days));
     }
 
+    /** Re-checked under the invoice lock: term over (with the extension), notice recorded and aged. */
     boolean stillDue(CommonInvoice invoice, LocalDateTime now, int days) {
-        return eligible(invoice)
-                && escalationAllowed(now)
-                && !invoice.getSentAt().isAfter(now.minusDays(days))
-                && noticedForCurrentCycle(invoice)
-                && !invoice.getOverdueNoticeAt().isAfter(now.minusDays(NOTICE_DAYS));
+        if (!eligible(invoice) || !escalationAllowed(now)) return false;
+        return clock.start(invoice)
+                .filter(start -> !overdueAt(invoice, start, days).isAfter(now))
+                .filter(start -> noticedForCurrentTerm(invoice, start))
+                .filter(start -> !invoice.getOverdueNoticeAt().isAfter(now.minusDays(NOTICE_DAYS)))
+                .isPresent();
     }
 
+    /**
+     * Ordinary invoices exactly as before. A bank paper invoice keeps its automation hold for the
+     * paper flow; whether its term has started (all documents delivered) is the clock's decision.
+     */
     private boolean eligible(CommonInvoice invoice) {
-        return invoice != null
-                && ESCALATION_STATUSES.contains(invoice.getStatus())
-                && !CommonInvoiceRouteState.isOwnerPaperInvoice(invoice)
-                && !invoice.isPaperInvoiceAutomationHold()
+        if (invoice == null) return false;
+        boolean paper = CommonInvoiceRouteState.isOwnerPaperInvoice(invoice);
+        return ESCALATION_STATUSES.contains(invoice.getStatus())
+                && (paper || !invoice.isPaperInvoiceAutomationHold())
                 && !invoice.isPaperInvoiceReviewHold()
                 && invoice.getSentAt() != null
                 && invoice.getPaidKopecks() == 0
@@ -231,13 +261,17 @@ public class CommonInvoiceOverdueEscalation implements CommonInvoiceOverdueNotic
                 && blank(invoice.getPaymentSuccessNotificationError());
     }
 
-    private static boolean noticedForCurrentCycle(CommonInvoice invoice) {
-        return invoice.getOverdueNoticeAt() != null && invoice.getSentAt() != null
-                && !invoice.getOverdueNoticeAt().isBefore(invoice.getSentAt());
+    static LocalDateTime overdueAt(CommonInvoice invoice, LocalDateTime start, int days) {
+        return start.plusDays(days + (long) Math.max(0, invoice.getOverdueExtensionDays()));
     }
 
-    private Approaching approaching(CommonInvoice invoice, long managerId, LocalDateTime now, int days) {
-        LocalDateTime overdueAt = invoice.getSentAt().plusDays(days);
+    /** A notice belongs to the current term only when it is not older than the term's start. */
+    private static boolean noticedForCurrentTerm(CommonInvoice invoice, LocalDateTime start) {
+        return invoice.getOverdueNoticeAt() != null && start != null && !invoice.getOverdueNoticeAt().isBefore(start);
+    }
+
+    private Approaching approaching(CommonInvoice invoice, long managerId, LocalDateTime start, LocalDateTime now, int days) {
+        LocalDateTime overdueAt = overdueAt(invoice, start, days);
         LocalDateTime earliestAfterNotice = now.plusDays(NOTICE_DAYS);
         return new Approaching(
                 invoice.getId(),
@@ -246,9 +280,16 @@ public class CommonInvoiceOverdueEscalation implements CommonInvoiceOverdueNotic
                         ? "Общий счёт #" + invoice.getId() : invoice.getAccount().getName(),
                 Math.max(0, invoice.getAmountKopecks() - invoice.getPaidKopecks()),
                 invoice.getSentAt(),
-                Math.max(0, ChronoUnit.DAYS.between(invoice.getSentAt().toLocalDate(), now.toLocalDate())),
-                overdueAt.isAfter(earliestAfterNotice) ? overdueAt : earliestAfterNotice
+                Math.max(0, ChronoUnit.DAYS.between(start.toLocalDate(), now.toLocalDate())),
+                max(overdueAt, earliestAfterNotice),
+                start,
+                CommonInvoiceRouteState.isOwnerPaperInvoice(invoice),
+                Math.max(0, invoice.getOverdueExtensionDays())
         );
+    }
+
+    private static LocalDateTime max(LocalDateTime first, LocalDateTime second) {
+        return first.isAfter(second) ? first : second;
     }
 
     private static boolean blank(String value) {

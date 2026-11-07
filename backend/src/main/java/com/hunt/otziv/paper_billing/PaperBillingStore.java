@@ -28,7 +28,7 @@ public class PaperBillingStore implements com.hunt.otziv.client_messages.api.Del
         return jdbc.queryForList(WITH_FILES+"WHERE d.target_kind=? AND d.target_id=? ORDER BY d.created_at DESC,d.id DESC LIMIT 1",target.kind(),target.id()).stream().findFirst();
     }
     public List<Map<String,Object>> summaries(Target target) {
-        String columns="id,number,amount_kopecks,stage,invoice_delivery,act_delivery,error_text,paid_at,cancel_message_delivery,cancel_reason,cancel_replacement_state,cancel_replacement_error,target_kind,target_id,payer_json,created_at";
+        String columns="id,number,amount_kopecks,stage,invoice_delivery,act_delivery,message_delivery,delivery_completed_at,error_text,paid_at,cancel_message_delivery,cancel_reason,cancel_replacement_state,cancel_replacement_error,target_kind,target_id,payer_json,created_at";
         if(target.kind().equals("COMMON_INVOICE"))return jdbc.queryForList("SELECT "+columns+" FROM paper_invoice_document WHERE (target_kind=? AND target_id=?) OR parent_invoice_id=? ORDER BY created_at DESC,id DESC LIMIT 200",target.kind(),target.id(),target.id());
         return jdbc.queryForList("SELECT "+columns+" FROM paper_invoice_document WHERE target_kind=? AND target_id=? ORDER BY created_at DESC,id DESC LIMIT 100",target.kind(),target.id());
     }
@@ -50,7 +50,8 @@ public class PaperBillingStore implements com.hunt.otziv.client_messages.api.Del
                 (String)r.get("stage"),(String)r.get("invoice_delivery"),(String)r.get("act_delivery"),(String)r.get("error_text"),
                 r.get("paid_at") instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : r.get("paid_at") instanceof LocalDateTime time ? time : null,
                 (String)r.get("cancel_message_delivery"),(String)r.get("cancel_reason"),
-                (String)r.get("cancel_replacement_state"),(String)r.get("cancel_replacement_error"),kind,target,payer,orderIds);
+                (String)r.get("cancel_replacement_state"),(String)r.get("cancel_replacement_error"),kind,target,payer,orderIds,
+                (String)r.get("message_delivery"),r.get("delivery_completed_at")!=null);
     }
     public String composition(Target target) {
         if(target.kind().equals("COMMON_INVOICE")) return common.composition(target.id());

@@ -28,11 +28,19 @@ class CommonInvoiceOverdueEscalationTest {
     private final CommonInvoiceRepository invoices = mock(CommonInvoiceRepository.class);
     private final CommonInvoiceArchiveWorkflow workflow = mock(CommonInvoiceArchiveWorkflow.class);
     private final BackgroundAutomationSettings settings = mock(BackgroundAutomationSettings.class);
+    /** Paper invoice id -> confirmed delivery of all its documents (absent: not delivered yet). */
+    private final java.util.Map<Long, LocalDateTime> paperDeliveries = new java.util.HashMap<>();
+    private final CommonInvoiceOverdueClock clock = mock(CommonInvoiceOverdueClock.class);
     private final CommonInvoiceOverdueEscalation escalation = new CommonInvoiceOverdueEscalation(
-            invoices, workflow, settings, mock(SchedulerLeaseService.class), mock(PlatformTransactionManager.class));
+            invoices, workflow, settings, mock(SchedulerLeaseService.class), clock, mock(PlatformTransactionManager.class));
 
     @BeforeEach
     void switchesOn() {
+        when(clock.start(any())).thenAnswer(call -> {
+            CommonInvoice invoice = call.getArgument(0);
+            return invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE
+                    ? Optional.ofNullable(paperDeliveries.get(invoice.getId())) : Optional.ofNullable(invoice.getSentAt());
+        });
         when(settings.getBooleanFreshFailClosed(anyString(), anyBoolean())).thenReturn(true);
         when(settings.getStringFresh(eq(CLIENT_MESSAGES_PAUSED_UNTIL), any())).thenReturn("");
         when(settings.getStringFresh(eq(CommonInvoiceOverdueEscalation.OVERDUE_DAYS), any())).thenReturn("30");
@@ -158,6 +166,83 @@ class CommonInvoiceOverdueEscalationTest {
         when(settings.getBooleanFreshFailClosed(eq(CommonInvoiceOverdueEscalation.LIVE_ENABLED), anyBoolean()))
                 .thenReturn(false);
         assertThat(escalation.automaticMoveNotBefore(1L, NOW)).as("live mode off: manager decision").isEmpty();
+    }
+
+    @Test
+    void aPaperInvoiceTermRunsFromTheDeliveryOfItsDocumentsPlusTheExtension() {
+        // Sent long ago with ordinary details, then switched to a bank paper invoice and delivered later.
+        var paper = invoice(2L, CommonInvoiceStatus.INVOICED, NOW.minusDays(40), null);
+        paper.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        paper.setPaperInvoiceAutomationHold(true); // the paper flow holds ordinary reminders, not the term
+        when(invoices.findOverdueNoticeCandidates(any(), any(), any())).thenReturn(List.<Object[]>of(new Object[]{paper, 7L}));
+
+        assertThat(escalation.pendingNotices(NOW)).as("documents not delivered: no term yet").isEmpty();
+        paperDeliveries.put(2L, NOW.minusDays(20));
+        assertThat(escalation.pendingNotices(NOW)).as("delivered 20 days ago: term ends in 10 days").isEmpty();
+
+        paperDeliveries.put(2L, NOW.minusDays(29));
+        assertThat(escalation.pendingNotices(NOW)).singleElement().satisfies(notice -> {
+            assertThat(notice.termStart()).isEqualTo(NOW.minusDays(29));
+            assertThat(notice.sentAt()).as("cycle identity for recordNotice").isEqualTo(NOW.minusDays(40));
+            assertThat(notice.paperDelivery()).isTrue();
+            assertThat(notice.unpaidDays()).isEqualTo(29);
+            assertThat(notice.moveNotBefore()).isEqualTo(NOW.plusDays(2));
+        });
+
+        paper.setOverdueExtensionDays(7);
+        assertThat(escalation.pendingNotices(NOW)).as("a week's extension delays the notice").isEmpty();
+        paperDeliveries.put(2L, NOW.minusDays(36));
+        assertThat(escalation.pendingNotices(NOW)).singleElement()
+                .satisfies(notice -> assertThat(notice.extensionDays()).isEqualTo(7));
+    }
+
+    @Test
+    void aPaperInvoiceMovesOnlyAfterItsDeliveryTermAndANoticeWithinThatTerm() {
+        var paper = invoice(2L, CommonInvoiceStatus.INVOICED, NOW.minusDays(40), NOW.minusDays(36));
+        paper.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        paper.setPaperInvoiceAutomationHold(true);
+        assertThat(escalation.stillDue(paper, NOW, 30)).as("not delivered").isFalse();
+
+        paperDeliveries.put(2L, NOW.minusDays(35));
+        assertThat(escalation.stillDue(paper, NOW, 30)).as("notice older than the delivery belongs to the old cycle").isFalse();
+        paper.setOverdueNoticeAt(NOW.minusDays(3));
+        assertThat(escalation.stillDue(paper, NOW, 30)).isTrue();
+        paper.setOverdueExtensionDays(7);
+        assertThat(escalation.stillDue(paper, NOW, 30)).as("35 days < 30 + 7").isFalse();
+        paper.setOverdueExtensionDays(5);
+        assertThat(escalation.stillDue(paper, NOW, 30)).as("35 days = 30 + 5").isTrue();
+        paper.setPaperInvoiceReviewHold(true);
+        assertThat(escalation.stillDue(paper, NOW, 30)).as("unreconciled receipt").isFalse();
+
+        var ordinaryHeld = invoice(3L, CommonInvoiceStatus.REMINDER, NOW.minusDays(40), NOW.minusDays(3));
+        ordinaryHeld.setPaperInvoiceAutomationHold(true);
+        assertThat(escalation.stillDue(ordinaryHeld, NOW, 30)).as("ordinary invoice keeps its hold").isFalse();
+    }
+
+    @Test
+    void aPaperNoticeIsRecordedOnlyOnceItsDocumentsAreDelivered() {
+        var paper = invoice(2L, CommonInvoiceStatus.INVOICED, NOW.minusDays(40), NOW.minusDays(39));
+        paper.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        when(invoices.findByIdForUpdate(2L)).thenReturn(Optional.of(paper));
+        assertThat(escalation.recordNotice(2L, paper.getSentAt(), NOW)).isFalse();
+        paperDeliveries.put(2L, NOW.minusDays(29));
+        assertThat(escalation.recordNotice(2L, paper.getSentAt(), NOW)).isTrue();
+        assertThat(paper.getOverdueNoticeAt()).isEqualTo(NOW);
+        assertThat(escalation.recordNotice(2L, paper.getSentAt(), NOW.plusHours(1))).as("no duplicate").isFalse();
+    }
+
+    @Test
+    void theShownMoveDateIncludesTheExtension() {
+        var invoice = invoice(1L, CommonInvoiceStatus.REMINDER, NOW.minusDays(10), null);
+        invoice.setOverdueExtensionDays(7);
+        when(invoices.findById(1L)).thenReturn(Optional.of(invoice));
+        assertThat(escalation.automaticMoveNotBefore(1L, NOW)).contains(NOW.minusDays(10).plusDays(37));
+        assertThat(escalation.termStart(1L)).contains(NOW.minusDays(10));
+
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        paperDeliveries.put(1L, NOW.minusDays(2));
+        assertThat(escalation.automaticMoveNotBefore(1L, NOW)).contains(NOW.minusDays(2).plusDays(37));
+        assertThat(escalation.termStart(1L)).contains(NOW.minusDays(2));
     }
 
     private static CommonInvoice invoice(long id, CommonInvoiceStatus status, LocalDateTime sentAt, LocalDateTime noticeAt) {

@@ -96,13 +96,21 @@ public class MaxBotClient {
     /** Upload is separate from message delivery and its token may be reused by a durable campaign. */
     public String uploadDocument(byte[] bytes, String filename) {
         if (!isConfigured()) throw new IllegalStateException("MAX не настроен");
+        String step = "upload-url";
         try {
-            String response = restTemplate.postForObject(baseUrl + "/uploads?type=file", new HttpEntity<>(headers()), String.class);
-            java.net.URI uploadUrl = java.net.URI.create(objectMapper.readTree(response).path("url").asText());
-            // Document uploads are served by this provider-owned host; never forward the bot token there.
-            if (!"https".equals(uploadUrl.getScheme()) || !"fu.oneme.ru".equals(uploadUrl.getHost())
-                    || uploadUrl.getUserInfo() != null || (uploadUrl.getPort() != -1 && uploadUrl.getPort() != 443))
+            JsonNode slot = objectMapper.readTree(restTemplate.postForObject(baseUrl + "/uploads?type=file", new HttpEntity<>(headers()), String.class));
+            if (slot == null || !hasText(slot.path("url").asText())) {
+                log.warn("MAX upload slot missing url (code={})", safeCode(slot == null ? null : slot.path("code").asText()));
+                throw new IllegalStateException("MAX upload url missing");
+            }
+            java.net.URI uploadUrl = java.net.URI.create(slot.path("url").asText());
+            step = "upload-host";
+            // File bytes go only to MAX's own upload hosts; the bot token is never sent there.
+            if (!trustedUploadHost(uploadUrl)) {
+                log.warn("MAX upload refused: unexpected upload host {}", uploadUrl.getHost());
                 throw new IllegalStateException("Unexpected MAX upload host");
+            }
+            step = "file-upload";
             var body = new org.springframework.util.LinkedMultiValueMap<String,Object>();
             body.add("data", new org.springframework.core.io.ByteArrayResource(bytes) {
                 @Override public String getFilename() { return filename; }
@@ -110,19 +118,54 @@ public class MaxBotClient {
             var uploadHeaders = new HttpHeaders();
             uploadHeaders.setContentType(MediaType.MULTIPART_FORM_DATA);
             String uploaded = restTemplate.postForObject(uploadUrl,new HttpEntity<>(body,uploadHeaders),String.class);
+            step = "upload-token";
             String uploadToken = objectMapper.readTree(uploaded).path("token").asText();
             if (uploadToken.isBlank() || uploadToken.length() > 8192) throw new IllegalStateException("MAX upload token missing");
             return uploadToken;
-        } catch (Exception failed) { throw new IllegalStateException("MAX не подтвердил загрузку файла",failed); }
+        } catch (Exception failed) {
+            log.warn("MAX file upload failed at {}: {}", step, describe(failed));
+            throw new IllegalStateException("MAX не подтвердил загрузку файла",failed);
+        }
     }
 
-    /** Exactly one message request. Upload failures cannot accidentally send a text-only offer. */
+    /** MAX's own upload hosts (file uploads use *.oneme.ru, media also *.okcdn.ru), over HTTPS only. */
+    static boolean trustedUploadHost(java.net.URI url) {
+        String host = url.getHost() == null ? "" : url.getHost().toLowerCase(java.util.Locale.ROOT);
+        return "https".equals(url.getScheme()) && url.getUserInfo() == null
+                && (url.getPort() == -1 || url.getPort() == 443)
+                && (host.endsWith(".oneme.ru") || host.endsWith(".okcdn.ru"));
+    }
+
+    /** MAX answers this while it still processes an uploaded file; the message was refused, not sent. */
+    public static final String ATTACHMENT_NOT_READY = "max_attachment_not_ready";
+    /** Pauses before re-sending a refused file message, as MAX recommends: growing, about 15 s in all. */
+    private static final long[] ATTACHMENT_READY_PAUSES_MS = {1000, 2000, 4000, 8000};
+    private java.util.function.LongPredicate pause = MaxBotClient::sleep;
+
+    void pauseWith(java.util.function.LongPredicate pause) { this.pause = pause; }
+
+    /**
+     * Exactly one accepted message. A message refused with attachment.not.ready was not sent, so it is
+     * re-sent after a pause; any other uncertain answer is returned at once without another request.
+     */
     public SendOnceResult sendDocumentToChatOnce(Long chatId, String text, String uploadToken) {
         if (!isConfigured()) return new SendOnceResult(null,"max_not_configured");
         if (chatId == null || !hasText(text) || !hasText(uploadToken)) return new SendOnceResult(null,"invalid_request");
         var payload = Map.<String,Object>of("text",text,"notify",true,"attachments",
                 List.of(Map.of("type","file","payload",Map.of("token",uploadToken))));
         String url = UriComponentsBuilder.fromUriString(baseUrl + "/messages").queryParam("chat_id",chatId).toUriString();
+        for (int attempt = 0; ; attempt++) {
+            SendOnceResult result = postDocumentMessage(url, payload);
+            if (!ATTACHMENT_NOT_READY.equals(result.errorCode()) || attempt >= ATTACHMENT_READY_PAUSES_MS.length
+                    || !pause.test(ATTACHMENT_READY_PAUSES_MS[attempt])) {
+                if (ATTACHMENT_NOT_READY.equals(result.errorCode()))
+                    log.warn("MAX file message refused: the file is still being processed after {} attempts", attempt + 1);
+                return result;
+            }
+        }
+    }
+
+    private SendOnceResult postDocumentMessage(String url, Map<String,Object> payload) {
         try {
             String response = restTemplate.postForObject(url,new HttpEntity<>(payload,headers()),String.class);
             JsonNode node = objectMapper.readTree(response);
@@ -131,16 +174,47 @@ public class MaxBotClient {
             boolean rejected = node.hasNonNull("error") || node.hasNonNull("code")
                     || (node.has("success") && (!node.path("success").isBoolean() || !node.path("success").booleanValue()));
             if (!rejected && receipt.isTextual() && validReceiptId(id)) return new SendOnceResult(id,null);
-            if ("attachment.not.ready".equals(node.path("code").asText())) return new SendOnceResult(null,"invalid_request");
+            if ("attachment.not.ready".equals(node.path("code").asText())) return new SendOnceResult(null,ATTACHMENT_NOT_READY);
+            log.warn("MAX file message has no confirmed receipt (code={})", safeCode(node.path("code").asText()));
         } catch (RestClientResponseException error) {
-            try {
-                if ("attachment.not.ready".equals(objectMapper.readTree(error.getResponseBodyAsString()).path("code").asText()))
-                    return new SendOnceResult(null,"invalid_request");
-            } catch (Exception ignored) { /* Unconfirmed */ }
+            String code = null;
+            try { code = objectMapper.readTree(error.getResponseBodyAsString()).path("code").asText(); }
+            catch (Exception ignored) { /* Unconfirmed */ }
+            if ("attachment.not.ready".equals(code)) return new SendOnceResult(null,ATTACHMENT_NOT_READY);
+            log.warn("MAX file message unconfirmed: HTTP {} (code={})", error.getStatusCode().value(), safeCode(code));
         } catch (Exception unconfirmed) {
             log.warn("MAX document operation unconfirmed ({})",unconfirmed.getClass().getSimpleName());
         }
         return new SendOnceResult(null,"operation_unknown");
+    }
+
+    private static boolean sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+            return true;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /** HTTP status, MAX error code and exception types only: upload URLs carry a signature. */
+    private String describe(Exception failure) {
+        if (failure instanceof RestClientResponseException http) {
+            String code = null;
+            try { code = objectMapper.readTree(http.getResponseBodyAsString()).path("code").asText(); }
+            catch (Exception ignored) { /* Not JSON */ }
+            return "HTTP " + http.getStatusCode().value() + " (code=" + safeCode(code) + ")";
+        }
+        Throwable root = failure;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        return failure.getClass().getSimpleName() + (root == failure ? "" : " caused by " + root.getClass().getSimpleName());
+    }
+
+    private static String safeCode(String code) {
+        if (!hasText(code)) return "-";
+        String cleaned = code.replaceAll("[^A-Za-z0-9._-]", "");
+        return cleaned.isEmpty() ? "-" : cleaned.substring(0, Math.min(80, cleaned.length()));
     }
 
     private static boolean validReceiptId(String messageId) {

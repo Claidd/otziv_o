@@ -132,6 +132,29 @@ public class PerformanceMetrics {
                 .register(meterRegistry).record(Math.max(0, nanos), TimeUnit.NANOSECONDS);
     }
 
+    /** Database work of the current request, for the slow-request log. Durations in milliseconds. */
+    record RequestStats(long queries, long sqlMs, long connectionMs, long fetchMs, long rows) {
+    }
+
+    /** null outside a request scope. */
+    static RequestStats currentStats() {
+        RequestWork work = CURRENT.get();
+        return work == null ? null : new RequestStats(work.queries, work.sqlNanos / 1_000_000,
+                work.connectionNanos / 1_000_000, work.fetchNanos / 1_000_000, work.rows);
+    }
+
+    /**
+     * Opens a plain scope for a request that no interactive scope measures, so its SQL work is counted
+     * for the slow-request log. It records no interactive metrics. False when a scope already runs.
+     */
+    boolean beginPlainRequest() {
+        if (CURRENT.get() != null) return false;
+        CURRENT.set(new RequestWork(this));
+        return true;
+    }
+
+    static void endPlainRequest() { CURRENT.remove(); }
+
     static boolean collectingSql() { return CURRENT.get() != null; }
     static void recordSql(long elapsedNanos) {
         RequestWork work = CURRENT.get();
