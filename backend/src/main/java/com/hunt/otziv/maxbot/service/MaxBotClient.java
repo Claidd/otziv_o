@@ -111,13 +111,7 @@ public class MaxBotClient {
                 throw new IllegalStateException("Unexpected MAX upload host");
             }
             step = "file-upload";
-            var body = new org.springframework.util.LinkedMultiValueMap<String,Object>();
-            body.add("data", new org.springframework.core.io.ByteArrayResource(bytes) {
-                @Override public String getFilename() { return filename; }
-            });
-            var uploadHeaders = new HttpHeaders();
-            uploadHeaders.setContentType(MediaType.MULTIPART_FORM_DATA);
-            String uploaded = restTemplate.postForObject(uploadUrl,new HttpEntity<>(body,uploadHeaders),String.class);
+            String uploaded = postFile(uploadUrl, bytes, filename);
             step = "upload-token";
             String uploadToken = objectMapper.readTree(uploaded).path("token").asText();
             if (uploadToken.isBlank() || uploadToken.length() > 8192) throw new IllegalStateException("MAX upload token missing");
@@ -126,6 +120,30 @@ public class MaxBotClient {
             log.warn("MAX file upload failed at {}: {}", step, describe(failed));
             throw new IllegalStateException("MAX не подтвердил загрузку файла",failed);
         }
+    }
+
+    /**
+     * The upload request MAX documents ({@code curl -F "data=@file"}): one multipart part named
+     * {@code data} with the UTF-8 file name and its type, a fixed Content-Length and an Accept of any type.
+     * The upload host answered HTTP 406 to the generic form writer, which streamed the body in
+     * chunks and sent a long negotiated Accept list.
+     */
+    String postFile(java.net.URI uploadUrl, byte[] bytes, String filename) {
+        String boundary = "otziv-" + java.util.UUID.randomUUID().toString().replace("-", "");
+        String name = filename.replaceAll("[\\r\\n\"\\\\]", "_");
+        MediaType partType = org.springframework.http.MediaTypeFactory.getMediaType(name).orElse(MediaType.APPLICATION_OCTET_STREAM);
+        var body = new java.io.ByteArrayOutputStream(bytes.length + 512);
+        body.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"data\"; filename=\"" + name
+                + "\"\r\nContent-Type: " + partType + "\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        body.writeBytes(bytes);
+        body.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        byte[] content = body.toByteArray();
+        var uploadHeaders = new HttpHeaders();
+        uploadHeaders.setContentType(new MediaType("multipart", "form-data", Map.of("boundary", boundary)));
+        uploadHeaders.setContentLength(content.length);
+        uploadHeaders.setAccept(List.of(MediaType.ALL));
+        uploadHeaders.set(HttpHeaders.USER_AGENT, "OtzivMaxBot/1.0");
+        return restTemplate.exchange(uploadUrl, HttpMethod.POST, new HttpEntity<>(content, uploadHeaders), String.class).getBody();
     }
 
     /** MAX's own upload hosts (file uploads use *.oneme.ru, media also *.okcdn.ru), over HTTPS only. */
@@ -204,7 +222,7 @@ public class MaxBotClient {
             String code = null;
             try { code = objectMapper.readTree(http.getResponseBodyAsString()).path("code").asText(); }
             catch (Exception ignored) { /* Not JSON */ }
-            return "HTTP " + http.getStatusCode().value() + " (code=" + safeCode(code) + ")";
+            return "HTTP " + http.getStatusCode().value() + " (code=" + safeCode(code) + ", body=" + safeSnippet(http.getResponseBodyAsString()) + ")";
         }
         Throwable root = failure;
         while (root.getCause() != null && root.getCause() != root) root = root.getCause();
@@ -215,6 +233,15 @@ public class MaxBotClient {
         if (!hasText(code)) return "-";
         String cleaned = code.replaceAll("[^A-Za-z0-9._-]", "");
         return cleaned.isEmpty() ? "-" : cleaned.substring(0, Math.min(80, cleaned.length()));
+    }
+
+    /** A short, single-line hint from an error page; links are cut because upload URLs carry a signature. */
+    static String safeSnippet(String body) {
+        if (!hasText(body)) return "-";
+        String cleaned = body.replaceAll("<[^>]{0,200}>", " ").replaceAll("(?i)https?://\\S+", " URL ")
+                .replaceAll("[^\\p{L}\\p{N} .,:;()_=-]", " ").replaceAll("\\s+", " ").trim();
+        if (cleaned.isEmpty()) return "-";
+        return cleaned.substring(0, Math.min(160, cleaned.length()));
     }
 
     private static boolean validReceiptId(String messageId) {
