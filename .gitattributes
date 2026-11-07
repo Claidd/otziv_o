@@ -203,3 +203,8 @@ infrastructure/runtime-security/c51-postgres-zlib-package.json text eol=lf
 infrastructure/runtime-security/postgres-c51-zlib-package.py text eol=lf
 infrastructure/runtime-security/postgres-c51-inspection.py text eol=lf
 infrastructure/runtime-security/postgres-c51-adjudication.mjs text eol=lf
+infrastructure/runtime-security/postgres-c51-rehearsal.py text eol=lf
+infrastructure/runtime-security/postgres-c51-capture-window.py text eol=lf
+infrastructure/runtime-security/c51-parent-postgres.json text eol=lf
+# C51 acceptance binds the scanner log byte for byte, including its trailing blank line.
+infrastructure/runtime-security/proofs/c51-postgres/publication/vulnerabilities.scanner.log -whitespace

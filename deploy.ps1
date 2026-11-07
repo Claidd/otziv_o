@@ -15,6 +15,7 @@ param(
     [switch]$FullRollout,
     [switch]$CoordinatedMysqlRefresh,
     [switch]$CoordinatedSslRefresh,
+    [switch]$CoordinatedPostgresRefresh,
     [switch]$CheckOnly,
     [switch]$PreflightOnly,
     [string]$ReleaseSessionToken = '',
@@ -34,6 +35,7 @@ if ($Help) {
     Write-Host '-FullRollout recreates all application services; database continuity guards still apply.'
     Write-Host '-CoordinatedMysqlRefresh applies an exact reviewed MySQL OS-package transition on the existing volume, after a protected backup.'
     Write-Host '-CoordinatedSslRefresh explicitly changes C23 PostgreSQL to an accepted C36 image with active C35 Keycloak, after protected backups.'
+    Write-Host '-CoordinatedPostgresRefresh replaces the accepted C36 PostgreSQL with the zlib-only C51 image on the same volume, keeping active C48 Keycloak, after protected backups.'
     Write-Host 'Production configuration and the existing mobile APK are retained unless an APK path is supplied.'
     Write-Host '-StandaloneMobileApkPath stages a separately signed APK before rollout, then verifies its public /android-new URL after deployment.'
     return
@@ -164,7 +166,7 @@ try {
     $session = ($sessionOutput -join '') | ConvertFrom-Json
     Set-OtzivReleaseStage -Path $timing -Stage 'committed-source-preparation'
     [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot -ExpectedRevision $ci.revision -CanonicalWorkspace $canonicalWorkspace)
-    $preparedSource = New-OtzivPreparedDeployArchive -Repository $repoRoot -Revision $ci.revision -Directory $directory -CoordinatedMysqlRefresh:$CoordinatedMysqlRefresh -CoordinatedSslRefresh:$CoordinatedSslRefresh
+    $preparedSource = New-OtzivPreparedDeployArchive -Repository $repoRoot -Revision $ci.revision -Directory $directory -CoordinatedMysqlRefresh:$CoordinatedMysqlRefresh -CoordinatedSslRefresh:$CoordinatedSslRefresh -CoordinatedPostgresRefresh:$CoordinatedPostgresRefresh
     & (Join-Path $repoRoot 'infrastructure/scripts/security/check-backup-readiness.ps1') -EnvFile $EnvFile
     if ($LASTEXITCODE -ne 0) { throw 'Local backup readiness failed before image transport.' }
     Set-OtzivReleaseStage -Path $timing -Stage 'manifest-and-server-preflight'
@@ -248,6 +250,7 @@ try {
         PrivateRegistryControlFile = $record; RequireMainCi = $true; SkipBuildPush = $true
         CiReleaseManifest = $manifest; CiCapacityPlan = $capacity; FullRollout = $FullRollout
         CoordinatedMysqlRefresh = $CoordinatedMysqlRefresh; CoordinatedSslRefresh = $CoordinatedSslRefresh
+        CoordinatedPostgresRefresh = $CoordinatedPostgresRefresh
         PreDeployBackupDirectory = (Join-Path $directory 'database-backup')
         PreparedSourceArchive = $preparedSource.archive; PreparedSourceSha256 = $preparedSource.sha256
         ReleaseTimingFile = $timing

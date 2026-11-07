@@ -105,13 +105,53 @@ try {
         }
         if (-not $rejectedMysql) { throw 'Unaccepted MySQL image entered the coordinated archive.' }
     }
+    $postgresApproved = $postgres[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c51-postgres.json' -and
+        [bool]$postgres[0].PSObject.Properties['postgresC51Acceptance'] -and
+        $keycloak[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c48-keycloak.json'
+    $postgresPaths = @()
+    if ($postgresApproved) {
+        $postgresPaths = @(Get-OtzivCoordinatedPostgresBundlePaths -Repository $repository)
+        $combinedPostgresPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedPostgresRefresh)
+        $acceptancePath = 'infrastructure/runtime-security/proofs/c51-postgres/acceptance.json'
+        if ($postgresPaths.Count -lt 20 -or $acceptancePath -notin $postgresPaths -or
+            'infrastructure/runtime-security/c51-parent-postgres.json' -notin $postgresPaths -or
+            @($postgresPaths | Where-Object { $_ -notin $combinedPostgresPaths }).Count -gt 0 -or
+            $acceptancePath -in $ordinaryPaths) {
+            throw 'Reviewed C51 PostgreSQL evidence entered the wrong deployment inventory.'
+        }
+        $tamperedPostgres = Join-Path $fixture 'postgres-evidence'
+        foreach ($path in $postgresPaths) {
+            $destination = Join-Path $tamperedPostgres $path
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $repository $path) -Destination $destination
+        }
+        $null = Get-OtzivCoordinatedPostgresBundlePaths -Repository $tamperedPostgres
+        $replay = Join-Path $tamperedPostgres 'infrastructure/runtime-security/proofs/c51-postgres/rehearsal/replay.json'
+        [IO.File]::AppendAllText($replay, 'tampered')
+        $rejectedPostgres = $false
+        try { $null = Get-OtzivCoordinatedPostgresBundlePaths -Repository $tamperedPostgres }
+        catch {
+            if ($_.Exception.Message -ne 'Accepted PostgreSQL refresh evidence changed.') { throw }
+            $rejectedPostgres = $true
+        }
+        if (-not $rejectedPostgres) { throw 'Changed C51 PostgreSQL rehearsal entered the deployment archive.' }
+    } else {
+        $rejectedPostgres = $false
+        try { $null = Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedPostgresRefresh }
+        catch {
+            if ($_.Exception.Message -ne 'Only the accepted C51 PostgreSQL and active C48 Keycloak pair permits this refresh.') { throw }
+            $rejectedPostgres = $true
+        }
+        if (-not $rejectedPostgres) { throw 'Unaccepted PostgreSQL generation entered the refresh archive.' }
+    }
     $realRevision = (& git -C $repository rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read the actual repository revision.' }
     $realEvidence = Join-Path $fixture 'real-release-evidence'
     New-Item -ItemType Directory -Path $realEvidence | Out-Null
     $realPrepared = New-OtzivPreparedDeployArchive -Repository $repository -Revision $realRevision `
-        -Directory $realEvidence -CoordinatedMysqlRefresh:$mysqlApproved -CoordinatedSslRefresh:$sslApproved
-    foreach ($path in @($ordinaryPaths + $extraPaths + $mysqlPaths | Select-Object -Unique)) {
+        -Directory $realEvidence -CoordinatedMysqlRefresh:$mysqlApproved -CoordinatedSslRefresh:$sslApproved `
+        -CoordinatedPostgresRefresh:$postgresApproved
+    foreach ($path in @($ordinaryPaths + $extraPaths + $mysqlPaths + $postgresPaths | Select-Object -Unique)) {
         if ($path -notin $realPrepared.paths -or
             -not (Test-Path -LiteralPath (Join-Path $realEvidence ('verified-source/' + $path)))) {
             throw "Deployment input absent from the committed archive: $path"

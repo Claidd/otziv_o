@@ -648,9 +648,95 @@ function Get-OtzivCoordinatedMysqlBundlePaths {
     return @($paths | Select-Object -Unique)
 }
 
+function Get-OtzivCoordinatedPostgresBundlePaths {
+    param([Parameter(Mandatory = $true)][string]$Repository)
+    function Read-OtzivBoundPostgresEvidence([string]$Path, [string]$Sha256) {
+        $relative = $Path.Replace('\', '/')
+        if ($relative -notmatch '^infrastructure/runtime-security/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$' -or
+            '..' -in $relative.Split('/') -or '.' -in $relative.Split('/') -or
+            $Sha256 -cnotmatch '^[a-f0-9]{64}$') {
+            throw 'PostgreSQL refresh evidence path or digest is invalid.'
+        }
+        $file = Join-Path $Repository $relative
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or
+            (Get-Item -LiteralPath $file).LinkType -or
+            (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Sha256) {
+            throw 'Accepted PostgreSQL refresh evidence changed.'
+        }
+        return $file
+    }
+    $prefix = 'infrastructure/runtime-security/'
+    $target = 'ghcr.io/claidd/otziv-security@sha256:13d2e1ba01b593f1f284d5d7869a9994f5251f036355e90064406ca4e7d809fc'
+    $targetConfig = 'sha256:ceffd72a35bc4a20a9588f71deaf98cc145ba6832104a8b539a63395ce341975'
+    $source = 'ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5'
+    $sourceConfig = 'sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc'
+    $issuer = 'ghcr.io/claidd/otziv-security@sha256:2e935efdb594ee4a3f0bc8343b1e6a76def33d70a4981cbd730ce5942ff47009'
+    $issuerConfig = 'sha256:09efb3a918669b335b30966deeea3027591e03c2e048e653c0cb7cad8a8ba773'
+    $activationPath = $prefix + 'reviewed-image-activations.json'
+    $parentPath = $prefix + 'c51-parent-postgres.json'
+    $acceptancePath = $prefix + 'proofs/c51-postgres/acceptance.json'
+    $index = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $activationPath) | ConvertFrom-Json
+    $postgres = @($index.images | Where-Object { $_.component -eq 'postgres' })
+    $keycloak = @($index.images | Where-Object { $_.component -eq 'keycloak' })
+    if ($postgres.Count -ne 1 -or $keycloak.Count -ne 1 -or
+        $postgres[0].reference -cne $target -or $keycloak[0].reference -cne $issuer -or
+        $postgres[0].manifest.path -cne ($prefix + 'reviewed-images-c51-postgres.json') -or
+        $keycloak[0].manifest.path -cne ($prefix + 'reviewed-images-c48-keycloak.json')) {
+        throw 'Only the accepted C51 PostgreSQL and active C48 Keycloak pair permits this refresh.'
+    }
+    $pg = $postgres[0]; $kc = $keycloak[0]
+    $null = Read-OtzivBoundPostgresEvidence $parentPath 'e817ee13121794b59975bc4d5a25b715dcd4f76abbeac4e8f0d80dd2176b4367'
+    $parent = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $parentPath) | ConvertFrom-Json
+    if ($parent.component -cne 'postgres' -or $parent.reference -cne $source -or
+        $parent.manifest.path -cne ($prefix + 'reviewed-images-c36-postgres.json')) {
+        throw 'PostgreSQL refresh source activation changed.'
+    }
+    $paths = @($activationPath, $parentPath)
+    foreach ($entry in @($pg, $kc)) {
+        $null = Read-OtzivBoundPostgresEvidence $entry.manifest.path $entry.manifest.sha256
+        $paths += $entry.manifest.path
+    }
+    if (-not $pg.PSObject.Properties['postgresC51Acceptance'] -or
+        $pg.postgresC51Acceptance.path -cne $acceptancePath -or
+        $pg.databaseTransition.path -cne $pg.postgresC51Acceptance.path -or
+        $pg.databaseTransition.sha256 -cne $pg.postgresC51Acceptance.sha256 -or
+        -not $kc.PSObject.Properties['aptRefreshAcceptance'] -or
+        $kc.migrationAcceptance.path -cne $kc.aptRefreshAcceptance.path -or
+        $kc.migrationAcceptance.sha256 -cne $kc.aptRefreshAcceptance.sha256) {
+        throw 'Missing accepted PostgreSQL refresh evidence.'
+    }
+    $pgAcceptance = Get-Content -Raw -Encoding UTF8 -LiteralPath `
+        (Read-OtzivBoundPostgresEvidence $pg.postgresC51Acceptance.path $pg.postgresC51Acceptance.sha256) | ConvertFrom-Json
+    $kcAcceptance = Get-Content -Raw -Encoding UTF8 -LiteralPath `
+        (Read-OtzivBoundPostgresEvidence $kc.aptRefreshAcceptance.path $kc.aptRefreshAcceptance.sha256) | ConvertFrom-Json
+    if ($pgAcceptance.schema -cne 'otziv-postgres-c51-acceptance-v1' -or $pgAcceptance.result -cne 'PASS' -or
+        $pgAcceptance.reference -cne $target -or $pgAcceptance.imageConfigId -cne $targetConfig -or
+        $pgAcceptance.parentReference -cne $source -or $pgAcceptance.parentConfigId -cne $sourceConfig -or
+        $pgAcceptance.pair.postgres.reference -cne $target -or $pgAcceptance.pair.postgres.imageConfigId -cne $targetConfig -or
+        $pgAcceptance.pair.keycloak.reference -cne $issuer -or $pgAcceptance.pair.keycloak.imageConfigId -cne $issuerConfig -or
+        @(@('commit','run','attempt') | Where-Object { $pgAcceptance.$_ -cne $pg.$_ }).Count -gt 0) {
+        throw 'Invalid accepted PostgreSQL refresh evidence: postgres'
+    }
+    if ($kcAcceptance.schema -cne 'otziv-apt-c48-acceptance-v1' -or $kcAcceptance.result -cne 'PASS' -or
+        $kcAcceptance.component -cne 'keycloak' -or $kcAcceptance.reference -cne $issuer -or
+        $kcAcceptance.imageConfigId -cne $issuerConfig -or
+        @(@('commit','run','attempt') | Where-Object { $kcAcceptance.$_ -cne $kc.$_ }).Count -gt 0) {
+        throw 'Invalid accepted PostgreSQL refresh evidence: keycloak'
+    }
+    $paths += @($pg.postgresC51Acceptance.path, $kc.aptRefreshAcceptance.path)
+    foreach ($map in @($pgAcceptance.files, $pgAcceptance.executedSources, $kcAcceptance.files)) {
+        if ($null -eq $map -or @($map.PSObject.Properties).Count -eq 0) { throw 'Accepted PostgreSQL refresh evidence is incomplete.' }
+        foreach ($file in $map.PSObject.Properties) {
+            $null = Read-OtzivBoundPostgresEvidence $file.Name $file.Value
+            $paths += $file.Name
+        }
+    }
+    return @($paths | Select-Object -Unique)
+}
+
 function Get-OtzivDeployBundlePaths {
     param([Parameter(Mandatory = $true)][string]$Repository,
-        [switch]$CoordinatedMysqlRefresh, [switch]$CoordinatedSslRefresh)
+        [switch]$CoordinatedMysqlRefresh, [switch]$CoordinatedSslRefresh, [switch]$CoordinatedPostgresRefresh)
     $errors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile(
         (Join-Path $Repository 'infrastructure/scripts/prod/deploy-prod.ps1'), [ref]$null, [ref]$errors)
@@ -670,6 +756,7 @@ function Get-OtzivDeployBundlePaths {
     if ($paths.Count -eq 0 -or 'docker-compose.yaml' -notin $paths) { throw 'Deployment inventory is incomplete.' }
     if ($CoordinatedMysqlRefresh) { $paths += @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $Repository) }
     if ($CoordinatedSslRefresh) { $paths += @(Get-OtzivCoordinatedSslBundlePaths -Repository $Repository) }
+    if ($CoordinatedPostgresRefresh) { $paths += @(Get-OtzivCoordinatedPostgresBundlePaths -Repository $Repository) }
     return @($paths | Select-Object -Unique)
 }
 
@@ -679,7 +766,8 @@ function New-OtzivPreparedDeployArchive {
         [Parameter(Mandatory = $true)][string]$Revision,
         [Parameter(Mandatory = $true)][string]$Directory,
         [switch]$CoordinatedMysqlRefresh,
-        [switch]$CoordinatedSslRefresh
+        [switch]$CoordinatedSslRefresh,
+        [switch]$CoordinatedPostgresRefresh
     )
     $stage = Join-Path $Directory 'verified-source'
     if (Test-Path -LiteralPath $stage) { throw 'Prepared source directory already exists.' }
@@ -713,7 +801,8 @@ function New-OtzivPreparedDeployArchive {
         foreach ($item in $manifest.files) { $external[$item.path] = $item }
     }
     $paths = @(Get-OtzivDeployBundlePaths -Repository $Repository `
-        -CoordinatedMysqlRefresh:$CoordinatedMysqlRefresh -CoordinatedSslRefresh:$CoordinatedSslRefresh)
+        -CoordinatedMysqlRefresh:$CoordinatedMysqlRefresh -CoordinatedSslRefresh:$CoordinatedSslRefresh `
+        -CoordinatedPostgresRefresh:$CoordinatedPostgresRefresh)
     $sourcePaths = @($paths | Where-Object { -not $external.ContainsKey($_.Replace('\', '/')) })
     Export-OtzivCommittedDeployBundle -Repository $Repository -Revision $Revision -StageRoot $stage -InputPaths $sourcePaths
     foreach ($path in $paths) {
@@ -738,6 +827,14 @@ function New-OtzivPreparedDeployArchive {
         $stagedMysqlEvidence = @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $stage)
         if (@(Compare-Object -ReferenceObject $expectedMysqlEvidence -DifferenceObject $stagedMysqlEvidence).Count -gt 0) {
             throw 'Staged MySQL cutover evidence changed the accepted deployment inventory.'
+        }
+    }
+    if ($CoordinatedPostgresRefresh) {
+        # The sealed tree must hold the same hash-bound C51/C48 acceptance graph.
+        $expectedPostgresEvidence = @(Get-OtzivCoordinatedPostgresBundlePaths -Repository $Repository)
+        $stagedPostgresEvidence = @(Get-OtzivCoordinatedPostgresBundlePaths -Repository $stage)
+        if (@(Compare-Object -ReferenceObject $expectedPostgresEvidence -DifferenceObject $stagedPostgresEvidence).Count -gt 0) {
+            throw 'Staged PostgreSQL refresh evidence changed the accepted deployment inventory.'
         }
     }
     if ($external.Count -gt 0) {
