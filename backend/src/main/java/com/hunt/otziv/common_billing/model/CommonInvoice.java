@@ -136,6 +136,16 @@ public class CommonInvoice {
     @Column(name = "overdue_notice_at")
     private LocalDateTime overdueNoticeAt;
 
+    /** Extra days granted by a manager before the automatic move to "Не оплачено" (0 = none). */
+    @Column(name = "overdue_extension_days", nullable = false)
+    private int overdueExtensionDays;
+
+    @Column(name = "overdue_extension_by", length = 150)
+    private String overdueExtensionBy;
+
+    @Column(name = "overdue_extension_at")
+    private LocalDateTime overdueExtensionAt;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 

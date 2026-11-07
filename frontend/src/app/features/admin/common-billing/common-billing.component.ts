@@ -44,6 +44,7 @@ import { ManagerOrderCardComponent } from '../../manager/manager-order-card.comp
 import type { ManagerOrderEditDraftChange } from '../../manager/manager-order-edit-modal.component';
 import { ManagerOrderEditModalComponent } from '../../manager/manager-order-edit-modal.component';
 import { CommonManualPaymentAttributionModalComponent } from './common-manual-payment-attribution-modal.component';
+import { CommonInvoiceOverdueTermComponent } from './common-invoice-overdue-term.component';
 import {
   StatusAction,
   managerErrorMessage,
@@ -277,6 +278,7 @@ export function isManualTbankReconciliationRetryError(error: string | null | und
     PaperInvoiceListComponent,
     AdminLayoutComponent,
     CommonManualPaymentAttributionModalComponent,
+    CommonInvoiceOverdueTermComponent,
     DatePipe,
     FormsModule,
     LoadErrorCardComponent,

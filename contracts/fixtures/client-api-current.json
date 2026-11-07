@@ -657,6 +657,18 @@
       "detachBlockedReason" : "contract-example",
       "ordinaryAfterPaperCancel" : false
     },
+    "CommonInvoiceOverdueTermResponseOutput" : {
+      "invoiceId" : 2,
+      "overdueDays" : 2,
+      "extensionDays" : 2,
+      "extensionBy" : "contract-example",
+      "extensionAt" : "2026-09-07T08:00:00",
+      "termStart" : "2026-09-07T08:00:00",
+      "paperDelivery" : false,
+      "automaticMoveNotBefore" : "2026-09-07T08:00:00",
+      "editable" : false,
+      "note" : "contract-example"
+    },
     "CommonInvoicePaymentRefResponseOutput" : {
       "id" : 2,
       "status" : "contract-example",
@@ -4276,6 +4288,9 @@
     },
     "CommonInvoiceManualCardPaymentRequestInput" : {
       "reason" : "contract-example"
+    },
+    "CommonInvoiceOverdueExtensionRequestInput" : {
+      "extensionDays" : 2
     },
     "CommonInvoicePaymentInitCheckRequestInput" : {
       "evidenceToken" : "contract-example"

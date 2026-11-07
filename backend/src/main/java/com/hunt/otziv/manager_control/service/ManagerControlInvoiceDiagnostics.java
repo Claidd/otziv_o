@@ -178,22 +178,59 @@ public class ManagerControlInvoiceDiagnostics {
         commonInvoiceRepository.findManagerOverdueApproachingInvoices(
                         manager, PAYMENT_REMINDER_STATUSES, overdueApproachingSince(now), PageRequest.of(0, 10_000))
                 .stream()
+                // The query is a superset (sent long ago); the term may start later or be extended.
+                .filter(invoice -> overdueApproaching(invoice, now))
                 .filter(invoice -> !overdueOwnedByAutoresponder(invoice, now))
                 .filter(invoice -> !handledAutomatically(invoice, now))
                 .forEach(invoice -> byId.putIfAbsent(invoice.getId(), invoice));
         return List.copyOf(byId.values());
     }
 
-    /** Sent before this moment: the manager notice period before the automatic move has begun. */
+    /** Sent before this moment: the earliest possible start of a notice period (query prefilter). */
     private LocalDateTime overdueApproachingSince(LocalDateTime now) {
         return (now == null ? LocalDateTime.now() : now).minusDays(Math.max(1, paymentOverdueDays() - OVERDUE_NOTICE_DAYS));
     }
 
+    /** The manager notice period before the automatic move has begun for the invoice's current term. */
     private boolean overdueApproaching(CommonInvoice invoice, LocalDateTime now) {
-        return invoice != null
-                && PAYMENT_REMINDER_STATUSES.contains(invoice.getStatus())
-                && invoice.getSentAt() != null
-                && !invoice.getSentAt().isAfter(overdueApproachingSince(now));
+        if (invoice == null || !PAYMENT_REMINDER_STATUSES.contains(invoice.getStatus())) {
+            return false;
+        }
+        LocalDateTime noticePeriodStart = noticePeriodStart(invoice);
+        return noticePeriodStart != null && !noticePeriodStart.isAfter(now == null ? LocalDateTime.now() : now);
+    }
+
+    /**
+     * Start of the payment term, as the autoresponder counts it: the sending, or for a bank paper
+     * invoice the delivery of all its documents (null until then).
+     */
+    private LocalDateTime overdueTermStart(CommonInvoice invoice) {
+        if (invoice == null) {
+            return null;
+        }
+        if (invoice.getInvoicePaymentMode() != InvoicePaymentMode.OWNER_PAPER_INVOICE
+                || overdueNotices == null || invoice.getId() == null) {
+            return invoice.getSentAt();
+        }
+        return overdueNotices.termStart(invoice.getId()).orElse(null);
+    }
+
+    /** End of the term: the overdue days plus the invoice's own extension. */
+    private LocalDateTime overdueDueAt(CommonInvoice invoice) {
+        LocalDateTime start = overdueTermStart(invoice);
+        return start == null ? null
+                : start.plusDays(paymentOverdueDays() + (long) Math.max(0, invoice.getOverdueExtensionDays()));
+    }
+
+    private LocalDateTime noticePeriodStart(CommonInvoice invoice) {
+        LocalDateTime due = overdueDueAt(invoice);
+        return due == null ? null : due.minusDays(OVERDUE_NOTICE_DAYS);
+    }
+
+    private boolean noticedForCurrentTerm(CommonInvoice invoice) {
+        LocalDateTime start = overdueTermStart(invoice);
+        LocalDateTime noticeAt = invoice.getOverdueNoticeAt();
+        return start != null && noticeAt != null && !noticeAt.isBefore(start);
     }
 
     private List<CommonInvoice> findActionInvoiceCandidates(Manager manager) {
@@ -396,18 +433,20 @@ public class ManagerControlInvoiceDiagnostics {
         if (overdueNotices.automaticMoveNotBefore(invoice.getId(), checkTime).isEmpty()) {
             return false;
         }
-        LocalDateTime noticeAt = invoice.getOverdueNoticeAt();
-        if (noticeAt == null || noticeAt.isBefore(invoice.getSentAt())) {
-            LocalDateTime noticePeriodStart = invoice.getSentAt().plusDays(Math.max(1, paymentOverdueDays() - OVERDUE_NOTICE_DAYS));
+        LocalDateTime noticePeriodStart = noticePeriodStart(invoice);
+        if (noticePeriodStart == null) {
+            return false;
+        }
+        if (!noticedForCurrentTerm(invoice)) {
             return noticePeriodStart.plusHours(OVERDUE_AUTOMATION_GRACE_HOURS).isAfter(checkTime);
         }
-        return expectedOverdueMove(invoice, noticeAt).plusHours(OVERDUE_AUTOMATION_GRACE_HOURS).isAfter(checkTime);
+        return expectedOverdueMove(invoice, invoice.getOverdueNoticeAt()).plusHours(OVERDUE_AUTOMATION_GRACE_HOURS).isAfter(checkTime);
     }
 
     private LocalDateTime expectedOverdueMove(CommonInvoice invoice, LocalDateTime noticeAt) {
-        LocalDateTime overdueAt = invoice.getSentAt().plusDays(paymentOverdueDays());
+        LocalDateTime overdueAt = overdueDueAt(invoice);
         LocalDateTime afterNotice = noticeAt.plusDays(OVERDUE_NOTICE_DAYS);
-        return overdueAt.isAfter(afterNotice) ? overdueAt : afterNotice;
+        return overdueAt == null || afterNotice.isAfter(overdueAt) ? afterNotice : overdueAt;
     }
 
     static String autoresponderHoldLabel(String code) {
@@ -422,15 +461,20 @@ public class ManagerControlInvoiceDiagnostics {
     }
 
     private String commonInvoiceOverdueReason(CommonInvoice invoice, LocalDate today) {
-        long unpaidDays = daysSince(invoice.getSentAt().toLocalDate(), today);
-        String head = "Почему в замечаниях: общий счёт не оплачен " + unpaidDays + " дн. после выставления"
-                + (invoice.getPaidKopecks() > 0 ? " (оплачен частично)" : "") + ". ";
+        LocalDateTime termStart = overdueTermStart(invoice);
+        boolean paperTerm = invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE && termStart != null;
+        long unpaidDays = daysSince((termStart == null ? invoice.getSentAt() : termStart).toLocalDate(), today);
+        int extension = Math.max(0, invoice.getOverdueExtensionDays());
+        String head = "Почему в замечаниях: общий счёт не оплачен " + unpaidDays + " дн. после "
+                + (paperTerm ? "доставки бумажного счёта" : "выставления")
+                + (invoice.getPaidKopecks() > 0 ? " (оплачен частично)" : "")
+                + (extension > 0 ? "; отсрочка " + extension + " дн." : "") + ". ";
         java.util.Optional<LocalDateTime> move = overdueNotices == null || invoice.getId() == null
                 ? java.util.Optional.empty()
                 : overdueNotices.automaticMoveNotBefore(invoice.getId(), LocalDateTime.now());
         if (move.isPresent()) {
             LocalDateTime noticeAt = invoice.getOverdueNoticeAt();
-            boolean noticed = noticeAt != null && !noticeAt.isBefore(invoice.getSentAt());
+            boolean noticed = noticedForCurrentTerm(invoice);
             String stalled = !noticed
                     ? "Уведомление о просрочке в группу менеджера не ушло больше суток — проверьте группу менеджера и автоответчик. "
                     : expectedOverdueMove(invoice, noticeAt).plusHours(OVERDUE_AUTOMATION_GRACE_HOURS).isBefore(LocalDateTime.now())
@@ -444,7 +488,8 @@ public class ManagerControlInvoiceDiagnostics {
                     + "Свяжитесь с клиентом; если оплата пришла, отметьте её в «Деталях» счёта.";
         }
         return head + "Автоматического перевода в «Не оплачено» для этого счёта не будет"
-                + (invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE ? " (банковский счёт)"
+                + (invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE && termStart == null
+                        ? " (доставка бумажного счёта не подтверждена)"
                 : invoice.getPaidKopecks() > 0 ? " (есть частичная оплата)"
                 : invoice.getClientReportedAt() != null ? " (клиент сообщил об оплате)" : "")
                 + ". Решение за менеджером: свяжитесь с клиентом, отметьте оплату или переведите счёт "
@@ -517,7 +562,7 @@ public class ManagerControlInvoiceDiagnostics {
         if (isPaperInvoiceDeliveryOverdue(invoice, LocalDateTime.now())) {
             attentionStartedAt = invoice.getSentAt();
         } else if (overdueApproaching(invoice, LocalDateTime.now()) && !hasText(invoice.getLastError())) {
-            attentionStartedAt = invoice.getSentAt().plusDays(Math.max(1, paymentOverdueDays() - OVERDUE_NOTICE_DAYS));
+            attentionStartedAt = noticePeriodStart(invoice);
         }
         return new ManagerControlConcreteItemResponse(
                 null,

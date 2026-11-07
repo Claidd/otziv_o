@@ -287,6 +287,33 @@ class ManagerControlInvoiceDiagnosticsTest {
     }
 
     @Test
+    void aPaperInvoiceCardCountsFromTheDeliveryOfItsDocumentsAndTheExtension() {
+        overdueDays(30);
+        var invoice = invoice(CommonInvoiceStatus.INVOICED, null);
+        invoice.setInvoicePaymentMode(com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        invoice.setSentAt(LocalDateTime.now().minusDays(40)); // sent with ordinary details before the switch
+        invoice.setPaperInvoiceIssuedAt(LocalDateTime.now().minusDays(20)); // documents delivered
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        given(invoice, List.of(position("Выставлен счет", false, true)));
+        var notices = overdueNotices();
+        when(notices.automaticMoveNotBefore(eq(invoice.getId()), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(LocalDateTime.of(2026, 12, 10, 12, 0)));
+
+        when(notices.termStart(invoice.getId())).thenReturn(Optional.of(LocalDateTime.now().minusDays(20)));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).as("delivered 20 days ago: not approaching").isTrue();
+
+        when(notices.termStart(invoice.getId())).thenReturn(Optional.of(LocalDateTime.now().minusDays(28).minusHours(1)));
+        invoice.setOverdueExtensionDays(7);
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).as("a week's extension keeps it off the board").isTrue();
+
+        invoice.setOverdueExtensionDays(0);
+        assertThat(reason(invoice, List.of())).contains("не оплачен 28 дн. после доставки бумажного счёта", "не раньше 10.12.2026");
+        invoice.setOverdueExtensionDays(3);
+        when(notices.termStart(invoice.getId())).thenReturn(Optional.of(LocalDateTime.now().minusDays(32)));
+        assertThat(reason(invoice, List.of())).contains("отсрочка 3 дн.");
+    }
+
+    @Test
     void invoiceTheAutoresponderWillNotMoveIsLeftToTheManagersDecision() {
         overdueDays(30);
         var invoice = invoice(CommonInvoiceStatus.PARTIALLY_PAID, null);

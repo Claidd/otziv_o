@@ -111,7 +111,7 @@ class CommonInvoiceManagerControlMySqlIntegrationTest {
     }
 
     @Test
-    void overdueQueriesFollowTheNoticeCycleAndLeaveBankPaperInvoicesToTheManager() {
+    void overdueQueriesFollowTheNoticeCycleAndLetTheTermDecideForBankPaperInvoices() {
         var manager = new Manager();
         var ids = new java.util.HashMap<String, Long>();
         var now = LocalDateTime.now();
@@ -126,6 +126,14 @@ class CommonInvoiceManagerControlMySqlIntegrationTest {
             var paper = sent(account, CommonInvoiceStatus.INVOICED, now.minusDays(40), null);
             paper.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
             ids.put("paper", paper.getId());
+            // The paper flow holds ordinary reminders; its term (from delivery) is checked in Java.
+            var paperNoticed = sent(account, CommonInvoiceStatus.INVOICED, now.minusDays(45), now.minusDays(3));
+            paperNoticed.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+            paperNoticed.setPaperInvoiceAutomationHold(true);
+            ids.put("paperNoticed", paperNoticed.getId());
+            var heldOrdinary = sent(account, CommonInvoiceStatus.REMINDER, now.minusDays(45), now.minusDays(3));
+            heldOrdinary.setPaperInvoiceAutomationHold(true);
+            ids.put("heldOrdinary", heldOrdinary.getId());
             var partial = sent(account, CommonInvoiceStatus.PARTIALLY_PAID, now.minusDays(40), null);
             partial.setAmountKopecks(500000); partial.setPaidKopecks(100000);
             ids.put("partial", partial.getId());
@@ -135,18 +143,18 @@ class CommonInvoiceManagerControlMySqlIntegrationTest {
         var noticeRows = tx.execute(status -> invoices.findOverdueNoticeCandidates(
                 autoStatuses, now.minusDays(28), PageRequest.of(0, 100)));
         assertThat(noticeRows).extracting(row -> ((CommonInvoice) row[0]).getId())
-                .containsExactlyInAnyOrder(ids.get("due"), ids.get("previousCycle"));
+                .containsExactlyInAnyOrder(ids.get("due"), ids.get("previousCycle"), ids.get("paper"), ids.get("paperNoticed"));
         assertThat(noticeRows).allSatisfy(row -> assertThat(((Number) row[1]).longValue()).isEqualTo(manager.getId()));
 
         var moveIds = tx.execute(status -> invoices.findOverdueEscalationCandidateIds(
                 autoStatuses, now.minusDays(30), now.minusDays(2), PageRequest.of(0, 100)));
-        assertThat(moveIds).containsExactly(ids.get("noticed"));
+        assertThat(moveIds).containsExactlyInAnyOrder(ids.get("noticed"), ids.get("paperNoticed"));
 
         var control = tx.execute(status -> invoices.findManagerOverdueApproachingInvoices(manager,
                 Set.of(CommonInvoiceStatus.INVOICED, CommonInvoiceStatus.REMINDER, CommonInvoiceStatus.PARTIALLY_PAID),
                 now.minusDays(28), PageRequest.of(0, 100)).stream().map(CommonInvoice::getId).toList());
         assertThat(control).containsExactlyInAnyOrder(ids.get("due"), ids.get("previousCycle"), ids.get("noticed"),
-                ids.get("noticedToday"), ids.get("paper"), ids.get("partial"));
+                ids.get("noticedToday"), ids.get("paper"), ids.get("partial"), ids.get("paperNoticed"), ids.get("heldOrdinary"));
     }
 
     private static CommonInvoice sent(CommonBillingAccount account, CommonInvoiceStatus status,

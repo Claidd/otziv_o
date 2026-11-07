@@ -543,9 +543,10 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
     );
 
     /**
-     * Unpaid automatic-route invoices whose current sending cycle has no manager notice yet. Each
-     * row is {@code [CommonInvoice, Long managerId]}; the manager is the account's, else the
-     * invoice company's.
+     * Unpaid invoices that may need a manager notice: ordinary ones without a notice for their
+     * current sending cycle, and every bank paper one (its term starts at the documents' delivery,
+     * which the caller checks). Each row is {@code [CommonInvoice, Long managerId]}; the manager is
+     * the account's, else the invoice company's. The caller applies the term and the extension.
      */
     @Query("""
         SELECT invoice, COALESCE(manager.id, invoiceManager.id)
@@ -555,11 +556,12 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         LEFT JOIN account.invoiceCompany invoiceCompany
         LEFT JOIN invoiceCompany.manager invoiceManager
         WHERE invoice.status IN :statuses
-          AND invoice.invoicePaymentMode <> com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE
-          AND invoice.paperInvoiceAutomationHold = false
+          AND (invoice.invoicePaymentMode = com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE
+               OR invoice.paperInvoiceAutomationHold = false)
           AND invoice.sentAt IS NOT NULL
           AND invoice.sentAt <= :sentBefore
-          AND (invoice.overdueNoticeAt IS NULL OR invoice.overdueNoticeAt < invoice.sentAt)
+          AND (invoice.invoicePaymentMode = com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE
+               OR invoice.overdueNoticeAt IS NULL OR invoice.overdueNoticeAt < invoice.sentAt)
           AND TRIM(COALESCE(invoice.lastError, '')) = ''
           AND TRIM(COALESCE(invoice.paymentSuccessNotificationError, '')) = ''
         ORDER BY invoice.sentAt ASC, invoice.id ASC
@@ -570,13 +572,13 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             Pageable pageable
     );
 
-    /** Noticed invoices whose notice period has passed; the move re-checks each under its lock. */
+    /** Noticed invoices whose notice period has passed; the move re-checks each (term, extension) under its lock. */
     @Query("""
         SELECT invoice.id
         FROM CommonInvoice invoice
         WHERE invoice.status IN :statuses
-          AND invoice.invoicePaymentMode <> com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE
-          AND invoice.paperInvoiceAutomationHold = false
+          AND (invoice.invoicePaymentMode = com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE
+               OR invoice.paperInvoiceAutomationHold = false)
           AND invoice.sentAt IS NOT NULL
           AND invoice.sentAt <= :sentBefore
           AND invoice.overdueNoticeAt IS NOT NULL
