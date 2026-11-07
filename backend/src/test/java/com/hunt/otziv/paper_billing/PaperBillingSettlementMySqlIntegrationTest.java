@@ -76,6 +76,44 @@ class PaperBillingSettlementMySqlIntegrationTest {
         assertTrue(jdbc.queryForObject("SELECT work_next_attempt_at>DATE_ADD(NOW(6),INTERVAL 105 SECOND) FROM paper_invoice_document WHERE id=?",Boolean.class,id));
     }
 
+    private PaperBillingService manualDeliveryService(PaperBillingTargets targets) {
+        return new PaperBillingService(store,targets,new PaperBillingSettings(),mock(PaperBillingBankClient.class),
+                new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
+    }
+    @Test void managerConfirmationClosesAnUnconfirmedFileSendLikeAConfirmedDelivery() {
+        jdbc.update("""
+            UPDATE paper_invoice_document SET stage='FILES_READY',payment_link_id=NULL,message_delivery='SENT',
+            invoice_delivery='UNKNOWN',act_delivery='UNKNOWN',work_failures=2,error_text='Счёт: не подтверждено' WHERE id=?
+            """,id);
+        var targets=mock(PaperBillingTargets.class);var service=manualDeliveryService(targets);
+        var auth=new org.springframework.security.authentication.TestingAuthenticationToken("lika",null,"ROLE_MANAGER");
+        var document=service.confirmManualDelivery(id,auth);
+        assertEquals("WAITING_PAYMENT",document.stage());assertTrue(document.deliveryCompleted());
+        assertEquals("SENT",document.invoiceDelivery());assertEquals("SENT",document.actDelivery());assertEquals("SENT",document.messageDelivery());
+        var row=store.row(id);
+        assertNull(row.get("error_text"));assertNotNull(row.get("delivery_completed_at"));assertEquals(0,((Number)row.get("work_failures")).intValue());
+        var target=new Target("ORDER",42L);
+        verify(targets).company(target,auth);verify(targets).lockDelivery(target);verify(targets).delivered(target,id);
+        assertTrue(jdbc.queryForObject("SELECT body FROM paper_invoice_event WHERE document_id=? AND event_key='manual-delivery'",String.class,id).contains("lika"));
+        // The system never sends these documents again, and a repeated click changes nothing.
+        assertFalse(store.pending().contains(id));assertFalse(store.claimDelivery(id,false));assertFalse(store.claimDelivery(id,true));
+        service.confirmManualDelivery(id,auth);
+        verify(targets,times(1)).delivered(target,id);
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE document_id=? AND event_key='manual-delivery'",Integer.class,id));
+    }
+    @Test void confirmationWaitsForASendInFlightAndNeverTouchesACancellation() {
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',payment_link_id=NULL,message_delivery='SENT',invoice_delivery='SENDING',act_delivery='PENDING' WHERE id=?",id);
+        var targets=mock(PaperBillingTargets.class);var service=manualDeliveryService(targets);
+        var auth=new org.springframework.security.authentication.TestingAuthenticationToken("lika",null,"ROLE_MANAGER");
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.confirmManualDelivery(id,auth));
+        assertEquals("SENDING",store.row(id).get("invoice_delivery"));assertEquals("PENDING",store.row(id).get("act_delivery"));
+        jdbc.update("UPDATE paper_invoice_document SET invoice_delivery='UNKNOWN',cancel_requested_at=NOW(6) WHERE id=?",id);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.confirmManualDelivery(id,auth));
+        var row=store.row(id);
+        assertEquals("UNKNOWN",row.get("invoice_delivery"));assertNull(row.get("delivery_completed_at"));
+        verify(targets,never()).delivered(any(),anyString());
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE document_id=? AND event_key='manual-delivery'",Integer.class,id));
+    }
     @Test void deliveryLeaseExpiresIndependentlyOfPaymentStatusUpdates() {
         jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',invoice_delivery='SENDING',delivery_attempted_at=DATE_SUB(NOW(6),INTERVAL 6 MINUTE),updated_at=NOW(6) WHERE id=?",id);
         store.pending();

@@ -20,6 +20,11 @@ public class PaperBillingController {
     public Document cancel(@PathVariable String id,@RequestBody CancelRequest request,Authentication auth) {
         return cancellation.request(id,request,auth);
     }
+    /** The manager has sent the message, invoice and act by hand; delivery completes as if sent automatically. */
+    @PostMapping("/documents/{id}/manual-delivery")
+    public Document confirmManualDelivery(@PathVariable String id,Authentication auth) {
+        return service.confirmManualDelivery(id,auth);
+    }
     @PostMapping("/{kind}/{targetId}/reconcile")
     public void reconcile(@PathVariable String kind,@PathVariable Long targetId,Authentication auth) {
         service.context(new Target(kind,targetId),auth);

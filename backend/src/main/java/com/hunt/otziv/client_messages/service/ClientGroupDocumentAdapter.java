@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 @Service @RequiredArgsConstructor
 public class ClientGroupDocumentAdapter implements ClientGroupDocumentDelivery {
+    public static final String MAX_UPLOAD_FAILED = "max_upload_failed";
     private final WhatsAppService whatsapp;
     private final TelegramService telegram;
     private final MaxBotClient max;
@@ -21,8 +22,17 @@ public class ClientGroupDocumentAdapter implements ClientGroupDocumentDelivery {
                     .map(id -> ClientMessageSendResult.sent("Telegram",id.toString()))
                     .orElseGet(() -> ClientMessageSendResult.failed("operation_unknown","Telegram не подтвердил доставку"));
         if(destination.startsWith("MAX:")) {
-            var result=max.sendDocumentToChatOnce(Long.parseLong(destination.substring(4)),caption,max.uploadDocument(bytes,filename));
-            return result.confirmed()?ClientMessageSendResult.sent("MAX",result.messageId()):ClientMessageSendResult.failed("operation_unknown","MAX не подтвердил доставку");
+            String upload;
+            try { upload=max.uploadDocument(bytes,filename); }
+            // The file is uploaded before any message: nothing reached the chat, so the send may be repeated.
+            catch(RuntimeException uploadFailed) { return ClientMessageSendResult.failed(MAX_UPLOAD_FAILED,"Файл не загрузился в MAX; сообщение клиенту не отправлялось"); }
+            var result=max.sendDocumentToChatOnce(Long.parseLong(destination.substring(4)),caption,upload);
+            if(result.confirmed()) return ClientMessageSendResult.sent("MAX",result.messageId());
+            if(MaxBotClient.ATTACHMENT_NOT_READY.equals(result.errorCode()))
+                return ClientMessageSendResult.failed(MaxBotClient.ATTACHMENT_NOT_READY,"MAX ещё обрабатывает файл; сообщение не отправлено и будет повторено");
+            if("max_not_configured".equals(result.errorCode()) || "invalid_request".equals(result.errorCode()))
+                return ClientMessageSendResult.failed(result.errorCode(),"MAX не принял файл до отправки");
+            return ClientMessageSendResult.failed("operation_unknown","MAX не подтвердил доставку");
         }
         return ClientMessageSendResult.failed("invalid_request","Канал группы не определён");
     }

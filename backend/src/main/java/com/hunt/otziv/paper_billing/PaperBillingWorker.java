@@ -55,7 +55,10 @@ public class PaperBillingWorker {
                     outcome=result.sent() && result.messageId()!=null?"SENT":ClientMessageDelivery.isKnownUnsent(result)?"PENDING":"UNKNOWN";
                     store.messageDelivery(id,outcome,result.messageId());
                     if(!outcome.equals("SENT")) store.deliveryFailure(id,"Сообщение",result.errorCode(),result.errorMessage());
-                } catch(Exception e) {outcome="UNKNOWN";store.messageDelivery(id,"UNKNOWN",null);}
+                } catch(Exception e) {
+                    outcome="UNKNOWN";store.messageDelivery(id,"UNKNOWN",null);
+                    unconfirmed(id,"Сообщение",e);
+                }
                 if(!outcome.equals("SENT")) return;
             }
             for (boolean act:new boolean[]{false,true}) {
@@ -70,12 +73,18 @@ public class PaperBillingWorker {
                         store.deliveryFailure(id,act?"Акт":"Счёт",result.errorCode(),result.errorMessage());
                         return;
                     }
-                } catch(Exception e) { store.delivery(id,act,"UNKNOWN",null); return; }
+                } catch(Exception e) { store.delivery(id,act,"UNKNOWN",null); unconfirmed(id,act?"Акт":"Счёт",e); return; }
             }
             r=store.row(id);
             if (r.get("invoice_delivery").equals("SENT") && r.get("act_delivery").equals("SENT")) {
                 service.completeDelivery(id);
             }
         }
+    }
+    /** An exception during a send leaves its result unknown: record it where staff and logs can see it. */
+    private void unconfirmed(String id,String label,Exception failure) {
+        log.warn("Paper document {} {} delivery unconfirmed ({})",id,label,failure.getClass().getSimpleName());
+        try { store.deliveryFailure(id,label,"operation_unknown","Отправка прервалась без подтверждения. Если документы отправлены вручную, подтвердите это в окне «Счёт и акт»"); }
+        catch(RuntimeException recordFailed) { log.warn("Paper document {} failure was not recorded ({})",id,recordFailed.getClass().getSimpleName()); }
     }
 }

@@ -30,4 +30,16 @@ class PaperBillingWorkerTest {
         verify(delivery,times(1)).sendIntro(row);verify(delivery,never()).send(any(),anyBoolean());
         assertEquals("UNKNOWN",row.get("message_delivery"));
     }
+    @Test void aSendThatThrowsIsRecordedForStaffAndNeverRepeated() {
+        var store=mock(PaperBillingStore.class);var delivery=mock(PaperBillingDelivery.class);
+        var settings=new PaperBillingSettings();settings.setDeliveryEnabled(true);
+        var row=new HashMap<String,Object>();row.put("stage","FILES_READY");row.put("message_delivery","SENT");
+        row.put("invoice_delivery","PENDING");row.put("act_delivery","PENDING");
+        when(store.row("doc")).thenReturn(row);when(store.claimDelivery("doc",false)).thenReturn(true);
+        when(delivery.send(row,false)).thenThrow(new IllegalStateException("upload interrupted"));
+        new PaperBillingWorker(store,mock(PaperBillingService.class),settings,mock(PaperBillingBankClient.class),delivery,mock(PaperBillingPdfSignature.class)).process("doc");
+        verify(store).delivery("doc",false,"UNKNOWN",null);
+        verify(store).deliveryFailure(eq("doc"),eq("Счёт"),eq("operation_unknown"),contains("вручную"));
+        verify(delivery,never()).send(row,true);
+    }
 }

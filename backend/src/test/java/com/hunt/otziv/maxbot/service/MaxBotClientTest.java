@@ -158,4 +158,57 @@ class MaxBotClientTest {
                 .andRespond(withSuccess("{\"url\":\"https://unknown.example/upload\"}",MediaType.APPLICATION_JSON));
         assertThatThrownBy(() -> client.uploadDocument(new byte[]{1},"offer.txt")).isInstanceOf(IllegalStateException.class);
     }
+    @Test
+    void aFileStillBeingProcessedIsSentAgainAfterGrowingPauses() {
+        var pauses = new java.util.ArrayList<Long>();
+        client.pauseWith(ms -> pauses.add(ms));
+        String notReady = "{\"code\":\"attachment.not.ready\",\"message\":\"Key: errors.process.attachment.file.not.processed\"}";
+        server.expect(requestTo("https://max.fixture/messages?chat_id=91")).andRespond(withBadRequest().body(notReady).contentType(MediaType.APPLICATION_JSON));
+        server.expect(requestTo("https://max.fixture/messages?chat_id=91")).andRespond(withSuccess(notReady, MediaType.APPLICATION_JSON));
+        server.expect(requestTo("https://max.fixture/messages?chat_id=91"))
+                .andRespond(withSuccess("{\"message\":{\"body\":{\"mid\":\"mid.file\"}}}", MediaType.APPLICATION_JSON));
+        assertThat(client.sendDocumentToChatOnce(91L, "Счёт", "upload-token").messageId()).isEqualTo("mid.file");
+        assertThat(pauses).containsExactly(1000L, 2000L);
+    }
+
+    @Test
+    void aFileNeverReadyEndsAsAKnownRefusalWithoutAnUncertainSend() {
+        var pauses = new java.util.ArrayList<Long>();
+        client.pauseWith(ms -> pauses.add(ms));
+        for (int i = 0; i < 5; i++)
+            server.expect(requestTo("https://max.fixture/messages?chat_id=91"))
+                    .andRespond(withSuccess("{\"code\":\"attachment.not.ready\"}", MediaType.APPLICATION_JSON));
+        var result = client.sendDocumentToChatOnce(91L, "Счёт", "upload-token");
+        assertThat(result.errorCode()).isEqualTo(MaxBotClient.ATTACHMENT_NOT_READY);
+        assertThat(pauses).containsExactly(1000L, 2000L, 4000L, 8000L);
+        assertThat(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(
+                com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(result.errorCode(), "x"))).isTrue();
+    }
+
+    @Test
+    void anUncertainFileAnswerIsNeverRepeated() {
+        client.pauseWith(ms -> { throw new AssertionError("no pause for an uncertain answer"); });
+        server.expect(requestTo("https://max.fixture/messages?chat_id=91")).andRespond(withServerError());
+        assertThat(client.sendDocumentToChatOnce(91L, "Счёт", "upload-token").errorCode()).isEqualTo("operation_unknown");
+    }
+
+    @Test
+    void uploadAcceptsMaxMediaHostsAndKeepsTheRussianFileName() {
+        server.expect(requestTo("https://max.fixture/uploads?type=file"))
+                .andRespond(withSuccess("{\"url\":\"https://omu.okcdn.ru/upload.do?sig=fixture\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("https://omu.okcdn.ru/upload.do?sig=fixture")).andExpect(headerDoesNotExist("Authorization"))
+                .andExpect(request -> {
+                    String body = ((org.springframework.mock.http.client.MockClientHttpRequest) request).getBodyAsString(java.nio.charset.StandardCharsets.UTF_8);
+                    assertThat(body).contains("name=\"data\"");
+                    // Raw UTF-8, as browsers send it: the client sees the real Russian file name in MAX.
+                    assertThat(body).contains("filename=\"Счёт на оплату — PB-2.pdf\"");
+                })
+                .andRespond(withSuccess("{\"fileId\":7,\"token\":\"uploaded-file\"}", MediaType.APPLICATION_JSON));
+        assertThat(client.uploadDocument(new byte[]{1, 2}, "Счёт на оплату — PB-2.pdf")).isEqualTo("uploaded-file");
+        assertThat(MaxBotClient.trustedUploadHost(java.net.URI.create("https://fu.oneme.ru/api/upload.do"))).isTrue();
+        assertThat(MaxBotClient.trustedUploadHost(java.net.URI.create("https://oneme.ru.evil.example/upload"))).isFalse();
+        assertThat(MaxBotClient.trustedUploadHost(java.net.URI.create("http://fu.oneme.ru/upload"))).isFalse();
+        assertThat(MaxBotClient.trustedUploadHost(java.net.URI.create("https://user@fu.oneme.ru/upload"))).isFalse();
+        assertThat(MaxBotClient.trustedUploadHost(java.net.URI.create("https://fu.oneme.ru:8443/upload"))).isFalse();
+    }
 }

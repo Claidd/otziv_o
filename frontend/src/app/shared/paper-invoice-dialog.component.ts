@@ -5,7 +5,7 @@ import { VisibilityAwarePoller, backoffDelayMs } from './visibility-aware-poller
 
 export interface PaperTarget { kind: 'ORDER' | 'COMMON_INVOICE' | 'COMMON_PART'; id: number; }
 interface Payer { type: string; name: string; inn: string; kpp: string; address: string; }
-export interface PaperDocument { id: string; number: string; amountKopecks: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; replacementState?: string; replacementError?: string; targetKind?:string;targetId?:number;payer?:Payer;orderIds?:number[]; }
+export interface PaperDocument { id: string; number: string; amountKopecks: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; replacementState?: string; replacementError?: string; targetKind?:string;targetId?:number;payer?:Payer;orderIds?:number[];messageDelivery?:string;deliveryCompleted?:boolean; }
 type Document = PaperDocument;
 export interface Position {orderId:number;companyId:number;companyTitle:string;amountKopecks:number;ready:boolean;paid:boolean;documentId:string|null;}
 interface Choice {id:string;companyId:number;payer:Payer;primary:boolean;version?:number;lastUsedAt?:string;}
@@ -55,6 +55,14 @@ const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
               @if (!d.stage.startsWith('CANCEL')) { <button type="button" (click)="checkPayment()" [disabled]="busy() || d.paidAt !== null">Проверить оплату</button> }
               @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">Сменить способ оплаты</button> }
               </div>
+              @if (canConfirmManualDelivery()) {
+                <form class="manual-delivery" (ngSubmit)="confirmManualDelivery()">
+                  <h3>Отправили документы сами?</h3>
+                  <p class="hint">Если клиент уже получил от вас сообщение, счёт и акт в чате, подтвердите это. Система перестанет отправлять их, отметит доставку и запустит напоминания об оплате. Оплата по-прежнему проверяется по данным банка.</p>
+                  <label class="check"><input name="manualDeliveryConfirmed" type="checkbox" [(ngModel)]="manualDeliveryConfirmed" [disabled]="busy()" /> Подтверждаю: сообщение, счёт № {{ d.number }} и акт отправлены клиенту вручную</label>
+                  <button type="submit" class="primary" [disabled]="busy() || !manualDeliveryConfirmed">Документы отправлены вручную</button>
+                </form>
+              }
               @if (d.stage === 'CANCEL_REQUESTED') { <p class="hint">Проверяем поступления и удаляем оба документа в Точке. Напоминания остановлены. При поступлении денег отмена будет передана на сверку.</p> }
               @if (d.stage === 'CANCEL_REVIEW') { <p role="alert" class="error">Отмена требует ручной сверки. Новый счёт не выпускается, автоматическое закрытие оплаты остановлено.</p> }
               @if (d.stage === 'CANCELLED') {
@@ -125,7 +133,7 @@ const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
     label{display:block;margin:16px 0 6px;font-size:14px;font-weight:600}input,select,textarea{display:block;width:100%;box-sizing:border-box;padding:12px;margin-top:6px;border:1px solid var(--paper-border);border-radius:9px;background:var(--paper-input);color:var(--paper-text);font:inherit}textarea{min-height:70px}
     .check{display:flex;align-items:center;gap:10px;font-weight:400}.check input{width:20px;flex-shrink:0}
     button{padding:12px 16px;border:1px solid var(--paper-border);border-radius:12px;background:var(--paper-button);color:var(--paper-text);cursor:pointer;min-height:48px;min-width:0;max-width:100%;margin:0;font:inherit;line-height:1.35;white-space:normal}button:disabled{opacity:.6;cursor:default}.primary{background:#ba4a25;color:white;border-color:#ba4a25}
-    .danger{background:var(--paper-error-bg);color:var(--paper-error-text);border-color:var(--paper-error-border)}.cancel-form{margin-top:20px;padding-top:12px;border-top:1px solid var(--paper-border)}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #dc8e67;outline-offset:2px}
+    .danger{background:var(--paper-error-bg);color:var(--paper-error-text);border-color:var(--paper-error-border)}.manual-delivery{margin-top:20px;padding-top:12px;border-top:1px solid var(--paper-border)}.manual-delivery button{width:100%}.cancel-form{margin-top:20px;padding-top:12px;border-top:1px solid var(--paper-border)}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #dc8e67;outline-offset:2px}
     .hint{font-size:13px;color:var(--paper-muted);line-height:1.5}.error{padding:12px;border:1px solid var(--paper-error-border);background:var(--paper-error-bg);border-radius:9px;color:var(--paper-error-text)}footer{margin-top:20px;text-align:right}
     @media(max-width:600px){.paper-backdrop{padding:12px;align-items:center}section{padding:24px 20px;max-height:calc(100dvh - 24px)}footer button{width:100%}}
     @media(max-width:360px){.actions{grid-template-columns:1fr}}
@@ -143,6 +151,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   readonly replacement = signal(false);
   cancelReason = '';
   cancelConfirmed = false;
+  manualDeliveryConfirmed = false;
   private lookupTicket = 0;
   private pollTicket = 0;
   private pollFailed = false;
@@ -163,7 +172,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     if (!r) return;
     this.stop(); this.busy.set(false); this.mutating.set(false); ++this.lookupTicket; const ticket = ++this.ticket;
     this.opened.set(true); this.context.set(null); this.error.set(''); this.candidates.set([]); this.confirmed = false;
-    this.cancelForm.set(false);this.replacement.set(false);this.cancelReason='';this.cancelConfirmed=false;
+    this.cancelForm.set(false);this.replacement.set(false);this.cancelReason='';this.cancelConfirmed=false;this.manualDeliveryConfirmed=false;
     this.selectedOrders.set([]);this.selectedChoice='';this.requestKey=crypto.randomUUID();
     this.http.get<Context>(this.path() + '/context').subscribe({
       next: c => {
@@ -275,6 +284,25 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     const ticket=this.beginMutation();if(ticket===null) return;++this.pollTicket;
     this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:true}).subscribe({
       next: document => {if(!this.finishMutation(ticket)) return;++this.pollTicket;this.cancelForm.set(false);this.context.update(c=>c?{...c,document}:c);this.startPolling();},
+      error: e => {if(ticket===this.ticket) this.failure(e);}
+    });
+  }
+  /**
+   * Automatic delivery ran into trouble (an unconfirmed result or a recorded failure) and no send is in
+   * flight: the manager may confirm a manual send. A routine send in progress shows no such offer.
+   */
+  canConfirmManualDelivery(): boolean {
+    const d=this.context()?.document;
+    if(!d || d.paidAt || d.stage !== 'FILES_READY' || d.deliveryCompleted || this.cancelForm()) return false;
+    const states=[d.messageDelivery || 'PENDING', d.invoiceDelivery, d.actDelivery];
+    return !states.includes('SENDING') && states.some(state => state !== 'SENT')
+      && (states.includes('UNKNOWN') || !!d.error);
+  }
+  confirmManualDelivery(): void {
+    const d=this.context()?.document;if(!d || !this.manualDeliveryConfirmed || !this.canConfirmManualDelivery()) return;
+    const ticket=this.beginMutation();if(ticket===null) return;++this.pollTicket;
+    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/manual-delivery',{}).subscribe({
+      next: document => {if(!this.finishMutation(ticket)) return;++this.pollTicket;this.manualDeliveryConfirmed=false;this.context.update(c=>c?{...c,document}:c);this.startPolling();},
       error: e => {if(ticket===this.ticket) this.failure(e);}
     });
   }

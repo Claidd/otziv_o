@@ -80,7 +80,9 @@ public interface ClientMessageDelivery {
                 "draining", "unauthorized", "invalid_request", "payload_too_large", "invalid_json",
                 "invalid_operation_id", "invalid_operation_envelope", "max_not_configured",
                 // Held before any provider call for a new operation (never for a replay).
-                "whatsapp_group_unavailable")
+                "whatsapp_group_unavailable",
+                // MAX: the file never uploaded, or MAX refused the message while it processed the file.
+                "max_upload_failed", "max_attachment_not_ready")
                 .contains(result.errorCode().trim().toLowerCase(java.util.Locale.ROOT));
     }
 }

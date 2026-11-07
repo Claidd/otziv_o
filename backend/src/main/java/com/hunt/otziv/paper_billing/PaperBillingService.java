@@ -201,21 +201,54 @@ public class PaperBillingService {
             var row=store.jdbc().queryForMap("SELECT * FROM paper_invoice_document WHERE id=? FOR UPDATE",id);
             if(row.get("cancel_requested_at")!=null) return;
             if(row.get("delivery_completed_at")!=null) return;
-            if(!"SENT".equals(row.get("message_delivery")) || !"SENT".equals(row.get("invoice_delivery")) || !"SENT".equals(row.get("act_delivery")))
-                throw problem("Доставка сообщения и обоих PDF ещё не подтверждена");
-            if(!Set.of("FILES_READY","WAITING_PAYMENT","PAID").contains(row.get("stage"))) throw problem("Документы требуют сверки");
-            targets.delivered(target,id);
-            if(row.get("payment_link_id")!=null) {
-                int updated=store.jdbc().update("""
-                    UPDATE payment_links SET paper_invoice_issued_at=COALESCE(paper_invoice_issued_at,NOW(6)),
-                    initiated_at=COALESCE(initiated_at,NOW(6)),status=IF(status='CREATED','WAITING_MANUAL_PAYMENT',status)
-                    WHERE id=? AND payment_method='OWNER_PAPER_INVOICE' AND paper_bank_document_id=?
-                    """,row.get("payment_link_id"),id);
-                if(updated!=1) throw problem("Платёжная запись банковского счёта изменилась");
-            }
-            store.jdbc().update("UPDATE paper_invoice_document SET delivery_completed_at=NOW(6),stage=IF(paid_at IS NULL,'WAITING_PAYMENT','PAID'),error_text=NULL,updated_at=NOW(6) WHERE id=?",id);
-            if(target.kind().equals("COMMON_PART") && row.get("paid_at")==null)
-                store.jdbc().update("UPDATE paper_invoice_document SET paper_next_reminder_at=COALESCE(paper_next_reminder_at,?) WHERE id=?",parts.nextReminder(target.id()),id);
+            markDelivered(target,id,row);
         });
+    }
+    /**
+     * A manager sent the message, invoice and act to the client by hand (for example after an
+     * unconfirmed automatic send). The system stops sending them and completes delivery exactly as
+     * for a confirmed automatic send: payment link, waiting for payment and reminders.
+     */
+    public Document confirmManualDelivery(String id,Authentication auth) {
+        var before=authorized(id,auth);
+        var target=new Target((String)before.get("target_kind"),((Number)before.get("target_id")).longValue());
+        String actor=auth==null || auth.getName()==null ? "unknown" : auth.getName();
+        var transaction=new TransactionTemplate(transactions);
+        transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+        transaction.executeWithoutResult(tx -> {
+            targets.lockDelivery(target);
+            var row=store.jdbc().queryForMap("SELECT * FROM paper_invoice_document WHERE id=? FOR UPDATE",id);
+            if(row.get("cancel_requested_at")!=null) throw problem("Счёт отменяется или отменён; подтверждать отправку не нужно");
+            if(row.get("delivery_completed_at")!=null) return;
+            if(!Set.of("FILES_READY","WAITING_PAYMENT","PAID").contains(row.get("stage")))
+                throw problem("Счёт и акт ещё не сформированы в банке. Подтвердить отправку можно после формирования документов");
+            if(List.of("message_delivery","invoice_delivery","act_delivery").stream().anyMatch(column->"SENDING".equals(row.get(column))))
+                throw problem("Система прямо сейчас отправляет документы. Дождитесь результата и обновите окно");
+            store.jdbc().update("""
+                UPDATE paper_invoice_document SET message_delivery='SENT',invoice_delivery='SENT',act_delivery='SENT',
+                work_failures=0,updated_at=NOW(6) WHERE id=?
+                """,id);
+            markDelivered(target,id,store.jdbc().queryForMap("SELECT * FROM paper_invoice_document WHERE id=?",id));
+            store.event(id,"manual-delivery","Бумажный счёт № "+row.get("number")+": "+actor
+                    +" подтвердил(а), что сообщение, счёт и акт отправлены клиенту вручную. Напоминания об оплате запущены.");
+        });
+        return store.document(store.row(id));
+    }
+    private void markDelivered(Target target,String id,Map<String,Object> row) {
+        if(!"SENT".equals(row.get("message_delivery")) || !"SENT".equals(row.get("invoice_delivery")) || !"SENT".equals(row.get("act_delivery")))
+            throw problem("Доставка сообщения и обоих PDF ещё не подтверждена");
+        if(!Set.of("FILES_READY","WAITING_PAYMENT","PAID").contains(row.get("stage"))) throw problem("Документы требуют сверки");
+        targets.delivered(target,id);
+        if(row.get("payment_link_id")!=null) {
+            int updated=store.jdbc().update("""
+                UPDATE payment_links SET paper_invoice_issued_at=COALESCE(paper_invoice_issued_at,NOW(6)),
+                initiated_at=COALESCE(initiated_at,NOW(6)),status=IF(status='CREATED','WAITING_MANUAL_PAYMENT',status)
+                WHERE id=? AND payment_method='OWNER_PAPER_INVOICE' AND paper_bank_document_id=?
+                """,row.get("payment_link_id"),id);
+            if(updated!=1) throw problem("Платёжная запись банковского счёта изменилась");
+        }
+        store.jdbc().update("UPDATE paper_invoice_document SET delivery_completed_at=NOW(6),stage=IF(paid_at IS NULL,'WAITING_PAYMENT','PAID'),error_text=NULL,updated_at=NOW(6) WHERE id=?",id);
+        if(target.kind().equals("COMMON_PART") && row.get("paid_at")==null)
+            store.jdbc().update("UPDATE paper_invoice_document SET paper_next_reminder_at=COALESCE(paper_next_reminder_at,?) WHERE id=?",parts.nextReminder(target.id()),id);
     }
 }
