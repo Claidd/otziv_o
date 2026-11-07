@@ -16,10 +16,14 @@ function identity(route, payload) {
 // the history cursor may move only after enqueue returns. No delivery TTL is used.
 class DurableInboundInbox {
   constructor(directory, { clientId, now = Date.now, since, maxRecords = 100000,
-    maxRecordBytes = 262144, retryBaseMs = 1000, retryMaxMs = 300000, io = fs } = {}) {
+    maxRecordBytes = 262144, retryBaseMs = 1000, retryMaxMs = 300000,
+    throttleDefaultMs = 30000, throttleMaxMs = 300000, io = fs } = {}) {
     this.directory = directory; this.clientId = clientId; this.now = now; this.io = io;
     this.maxRecords = maxRecords; this.maxRecordBytes = maxRecordBytes;
     this.retryBaseMs = retryBaseMs; this.retryMaxMs = retryMaxMs;
+    // A 429 from the receiver pauses the whole drain until this time (see deliverBatch).
+    this.throttleDefaultMs = throttleDefaultMs; this.throttleMaxMs = throttleMaxMs; this.throttledUntil = 0;
+    this.throttledResponses = 0;
     this.records = new Map(); this.acknowledged = new Map(); this.lastOrder = 0; this.healthy = true; this.persistFailures = 0;
     this.historyGaps = new Set(); this.blockedHistoryChats = new Set(); this.historyDiscoveryFailed = false; this.paused = false; this.stopped = false;
     // Per client generation: chats whose history was covered once are never held again.
@@ -133,7 +137,9 @@ class DurableInboundInbox {
       oldestAgeSeconds: records.length ? Math.max(0, (this.now() - records.reduce((oldest, r) => Math.min(oldest, r.createdAt), this.now())) / 1000) : 0,
       persistenceFailures: this.persistFailures, historyGapChats: this.historyGaps.size,
       historyDiscoveryFailed: this.historyDiscoveryFailed, historySince: this.metadata.since, historyPaused: this.paused,
-      historyHeldChats: this.blockedHistoryChats.size, historyCoveredChats: this.historyCoveredChats.size };
+      historyHeldChats: this.blockedHistoryChats.size, historyCoveredChats: this.historyCoveredChats.size,
+      throttledForSeconds: Math.max(0, Math.ceil((this.throttledUntil - this.now()) / 1000)),
+      throttledResponses: this.throttledResponses };
   }
 
   deadLetters() {
@@ -142,7 +148,7 @@ class DurableInboundInbox {
   }
 
   async drain(send, { limit = 50 } = {}) {
-    if (this.running || this.paused || !this.healthy) return;
+    if (this.running || this.paused || !this.healthy || this.now() < this.throttledUntil) return;
     this.running = this.deliverBatch(send, limit);
     try { await this.running; } finally { this.running = null; }
   }
@@ -176,6 +182,16 @@ class DurableInboundInbox {
         while (this.acknowledged.size > 100000 || (this.acknowledged.size && this.acknowledged.values().next().value <= this.now())) {
           this.acknowledged.delete(this.acknowledged.keys().next().value);
         }
+      } else if (status === 429 || (status === 503 && Number(response?.retryAfterMs) > 0)) {
+        // The receiver is rate limiting (after a restart the whole backlog arrives at once). Keep
+        // the record first in line and pause the drain for the requested time instead of sending
+        // the rest of the backlog into the same limit and backing every record off separately.
+        const waitMs = Math.min(this.throttleMaxMs,
+          Math.max(1000, Number(response?.retryAfterMs) || this.throttleDefaultMs));
+        this.throttledUntil = this.now() + waitMs; this.throttledResponses += 1;
+        const throttled = { ...record, lastStatus: status, nextAttemptAt: this.throttledUntil };
+        this.write(`${record.key}.json`, throttled); this.records.set(record.key, throttled);
+        break;
       } else if ([400, 404, 405, 410, 413, 415, 422].includes(status)) {
         const dead = { ...record, status: "DEAD", lastStatus: status };
         this.write(`${record.key}.json`, dead); this.records.set(record.key, dead);

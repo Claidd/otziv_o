@@ -375,3 +375,45 @@ test("a redirect response is not an acknowledgement and stays pending", async t 
   const [record] = inbox.records.values();
   assert.equal(record.attempts, 4); assert.equal(record.lastStatus, 308);
 });
+
+test("a 429 pauses the whole drain for Retry-After and the backlog then arrives in order", async t => {
+  let now = 1000; const { inbox } = fixture(t, { now: () => now });
+  for (let i = 1; i <= 3; i++) inbox.enqueue(route, payload(`m${i}`, i, `group${i}@g.us`));
+  const calls = [];
+  // The receiver accepts the first message, then sheds load for 20 s.
+  await inbox.drain(async (_route, body) => {
+    calls.push(body.messageId);
+    return body.messageId === "m1" ? { status: 200 } : { status: 429, retryAfterMs: 20000 };
+  });
+  assert.deepEqual(calls, ["m1", "m2"]);
+  assert.equal(inbox.snapshot().pending, 2);
+  assert.equal(inbox.snapshot().throttledForSeconds, 20);
+  assert.equal(inbox.snapshot().throttledResponses, 1);
+
+  // Inside the pause nothing is sent, so the limit is not hit again and again.
+  now += 19000;
+  await inbox.drain(async () => { calls.push("during pause"); return { status: 200 }; });
+  assert.deepEqual(calls, ["m1", "m2"]);
+
+  now += 1001;
+  await inbox.drain(async (_route, body) => { calls.push(body.messageId); return { status: 200 }; });
+  assert.deepEqual(calls, ["m1", "m2", "m2", "m3"]);
+  assert.equal(inbox.snapshot().pending, 0);
+  assert.equal(inbox.snapshot().dead, 0);
+});
+
+test("a 429 without Retry-After pauses for the default and a plain 503 keeps the per-record backoff", async t => {
+  let now = 1000; const { inbox } = fixture(t, { now: () => now, throttleDefaultMs: 30000 });
+  inbox.enqueue(route, payload("m1", 1, "a@g.us")); inbox.enqueue(route, payload("m2", 2, "b@g.us"));
+  let sent = 0;
+  await inbox.drain(async () => { sent += 1; return { status: 429 }; });
+  assert.equal(sent, 1);
+  assert.equal(inbox.snapshot().throttledForSeconds, 30);
+  now += 30001;
+  sent = 0;
+  // A 503 without Retry-After is an ordinary failure: every due record is tried, none pauses the drain.
+  await inbox.drain(async () => { sent += 1; return { status: 503 }; });
+  assert.equal(sent, 2);
+  assert.equal(inbox.snapshot().throttledForSeconds, 0);
+  assert.equal(inbox.snapshot().pending, 2);
+});

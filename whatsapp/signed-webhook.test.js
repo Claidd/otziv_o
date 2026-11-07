@@ -43,3 +43,22 @@ test("the configured fetch receives redirect manual", async () => {
   const opaque = createSignedWebhookPoster({ fetchImpl: async () => ({ type: "opaqueredirect", status: 0, body: null }) });
   assert.deepEqual(await opaque("http://backend", "", "/path", {}), { status: 0 });
 });
+
+test("a rate-limited receiver's Retry-After is reported for the inbox pause", async t => {
+  const backend = await server(t, (_req, res) => { res.writeHead(429, { "Retry-After": "17" }); res.end(); });
+  const post = createSignedWebhookPoster({ timeoutMs: 5000 });
+  assert.deepEqual(await post(backend, "fixture-secret", "/webhook/whatsapp-group-reply", { messageId: "m1" }),
+    { status: 429, retryAfterMs: 17000 });
+  const unannounced = await server(t, (_req, res) => { res.writeHead(429); res.end(); });
+  assert.deepEqual(await post(unannounced, "fixture-secret", "/webhook/whatsapp-group-reply", { messageId: "m1" }), { status: 429 });
+});
+
+test("Retry-After accepts delay seconds and HTTP dates and ignores anything else", () => {
+  const { retryAfterMs } = require("./signed-webhook");
+  assert.equal(retryAfterMs("30", 0), 30000);
+  assert.equal(retryAfterMs(new Date(60000).toUTCString(), 0), 60000);
+  assert.equal(retryAfterMs(new Date(0).toUTCString(), 60000), 0);
+  assert.equal(retryAfterMs("soon", 0), undefined);
+  assert.equal(retryAfterMs("-5", 0), undefined);
+  assert.equal(retryAfterMs(undefined, 0), undefined);
+});

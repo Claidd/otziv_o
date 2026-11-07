@@ -2028,6 +2028,39 @@
           }
         },
         {
+          "id": 201,
+          "type": "logs",
+          "title": "Медленные HTTP-запросы и фоновые задачи",
+          "description": "HTTP-запросы дольше 1 с по любому адресу (маршрут без идентификаторов, статус, число и время SQL) и фоновые задачи дольше 30 с (не чаще раза в 15 минут на задачу).",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "expr": "{job=\"backend-file\", service=\"backend\", filename=\"/var/log/otziv-app/app.log\"} |~ \"Slow HTTP request|Slow scheduled task\"",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 94,
+            "w": 24,
+            "h": 8
+          }
+        },
+        {
           "id": 15,
           "type": "logs",
           "title": "Логи Docker",
@@ -2054,7 +2087,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 94,
+            "y": 102,
             "w": 24,
             "h": 8
           }
