@@ -26,14 +26,6 @@ groups:
         annotations:
           summary: "В очереди {{ $labels.queue }} есть новая неотправленная команда"
           description: "Отправка точно не выполнена, повторной рассылки не будет. Карточка возвращена менеджеру; причину видно в карточке или в журнале очереди."
-      - alert: WhatsAppUnlinkedGroupMessage
-        expr: delta(otziv_delivery_queue_jobs{queue="whatsapp_unlinked",state="QUEUED"}[30m]) > 0
-        for: 1m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Сообщение из WhatsApp-группы без привязки к компании"
-          description: "Привяжите группу к компании или проверьте, нужна ли она. Сообщение хранится до 30 дней и будет обработано после привязки."
       - alert: ClientDeliveryLeaseExpired
         expr: otziv_delivery_queue_expired_leases > 0
         for: 5m
