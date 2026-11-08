@@ -97,7 +97,9 @@ public class BotImportService {
             throw badRequest("Файл не выбран");
         }
 
-        List<List<String>> rows = readRows(file);
+        String extension = fileUploadGuard.requireSupportedAccountImportFile(file);
+        boolean textPairs = "txt".equals(extension);
+        List<List<String>> rows = readRows(file, extension);
         int headerRow = 0;
         while (headerRow < rows.size() && !hasContent(rows.get(headerRow))) {
             headerRow++;
@@ -111,7 +113,7 @@ public class BotImportService {
         originRepository.lockImports();
         Long cityOverrideId = validCityOverrideId(cityId);
         LocalDateTime importedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
-        boolean hasHeader = hasHeader(rows.get(headerRow));
+        boolean hasHeader = !textPairs && hasHeader(rows.get(headerRow));
         Map<String, Integer> headers = hasHeader ? headerIndexes(rows.get(headerRow)) : Map.of();
         int firstDataRow = hasHeader ? headerRow + 1 : headerRow;
 
@@ -128,6 +130,12 @@ public class BotImportService {
 
             totalRows++;
             try {
+                if (textPairs) {
+                    String line = row.getFirst();
+                    int separator = line.indexOf(':');
+                    if (separator < 0) throw rowError(index + 1, "ожидается логин:пароль");
+                    row = List.of(line.substring(0, separator).trim(), line.substring(separator + 1));
+                }
                 ImportedBotRow importedRow = toImportedRow(row, hasHeader, headers, index + 1, cityOverrideId);
                 importedRows.add(importedRow);
             } catch (RowImportException exception) {
@@ -212,25 +220,28 @@ public class BotImportService {
         return login.trim().toLowerCase(Locale.ROOT);
     }
 
-    private List<List<String>> readRows(MultipartFile file) {
-        String extension = fileUploadGuard.requireSupportedImportFile(file);
+    private List<List<String>> readRows(MultipartFile file, String extension) {
         try {
-            if ("xlsx".equals(extension) || "xls".equals(extension)) {
-                List<List<String>> rows = readWorkbookRows(file);
-                fileUploadGuard.requireImportRowLimit(rows.size());
-                return rows;
-            }
-
-            if ("csv".equals(extension) || "tsv".equals(extension)) {
-                List<List<String>> rows = readDelimitedRows(file);
-                fileUploadGuard.requireImportRowLimit(rows.size());
-                return rows;
-            }
+            List<List<String>> rows = switch (extension) {
+                case "xls", "xlsx" -> readWorkbookRows(file);
+                case "csv", "tsv" -> readDelimitedRows(file);
+                case "txt" -> readTextLines(file);
+                default -> throw badRequest("Неизвестный формат файла аккаунтов");
+            };
+            fileUploadGuard.requireImportRowLimit(rows.size());
+            return rows;
         } catch (IOException exception) {
             throw badRequest("Файл не удалось прочитать");
         }
+    }
 
-        throw badRequest("Поддерживаются только CSV, TSV, XLS и XLSX");
+    private List<List<String>> readTextLines(MultipartFile file) throws IOException {
+        List<List<String>> rows = new ArrayList<>();
+        decode(file.getBytes()).lines().forEach(line -> {
+            fileUploadGuard.requireImportRowLimit(rows.size() + 1);
+            rows.add(List.of(line));
+        });
+        return rows;
     }
 
     private List<List<String>> readWorkbookRows(MultipartFile file) throws IOException {
@@ -460,15 +471,14 @@ public class BotImportService {
         if (index < 0 || index >= row.size()) {
             return "";
         }
-        return cleanCell(row.get(index));
+        return row.get(index);
     }
 
     private String requiredValue(String value, String field, int rowNumber) {
-        String result = cleanCell(value);
-        if (result.isBlank()) {
+        if (value.isBlank()) {
             throw rowError(rowNumber, field + " обязателен");
         }
-        return result;
+        return value;
     }
 
     private String valueOrDefault(String value, String defaultValue) {
@@ -563,15 +573,15 @@ public class BotImportService {
 
     private String decode(byte[] bytes) {
         try {
-            return StandardCharsets.UTF_8
+            String text = StandardCharsets.UTF_8
                     .newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(bytes))
-                    .toString()
-                    .replace("\uFEFF", "");
+                    .toString();
+            return text.startsWith("\uFEFF") ? text.substring(1) : text;
         } catch (CharacterCodingException exception) {
-            return Charset.forName("windows-1251").decode(ByteBuffer.wrap(bytes)).toString().replace("\uFEFF", "");
+            return Charset.forName("windows-1251").decode(ByteBuffer.wrap(bytes)).toString();
         }
     }
 

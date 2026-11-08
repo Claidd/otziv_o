@@ -15,7 +15,9 @@ import com.hunt.otziv.admin.repository.BotImportOriginRepository.Origin;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.io.ByteArrayOutputStream;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
@@ -243,6 +246,48 @@ class BotImportServiceTest {
 
     private MockMultipartFile csv(String filename, String content) {
         return new MockMultipartFile("file", filename, "text/csv", content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void importsTextPairsLiterallyAndReportsPhysicalLinesAndRepeats() {
+        String password = " p:a;ss,\"w@rd\" ";
+        var file = new MockMultipartFile("file", "accounts.TXT", "text/plain; charset=UTF-8",
+                ("\uFEFFlogin:password\r\n\r\n00123456789:" + password
+                        + "\r\nuser@example.invalid:pass\r\nbroken\r\n:\r\nmissing:\r\n"
+                        + "USER@example.invalid:other").getBytes(StandardCharsets.UTF_8));
+        var result = service.importBots(file, 326L);
+
+        assertThat(result.totalRows()).isEqualTo(7);
+        assertThat(result.added()).isEqualTo(3);
+        assertThat(result.skippedInvalid()).isEqualTo(3);
+        assertThat(result.errors()).anyMatch(error -> error.contains("Строка 5"))
+                .anyMatch(error -> error.contains("Строка 6")).anyMatch(error -> error.contains("Строка 7"));
+        assertThat(result.duplicates()).singleElement().satisfies(duplicate -> {
+            assertThat(duplicate.rowNumber()).isEqualTo(8);
+            assertThat(duplicate.originalRowNumber()).isEqualTo(4);
+            assertThat(duplicate.originalFileName()).isEqualTo("accounts.TXT");
+        });
+        ArgumentCaptor<List<Bot>> saved = ArgumentCaptor.captor();
+        verify(botsRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).extracting(Bot::getLogin)
+                .containsExactly("login", "00123456789", "user@example.invalid");
+        assertThat(saved.getValue().get(1).getPassword()).isEqualTo(password);
+        assertThat(saved.getValue()).allSatisfy(bot -> {
+            assertThat(bot.getBotCity().getId()).isEqualTo(326L);
+            assertThat(bot.getFio()).isEqualTo(DEFAULT_FIO);
+        });
+        var repeat = service.importBots(file);
+        assertThat(repeat.added()).isZero();
+        assertThat(repeat.skippedDuplicates()).isEqualTo(4);
+    }
+
+    @Test
+    void rejectsOversizedTextRowCountBeforeSavingAnything() {
+        var file = new MockMultipartFile("file", "accounts.txt", "text/plain",
+                "\n".repeat(5000).concat("account:test").getBytes(StandardCharsets.UTF_8));
+        assertThatThrownBy(() -> service.importBots(file)).isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("слишком много строк");
+        verify(botsRepository, never()).saveAll(any());
     }
 
     @Test

@@ -328,7 +328,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   <span class="material-icons-sharp">upload_file</span>
                   <div>
                     <strong>Импорт аккаунтов</strong>
-                    <small>CSV, TSV, XLS или XLSX как в веб-версии</small>
+                    <small>TXT, CSV, TSV, XLS, XLSX. В TXT каждая строка имеет вид логин:пароль.</small>
                   </div>
                   <button type="button" (click)="accountImportInput.click()" [disabled]="importing()" aria-label="Выбрать файл">
                     <span class="material-icons-sharp">upload</span>
@@ -338,7 +338,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   #accountImportInput
                   hidden
                   type="file"
-                  accept=".csv,.tsv,.xls,.xlsx"
+                  accept=".txt,.csv,.tsv,.xls,.xlsx"
                   (change)="uploadBotImport($event)"
                 >
                 @if (importing()) {
@@ -1624,7 +1624,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     this.importResult.set(null);
     this.importError.set(null);
     if (!file) {
-      this.importError.set('Выберите CSV или Excel-файл.');
+      this.importError.set('Выберите файл TXT, CSV, TSV, XLS или XLSX.');
       return;
     }
 

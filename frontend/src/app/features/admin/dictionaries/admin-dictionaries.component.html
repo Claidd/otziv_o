@@ -4350,10 +4350,10 @@
         }
 
         <label class="file-picker" [class.has-file]="importFile()">
-          <input type="file" accept=".csv,.tsv,.xls,.xlsx" [disabled]="importing()" (change)="selectBotImportFile($event)">
+          <input type="file" accept=".txt,.csv,.tsv,.xls,.xlsx" [disabled]="importing()" (change)="selectBotImportFile($event)">
           <span class="material-icons-sharp">upload_file</span>
           <strong>{{ importFile()?.name || 'Выбрать файл' }}</strong>
-          <small>CSV, XLS, XLSX</small>
+          <small>TXT, CSV, TSV, XLS, XLSX. В TXT каждая строка имеет вид логин:пароль.</small>
         </label>
 
         @if (importError()) {

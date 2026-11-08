@@ -59,6 +59,16 @@ class FileUploadGuardTest {
     }
 
     @Test
+    void acceptsTextOnlyForAccountImportsAndRejectsBinaryText() {
+        var guard = guard();
+        var text = new MockMultipartFile("file", "accounts.txt", "text/plain", "login:pass".getBytes(StandardCharsets.UTF_8));
+        assertEquals("txt", guard.requireSupportedAccountImportFile(text));
+        assertThrows(ResponseStatusException.class, () -> guard.requireSupportedImportFile(text));
+        var binary = new MockMultipartFile("file", "accounts.txt", "application/octet-stream", new byte[]{1, 0, 1});
+        assertThrows(ResponseStatusException.class, () -> guard.requireSupportedAccountImportFile(binary));
+    }
+
+    @Test
     void rejectsTooManyImportRows() {
         FileUploadGuard guard = guard();
 

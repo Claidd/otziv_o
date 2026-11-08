@@ -82,6 +82,14 @@ public class FileUploadGuard {
     }
 
     public String requireSupportedImportFile(MultipartFile file) {
+        return requireSupportedImportFile(file, false);
+    }
+
+    public String requireSupportedAccountImportFile(MultipartFile file) {
+        return requireSupportedImportFile(file, true);
+    }
+
+    private String requireSupportedImportFile(MultipartFile file, boolean allowAccountText) {
         if (file == null || file.isEmpty()) {
             throw badRequest("Файл не выбран");
         }
@@ -90,8 +98,10 @@ public class FileUploadGuard {
         }
 
         String extension = extension(file.getOriginalFilename());
-        if (!IMPORT_EXTENSIONS.contains(extension)) {
-            throw badRequest("Поддерживаются только CSV, TSV, XLS и XLSX");
+        boolean accountText = allowAccountText && "txt".equals(extension);
+        if (!accountText && !IMPORT_EXTENSIONS.contains(extension)) {
+            throw badRequest(allowAccountText ? "Поддерживаются TXT, CSV, TSV, XLS и XLSX"
+                    : "Поддерживаются только CSV, TSV, XLS и XLSX");
         }
 
         String contentType = file.getContentType();
@@ -107,13 +117,16 @@ public class FileUploadGuard {
         }
 
         byte[] bytes = bytes(file, "Файл не удалось прочитать");
+        if (accountText && looksBinary(bytes, bytes.length)) {
+            throw badRequest("TXT-файл должен содержать текст");
+        }
         if ("xlsx".equals(extension) && !hasZipSignature(bytes)) {
             throw badRequest("XLSX-файл имеет неверную сигнатуру");
         }
         if ("xls".equals(extension) && !hasOleSignature(bytes)) {
             throw badRequest("XLS-файл имеет неверную сигнатуру");
         }
-        if (("csv".equals(extension) || "tsv".equals(extension)) && looksBinary(bytes)) {
+        if (("csv".equals(extension) || "tsv".equals(extension)) && looksBinary(bytes, Math.min(bytes.length, 1024))) {
             throw badRequest("CSV/TSV-файл имеет неверный формат");
         }
 
@@ -285,8 +298,7 @@ public class FileUploadGuard {
                 && (bytes[7] & 0xff) == 0xe1;
     }
 
-    private boolean looksBinary(byte[] bytes) {
-        int limit = Math.min(bytes.length, 1024);
+    private boolean looksBinary(byte[] bytes, int limit) {
         for (int index = 0; index < limit; index++) {
             if (bytes[index] == 0) {
                 return true;

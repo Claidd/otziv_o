@@ -329,7 +329,7 @@ export class AdminAccountsFacade {
 
     const file = this.importFile();
     if (!file || this.importing()) {
-      this.importError.set('Выберите CSV или Excel-файл.');
+      this.importError.set('Выберите файл TXT, CSV, TSV, XLS или XLSX.');
       return;
     }
 
