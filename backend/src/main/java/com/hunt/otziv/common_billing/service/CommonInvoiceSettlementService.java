@@ -93,6 +93,8 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     public static final String STATUS_WAITING_COMMON_INVOICE = "Ожидает общего счета";
 
     static final String STATUS_PUBLIC = "Опубликовано";
+    /** Purpose of the successor that bills a non-paying client after bad reviews. */
+    public static final String BAD_REVIEW_SUCCESSOR_PURPOSE = "BAD_REVIEW_SUCCESSOR";
 
     static final String STATUS_TO_PAY = "Выставлен счет";
 
@@ -2095,6 +2097,9 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         OrderStatus publicStatus = orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC);
         for (CommonInvoiceOrder item : items) {
             if (item == null || item.isPaid() || item.isOrdinaryAfterPaperCancel()) continue;
+            // A bad-review successor bills a client who has not paid: its orders stay "Не оплачено"
+            // until the payment arrives, whoever promotes or sends the invoice.
+            if (item.getInvoice() != null && BAD_REVIEW_SUCCESSOR_PURPOSE.equals(item.getInvoice().getInvoicePurpose())) continue;
             Order order = item == null ? null : item.getOrder();
             if (order == null || STATUS_PUBLIC.equals(statusTitle(order))) {
                 continue;

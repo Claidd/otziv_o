@@ -666,7 +666,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.
 com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.payments.service.PaymentProfileService
 com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy
 com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.payments.service.TbankClient
-com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.bad_reviews.service.BadReviewTaskService
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.config.settings.service.AppSettingService

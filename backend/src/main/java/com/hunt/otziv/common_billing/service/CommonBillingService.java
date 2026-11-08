@@ -343,9 +343,15 @@ public class CommonBillingService {
     }
 
     /**
-     * Creates the immutable predecessor's idempotent live successor.
+     * Creates the immutable predecessor's idempotent live successor. A delivered successor the
+     * client has not paid is closed as "Не оплачено" first, so the client receives the invoice
+     * with the new amount after every completed bad review. Runs in the task's transaction.
      */
     public boolean createBadReviewSupplementSuccessor(Long orderId, Long taskId) {
+        Long delivered = invoiceMembershipWorkflow.deliveredBadReviewSuccessorToSupersede(orderId);
+        if (delivered != null) {
+            invoiceArchiveWorkflow.supersedeUnpaidBadReviewSuccessor(delivered, invoiceMembershipWorkflow::supersedableBadReviewSuccessor);
+        }
         return invoiceMembershipWorkflow.createBadReviewSupplementSuccessor(orderId, taskId);
     }
 

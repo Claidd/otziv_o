@@ -9,7 +9,6 @@ import static com.hunt.otziv.common_billing.service.CommonInvoiceInitializationS
 import static com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoicePresenter.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService.*;
-import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRefResponse;
@@ -90,6 +89,9 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
 
     static final String BAD_REVIEW_SUPPLEMENT_REQUIRED = "bad_review_supplement_required:";
 
+    /** A payment that is confirmed, applied or being initialized makes a delivered successor untouchable. */
+    static final Set<String> SUCCESSOR_SUPERSEDE_BLOCKING_PAYMENT_REF_STATUSES = Set.of(PAYMENT_REF_CONFIRMED, PAYMENT_REF_PREPAID, PAYMENT_REF_APPLYING, PAYMENT_REF_APPLIED, PAYMENT_REF_INIT_PREPARED, PAYMENT_REF_INIT_CONFLICT);
+
     static final String PAYABLE_CHANGE_REQUIRES_SUPPLEMENT = "payable_change_requires_supplement:";
 
     static final String COMMON_INVOICE_ROUTE_ATTACHED_PREFIX = "common_invoice_route_attached; ";
@@ -162,7 +164,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
                 || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
             return true;
         }
-        if (invoice.getStatus() != CommonInvoiceStatus.COLLECTING || invoice.getSentAt() != null || invoice.getClientReportedAt() != null || hasFrozenCommonPaymentRoute(invoice)) {
+        if (!refreshableBadReviewSuccessor(invoice) && (invoice.getStatus() != CommonInvoiceStatus.COLLECTING || invoice.getSentAt() != null || invoice.getClientReportedAt() != null || hasFrozenCommonPaymentRoute(invoice))) {
             if (payableUnchanged(item)) {
                 // Re-created reviews with the same sum do not change what the client was billed.
                 return true;
@@ -279,11 +281,16 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Состав общего счета изменился. Обновите данные и повторите действие");
         }
         boolean unpaidCycle = !item.isPaid() && item.isUnpaid() && (invoice.getStatus() == CommonInvoiceStatus.UNPAID || (invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION && attentionError(invoice).startsWith(BAD_REVIEW_SUPPLEMENT_REQUIRED)));
-        boolean frozenSuccessorCycle = !item.isPaid() && "BAD_REVIEW_SUCCESSOR".equals(invoice.getInvoicePurpose()) && (invoice.getStatus() != CommonInvoiceStatus.COLLECTING || invoice.getSentAt() != null || invoice.getClientReportedAt() != null);
+        boolean refreshableSuccessor = refreshableBadReviewSuccessor(invoice);
+        boolean frozenSuccessorCycle = !item.isPaid() && BAD_REVIEW_SUCCESSOR_PURPOSE.equals(invoice.getInvoicePurpose()) && !refreshableSuccessor;
         if (unpaidCycle || frozenSuccessorCycle) {
             // The delivered common cycle is immutable. Completion is allowed,
             // but a standalone order link is forbidden.
             return CommonPayableChangeDisposition.SUPPLEMENT_REQUIRED;
+        }
+        if (!item.isPaid() && refreshableSuccessor) {
+            // Nobody has seen this successor yet: it goes out with the new amount.
+            return CommonPayableChangeDisposition.REFRESH_CURRENT_INVOICE;
         }
         if (item.isPaid() || invoice.getStatus() != CommonInvoiceStatus.COLLECTING || invoice.getSentAt() != null || invoice.getClientReportedAt() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сумма общего счета уже зафиксирована или содержит платежные признаки. " + "Нужен дополнительный счет либо ручная сверка");
@@ -373,17 +380,18 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         return true;
     }
 
+    /**
+     * Every completed bad review is billed at once: the client gets the invoice with the new
+     * amount after each one, not after the last. Later reviews supersede this successor
+     * (see {@link #supersedableBadReviewSuccessor}). Only an active review recovery holds it back.
+     */
     void promoteBadReviewSuccessorIfReady(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
-        if (invoice == null || !"BAD_REVIEW_SUCCESSOR".equals(invoice.getInvoicePurpose()) || invoice.getStatus() != CommonInvoiceStatus.COLLECTING || items == null || items.isEmpty()) {
+        if (invoice == null || !BAD_REVIEW_SUCCESSOR_PURPOSE.equals(invoice.getInvoicePurpose()) || invoice.getStatus() != CommonInvoiceStatus.COLLECTING || items == null || items.isEmpty()) {
             return;
         }
         boolean stable = items.stream().allMatch(item -> {
             Order order = item.getOrder();
-            if (order == null || order.getId() == null || hasActiveRecovery(item)) {
-                return false;
-            }
-            BadReviewTaskSummary summary = badReviewTaskService.getSummaryForOrder(order.getId());
-            return summary != null && summary.pending() == 0;
+            return order != null && order.getId() != null && !hasActiveRecovery(item);
         });
         if (!stable) {
             return;
@@ -400,6 +408,47 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true) && immediateClientMessagesEnabled()) {
             sendInvoiceAfterCommit(invoice.getId(), false);
         }
+    }
+
+    /**
+     * A bad-review successor nobody has seen yet: not sent, no client report, no payment route,
+     * no paper bank document and no operation in flight. It takes a new amount in place.
+     */
+    boolean refreshableBadReviewSuccessor(CommonInvoice invoice) {
+        return invoice != null && BAD_REVIEW_SUCCESSOR_PURPOSE.equals(invoice.getInvoicePurpose())
+                && (invoice.getStatus() == CommonInvoiceStatus.COLLECTING || invoice.getStatus() == CommonInvoiceStatus.READY)
+                && invoice.getSentAt() == null && invoice.getClientReportedAt() == null
+                && normalize(invoice.getLastError()).isBlank() && normalize(invoice.getPaperBankDocumentId()).isBlank()
+                && !hasFrozenCommonPaymentRoute(invoice);
+    }
+
+    /**
+     * The delivered successor the next bad review replaces, when the client has not paid it: it
+     * closes as "Не оплачено" and a new successor goes out with the new amount. Any trace of
+     * payment (a partial or reported payment, a confirmed bank payment, a paper document or an
+     * operation in flight) keeps the fail-closed manual review instead.
+     */
+    public boolean supersedableBadReviewSuccessor(CommonInvoice invoice) {
+        if (invoice == null || invoice.getId() == null || !BAD_REVIEW_SUCCESSOR_PURPOSE.equals(invoice.getInvoicePurpose())
+                || (invoice.getStatus() != CommonInvoiceStatus.INVOICED && invoice.getStatus() != CommonInvoiceStatus.REMINDER)
+                || invoice.getSentAt() == null || invoice.getPaidKopecks() > 0 || invoice.getClientReportedAt() != null
+                || !normalize(invoice.getLastError()).isBlank() || !normalize(invoice.getPaperBankDocumentId()).isBlank()
+                || paymentRefRepository.existsByInvoice_IdAndStatusIn(invoice.getId(), SUCCESSOR_SUPERSEDE_BLOCKING_PAYMENT_REF_STATUSES)) {
+            return false;
+        }
+        List<CommonInvoiceOrder> active = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId()).stream()
+                .filter(CommonInvoiceOrder::isActiveMembership).toList();
+        return !active.isEmpty() && active.stream().noneMatch(this::hasBadReviewSuccessorPaymentEvidence);
+    }
+
+    /** Id of the order's current delivered successor that a new bad-review amount supersedes, or null. */
+    public Long deliveredBadReviewSuccessorToSupersede(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return null;
+        }
+        CommonInvoice invoice = invoiceOrderRepository.findByOrderIdWithInvoice(orderId)
+                .map(CommonInvoiceOrder::getInvoice).orElse(null);
+        return supersedableBadReviewSuccessor(invoice) ? invoice.getId() : null;
     }
 
     void markBadReviewSupplementAttention(CommonInvoice invoice, Long orderId, Long taskId, String reason) {

@@ -528,6 +528,8 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
 
     long countByStatusAndScheduledDateLessThanEqual(BadReviewTaskStatus status, LocalDate scheduledDate);
 
+    long countByOrder_IdInAndStatusAndScheduledDateLessThan(Collection<Long> orderIds, BadReviewTaskStatus status, LocalDate scheduledDate);
+
     long countByStatusAndScheduledDateLessThanEqualAndWorker(
             BadReviewTaskStatus status,
             LocalDate scheduledDate,

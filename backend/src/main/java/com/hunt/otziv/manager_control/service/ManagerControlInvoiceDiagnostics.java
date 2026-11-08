@@ -56,6 +56,9 @@ public class ManagerControlInvoiceDiagnostics {
     private com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices overdueNotices;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait deliveryWait;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.common_billing.api.CommonInvoiceUnpaidAttention unpaidCycle;
+    private static final String UNPAID_REASON = "Счет переведен в «Не оплачено». Рекомендация: проверьте, нужно ли вернуть позиции в работу или закрыть карточку контроля.";
     private static final int OVERDUE_NOTICE_DAYS = com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices.NOTICE_DAYS;
     /** A reminder the autoresponder holds longer than this has stopped being ordinary waiting. */
     private static final int AUTORESPONDER_WAIT_LIMIT_HOURS = 48;
@@ -173,6 +176,7 @@ public class ManagerControlInvoiceDiagnostics {
         findActionInvoiceCandidates(manager).stream()
                 .filter(invoice -> !paymentRemindersOnSchedule(invoice, now))
                 .filter(invoice -> !handledAutomatically(invoice, now))
+                .filter(invoice -> invoice.getStatus() != CommonInvoiceStatus.UNPAID || unpaidAttention(invoice, now).isPresent())
                 .forEach(invoice -> byId.putIfAbsent(invoice.getId(), invoice));
         // Reminders refresh an ordinary invoice every few days, so the stale rule never sees it.
         commonInvoiceRepository.findManagerOverdueApproachingInvoices(
@@ -255,6 +259,11 @@ public class ManagerControlInvoiceDiagnostics {
         }
         CommonInvoice invoice = commonInvoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        if (invoice.getStatus() == CommonInvoiceStatus.UNPAID) {
+            // "Не оплачено" is a decided state, not an error to repair: the check mark records the
+            // manager's decision (wait for the bad-review cycle, ban or record a payment).
+            return;
+        }
         if (!isCommonInvoiceManagerControlProblem(invoice, LocalDateTime.now())) {
             return;
         }
@@ -294,6 +303,9 @@ public class ManagerControlInvoiceDiagnostics {
             return true;
         }
         CommonInvoiceStatus status = invoice.getStatus();
+        if (status == CommonInvoiceStatus.UNPAID) {
+            return unpaidAttention(invoice, now).isPresent();
+        }
         if (COMMON_INVOICE_CRITICAL_STATUSES.contains(status)) {
             return true;
         }
@@ -362,6 +374,26 @@ public class ManagerControlInvoiceDiagnostics {
                     && paperReminderProgress.remindersOnSchedule(invoice.getId(), staleReminderBefore);
         }
         return invoice.getNextReminderAt() != null && invoice.getNextReminderAt().isAfter(staleReminderBefore);
+    }
+
+    /**
+     * "Не оплачено" is the autoresponder's bad-review cycle (bad reviews on schedule, an invoice
+     * with the new amount after each one). The manager sees it only when billing reports that the
+     * cycle stalled or ended. Without the billing seam or when it fails, the card stays visible.
+     */
+    java.util.Optional<String> unpaidAttention(CommonInvoice invoice, LocalDateTime now) {
+        if (invoice == null || invoice.getStatus() != CommonInvoiceStatus.UNPAID) {
+            return java.util.Optional.empty();
+        }
+        if (unpaidCycle == null || invoice.getId() == null) {
+            return java.util.Optional.of(UNPAID_REASON);
+        }
+        try {
+            return unpaidCycle.attention(invoice.getId(), now == null ? LocalDateTime.now() : now);
+        } catch (RuntimeException unavailable) {
+            log.warn("Unpaid common invoice {} cycle state unavailable: {}", invoice.getId(), unavailable.getClass().getSimpleName());
+            return java.util.Optional.of(UNPAID_REASON);
+        }
     }
 
     /**
@@ -638,7 +670,7 @@ public class ManagerControlInvoiceDiagnostics {
             return "Счет требует ручного разбора. Рекомендация: откройте «Счет», проверьте позиции и выберите подходящее действие в правой панели.";
         }
         if (status == CommonInvoiceStatus.UNPAID) {
-            return "Счет переведен в «Не оплачено». Рекомендация: проверьте, нужно ли вернуть позиции в работу или закрыть карточку контроля.";
+            return unpaidAttention(invoice, LocalDateTime.now()).orElse(UNPAID_REASON);
         }
         if (status == CommonInvoiceStatus.BAN) {
             return "Счет в бане. Рекомендация: проверьте причину блокировки в карточке счета.";

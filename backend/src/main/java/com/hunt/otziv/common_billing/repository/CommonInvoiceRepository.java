@@ -24,6 +24,8 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
 
     boolean existsBySupersedesInvoice_Id(Long invoiceId);
 
+    Optional<CommonInvoice> findFirstBySupersedesInvoice_IdOrderByIdDesc(Long invoiceId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT invoice FROM CommonInvoice invoice WHERE invoice.supersedesInvoice.id = :invoiceId ORDER BY invoice.id DESC")
     List<CommonInvoice> findSuccessorsForUpdate(@Param("invoiceId") Long invoiceId);
