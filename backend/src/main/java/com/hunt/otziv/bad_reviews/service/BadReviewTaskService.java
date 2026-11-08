@@ -60,6 +60,9 @@ public interface BadReviewTaskService {
 
     Map<Long, BadReviewTaskSummary> getSummaryByOrderIds(Collection<Long> orderIds);
 
+    /** New tasks of these orders scheduled before {@code today}: the specialists are behind schedule. */
+    long countOverdueTasks(Collection<Long> orderIds, java.time.LocalDate today);
+
     BigDecimal getPayableSum(Order order);
 
     /** Amounts and task counters from the same fresh read; scoped to this assembly. */

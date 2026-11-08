@@ -880,6 +880,14 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
     }
 
     @Override
+    public long countOverdueTasks(Collection<Long> orderIds, LocalDate today) {
+        if (orderIds == null || orderIds.isEmpty() || today == null) {
+            return 0;
+        }
+        return badReviewTaskRepository.countByOrder_IdInAndStatusAndScheduledDateLessThan(orderIds, BadReviewTaskStatus.NEW, today);
+    }
+
+    @Override
     public Map<Long, BadReviewTaskSummary> getSummaryByOrderIds(Collection<Long> orderIds) {
         if (orderIds == null || orderIds.isEmpty()) {
             return Map.of();

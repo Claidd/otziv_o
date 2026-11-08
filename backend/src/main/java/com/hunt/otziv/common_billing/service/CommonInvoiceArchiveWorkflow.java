@@ -57,7 +57,11 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billing.api.ArchivedCommonInvoiceRevival {
+public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billing.api.ArchivedCommonInvoiceRevival,
+        com.hunt.otziv.common_billing.api.CommonInvoiceUnpaidAttention {
+
+    /** The invoice with the new amount waits for business windows and limits; a day unsent is a stall. */
+    static final int BAD_REVIEW_SUCCESSOR_SEND_GRACE_HOURS = 24;
 
     private final CommonInvoiceBoardWorkflow invoiceBoardWorkflow;
 
@@ -118,6 +122,77 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
         }
         moveLockedInvoiceToUnpaid(invoiceId, invoice, "overdue_unpaid");
         log.info("Common invoice {} moved to Не оплачено after the payment overdue period", invoiceId);
+        return true;
+    }
+
+    /**
+     * "Не оплачено" starts the bad-review cycle: bad reviews on schedule, and after each completed
+     * one an invoice with the new amount ({@link #supersedeUnpaidBadReviewSuccessor}). While it runs
+     * the invoice needs no manager; a reason is returned when the cycle stalls or has ended.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> attention(Long invoiceId, LocalDateTime now) {
+        CommonInvoice invoice = invoiceId == null ? null : invoiceRepository.findById(invoiceId).orElse(null);
+        if (invoice == null || invoice.getStatus() != CommonInvoiceStatus.UNPAID) {
+            return Optional.empty();
+        }
+        LocalDateTime checkTime = now == null ? LocalDateTime.now() : now;
+        List<CommonInvoiceOrder> unpaid = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId).stream()
+                .filter(CommonInvoiceOrder::isActiveMembership)
+                .filter(item -> !item.isPaid() && item.getOrder() != null && item.getOrder().getId() != null)
+                .toList();
+        if (unpaid.isEmpty()) {
+            // The positions moved on to the invoice with the new amount: this one is history,
+            // unless that invoice has not reached the client.
+            return invoiceRepository.findFirstBySupersedesInvoice_IdOrderByIdDesc(invoiceId)
+                    .filter(successor -> successor.getSentAt() == null
+                            && (successor.getStatus() == CommonInvoiceStatus.COLLECTING || successor.getStatus() == CommonInvoiceStatus.READY)
+                            && successor.getCreatedAt() != null
+                            && successor.getCreatedAt().plusHours(BAD_REVIEW_SUCCESSOR_SEND_GRACE_HOURS).isBefore(checkTime))
+                    .map(successor -> "Почему в замечаниях: клиент не оплатил счёт, по нему идут плохие отзывы, но счёт с новой суммой (общий счёт #"
+                            + successor.getId() + ") не отправлен клиенту больше суток. Проверьте паузу и рабочие окна автоответчика, "
+                            + "затем откройте новый счёт в «Деталях» и отправьте его.");
+        }
+        List<Long> orderIds = unpaid.stream().map(item -> item.getOrder().getId()).distinct().toList();
+        java.util.Map<Long, BadReviewTaskSummary> summaries = badReviewTaskService.getSummaryByOrderIds(orderIds);
+        java.util.function.Function<Long, BadReviewTaskSummary> summary = orderId -> summaries.getOrDefault(orderId, BadReviewTaskSummary.empty());
+        long withoutTasks = orderIds.stream().filter(orderId -> summary.apply(orderId).total() == 0).count();
+        if (withoutTasks > 0) {
+            return Optional.of("Почему в замечаниях: счёт в «Не оплачено», но плохие задачи не созданы для заказов: " + withoutTasks
+                    + ". Без них автоответчик не продолжит работу с должником — проверьте опубликованные отзывы этих заказов.");
+        }
+        long overdue = badReviewTaskService.countOverdueTasks(orderIds, checkTime.toLocalDate());
+        if (overdue > 0) {
+            return Optional.of("Почему в замечаниях: клиент не оплатил счёт, а плохие задачи просрочены: " + overdue
+                    + ". Проверьте, почему специалисты их не выполнили; после каждой выполненной задачи клиенту уходит счёт с новой суммой.");
+        }
+        // A failed successor never leaves the task done: it rolls back or turns the invoice into
+        // "требует разбора", so a running cycle with nothing overdue needs no one.
+        boolean running = orderIds.stream().anyMatch(orderId -> summary.apply(orderId).pending() > 0);
+        long done = orderIds.stream().mapToLong(orderId -> summary.apply(orderId).done()).sum();
+        if (!running) {
+            return Optional.of("Почему в замечаниях: плохих задач в работе не осталось (выполнено: " + done + "), оплаты нет. "
+                    + "Решение за менеджером: если оплата пришла, отметьте её; если нет — переведите счёт в «Бан» в «Деталях».");
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The next bad review changes the amount of a delivered successor the client has not paid:
+     * that successor closes as "Не оплачено" by the same business move (its payment link archived,
+     * reminders stopped, orders kept in "Не оплачено"), so the next successor can carry the new
+     * amount. {@code stillSupersedable} rechecks the payment traces under the invoice lock.
+     */
+    @Transactional
+    public boolean supersedeUnpaidBadReviewSuccessor(Long invoiceId, java.util.function.Predicate<CommonInvoice> stillSupersedable) {
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
+        if (invoice == null || stillSupersedable == null || !stillSupersedable.test(invoice)) {
+            return false;
+        }
+        moveLockedInvoiceToUnpaid(invoiceId, invoice, "bad_review_superseded");
+        log.info("Common invoice {} moved to Не оплачено: the next bad review supersedes its amount", invoiceId);
         return true;
     }
 

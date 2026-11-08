@@ -7967,9 +7967,6 @@ class CommonBillingServiceTest {
                 .thenReturn(Optional.empty());
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(sourceItem));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
-        when(badReviewTaskService.getSummaryForOrder(101L)).thenReturn(
-                new BadReviewTaskSummary(1, 0, 1, 0, BigDecimal.valueOf(300), BigDecimal.ZERO)
-        );
         when(invoiceRepository.save(any(CommonInvoice.class))).thenAnswer(invocation -> {
             CommonInvoice saved = invocation.getArgument(0);
             if (saved.getId() == null) {
@@ -7980,6 +7977,8 @@ class CommonBillingServiceTest {
 
         assertTrue(service.createBadReviewSupplementSuccessor(101L, 77L));
 
+        // The invoice goes out after this bad review even though more are scheduled.
+        verify(badReviewTaskService, never()).getSummaryForOrder(any());
         assertEquals(CommonInvoiceStatus.UNPAID, predecessor.getStatus());
         assertFalse(sourceItem.isActiveMembership());
         ArgumentCaptor<Iterable> itemBatches = ArgumentCaptor.forClass(Iterable.class);
@@ -8000,6 +7999,179 @@ class CommonBillingServiceTest {
         assertEquals("Не оплачено", order.getStatus().getTitle());
         verify(orderRepository, never()).save(order);
         verify(entityManager).flush();
+    }
+
+    private CommonInvoice deliveredBadReviewSuccessor(CommonBillingAccount account) {
+        CommonInvoice delivered = invoice(account);
+        delivered.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        delivered.setStatus(CommonInvoiceStatus.INVOICED);
+        delivered.setSentAt(LocalDateTime.now().minusDays(2));
+        delivered.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        return delivered;
+    }
+
+    @Test
+    void nextBadReviewClosesTheUnpaidDeliveredSuccessorAndSendsTheNewAmount() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice delivered = deliveredBadReviewSuccessor(account);
+        Order order = order(101L);
+        order.setStatus(status("Не оплачено"));
+        CommonInvoiceOrder item = item(delivered, order);
+        item.setActiveMembership(true);
+        stubLockedInvoice(delivered, item, order);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(invoiceRepository.findByCycleIdempotencyKeyForUpdate("BAD_REVIEW_SUCCESSOR:10")).thenReturn(Optional.empty());
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1500));
+        when(invoiceRepository.save(any(CommonInvoice.class))).thenAnswer(invocation -> {
+            CommonInvoice saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(11L);
+            }
+            return saved;
+        });
+
+        assertTrue(service.createBadReviewSupplementSuccessor(101L, 78L));
+
+        assertEquals(CommonInvoiceStatus.UNPAID, delivered.getStatus());
+        assertNull(delivered.getNextReminderAt());
+        assertFalse(item.isActiveMembership());
+        verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Не оплачено");
+        ArgumentCaptor<CommonInvoice> saved = ArgumentCaptor.forClass(CommonInvoice.class);
+        verify(invoiceRepository, atLeastOnce()).save(saved.capture());
+        CommonInvoice successor = saved.getAllValues().stream()
+                .filter(invoice -> invoice != delivered).reduce((first, second) -> second).orElseThrow();
+        assertEquals(delivered, successor.getSupersedesInvoice());
+        assertEquals("BAD_REVIEW_SUCCESSOR:10", successor.getCycleIdempotencyKey());
+        assertEquals(CommonInvoiceStatus.READY, successor.getStatus());
+        assertEquals(150_000L, successor.getAmountKopecks());
+        assertEquals("Не оплачено", order.getStatus().getTitle());
+    }
+
+    @Test
+    void deliveredSuccessorWithAReportedPaymentStaysForManualReview() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice delivered = deliveredBadReviewSuccessor(account);
+        delivered.setClientReportedAt(LocalDateTime.now().minusHours(1));
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(delivered, order);
+        item.setActiveMembership(true);
+        stubLockedInvoice(delivered, item, order);
+        when(invoiceRepository.findByCycleIdempotencyKeyForUpdate("BAD_REVIEW_SUCCESSOR:10")).thenReturn(Optional.empty());
+
+        assertTrue(service.createBadReviewSupplementSuccessor(101L, 78L));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, delivered.getStatus());
+        assertTrue(delivered.getLastError().startsWith("bad_review_supplement_required:"));
+        assertTrue(item.isActiveMembership());
+        verify(orderStatusTransitionService, never()).changeStatusForCommonBillingOrder(any(), any());
+    }
+
+    @Test
+    void unsentSuccessorTakesTheNewAmountInPlaceButADeliveredOneNeedsTheNext() {
+        CommonBillingAccount account = account();
+        CommonInvoice successor = invoice(account);
+        successor.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        successor.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(successor, order);
+        item.setActiveMembership(true);
+        stubLockedInvoice(successor, item, order);
+
+        assertEquals(CommonPayableChangeDisposition.REFRESH_CURRENT_INVOICE, service.prepareLinkedOrderPayableChange(101L));
+
+        successor.setStatus(CommonInvoiceStatus.INVOICED);
+        successor.setSentAt(LocalDateTime.now().minusHours(3));
+        assertEquals(CommonPayableChangeDisposition.SUPPLEMENT_REQUIRED, service.prepareLinkedOrderPayableChange(101L));
+    }
+
+    @Test
+    void successorPositionsKeepTheirUnpaidOrdersWhenTheInvoiceIsPromoted() {
+        CommonBillingAccount account = account();
+        CommonInvoice successor = invoice(account);
+        successor.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        Order order = order(101L);
+        order.setStatus(status("Не оплачено"));
+        CommonInvoiceOrder item = item(successor, order);
+        CommonInvoiceSettlementService settlement =
+                (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+
+        settlement.markInvoiceOrdersPublished(List.of(item));
+
+        assertEquals("Не оплачено", order.getStatus().getTitle());
+        verify(orderRepository, never()).save(order);
+    }
+
+    private CommonInvoiceArchiveWorkflow archiveWorkflow() {
+        return (CommonInvoiceArchiveWorkflow) ReflectionTestUtils.getField(service, "invoiceArchiveWorkflow");
+    }
+
+    private CommonInvoice unpaidWithPositions(CommonInvoiceOrder... positions) {
+        CommonInvoice unpaid = invoice(account());
+        unpaid.setStatus(CommonInvoiceStatus.UNPAID);
+        when(invoiceRepository.findById(10L)).thenReturn(Optional.of(unpaid));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(positions));
+        return unpaid;
+    }
+
+    private CommonInvoiceOrder unpaidPosition(long orderId, boolean active) {
+        CommonInvoiceOrder position = item(invoice(account()), order(orderId));
+        position.setActiveMembership(active);
+        position.setUnpaid(true);
+        return position;
+    }
+
+    private BadReviewTaskSummary tasks(int pending, int done) {
+        return new BadReviewTaskSummary(pending + done, pending, done, 0, BigDecimal.valueOf(200L * done), BigDecimal.valueOf(200L * pending));
+    }
+
+    @Test
+    void unpaidInvoiceNeedsNoManagerWhileItsBadReviewsRunOnSchedule() {
+        unpaidWithPositions(unpaidPosition(101L, true));
+        when(badReviewTaskService.getSummaryByOrderIds(List.of(101L))).thenReturn(Map.of(101L, tasks(11, 1)));
+        when(badReviewTaskService.countOverdueTasks(eq(List.of(101L)), any())).thenReturn(0L);
+
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).isEmpty());
+    }
+
+    @Test
+    void overdueBadReviewsBringTheUnpaidInvoiceBack() {
+        unpaidWithPositions(unpaidPosition(101L, true));
+        when(badReviewTaskService.getSummaryByOrderIds(List.of(101L))).thenReturn(Map.of(101L, tasks(11, 1)));
+        when(badReviewTaskService.countOverdueTasks(eq(List.of(101L)), any())).thenReturn(2L);
+
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).orElseThrow().contains("просрочены: 2"));
+    }
+
+    @Test
+    void unpaidInvoiceWithoutBadReviewsOrWithTheCycleFinishedNeedsTheManager() {
+        unpaidWithPositions(unpaidPosition(101L, true));
+        when(badReviewTaskService.getSummaryByOrderIds(List.of(101L))).thenReturn(Map.of());
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).orElseThrow().contains("не созданы"));
+
+        when(badReviewTaskService.getSummaryByOrderIds(List.of(101L))).thenReturn(Map.of(101L, tasks(0, 12)));
+        when(badReviewTaskService.countOverdueTasks(eq(List.of(101L)), any())).thenReturn(0L);
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).orElseThrow().contains("«Бан»"));
+    }
+
+    @Test
+    void supersededUnpaidInvoiceReturnsOnlyWhenTheNewAmountDidNotReachTheClient() {
+        unpaidWithPositions(unpaidPosition(101L, false));
+        CommonInvoice successor = invoice(account());
+        successor.setId(11L);
+        successor.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        successor.setStatus(CommonInvoiceStatus.READY);
+        successor.setCreatedAt(LocalDateTime.now().minusHours(3));
+        when(invoiceRepository.findFirstBySupersedesInvoice_IdOrderByIdDesc(10L)).thenReturn(Optional.of(successor));
+
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).isEmpty());
+
+        successor.setCreatedAt(LocalDateTime.now().minusHours(30));
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).orElseThrow().contains("не отправлен клиенту больше суток"));
+
+        successor.setStatus(CommonInvoiceStatus.INVOICED);
+        successor.setSentAt(LocalDateTime.now().minusHours(29));
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).isEmpty());
+        verifyNoInteractions(badReviewTaskService);
     }
 
     @Test

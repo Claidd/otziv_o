@@ -454,6 +454,45 @@ class ManagerControlInvoiceDiagnosticsTest {
         return progress;
     }
 
+    @Test
+    void unpaidInvoiceWhoseBadReviewCycleRunsLeavesTheBoardAndCanBeClosed() {
+        var unpaid = invoice(CommonInvoiceStatus.UNPAID, null);
+        given(unpaid, List.of(position("Не оплачено", false, false)));
+        var cycle = mock(com.hunt.otziv.common_billing.api.CommonInvoiceUnpaidAttention.class);
+        when(cycle.attention(eq(unpaid.getId()), any())).thenReturn(Optional.empty());
+        ReflectionTestUtils.setField(diagnostics, "unpaidCycle", cycle);
+
+        assertThat(diagnostics.resolvedForAudit(unpaid.getId())).isTrue();
+        assertThatCode(() -> diagnostics.requireResolved(unpaid.getId())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void stalledUnpaidCycleStaysWithItsReasonAndTheCheckMarkRecordsTheDecision() {
+        var unpaid = invoice(CommonInvoiceStatus.UNPAID, null);
+        given(unpaid, List.of(position("Не оплачено", false, true)));
+        var cycle = mock(com.hunt.otziv.common_billing.api.CommonInvoiceUnpaidAttention.class);
+        when(cycle.attention(eq(unpaid.getId()), any()))
+                .thenReturn(Optional.of("Почему в замечаниях: клиент не оплатил счёт, а плохие задачи просрочены: 2."));
+        ReflectionTestUtils.setField(diagnostics, "unpaidCycle", cycle);
+
+        assertThat(diagnostics.resolvedForAudit(unpaid.getId())).isFalse();
+        assertThat(reason(unpaid, List.of())).contains("плохие задачи просрочены: 2")
+                .doesNotContain("закрыть карточку контроля");
+        assertThatCode(() -> diagnostics.requireResolved(unpaid.getId())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void unavailableCycleStateKeepsTheUnpaidCardVisible() {
+        var unpaid = invoice(CommonInvoiceStatus.UNPAID, null);
+        given(unpaid, List.of());
+        var cycle = mock(com.hunt.otziv.common_billing.api.CommonInvoiceUnpaidAttention.class);
+        when(cycle.attention(eq(unpaid.getId()), any())).thenThrow(new IllegalStateException("database unavailable"));
+        ReflectionTestUtils.setField(diagnostics, "unpaidCycle", cycle);
+
+        assertThat(diagnostics.resolvedForAudit(unpaid.getId())).isFalse();
+        assertThat(reason(unpaid, List.of())).contains("«Не оплачено»");
+    }
+
     private void overdueDays(int days) {
         when(settings.getInt(eq(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS), anyInt())).thenReturn(days);
     }
