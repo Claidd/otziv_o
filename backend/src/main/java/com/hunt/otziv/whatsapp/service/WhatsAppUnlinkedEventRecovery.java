@@ -15,6 +15,7 @@ public class WhatsAppUnlinkedEventRecovery {
     private final WhatsAppUnlinkedEventStore store;
     private final GroupReplyService replies;
     private final PlatformTransactionManager transactions;
+    private final WhatsAppUnlinkedGroupNotifier notices;
 
     @Scheduled(fixedDelayString="${whatsapp.webhook.unlinked-recovery-delay-ms:60000}",initialDelay=60000)
     @Transactional(propagation=Propagation.NOT_SUPPORTED)
@@ -35,6 +36,13 @@ public class WhatsAppUnlinkedEventRecovery {
                 store.postponeFailed(key);
                 log.warn("Unlinked WhatsApp event recovery deferred: exceptionType={}",failure.getClass().getSimpleName());
             }
+        }
+        // After the replay: a message whose group got linked meanwhile is already completed and never announced.
+        try {
+            int announced=notices.notifyDue();
+            if(announced>0) log.info("Announced {} unlinked WhatsApp groups to the admin chats",announced);
+        } catch(RuntimeException failure) {
+            log.warn("Unlinked WhatsApp group notices failed: exceptionType={}",failure.getClass().getSimpleName());
         }
     }
 }

@@ -519,6 +519,23 @@ public class WhatsAppGroupCompanyLinker {
         return previous[second.length()] <= threshold;
     }
 
+    /** Normalized company titles a group name may refer to: each comma part, with and without service prefixes. */
+    public static List<String> titleCandidates(String groupName) {
+        if (!hasText(groupName)) {
+            return List.of();
+        }
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        for (String part : groupTitleParts(groupName)) {
+            candidates.addAll(groupTitlePartCandidates(part));
+        }
+        return new ArrayList<>(candidates);
+    }
+
+    /** The company-title normalization that group-name matching uses. */
+    public static String normalizedTitle(String title) {
+        return normalizeTitle(title);
+    }
+
     private static List<String> groupTitlePartCandidates(String rawPart) {
         LinkedHashSet<String> candidates = new LinkedHashSet<>();
         String title = normalizeTitle(rawPart);

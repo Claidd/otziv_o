@@ -1916,6 +1916,30 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         adminChatIds.forEach(chatId -> sendMessage(chatId, text, "Markdown"));
     }
 
+    /** Admin alerts can leave at all: sending is on, the bot token is valid and an admin chat is configured. */
+    public boolean canSendAdminAlerts() {
+        return sendingEnabled && looksLikeTelegramBotToken(getBotToken()) && !adminChatIds.isEmpty();
+    }
+
+    /**
+     * An HTML alert (dynamic values escaped by the caller) to every admin chat. True when at least one
+     * chat accepted it: the caller keeps the alert pending otherwise and retries it later.
+     */
+    public boolean sendHtmlAlertToAdmins(String html) {
+        if (!canSendAdminAlerts()) {
+            return false;
+        }
+        boolean sent = false;
+        for (Long chatId : adminChatIds) {
+            try {
+                sent = sendMessage(chatId, html, "HTML") || sent;
+            } catch (RuntimeException failure) {
+                log.warn("Telegram-алерт не отправлен chatId={}: {}", chatId, failure.getClass().getSimpleName());
+            }
+        }
+        return sent;
+    }
+
     protected User authUserInTelegramBot(long chatId, String messageText) {
         Optional<User> optionalUserByChatId = userService.findByChatId(chatId);
 
