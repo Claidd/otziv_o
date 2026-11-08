@@ -1,10 +1,13 @@
 """Read immutable Actions artifacts without forwarding GitHub credentials to storage."""
 import hashlib
+import http.client
 import json
 from pathlib import Path
 import re
 import shutil
 import stat
+import sys
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
@@ -56,12 +59,35 @@ def extract_files(archive, output, expected):
             require(target.stat().st_size == member.file_size, 'Incomplete artifact member')
 
 
+# Pauses before repeating a GitHub read whose connection was lost (as release_ci does).
+RETRY_DELAYS = (1, 2, 4)
+LOST_CONNECTION = (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException, json.JSONDecodeError)
+
+
 class Client:
-    def __init__(self, repo):
+    def __init__(self, repo, sleep=time.sleep):
         self.token = github_token(repo)
         self.opener = urllib.request.build_opener(NoFollow())
+        self.sleep = sleep
+
+    def attempts(self, method, action):
+        """Repeat only a read that got no answer; an HTTP answer (including the deliberate
+        storage redirect) and any write are returned or raised exactly once."""
+        for delay in RETRY_DELAYS + (None,):
+            try:
+                return action()
+            except urllib.error.HTTPError:
+                raise
+            except LOST_CONNECTION as error:
+                if method != 'GET' or delay is None:
+                    raise
+                print(f'GitHub read lost its connection ({type(error).__name__}); retrying in {delay} s', file=sys.stderr)
+                self.sleep(delay)
 
     def request(self, path, method='GET', body=None):
+        return self.attempts(method, lambda: self.open(path, method, body))
+
+    def open(self, path, method='GET', body=None):
         require(path.startswith('/') and not re.search(r'[\r\n#\\]', path) and '..' not in path.split('/'), 'Invalid GitHub path')
         headers = {'Authorization': 'Bearer ' + self.token, 'Accept': 'application/vnd.github+json',
                    'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'otziv-ci-release'}
@@ -71,10 +97,12 @@ class Client:
         return self.opener.open(urllib.request.Request(API + path, data=data, method=method, headers=headers), timeout=60)
 
     def get(self, path, method='GET', body=None):
-        with self.request(path, method, body) as response:
-            data = response.read(4 * 1024**2 + 1)
-            require(len(data) <= 4 * 1024**2, 'GitHub response too large')
-            return json.loads(data)
+        def read():
+            with self.open(path, method, body) as response:
+                data = response.read(4 * 1024**2 + 1)
+                require(len(data) <= 4 * 1024**2, 'GitHub response too large')
+                return json.loads(data)
+        return self.attempts(method, read)
 
     def artifacts(self, run_id):
         return pages(self.get, f'/actions/runs/{int(run_id)}/artifacts', 'artifacts')
