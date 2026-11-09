@@ -24,14 +24,10 @@ export function commonManualPaymentDraftAfterRouteRefresh(
   receiptUrl: string,
   newRowKey: () => string
 ): CommonManualPaymentRouteRefreshDraft {
-  const defaultRecipient = options.candidates.find(candidate => candidate.key === options.defaultRecipientKey);
-  if (options.remainingKopecks > 0 && !defaultRecipient) {
-    throw new Error('Исходный получатель отсутствует в безопасном списке. Оплата не изменена.');
-  }
   return {
-    rows: defaultRecipient && options.remainingKopecks > 0 ? [{
+    rows: options.remainingKopecks > 0 ? [{
       rowKey: newRowKey(),
-      recipientKey: defaultRecipient.key,
+      recipientKey: '',
       amountRubles: (options.remainingKopecks / 100).toFixed(2).replace('.', ',')
     }] : [],
     reason,

@@ -1,5 +1,7 @@
 package com.hunt.otziv.paper_billing;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import static com.hunt.otziv.paper_billing.PaperBillingModels.*;
 import com.hunt.otziv.common_billing.api.BankPaperInvoices;
 import com.hunt.otziv.manager.api.PaymentReviewOrderAccess;
@@ -60,6 +62,11 @@ public class PaperBillingTargets {
         if(isPart(target)) {parts.resumeOrdinaryInvoice(target.id());return;}
         if(target.kind().equals("ORDER")) orders.resumeOrdinaryInvoice(target.id());
         else common.resumeOrdinaryInvoice(target.id());
+    }
+    public void resumeOrdinaryInvoice(Target target, InvoicePaymentMode mode) {
+        if (isPart(target)) parts.resumeOrdinaryInvoice(target.id(), mode);
+        else if (target.kind().equals("ORDER")) orders.resumeOrdinaryInvoice(target.id(), mode);
+        else common.resumeOrdinaryInvoice(target.id(), mode);
     }
     public long previewAmount(Target target) {
         if(isPart(target)) return parts.read(target.id()).amountKopecks();

@@ -63,6 +63,11 @@ public class ManualPaymentTaskLedgerService {
     }
 
     public Optional<ManualPaymentTaskRouteSnapshot> reserveFirst(ManualPaymentTaskReserveCommand command) {
+        return reserveFirst(command, ManualPaymentTaskRoutingFilter.ANY);
+    }
+
+    @Transactional
+    public Optional<ManualPaymentTaskRouteSnapshot> reserveFirst(ManualPaymentTaskReserveCommand command, ManualPaymentTaskRoutingFilter filter) {
         requireReserveCommand(command);
         String reservationKey = reservationKey(command.source());
         Optional<ManualPaymentTaskLedgerEntry> replay = ledgerRepository.findReservation(reservationKey);
@@ -84,6 +89,7 @@ public class ManualPaymentTaskLedgerService {
         }
 
         for (ManualPaymentTask task : candidates) {
+            if (!filter.allows(task)) continue;
             ManualPaymentTaskBalance balance = balance(task.getId());
             long projected = addExact(balance.occupiedAmountKopecks(), command.amountKopecks());
             if (projected > task.getTargetAmountKopecks()) {
@@ -94,9 +100,8 @@ public class ManualPaymentTaskLedgerService {
             }
             ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot beforeCommitment =
                     capacityService.snapshot(task, balance);
-            if (beforeCommitment.profileId() != null) {
-                capacityService.validateReservationIntent(
-                        task, balance, command.amountKopecks());
+            if (beforeCommitment.profileId() != null && !capacityService.canReserve(task, balance, command.amountKopecks())) {
+                continue;
             }
             ManualPaymentTaskLedgerEntry entry = newEntry(
                     task,

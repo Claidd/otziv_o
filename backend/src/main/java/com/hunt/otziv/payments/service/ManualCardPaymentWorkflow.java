@@ -169,8 +169,14 @@ public class ManualCardPaymentWorkflow {
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AdminPaymentLinkResponse confirmPaidByManualCardTransferForOrder(Long orderId, boolean recipientStatementChecked, boolean paymentReceived, Long receivedAmountKopecks, String note, String receiptUrl, String actor, Authentication authentication) {
+        return confirmPaidByManualCardTransferForOrder(orderId, recipientStatementChecked, paymentReceived, receivedAmountKopecks,
+                note, receiptUrl, null, null, null, actor, authentication);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public AdminPaymentLinkResponse confirmPaidByManualCardTransferForOrder(Long orderId, boolean recipientStatementChecked, boolean paymentReceived, Long receivedAmountKopecks, String note, String receiptUrl, ContractorRecipientType recipientType, Long recipientProfileId, String recipientKey, String actor, Authentication authentication) {
         OrderManualCardRoute route = selectManualCardPaymentRouteForOrder(orderId, authentication);
-        return confirmPaidByManualCardTransfer(route.linkId(), recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl, null, null, null, actor, authentication);
+        return confirmPaidByManualCardTransfer(route.linkId(), recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl, recipientType, recipientProfileId, recipientKey, actor, authentication);
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -289,7 +295,7 @@ public class ManualCardPaymentWorkflow {
                 "Текущая оплата, сумма или получатель заказа изменились; обновите заказ и проведите сверку исходного платежа");
     }
 
-    private void requireCurrentManualCardRouteAmount(Order order, PaymentLink link) {
+    void requireCurrentManualCardRouteAmount(Order order, PaymentLink link) {
         if (isCompletedManualCardPayment(link)) {
             return;
         }
@@ -380,6 +386,12 @@ public class ManualCardPaymentWorkflow {
         Long orderId = initialSnapshot.getOrder() == null ? null : initialSnapshot.getOrder().getId();
         if (orderId == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
+        }
+        if (!isCompletedManualCardPayment(initialSnapshot) && !signedOwnerApproval
+                && (initialSnapshot.getPaymentMethod() == PaymentMethod.BANK_FORM || initialSnapshot.getPaymentMethod() == PaymentMethod.SBP_QR)
+                && (requestedRecipientType == ContractorRecipientType.OWNER || "OWNER".equals(requestedRecipientKey)
+                    || (requestedRecipientType == null && normalize(requestedRecipientKey).isBlank()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Поступление владельцу по банковской ссылке подтверждает банк");
         }
         requireManualCardProviderEligibility(initialSnapshot);
         reconcileLegacyTerminalBankRoutesForManualCardPayment(orderId, authentication);
@@ -636,6 +648,10 @@ public class ManualCardPaymentWorkflow {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
+    boolean legacyOwnerAccounting() {
+        return !actualPaymentAttributionService.actualRecipientAccountingEnabled();
+    }
+
     void freezeActualRecipientIntentIfRequired(Order order, PaymentLink link, ContractorRecipientType requestedRecipientType, Long requestedRecipientProfileId, String requestedRecipientKey, String reason, String receiptUrl, String actor) {
         requireHistoricalPreCutoverManualCardSelectionIfNeeded(link, requestedRecipientKey);
         if (isHistoricalPreCutoverManualCardSettlement(link, requestedRecipientKey)) {

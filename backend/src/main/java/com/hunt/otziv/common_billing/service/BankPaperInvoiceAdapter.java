@@ -1,5 +1,7 @@
 package com.hunt.otziv.common_billing.service;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import com.hunt.otziv.common_billing.api.BankPaperInvoices;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import java.security.Principal;
@@ -96,13 +98,18 @@ public class BankPaperInvoiceAdapter implements BankPaperInvoices {
     }
     @Transactional
     public void resumeOrdinaryInvoice(long id) {
+        resumeOrdinaryInvoice(id, InvoicePaymentMode.AUTO_ROUTING);
+    }
+
+    @Transactional
+    public void resumeOrdinaryInvoice(long id, InvoicePaymentMode mode) {
         var invoice=delivery.lockedInvoiceAfterStandalonePaymentPrelude(id).invoice();
         if(invoice.isPaperInvoiceReviewHold() || !invoice.isPaperInvoiceAutomationHold()
                 || !CommonInvoiceRouteState.isOwnerPaperInvoice(invoice) || invoice.getPaidKopecks()!=0
                 || invoice.getPaperBankDocumentId()!=null || invoice.getPaperInvoiceIssuedAt()!=null
                 || invoice.getStatus()!=com.hunt.otziv.common_billing.model.CommonInvoiceStatus.READY)
             throw problem("Общий счёт изменился или требует сверки перед новым счётом");
-        invoice.useAutomaticInvoicePaymentMode();
+        invoice.setInvoicePaymentMode(mode);
         invoice.setPaperInvoiceAutomationHold(false);
         invoice.setLastError(CommonInvoiceDeliveryService.PAYMENT_ROUTE_CHANGED_MESSAGE_PENDING);
         invoices.save(invoice);

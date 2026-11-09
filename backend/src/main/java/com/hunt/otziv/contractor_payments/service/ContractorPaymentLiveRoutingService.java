@@ -674,10 +674,31 @@ public class ContractorPaymentLiveRoutingService {
         return reserveForPaymentLink(link, PaymentLinkRoutePreference.CONTRACTOR_ONLY);
     }
 
+    public Long issuedRecipientUserId(Long allocationId, Long issuedTaskProfileId) {
+        if (issuedTaskProfileId != null) {
+            return profileRepository.findById(issuedTaskProfileId)
+                    .map(ContractorPaymentProfile::getUser).map(user -> user.getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Профиль получателя задания недоступен"));
+        }
+        return allocationId == null ? null : allocationRepository.findById(allocationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Резерв прежнего получателя не найден"))
+                .getRecipientUserId();
+    }
+
+    @Transactional
+    public ContractorPaymentAllocation reserveContractorForPaymentLink(PaymentLink link, Long excludedUserId) {
+        return reserveForPaymentLink(link, PaymentLinkRoutePreference.CONTRACTOR_ONLY, excludedUserId);
+    }
+
     private ContractorPaymentAllocation reserveForPaymentLink(
             PaymentLink link,
             PaymentLinkRoutePreference preference
     ) {
+        return reserveForPaymentLink(link, preference, null);
+    }
+
+    private ContractorPaymentAllocation reserveForPaymentLink(PaymentLink link, PaymentLinkRoutePreference preference,
+                                                               Long excludedUserId) {
         if (!enabledForNewRoutes()) {
             return null;
         }
@@ -725,7 +746,7 @@ public class ContractorPaymentLiveRoutingService {
                     order.getWorker(),
                     effectiveManager(order),
                     amount,
-                    null
+                    null, excludedUserId
             );
         }
 
@@ -795,6 +816,12 @@ public class ContractorPaymentLiveRoutingService {
         return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.OWNER, true);
     }
 
+    @Transactional
+    public ContractorPaymentAllocation reserveContractorForCommonInvoice(CommonInvoice invoice, List<Order> orders,
+            Manager manager, long amount, Long excludedUserId) {
+        return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.CONTRACTOR_ONLY, true, excludedUserId);
+    }
+
     private ContractorPaymentAllocation reserveForCommonInvoice(
             CommonInvoice invoice,
             List<Order> orders,
@@ -803,6 +830,11 @@ public class ContractorPaymentLiveRoutingService {
             CommonInvoiceRoutePreference preference,
             boolean explicitReplacement
     ) {
+        return reserveForCommonInvoice(invoice, orders, manager, amount, preference, explicitReplacement, null);
+    }
+
+    private ContractorPaymentAllocation reserveForCommonInvoice(CommonInvoice invoice, List<Order> orders,
+            Manager manager, long amount, CommonInvoiceRoutePreference preference, boolean explicitReplacement, Long excludedUserId) {
         if (!enabledForNewRoutes()) {
             return null;
         }
@@ -881,7 +913,7 @@ public class ContractorPaymentLiveRoutingService {
                             completeWorkerSet && workers.size() == 1 ? workers.getFirst() : null,
                             manager,
                             amount,
-                            specialistPrecondition
+                            specialistPrecondition, excludedUserId
                     )
                     : ContractorPaymentRouteDecision.owner(
                             ContractorRoutingDecisionReason.PRIOR_PAYMENT_EVIDENCE,
@@ -1009,11 +1041,12 @@ public class ContractorPaymentLiveRoutingService {
             Object specialistSubject,
             Object managerSubject,
             long amount,
-            ContractorRoutingDecisionReason specialistPrecondition
+            ContractorRoutingDecisionReason specialistPrecondition, Long excludedUserId
     ) {
         List<RouteCandidate> candidates = new ArrayList<>(2);
         addCandidate(candidates, specialistSubject, ContractorRole.SPECIALIST);
         addCandidate(candidates, managerSubject, ContractorRole.MANAGER);
+        if (excludedUserId != null) candidates.removeIf(candidate -> excludedUserId.equals(candidate.userId()));
         ContractorRoutingDecisionReason specialistRejection = specialistPrecondition;
         if (specialistRejection == null && user(specialistSubject) == null) {
             specialistRejection = ContractorRoutingDecisionReason.SPECIALIST_NOT_ASSIGNED;

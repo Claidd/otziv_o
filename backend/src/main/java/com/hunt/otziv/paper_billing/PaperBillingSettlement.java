@@ -116,27 +116,37 @@ public class PaperBillingSettlement {
                     return;
                 }
                 var payer=service.payer((String)row.get("payer_json"));
-                long receipts=store.jdbc().queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt WHERE document_id=?",Long.class,id);
+                long total = ((Number) row.get("amount_kopecks")).longValue();
+                long partial = store.jdbc().queryForObject("""
+                        SELECT COALESCE(SUM(amount_kopecks),0) FROM paper_invoice_bank_receipt
+                        WHERE document_id=? AND state='PARTIAL'
+                        """, Long.class, id);
                 if (!receipt.customerCode().equals(row.get("customer_code")) || !receipt.accountId().equals(row.get("supplier_account"))
-                        || !receipt.payerInn().equals(payer.inn()) || receipt.amountKopecks()!=((Number)row.get("amount_kopecks")).longValue()
-                        || row.get("bank_invoice_id")==null || receipts!=1 || row.get("paid_at")!=null
-                        || store.hasUnresolvedReceipt(new Target((String)row.get("target_kind"),((Number)row.get("target_id")).longValue()),id)
-                        || !store.composition(new Target((String)row.get("target_kind"),((Number)row.get("target_id")).longValue())).equals(row.get("composition_hash"))) {
+                        || !receipt.payerInn().equals(payer.inn()) || receipt.amountKopecks() <= 0 || receipt.amountKopecks() > total - partial
+                        || row.get("bank_invoice_id")==null || row.get("paid_at")!=null
+                        || store.hasUnresolvedReceipt(new Target((String)row.get("target_kind"), ((Number)row.get("target_id")).longValue()), null)
+                        || !store.composition(new Target((String)row.get("target_kind"), ((Number)row.get("target_id")).longValue())).equals(row.get("composition_hash"))) {
                     store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='NEEDS_REVIEW' WHERE customer_code=? AND account_id=? AND payment_id=?",
                             receipt.customerCode(),receipt.accountId(),receipt.paymentId());
-                    if (row.get("paid_at")==null) store.error(id,"NEEDS_REVIEW","Перевод требует сверки: плательщик, сумма, состав счёта или несколько платежей");
+                    if (row.get("paid_at")==null) store.error(id,"NEEDS_REVIEW","Проверьте плательщика, сумму и состав счёта");
+                    return;
+                }
+                if (receipt.amountKopecks() < total - partial) {
+                    store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='PARTIAL' WHERE customer_code=? AND account_id=? AND payment_id=?",
+                            receipt.customerCode(), receipt.accountId(), receipt.paymentId());
                     return;
                 }
                 if (row.get("target_kind").equals("ORDER")) {
-                    standalone.applyVerifiedPaperBankPayment(((Number)row.get("payment_link_id")).longValue(),receipt.amountKopecks());
+                    standalone.applyVerifiedPaperBankPayment(((Number)row.get("payment_link_id")).longValue(),total);
                     automation.synchronizeOrder(((Number)row.get("target_id")).longValue());
                 }
-                else if("COMMON_PART".equals(row.get("target_kind"))) parts.settle(((Number)row.get("target_id")).longValue(),receipt.amountKopecks(),receipt.paymentId());
-                else common.settle(((Number)row.get("target_id")).longValue(),receipt.amountKopecks(),receipt.paymentId());
+                else if("COMMON_PART".equals(row.get("target_kind"))) parts.settle(((Number)row.get("target_id")).longValue(),total,receipt.paymentId());
+                else common.settle(((Number)row.get("target_id")).longValue(),total,receipt.paymentId());
                 store.jdbc().update("""
                     UPDATE paper_invoice_document SET stage=IF(stage='WAITING_PAYMENT','PAID',stage),
                     paid_at=NOW(6),error_text=NULL,updated_at=NOW(6) WHERE id=?
                     """,id);
+                store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='APPLIED' WHERE document_id=? AND state='PARTIAL'", id);
                 store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='APPLIED' WHERE customer_code=? AND account_id=? AND payment_id=?",
                         receipt.customerCode(),receipt.accountId(),receipt.paymentId());
             });

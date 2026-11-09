@@ -7,7 +7,8 @@ const apiSource = apiTransportSource();
 const pageSource = fs.readFileSync('src/app/features/common-billing.page.ts', 'utf8');
 
 test('mobile common invoice exposes the same safe payment-route switches as web', () => {
-  assert.match(pageSource, />Сменить способ оплаты</u);
+  assert.match(pageSource, />Сменить получателя</u);
+  assert.match(pageSource, />Выдать реквизиты без ссылки</u);
   assert.match(pageSource, /'Бумажный счёт'/u);
   assert.match(pageSource, /'Вернуть авто-распределение'/u);
   assert.match(pageSource, />Счёт отправлен</u);
@@ -16,10 +17,10 @@ test('mobile common invoice exposes the same safe payment-route switches as web'
   assert.match(pageSource, /this\.auth\.hasAnyRealmRole\(\['ADMIN', 'OWNER'\]\)/u);
 
   assert.match(apiSource, /\/payment-route-change-context`/u);
-  assert.match(apiSource, /\/payment-route-change`/u);
+  assert.match(apiSource, /\/payment-route-change\$\{different \?/u);
   assert.match(apiSource, /confirmedUnpaid: true, expectedPaymentEvidenceToken/u);
   assert.match(apiSource, /\/payment-mode`/u);
-  assert.match(apiSource, /\{ mode, confirmedUnpaid: true \}/u);
+  assert.match(apiSource, /\{ mode, confirmedUnpaid: true, \.\.\.\(paperInvoiceWithdrawn/u);
 });
 
 test('paper invoice confirmation uses dedicated endpoints and does not enter recipient attribution', () => {

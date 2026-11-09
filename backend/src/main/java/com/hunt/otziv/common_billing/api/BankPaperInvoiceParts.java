@@ -1,5 +1,7 @@
 package com.hunt.otziv.common_billing.api;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import java.security.Principal;
 import java.util.List;
 
@@ -28,5 +30,6 @@ public interface BankPaperInvoiceParts {
     void review(long partId);
     void cancelled(long partId,String document);
     void resumeOrdinaryInvoice(long partId);
+    void resumeOrdinaryInvoice(long partId, InvoicePaymentMode mode);
     BankPaperInvoices.StaffContext staffContext(long partId);
 }

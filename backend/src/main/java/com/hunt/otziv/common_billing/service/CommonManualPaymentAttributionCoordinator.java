@@ -99,8 +99,10 @@ public class CommonManualPaymentAttributionCoordinator {
         PreparedContext context = context(invoice, activeItems(items), mode);
         List<CommonManualPaymentRecipientCandidateResponse> candidates = context.candidates().values().stream()
                 .map(CandidateState::response)
+                .filter(candidate -> !CommonOwnerReceiptApprovals.hasBankRoute(invoice)
+                        || candidate.recipientType() != ContractorRecipientType.OWNER)
                 .toList();
-        if (candidates.stream().noneMatch(candidate -> candidate.key().equals(context.defaultRecipientKey()))) {
+        if (candidates.isEmpty()) {
             throw conflict("Исходный получатель общего счета недоступен; нужна ручная сверка");
         }
         return new CommonManualPaymentOptionsResponse(
@@ -546,6 +548,16 @@ public class CommonManualPaymentAttributionCoordinator {
                 mode,
                 accountingAllocation
         );
+        if (!managerIds.isEmpty()) {
+            var team = profileRepository.findTeamProfileIds(managerIds, ContractorRole.SPECIALIST);
+            for (var profile : profileRepository.findAllById(team)) {
+                if (!candidates.containsKey(profileKey(profile.getId())) && profile.getUser() != null
+                        && targetAccessPolicy.canManageUser(profile.getUser().getId())) {
+                    addProfileCandidate(candidates, profile, ContractorRecipientType.SPECIALIST, false, false,
+                            availableFor(profile, mode, accountingAllocation));
+                }
+            }
+        }
         taskRoute.ifPresent(snapshot -> {
             ManualPaymentTaskAccountingTargetKind targetKind = snapshot.accountingTargetKind();
             if (targetKind == null) {

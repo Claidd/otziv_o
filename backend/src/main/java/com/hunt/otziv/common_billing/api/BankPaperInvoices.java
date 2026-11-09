@@ -1,5 +1,7 @@
 package com.hunt.otziv.common_billing.api;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import java.security.Principal;
 
 /** Billing-owned seam. Read/configure retain current-user scope; prepare/bind join caller locks.
@@ -20,6 +22,7 @@ public interface BankPaperInvoices {
     void requireUnpaidForCancellation(long invoiceId);
     void holdForPaymentReview(long invoiceId);
     void resumeOrdinaryInvoice(long invoiceId);
+    void resumeOrdinaryInvoice(long invoiceId, InvoicePaymentMode mode);
     record StaffContext(java.util.List<Long> managerIds,java.util.List<Long> orderIds,String title) {}
     StaffContext staffContext(long invoiceId);
 }

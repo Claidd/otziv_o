@@ -96,7 +96,7 @@ class ManualPaymentTaskReceiptIntegrationServiceTest {
                 ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK, null);
         when(contractorReservationService.lockAccountingMode())
                 .thenReturn(ContractorAllocationMode.SHADOW);
-        when(ledgerService.reserveFirst(any())).thenReturn(Optional.of(snapshot));
+        when(ledgerService.reserveFirst(any(), org.mockito.ArgumentMatchers.eq(ManualPaymentTaskRoutingFilter.ANY))).thenReturn(Optional.of(snapshot));
         when(contractorReservationService.reserve(
                 link, snapshot, ContractorAllocationMode.SHADOW)).thenReturn(null);
 

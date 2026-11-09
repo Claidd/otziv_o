@@ -10,8 +10,23 @@ public record CommonManualPaymentOptionsResponse(
         List<CommonManualPaymentRecipientCandidateResponse> candidates,
         List<CommonManualPaymentAttributionResponse> history,
         String contractVersion,
-        String routeRevision
+        String routeRevision,
+        OwnerReport ownerReport
 ) {
+    public record OwnerReport(long id, String reportedBy, boolean attentionMode, boolean canDecide,
+            CommonManualPaymentAttributionRequest request) {}
+
+    public CommonManualPaymentOptionsResponse(Long invoiceId, long remainingKopecks, String defaultRecipientKey,
+            List<CommonManualPaymentRecipientCandidateResponse> candidates, List<CommonManualPaymentAttributionResponse> history,
+            String contractVersion, String routeRevision) {
+        this(invoiceId, remainingKopecks, defaultRecipientKey, candidates, history, contractVersion, routeRevision, null);
+    }
+
+    public CommonManualPaymentOptionsResponse withReport(OwnerReport report) {
+        return new CommonManualPaymentOptionsResponse(invoiceId, remainingKopecks, defaultRecipientKey, candidates, history,
+                contractVersion, routeRevision, report);
+    }
+
     public CommonManualPaymentOptionsResponse(
             Long invoiceId, long remainingKopecks, String defaultRecipientKey,
             List<CommonManualPaymentRecipientCandidateResponse> candidates,

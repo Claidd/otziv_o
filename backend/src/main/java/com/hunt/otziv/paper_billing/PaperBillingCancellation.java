@@ -1,5 +1,7 @@
 package com.hunt.otziv.paper_billing;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import static com.hunt.otziv.paper_billing.PaperBillingModels.*;
 import java.time.*;
 import java.util.*;
@@ -43,7 +45,13 @@ public class PaperBillingCancellation {
         targets.authorizeCancellation(target(before),before.get("payment_link_id") instanceof Number n?n.longValue():null);
         return tx().execute(status -> {
             var row=locked(id);
-            if(row.get("cancel_requested_at")!=null) return store.document(row);
+            if(row.get("cancel_requested_at")!=null) {
+                String savedMode = Objects.toString(row.get("cancel_replacement_mode"), "AUTO_ROUTING");
+                String requestedMode = request.replacementMode() == null ? "AUTO_ROUTING" : request.replacementMode().name();
+                if (!savedMode.equals(requestedMode) || request.replaceWithOrdinary() != (row.get("cancel_replacement_state") != null))
+                    throw problem("Отмена уже начата с другим способом оплаты");
+                return store.document(row);
+            }
             if(row.get("paid_at")!=null || receipts(id)!=0) throw problem("По счёту уже есть поступление. Отмена запрещена; сначала нужна сверка");
             targets.requireUnpaidForCancellation(target(row));
             String stage=(String)row.get("stage");
@@ -58,6 +66,9 @@ public class PaperBillingCancellation {
                 cancel_step='CHECK_BEFORE',stage='CANCEL_REQUESTED',cancel_scan_date=DATE_SUB(DATE(created_at),INTERVAL 1 DAY),
                 cancel_next_attempt_at=NOW(6),cancel_replacement_state=?,error_text=NULL,updated_at=NOW(6) WHERE id=?
                 """,actor.getName(),clean(request.reason()),targets.cancellationManagers(target(row)).toString(),request.replaceWithOrdinary()?"PENDING":null,id);
+            if (request.replacementMode() != null) {
+                store.jdbc().update("UPDATE paper_invoice_document SET cancel_replacement_mode=? WHERE id=?", request.replacementMode().name(), id);
+            }
             targets.holdAutomation(target(row),true);
             return store.document(store.row(id));
         });
@@ -102,7 +113,9 @@ public class PaperBillingCancellation {
             catch(org.springframework.web.server.ResponseStatusException paid) {
                 targets.holdForPaymentReview(target(row));review(id,"Заказ уже оплачен или изменился после отмены. Нужна сверка до обычного счёта");return;
             }
-            targets.resumeOrdinaryInvoice(target(row));
+            String mode = (String) row.get("cancel_replacement_mode");
+            if (mode == null) targets.resumeOrdinaryInvoice(target(row));
+            else targets.resumeOrdinaryInvoice(target(row), InvoicePaymentMode.valueOf(mode));
             store.jdbc().update("UPDATE paper_invoice_document SET cancel_replacement_state='QUEUED',cancel_replacement_error=NULL,cancel_replacement_queued_at=NOW(6),updated_at=NOW(6) WHERE id=?",id);
             store.event(id,"ORDINARY_QUEUED","Счёт № "+row.get("number")+" и акт отменены. Обычный счёт передан в штатную очередь: получатель выбирается заново по доступным резервам. Подтверждение отправки отслеживается автоответчиком.");
         });

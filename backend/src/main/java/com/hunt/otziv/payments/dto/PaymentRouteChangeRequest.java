@@ -7,8 +7,12 @@ public record PaymentRouteChangeRequest(
         Long expectedPaymentLinkId,
         @NotNull PaymentRouteChangeTarget target,
         @AssertTrue(message = "Подтвердите, что клиент еще не оплатил") boolean confirmedUnpaid,
-        Long expectedTargetPaymentProfileId
+        Long expectedTargetPaymentProfileId, Boolean paperInvoiceWithdrawn
 ) {
+    public PaymentRouteChangeRequest(Long link, PaymentRouteChangeTarget target, boolean unpaid, Long profile) {
+        this(link, target, unpaid, profile, false);
+    }
+
     public PaymentRouteChangeRequest(
             Long expectedPaymentLinkId,
             PaymentRouteChangeTarget target,

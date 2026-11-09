@@ -40,6 +40,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_354__paper_cancel_ordinary_invoice.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_363__paper_invoice_payment_reference.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_364__paper_files_and_delivery_backoff.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_387__paper_invoice_replacement_mode.sql")).execute(ds);
         store=new PaperBillingStore(jdbc,mock(BankPaperInvoices.class)); id=UUID.randomUUID().toString();
         var service=mock(PaperBillingService.class);
         when(service.payer(anyString())).thenReturn(new Payer("company","Тест","7707083893","773601001",""));
@@ -263,12 +264,15 @@ class PaperBillingSettlementMySqlIntegrationTest {
         catch(InterruptedException e) {Thread.currentThread().interrupt();throw new IllegalStateException(e);}
     }
 
-    @Test void partialThenRemainderCannotBeSummedIntoAutomaticPayment() {
+    @Test void partialAndRemainderCloseOnceAfterMatchingBothReceipts() {
         settlement.accept(receipt("p1",200000,"7707083893"));
-        settlement.accept(receipt("p2",50000,"7707083893"));
+        settlement.accept(receipt("p1",200000,"7707083893"));
         verifyNoInteractions(finance);
-        assertEquals("NEEDS_REVIEW",store.row(id).get("stage"));
-        assertNull(store.row(id).get("paid_at"));
+        assertEquals(200000L, store.document(store.row(id)).receivedKopecks());
+        settlement.accept(receipt("p2",50000,"7707083893"));
+        settlement.accept(receipt("p2",50000,"7707083893"));
+        verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);
+        assertNotNull(store.row(id).get("paid_at"));
     }
     @Test void wrongPayerAndDuplicateFullTransfersRequireReview() {
         settlement.accept(receipt("p1",250000,"380124742639"));
@@ -524,6 +528,22 @@ class PaperBillingSettlementMySqlIntegrationTest {
         verify(cancelTargets,times(1)).resumeOrdinaryInvoice(new Target("ORDER",42L));
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE event_key='ORDINARY_QUEUED'",Integer.class));
     }
+    @Test void cancellationKeepsTheRequestedReplacementAcrossRetries() throws Exception {
+        cancellationFixture();
+        var mode = com.hunt.otziv.payments.model.InvoicePaymentMode.EMPLOYEE_REQUISITES;
+        var request = new CancelRequest("Клиент просит реквизиты", true, true, mode);
+        cancelWorkflow.request(id, request, cancelActor);
+        cancelWorkflow.request(id, request, cancelActor);
+        assertThrows(RuntimeException.class, () -> cancelWorkflow.request(id,
+                new CancelRequest("Клиент просит реквизиты", true, true, com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_TBANK), cancelActor));
+        drainCancel();
+        jdbc.update("UPDATE paper_invoice_document SET cancel_message_delivery='SENT' WHERE id=?", id);
+        cancelWorkflow.resumeOrdinaryInvoice(id);
+        cancelWorkflow.resumeOrdinaryInvoice(id);
+        verify(cancelTargets).resumeOrdinaryInvoice(new Target("ORDER", 42L), mode);
+        assertEquals("QUEUED", store.row(id).get("cancel_replacement_state"));
+    }
+
     @Test void ordinaryQueueFailureRollsBackHandoffAndCanBeRetried() throws Exception {
         cancellationFixture();cancelWorkflow.request(id,new CancelRequest("Другой способ оплаты",true,true),cancelActor);drainCancel();
         jdbc.update("UPDATE paper_invoice_document SET cancel_message_delivery='SENT' WHERE id=?",id);

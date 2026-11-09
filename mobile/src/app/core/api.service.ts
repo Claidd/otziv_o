@@ -305,7 +305,7 @@ export interface ManagerPaymentLinkResponse {
   copyText: string;
 }
 
-export type PaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE';
+export type PaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'DIFFERENT_RECIPIENT' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE';
 
 export interface PaymentRouteChangeContext {
   paymentLinkId: number | null;
@@ -323,6 +323,7 @@ export interface PaymentRouteChangeRequest {
   expectedPaymentLinkId: number | null;
   target: PaymentRouteChangeTarget;
   confirmedUnpaid: boolean;
+  paperInvoiceWithdrawn?: boolean;
   expectedTargetPaymentProfileId?: number | null;
 }
 
@@ -776,6 +777,7 @@ export interface ClientMessageStatus {
 
 export type CommonInvoicePaymentRouteChangeTarget =
   | 'EMPLOYEE_REQUISITES'
+  | 'DIFFERENT_RECIPIENT'
   | 'OWNER_TBANK'
   | 'OWNER_BANK_REISSUE';
 
@@ -1154,6 +1156,13 @@ export interface CommonManualPaymentAttributionHistoryItem {
 }
 
 export interface CommonManualPaymentOptions {
+  ownerReport?: {
+    id: number;
+    reportedBy: string;
+    attentionMode: boolean;
+    canDecide: boolean;
+    request: CommonManualPaymentAttributionRequest;
+  } | null;
   invoiceId: number;
   remainingKopecks: number;
   defaultRecipientKey: string;

@@ -163,6 +163,9 @@ export type MobileOrderCopyKind = 'review' | 'payment';
               >
                 {{ action.label }}
               </button>
+              @if (action.status === 'Оплачено' && allowRecordTransfer && order.status !== 'Оплачено') {
+                <button type="button" [disabled]="!canRunStatusAction(action) || !!mutationKey" (click)="recordTransfer.emit()">Оплата конкретному специалисту</button>
+              }
             }
           } @else if (canSubmitWaitingForReview) {
             @for (action of statusActions; track action.status) {
@@ -852,6 +855,8 @@ export type MobileOrderCopyKind = 'review' | 'payment';
 })
 export class MobileOrderCardComponent {
   @Input({ required: true }) order!: OrderItem;
+  @Input() allowRecordTransfer = false;
+  @Output() recordTransfer = new EventEmitter<void>();
   @Input() statusActions: readonly MobileOrderStatusAction[] = [];
   @Input() copiedKey: string | null = null;
   @Input() mutationKey: string | null = null;

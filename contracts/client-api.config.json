@@ -23,6 +23,7 @@
     "ManagerManualCardPaymentResultResponse": ["manualPaymentReview"],
     "SpecialistManualPaymentReviewResponse": ["creditedAt", "confirmationBasis"],
     "CommonInvoiceDetailsResponse": ["delivery"],
+    "CommonManualPaymentOptionsResponse": ["ownerReport"],
     "CommonInvoiceOrderResponse": ["detachBlockedReason", "ordinaryAfterPaperCancel"],
     "CommonInvoicePaymentRouteChangeContextResponse": ["ownerManualRoute"]
   },

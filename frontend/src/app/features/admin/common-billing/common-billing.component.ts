@@ -984,7 +984,7 @@ export class CommonBillingComponent implements OnDestroy {
     const paperEnabled = invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE';
     const nextMode = paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE';
     const confirmation = paperEnabled
-      ? 'Вернуть автоматическое распределение специалист → менеджер → владелец? Продолжайте только если бумажный счёт ещё не отправлялся и оплаты по нему нет.'
+      ? 'Вернуть автоматическое распределение специалист → менеджер → владелец? Проверьте отсутствие поступления по выписке. Если счёт уже отправлен, подтвердите, что клиент уведомлён о его отзыве.'
       : 'Включить бумажный счёт владельца? Система проверит прежнюю банковскую ссылку и отменит её только при подтверждённом отсутствии оплаты. Текущий безопасный резерв будет освобождён, а будущие циклы этого общего счёта тоже станут бумажными. Продолжайте только если клиент ещё не платил.';
     if (!window.confirm(confirmation)) {
       return;
@@ -992,7 +992,7 @@ export class CommonBillingComponent implements OnDestroy {
     this.invoiceAction(
       invoice.id,
       'change-paper-invoice-mode',
-      () => this.commonBillingApi.changeInvoicePaymentMode(invoice.id, nextMode),
+      () => this.commonBillingApi.changeInvoicePaymentMode(invoice.id, nextMode, !!invoice.paperInvoiceIssuedAt),
       paperEnabled ? 'Автоматическое распределение восстановлено' : 'Режим бумажного счёта включён'
     );
   }
@@ -1025,7 +1025,8 @@ export class CommonBillingComponent implements OnDestroy {
             ? 'EMPLOYEE_REQUISITES'
             : 'OWNER_TBANK');
         const destination = target === 'EMPLOYEE_REQUISITES'
-          ? 'реквизиты специалиста или менеджера'
+          ? 'реквизиты без ссылки'
+          : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
           : 'банковскую ссылку владельца';
         const currentRecipient = context.currentRecipient?.trim()
           ? ` Получатель сейчас: ${context.currentRecipient}.`
@@ -1045,8 +1046,8 @@ export class CommonBillingComponent implements OnDestroy {
             target,
             context.paymentEvidenceToken
           ),
-          target === 'EMPLOYEE_REQUISITES'
-            ? 'Общий счёт переведён на реквизиты сотрудника'
+          target !== 'OWNER_TBANK'
+            ? 'Новые реквизиты для общего счёта подготовлены'
             : 'Общий счёт переведён на банковскую ссылку владельца'
         );
       },

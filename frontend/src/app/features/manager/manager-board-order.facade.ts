@@ -337,12 +337,13 @@ export class ManagerBoardOrderFacade {
       return;
     }
     const targetTitle = target === 'EMPLOYEE_REQUISITES'
-      ? 'реквизиты специалиста/менеджера'
+      ? 'реквизиты без ссылки'
+      : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
       : target === 'OWNER_TBANK'
         ? 'ссылку эквайринга владельца'
         : 'режим бумажного счёта владельца';
     if (!window.confirm(
-      `Клиент еще не оплатил по прежним реквизитам? Старый счет будет закрыт, а клиенту будут отправлены ${targetTitle}.`
+      (context.paperInvoiceIssued ? 'Подтвердите, что выписка проверена, денег нет и клиент уведомлён об отзыве бумажного счёта. ' : '') + `Клиент еще не оплатил по прежним реквизитам? Старый счет будет закрыт, а клиенту будут отправлены ${targetTitle}.`
     )) {
       return;
     }
@@ -353,6 +354,7 @@ export class ManagerBoardOrderFacade {
       expectedPaymentLinkId: context.paymentLinkId,
       target,
       confirmedUnpaid: true,
+        ...(context.paperInvoiceIssued ? { paperInvoiceWithdrawn: true } : {}),
       expectedTargetPaymentProfileId: target === 'OWNER_TBANK'
         ? context.expectedTargetPaymentProfileId ?? null
         : null

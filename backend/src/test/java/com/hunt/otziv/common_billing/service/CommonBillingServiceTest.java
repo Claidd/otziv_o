@@ -434,11 +434,13 @@ class CommonBillingServiceTest {
                 cancellation, settlement, entityManager, invoiceRepository, paymentRefRepository,
                 paymentProfileService, tochkaPaymentProfileResolver, tochkaClient, tochkaPaymentOperationMapper);
         ReflectionTestUtils.setField(service, "invoiceReconciliation", reconciliation);
+        var ownerReceipts = org.mockito.Mockito.mock(CommonOwnerReceiptApprovals.class);
+        org.mockito.Mockito.lenient().when(ownerReceipts.attach(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
         CommonInvoiceManualPaymentWorkflow manualPayments = new CommonInvoiceManualPaymentWorkflow(
                 paymentLinkService, cancellation, delivery, detailsAssembler, settlement,
                 invoiceRepository, invoiceOrderRepository, paymentRefRepository, paymentLinkRepository,
                 manualCardPaymentReviewNotificationService, commonManualPaymentAttributionCoordinator,
-                actualPaymentAttributionFlowPolicy, taskReceiptIntegrationService, paymentProfileService, tbankClient);
+                actualPaymentAttributionFlowPolicy, taskReceiptIntegrationService, paymentProfileService, tbankClient, ownerReceipts);
         ReflectionTestUtils.setField(service, "manualPaymentWorkflow", manualPayments);
         ReflectionTestUtils.setField(service, "invoiceRouteWorkflow", new CommonInvoicePaymentRouteWorkflow(
                 org.mockito.Mockito.mock(com.hunt.otziv.p_products.api.PaperInvoiceOrderAutomation.class),manualPayments, delivery, detailsAssembler, invoiceRouteSelector, initialization, cancellation,
@@ -881,7 +883,7 @@ class CommonBillingServiceTest {
         when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of());
         when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(invoice.getId(), 501L))
                 .thenReturn(FrozenCommonRouteAction.KEEP);
-        when(invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, 100_000L))
+        when(invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, 100_000L, com.hunt.otziv.payments.service.ManualPaymentTaskRoutingFilter.NUMBER))
                 .thenReturn(Optional.empty());
         ContractorPaymentAllocation replacement = new ContractorPaymentAllocation();
         replacement.setId(502L);
@@ -890,7 +892,7 @@ class CommonBillingServiceTest {
         replacement.setPaymentPhoneSnapshot("89149528806");
         replacement.setBankNameSnapshot("Альфа банк");
         when(contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(
-                eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L)))
+                eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L), org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(replacement);
         String token = ReflectionTestUtils.invokeMethod(
                 service, "commonInvoiceRouteChangeToken", invoice, List.of());
@@ -914,7 +916,7 @@ class CommonBillingServiceTest {
                 eq(invoice), eq("Способ оплаты общего счёта изменён по просьбе клиента"),
                 eq("LIVE_COMMON:ROUTE_REPLACED"));
         verify(contractorPaymentLiveRoutingService).reserveContractorForCommonInvoice(
-                eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L));
+                eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L), org.mockito.ArgumentMatchers.isNull());
     }
 
     @Test
@@ -935,7 +937,7 @@ class CommonBillingServiceTest {
         when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of());
         when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(invoice.getId(), 551L))
                 .thenReturn(FrozenCommonRouteAction.KEEP);
-        when(invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, 100_000L))
+        when(invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, 100_000L, com.hunt.otziv.payments.service.ManualPaymentTaskRoutingFilter.NUMBER))
                 .thenReturn(Optional.empty());
         ContractorPaymentAllocation employee = new ContractorPaymentAllocation();
         employee.setId(552L);
@@ -943,7 +945,7 @@ class CommonBillingServiceTest {
         employee.setRecipientNameSnapshot("Елена Ч.");
         employee.setPaymentPhoneSnapshot("89149528806");
         when(contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(
-                eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L)))
+                eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L), org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(employee);
         String token = ReflectionTestUtils.invokeMethod(
                 service, "commonInvoiceRouteChangeToken", invoice, List.of());
@@ -2035,9 +2037,9 @@ class CommonBillingServiceTest {
                 "Клиент перевёл другому получателю",
                 "",
                 List.of(new CommonManualPaymentAttributionRowRequest(
-                        "owner",
-                        ContractorRecipientType.OWNER,
-                        null,
+                        "specialist",
+                        ContractorRecipientType.SPECIALIST,
+                        7L,
                         100_000L
                 ))
         );
@@ -2183,9 +2185,9 @@ class CommonBillingServiceTest {
                 "Клиент оплатил по прежним реквизитам",
                 "",
                 List.of(new CommonManualPaymentAttributionRowRequest(
-                        "owner",
-                        ContractorRecipientType.OWNER,
-                        null,
+                        "specialist",
+                        ContractorRecipientType.SPECIALIST,
+                        7L,
                         100_000L
                 ))
         );
@@ -2242,9 +2244,9 @@ class CommonBillingServiceTest {
                 "Клиент перевёл другому получателю",
                 "",
                 List.of(new CommonManualPaymentAttributionRowRequest(
-                        "owner",
-                        ContractorRecipientType.OWNER,
-                        null,
+                        "specialist",
+                        ContractorRecipientType.SPECIALIST,
+                        7L,
                         100_000L
                 ))
         );
@@ -2299,9 +2301,9 @@ class CommonBillingServiceTest {
                 "Клиент оплатил по прежним реквизитам",
                 "",
                 List.of(new CommonManualPaymentAttributionRowRequest(
-                        "owner",
-                        ContractorRecipientType.OWNER,
-                        null,
+                        "specialist",
+                        ContractorRecipientType.SPECIALIST,
+                        7L,
                         100_000L
                 ))
         );

@@ -22,7 +22,7 @@ export class MobileManualCardPaymentFlowService {
 
   async confirm(orderId: number, defaultReason = ''): Promise<MobileManualCardPaymentOutcome | null> {
     const context = await firstValueFrom(this.managerManualPaymentsApi.getManagerManualCardPaymentContext(orderId));
-    if (!mobileManualCardPaymentSelectionRecipient(context)) {
+    if (!context.candidates?.length || (context.recipientSelectionFrozen && !mobileManualCardPaymentSelectionRecipient(context))) {
       throw new Error(context.recipientSelectionFrozen
         ? 'Ранее выбранный получатель отсутствует в списке доступных получателей. Повтор оплаты заблокирован.'
         : 'Исходный получатель счёта отсутствует в списке доступных получателей. Оплата не изменена.');

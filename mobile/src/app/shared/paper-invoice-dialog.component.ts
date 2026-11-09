@@ -6,7 +6,7 @@ import { mobileEnvironment } from '../core/mobile-environment';
 
 export interface PaperTarget { kind: 'ORDER' | 'COMMON_INVOICE' | 'COMMON_PART'; id: number; }
 interface Payer { type: string; name: string; inn: string; kpp: string; address: string; }
-export interface PaperDocument { id: string; number: string; amountKopecks: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; replacementState?: string; replacementError?: string; targetKind?:string;targetId?:number;payer?:Payer;orderIds?:number[]; }
+export interface PaperDocument { id: string; number: string; amountKopecks: number; receivedKopecks?: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; replacementState?: string; replacementError?: string; targetKind?:string;targetId?:number;payer?:Payer;orderIds?:number[]; }
 type Document = PaperDocument;
 export interface Position {orderId:number;companyId:number;companyTitle:string;amountKopecks:number;ready:boolean;paid:boolean;documentId:string|null;}
 interface Choice {id:string;companyId:number;payer:Payer;primary:boolean;version?:number;lastUsedAt?:string;}
@@ -47,6 +47,9 @@ const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
               <h3>Счёт №{{ d.number }}</h3>
               @if(d.orderIds?.length) { <p class="hint">Заказы № {{d.orderIds?.join(', ')}}</p> }
               <p>{{ (d.amountKopecks / 100).toLocaleString('ru-RU') }} ₽ · {{ d.paidAt ? 'Оплата получена' : stage(d.stage) }}</p>
+              @if (d.receivedKopecks && !d.paidAt) {
+                <p>Поступило {{ (d.receivedKopecks / 100).toLocaleString('ru-RU') }} ₽ · Осталось {{ ((d.amountKopecks - d.receivedKopecks) / 100).toLocaleString('ru-RU') }} ₽</p>
+              }
               <p>Счёт: {{ delivery(d.invoiceDelivery) }}. Акт: {{ delivery(d.actDelivery) }}.</p>
               @if (d.error) { <p class="error">{{ d.error }}</p> }
               <div class="actions"><button type="button" (click)="download('invoice')">Скачать счёт</button><button type="button" (click)="download('act')">Скачать акт</button></div>
@@ -72,7 +75,14 @@ const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
               @if (cancelForm()) {
                 <form class="cancel-form" (ngSubmit)="cancel()">
                   <h3>Замена бумажного счёта обычным</h3>
-                  <p>Система проверит поступления, отменит счёт и акт в Точке и уведомит заказчика. Затем заново выберет сотрудника или владельца по доступным резервам, отправит новые реквизиты и возобновит автоответчик. @if(isPartDocument()) { Способ оплаты изменится только у заказов этого комплекта. Остальные счета сохранятся, а оплаты всех заказов продолжат учитываться в общем счёте. } Если обнаружено поступление или нужна сверка, отмена остановится.</p>
+                  <p>Система проверит поступления, отменит счёт и акт в Точке и уведомит заказчика. После сверки система подготовит выбранный способ оплаты. @if(isPartDocument()) { Способ оплаты изменится только у заказов этого комплекта. Остальные счета сохранятся, а оплаты всех заказов продолжат учитываться в общем счёте. } Если обнаружено поступление или нужна сверка, отмена остановится.</p>
+                  <label>После отмены выставить
+                    <select name="replacementMode" [(ngModel)]="replacementMode" [disabled]="busy()">
+                      <option value="AUTO_ROUTING">Подобрать способ автоматически</option>
+                      <option value="EMPLOYEE_REQUISITES">Реквизиты без ссылки</option>
+                      <option value="OWNER_TBANK">Банковскую ссылку владельца</option>
+                    </select>
+                  </label>
                   <label>Причина отмены<textarea name="cancelReason" maxlength="500" [(ngModel)]="cancelReason" [disabled]="busy()"></textarea></label>
                   <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" /> Подтверждаю отмену счёта и акта и отправку обычных реквизитов</label>
                   <div class="actions"><button type="button" (click)="cancelForm.set(false)" [disabled]="busy()">Вернуться</button><button type="submit" class="danger" [disabled]="busy() || !cancelConfirmed || !cancelReason.trim()">Подтвердить отмену</button></div>
@@ -143,6 +153,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   readonly cancelForm = signal(false);
   readonly replacement = signal(false);
   cancelReason = '';
+  replacementMode = 'AUTO_ROUTING';
   cancelConfirmed = false;
   private lookupTicket = 0;
   private pollTicket = 0;
@@ -164,7 +175,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     if (!r) return;
     this.stop(); this.busy.set(false); this.mutating.set(false); ++this.lookupTicket; const ticket = ++this.ticket;
     this.opened.set(true); this.context.set(null); this.error.set(''); this.candidates.set([]); this.confirmed = false;
-    this.cancelForm.set(false);this.replacement.set(false);this.cancelReason='';this.cancelConfirmed=false;
+    this.cancelForm.set(false);this.replacement.set(false);this.cancelReason='';this.replacementMode='AUTO_ROUTING';this.cancelConfirmed=false;
     this.selectedOrders.set([]);this.selectedChoice='';this.requestKey=crypto.randomUUID();
     this.http.get<Context>(this.path() + '/context').subscribe({
       next: c => {
@@ -269,12 +280,13 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   }
   canCancel(): boolean {
     const d=this.context()?.document;
-    return !!d && !d.paidAt && ['PENDING','INVOICE_CREATED','ACT_CREATED','FILES_READY','WAITING_PAYMENT','NEEDS_REVIEW'].includes(d.stage);
+    return !!d && !d.paidAt && !d.receivedKopecks && ['PENDING','INVOICE_CREATED','ACT_CREATED','FILES_READY','WAITING_PAYMENT','NEEDS_REVIEW'].includes(d.stage);
   }
   cancel(): void {
     const d=this.context()?.document;if(!d || !this.canCancel() || !this.cancelConfirmed || !this.cancelReason.trim()) return;
     const ticket=this.beginMutation();if(ticket===null) return;++this.pollTicket;
-    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:true}).subscribe({
+    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:true,
+      ...(this.replacementMode === 'AUTO_ROUTING' ? {} : {replacementMode:this.replacementMode})}).subscribe({
       next: document => {if(!this.finishMutation(ticket)) return;++this.pollTicket;this.cancelForm.set(false);this.context.update(c=>c?{...c,document}:c);this.startPolling();},
       error: e => {if(ticket===this.ticket) this.failure(e);}
     });

@@ -53,6 +53,8 @@ export class ManagerOrderCardComponent implements OnDestroy {
   @Output() readonly orderNoteSaved = new EventEmitter<string>();
   @Output() readonly phoneCopied = new EventEmitter<string | undefined>();
   @Output() readonly copyTextRequested = new EventEmitter<'review' | 'payment'>();
+  @Input() allowRecordTransfer = false;
+  @Output() readonly recordTransfer = new EventEmitter<void>();
   @Output() readonly statusUpdated = new EventEmitter<StatusAction>();
   @Output() readonly clientWaitingToggled = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();

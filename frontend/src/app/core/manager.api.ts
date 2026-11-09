@@ -1,3 +1,4 @@
+import type { ManualTransferRequest } from '@otziv/client-common/billing-payments';
 import type { OrderEditPayload } from '@otziv/client-common/order-editor';
 export type { OrderEditPayload } from '@otziv/client-common/order-editor';
 import { HttpClient, HttpParams } from '@angular/common/http';
@@ -546,7 +547,7 @@ export interface OrderUpdateRequest {
   removePreviousWorkerFromCompany: boolean;
 }
 
-export type PaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE';
+export type PaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'DIFFERENT_RECIPIENT' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE';
 
 export interface PaymentRouteChangeContext {
   paymentLinkId: number | null;
@@ -555,7 +556,7 @@ export interface PaymentRouteChangeContext {
   status: string;
   canChange: boolean;
   blockReason: string;
-  configuredMode?: 'AUTO_ROUTING' | 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE' | string;
+  configuredMode?: 'AUTO_ROUTING' | 'EMPLOYEE_REQUISITES' | 'DIFFERENT_RECIPIENT' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE' | string;
   paperInvoiceIssued?: boolean;
   expectedTargetPaymentProfileId?: number | null;
 }
@@ -564,6 +565,7 @@ export interface PaymentRouteChangeRequest {
   expectedPaymentLinkId: number | null;
   target: PaymentRouteChangeTarget;
   confirmedUnpaid: boolean;
+  paperInvoiceWithdrawn?: boolean;
   expectedTargetPaymentProfileId?: number | null;
 }
 
@@ -1109,9 +1111,10 @@ export class ManagerApi {
     orderId: number,
     request: PaymentRouteChangeRequest
   ): Observable<PaymentRouteChangeResponse> {
+    const different = request.target === 'DIFFERENT_RECIPIENT';
     return this.http.post<PaymentRouteChangeResponse>(
-      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/payment-route-change`,
-      request
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/payment-route-change${different ? '/recipient' : ''}`,
+      different ? { ...request, target: 'EMPLOYEE_REQUISITES' } : request
     );
   }
 
@@ -1212,6 +1215,10 @@ export class ManagerApi {
     return this.http.get<ManualCardPaymentContext>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/manual-card-payment-context`
     );
+  }
+
+  recordTransfer(request: ManualTransferRequest): Observable<ManagerManualCardPaymentResult[]> {
+    return this.http.post<ManagerManualCardPaymentResult[]>(`${appEnvironment.apiBaseUrl}/api/manager/manual-transfer-receipts`, request);
   }
 
   confirmManualCardPayment(

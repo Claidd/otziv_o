@@ -81,7 +81,7 @@ test('stale common split refresh preserves evidence and resets route-sensitive s
   }, 'reason', 'https://example.test/receipt', () => 'new-row');
 
   assert.deepEqual(JSON.parse(JSON.stringify(refreshed)), {
-    rows: [{ rowKey: 'new-row', recipientKey: 'TASK:12:4', amountRubles: '2500,00' }],
+    rows: [{ rowKey: 'new-row', recipientKey: '', amountRubles: '2500,00' }],
     reason: 'reason',
     receiptUrl: 'https://example.test/receipt',
     paymentReceived: false,

@@ -28,8 +28,18 @@ public class PaymentRouteChangeService {
             PaymentRouteChangeRequest request,
             Authentication authentication
     ) {
+        return change(orderId, request, authentication, false);
+    }
+
+    @Transactional
+    public PaymentRouteChangeResponse change(Long orderId, PaymentRouteChangeRequest request,
+            Authentication authentication, boolean differentRecipient) {
+        boolean paperWithdrawn = Boolean.TRUE.equals(request.paperInvoiceWithdrawn());
         PaymentLinkService.PaymentRouteReplacement replacement =
-                paymentLinkService.replacePaymentRouteAuthorized(
+                (paperWithdrawn || differentRecipient)
+                        ? paymentLinkService.replacePaymentRouteAuthorized(orderId, request.expectedPaymentLinkId(), request.target(),
+                                request.confirmedUnpaid(), request.expectedTargetPaymentProfileId(), authentication, paperWithdrawn, differentRecipient)
+                        : paymentLinkService.replacePaymentRouteAuthorized(
                         orderId,
                         request.expectedPaymentLinkId(),
                         request.target(),

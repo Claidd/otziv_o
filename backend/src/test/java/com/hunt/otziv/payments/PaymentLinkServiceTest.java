@@ -2228,7 +2228,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void createForOrderPublishesExternalManualTaskAsMobileBankTransfer() {
+    void createForOrderPublishesTheExternalLinkFrozenByTheTask() {
         TbankPaymentProperties properties = properties();
         PaymentLinkService service = service(properties);
         PaymentProfile profile = profile(3L, "manual", "Ручной профиль", "manual-terminal");
@@ -2293,15 +2293,13 @@ class PaymentLinkServiceTest {
         ArgumentCaptor<PaymentLink> captor = ArgumentCaptor.forClass(PaymentLink.class);
         verify(paymentLinkRepository, times(2)).save(captor.capture());
         PaymentLink link = captor.getValue();
-        assertEquals(PaymentMethod.MANUAL_MOBILE_BANK, link.getPaymentMethod());
-        assertEquals(ManualPaymentType.MOBILE_BANK, link.getManualPaymentType());
+        assertEquals(PaymentMethod.MANUAL_EXTERNAL_LINK, link.getPaymentMethod());
+        assertEquals(ManualPaymentType.EXTERNAL_LINK, link.getManualPaymentType());
         assertEquals(ManualPaymentSource.MANUAL_TASK, link.getManualSource());
-        assertNull(link.getManualPaymentUrl());
-        assertNull(link.getManualPaymentButtonLabel());
-        assertTrue(response.instructionText().contains("Оплата по мобильному банку: 2202208238396676"));
-        assertTrue(response.instructionText().contains("Получатель: Получатель задания"));
-        assertFalse(response.instructionText().contains("Ссылка на оплату:"));
-        assertEquals("2202208238396676", response.telegramCopyTransferNumber());
+        assertEquals("https://pay.alfabank.ru/sc/legacy-task", link.getManualPaymentUrl());
+        assertEquals("Оплатить по старой ссылке", link.getManualPaymentButtonLabel());
+        assertNull(link.getManualPhone());
+        assertFalse(response.instructionText().contains("2202208238396676"));
     }
     @Test
     void createForOrderDoesNotReserveTaskWhenTypedAccountingIsDisabled() {
@@ -5395,6 +5393,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentForOrderCancelsNewBankSessionThenSettlesAndIsIdempotent() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -5422,9 +5421,8 @@ class PaymentLinkServiceTest {
                 100_000L,
                 "04.08 20:40, карта *1234, перевод за заказ",
                 null,
-                "manager",
-                authentication
-        );
+                ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager",
+                authentication);
         service.confirmPaidByManualCardTransferForOrder(
                 25047L,
                 true,
@@ -5432,9 +5430,8 @@ class PaymentLinkServiceTest {
                 100_000L,
                 "повтор запроса",
                 null,
-                "manager",
-                authentication
-        );
+                ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager",
+                authentication);
 
         assertEquals(PaymentLinkStatus.CANCELED, link.getStatus());
         assertEquals("CANCELED", link.getProviderTerminalStatus());
@@ -5471,6 +5468,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void managerManualCardReportCancelsFormShowedAndDoesNotRequestSecondOwnerReview() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -5500,9 +5498,8 @@ class PaymentLinkServiceTest {
         service.reportPaidByManualCardTransferForOrder(
                 25070L,
                 "Клиент оплатил переводом по номеру телефона",
-                "manager@example.ru",
-                authentication
-        );
+                null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager@example.ru",
+                authentication);
 
         assertTrue(link.getManualComment().startsWith("Заявлено менеджером: оплата переводом"));
         verifyNoInteractions(manualCardPaymentReviewNotificationService);
@@ -5518,7 +5515,6 @@ class PaymentLinkServiceTest {
         when(orderRepository.findByIdForCounterUpdate(25071L)).thenReturn(Optional.of(order));
         when(paymentLinkRepository.findByOrderIdForUpdate(25071L)).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(5271L)).thenReturn(Optional.of(link));
-        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
                 service.reportPaidByManualCardTransferForOrder(
@@ -5701,6 +5697,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentSelectsCurrentActiveRouteAndIgnoresProviderExpiredHistory() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -5726,8 +5723,7 @@ class PaymentLinkServiceTest {
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
-                25057L, true, true, 100_000L, "выписка проверена", null, "owner", authentication
-        );
+                25057L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "owner", authentication);
 
         assertTrue(active.getLastError().startsWith("manual_card_payment_completed:"));
         assertEquals(PaymentLinkStatus.EXPIRED, oldExpired.getStatus());
@@ -5738,6 +5734,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentReconcilesLegacyExpiredHistoryBeforeCurrentRoute() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -5765,8 +5762,7 @@ class PaymentLinkServiceTest {
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
-                25059L, true, true, 100_000L, "выписка проверена", null, "owner", authentication
-        );
+                25059L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "owner", authentication);
 
         assertEquals("DEADLINE_EXPIRED", locallyExpired.getProviderTerminalStatus());
         assertEquals(PaymentLinkStatus.CANCELED, active.getStatus());
@@ -5843,6 +5839,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentReconcilesMultipleLegacyTerminalRoutesBeforeCurrentRoute() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -5876,8 +5873,7 @@ class PaymentLinkServiceTest {
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
-                25063L, true, true, 100_000L, "выписка проверена", null, "owner", authentication
-        );
+                25063L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "owner", authentication);
 
         assertEquals("DEADLINE_EXPIRED", firstLegacy.getProviderTerminalStatus());
         assertEquals(PaymentLinkStatus.REJECTED, secondLegacy.getStatus());
@@ -6066,7 +6062,7 @@ class PaymentLinkServiceTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void managerOwnerSelectionUsesImmediateReviewWithCanonicalRecipient(boolean explicitType) throws Exception {
+    void managerCannotCreditBankOwnerWithKeyOrType(boolean explicitType) throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25270L, "Старые реквизиты владельца", BigDecimal.valueOf(1000));
         order.getManager().setAuditTelegramGroupChatId(-10025270L);
@@ -6078,10 +6074,7 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByIdForUpdate(5370L)).thenReturn(Optional.of(link));
         stubManualCardRecipients(order, link, new ManualCardPaymentRecipientResponse(
                 ContractorRecipientType.OWNER, null, null, "Владелец", 100_000L, 0L, true));
-        stubImmediateReview(order, link, ContractorRecipientType.OWNER, null, "OWNER",
-                "Проверить перевод на старый Альфа-Банк владельца");
-
-        var result = service.submitManagerManualCardPaymentForOrder(
+        var error = assertThrows(ResponseStatusException.class, () -> service.submitManagerManualCardPaymentForOrder(
                 25270L,
                 "Проверить перевод на старый Альфа-Банк владельца",
                 null,
@@ -6090,17 +6083,10 @@ class PaymentLinkServiceTest {
                 "OWNER",
                 "manager@example.ru",
                 authentication
-        );
+        ));
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verifyNoInteractions(reviewSettlement, manualCardPaymentReviewNotificationService);
 
-        assertEquals("COMPLETED", result.status());
-        InOrder flow = inOrder(specialistManualPaymentReviewService, reviewSettlement);
-        flow.verify(specialistManualPaymentReviewService).requestRecipient(
-                25270L, 5370L, 100_000L, "OWNER", null, "OWNER",
-                "Проверить перевод на старый Альфа-Банк владельца", "", "manager@example.ru", authentication);
-        flow.verify(reviewSettlement).creditNow(9_370L);
-        flow.verify(specialistManualPaymentReviewService).deliver(9_370L);
-        verify(ownerManualCardPaymentApprovalRepository, never()).saveAndFlush(any());
-        verifyNoInteractions(manualCardPaymentReviewNotificationService);
     }
 
     @Test
@@ -6117,8 +6103,6 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
         when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
         when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
-        stubManualCardRecipients(order, link, new ManualCardPaymentRecipientResponse(
-                ContractorRecipientType.OWNER, null, null, "Владелец", 100_000L, 0L, true));
         doAnswer(invocation -> {
             PaymentLink frozen = invocation.getArgument(1);
             if (frozen.getManualActualRecipientFrozenAt() == null) {
@@ -6432,8 +6416,11 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByOrderIdForUpdate(25277L)).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(5377L)).thenReturn(Optional.of(link));
         when(paymentLinkRepository.findByIdForUpdate(5377L)).thenReturn(Optional.of(link));
-        stubImmediateReview(order, link, ContractorRecipientType.OWNER, null, "OWNER",
-                "Поступило по бумажному счёту");
+        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any())).thenAnswer(call -> {
+            OwnerManualCardPaymentApproval approval = call.getArgument(0);
+            approval.setId(42L);
+            return approval;
+        });
 
         ManualCardPaymentContextResponse context = service.manualCardPaymentContextForOrder(
                 25277L, authentication);
@@ -6444,14 +6431,11 @@ class PaymentLinkServiceTest {
                 ContractorRecipientType.OWNER, null, context.candidates().getFirst().key(),
                 "manager@example.ru", authentication);
 
-        assertEquals("COMPLETED", pending.status());
-        verify(reviewSettlement).creditNow(9_370L);
-        verify(specialistManualPaymentReviewService).requestRecipient(
-                25277L, 5377L, 100_000L, "OWNER", null, "OWNER",
-                "Поступило по бумажному счёту", "", "manager@example.ru", authentication);
-        verify(ownerManualCardPaymentApprovalRepository, never()).saveAndFlush(any());
-        verify(orderTransactionService, never()).handlePaymentStatus(order);
-        verifyNoInteractions(tbankClient);
+        assertEquals("OWNER_APPROVAL_PENDING", pending.status());
+        verify(ownerManualCardPaymentApprovalRepository).saveAndFlush(any());
+        verify(reviewSettlement, never()).creditNow(anyLong());
+        verify(orderTransactionService, never()).handlePaymentStatus(any());
+
     }
 
     @Test
@@ -6497,8 +6481,6 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByIdWithOrder(5371L)).thenReturn(Optional.of(link));
         when(paymentLinkRepository.findByIdForUpdate(5371L)).thenReturn(Optional.of(link));
         when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
-        stubManualCardRecipients(order, link, new ManualCardPaymentRecipientResponse(
-                ContractorRecipientType.OWNER, null, null, "Владелец", 100_000L, 0L, true));
         doAnswer(invocation -> {
             PaymentLink frozen = invocation.getArgument(1);
             if (frozen.getManualActualRecipientFrozenAt() == null) {
@@ -6621,8 +6603,11 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByIdForUpdate(5373L)).thenReturn(Optional.of(link));
         stubManualCardRecipients(order, link, new ManualCardPaymentRecipientResponse(
                 ContractorRecipientType.OWNER, null, null, "Владелец", 100_000L, 0L, false));
-        stubImmediateReview(order, link, ContractorRecipientType.OWNER, null, "OWNER",
-                "Поступило на старый Альфа-Банк владельца");
+        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any())).thenAnswer(call -> {
+            OwnerManualCardPaymentApproval approval = call.getArgument(0);
+            approval.setId(42L);
+            return approval;
+        });
 
         var result = service.submitManagerManualCardPaymentForOrder(
                 25273L, "Поступило на старый Альфа-Банк владельца", null,
@@ -6630,13 +6615,11 @@ class PaymentLinkServiceTest {
                 "manager@example.ru", authentication
         );
 
-        assertEquals("COMPLETED", result.status());
-        assertEquals(PaymentLinkStatus.MANUAL_REPORTED, link.getStatus());
-        verify(reviewSettlement).creditNow(9_370L);
-        verifyNoInteractions(manualCardPaymentReviewNotificationService);
-        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
-        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
-        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+        assertEquals("OWNER_APPROVAL_PENDING", result.status());
+        verify(ownerManualCardPaymentApprovalRepository).saveAndFlush(any());
+        verify(reviewSettlement, never()).creditNow(anyLong());
+        verify(orderTransactionService, never()).handlePaymentStatus(any());
+
     }
 
     @Test
@@ -6969,6 +6952,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentSelectsLatestOfMultipleSafeTerminalRoutes() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -6989,8 +6973,7 @@ class PaymentLinkServiceTest {
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
-                25058L, true, true, 100_000L, "выписка проверена", null, "owner", authentication
-        );
+                25058L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "owner", authentication);
 
         assertTrue(latest.getLastError().startsWith("manual_card_payment_completed:"));
         assertEquals(PaymentLinkStatus.EXPIRED, older.getStatus());
@@ -7001,6 +6984,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentLocallyClosesCreatedBankRouteWithoutCallingProvider() throws Exception {
+        stubEmployeeTransferAccounting();
         PaymentLinkService service = service(properties());
         Order order = order(25054L, "Ссылка еще не открыта", BigDecimal.valueOf(1000));
         PaymentLink link = new PaymentLink();
@@ -7020,8 +7004,7 @@ class PaymentLinkServiceTest {
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
-                25054L, true, true, 100_000L, "выписка проверена", null, "owner", authentication
-        );
+                25054L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "owner", authentication);
 
         assertEquals(PaymentLinkStatus.CANCELED, link.getStatus());
         assertTrue(link.getLastError().startsWith("manual_card_payment_completed:"));
@@ -7032,6 +7015,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentAcceptsFreshProviderVerifiedCanceledRoute() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -7048,8 +7032,7 @@ class PaymentLinkServiceTest {
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
-                25055L, true, true, 100_000L, "выписка проверена", null, "owner", authentication
-        );
+                25055L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "owner", authentication);
 
         assertEquals(PaymentLinkStatus.CANCELED, link.getStatus());
         assertTrue(link.getLastError().startsWith("manual_card_payment_completed:"));
@@ -7060,6 +7043,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentLinkEndpointReconcilesLegacyExpiredRoute() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -7076,8 +7060,7 @@ class PaymentLinkServiceTest {
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransfer(
-                5233L, true, true, 100_000L, "выписка проверена", null, "owner", authentication
-        );
+                5233L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "owner", authentication);
 
         assertEquals("DEADLINE_EXPIRED", legacy.getProviderTerminalStatus());
         assertTrue(legacy.getLastError().startsWith("manual_card_payment_completed:"));
@@ -7112,6 +7095,7 @@ class PaymentLinkServiceTest {
     @ParameterizedTest
     @ValueSource(strings = {"CONFIRMED", "AUTHORIZED", "PROCESSING"})
     void manualCardPaymentFailsClosedWhenProviderIsNotNewOrSafelyClosed(String providerStatus) throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -7128,8 +7112,7 @@ class PaymentLinkServiceTest {
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
                 () -> service.confirmPaidByManualCardTransferForOrder(
-                        25048L, true, true, 100_000L, "выписка проверена", null, "manager", authentication
-                )
+                        25048L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager", authentication)
         );
 
         assertEquals(409, error.getStatusCode().value());
@@ -7140,6 +7123,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentCancelTimeoutNeverSettlesOrderAndCanResumeAfterCanceledReconciliation() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -7163,8 +7147,7 @@ class PaymentLinkServiceTest {
         ResponseStatusException timeout = assertThrows(
                 ResponseStatusException.class,
                 () -> service.confirmPaidByManualCardTransferForOrder(
-                        25049L, true, true, 100_000L, "выписка проверена", null, "manager", authentication
-                )
+                        25049L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager", authentication)
         );
 
         assertEquals(502, timeout.getStatusCode().value());
@@ -7178,8 +7161,7 @@ class PaymentLinkServiceTest {
         assertNull(link.getBankCancelOriginStatus());
 
         service.confirmPaidByManualCardTransferForOrder(
-                25049L, true, true, 100_000L, "повтор после сверки", null, "manager", authentication
-        );
+                25049L, true, true, 100_000L, "повтор после сверки", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager", authentication);
 
         assertNull(link.getConfirmedAmountKopecks());
         assertTrue(link.getLastError().startsWith("manual_card_payment_completed:"));
@@ -7274,6 +7256,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentRechecksCompetingRouteAfterProviderObservationBeforeCancel() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -7294,8 +7277,7 @@ class PaymentLinkServiceTest {
         ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
                 service.reportPaidByManualCardTransferForOrder(
                         25072L, "Клиент перевёл напрямую", null,
-                        ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication
-                ));
+                        ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager@example.ru", authentication));
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
         assertTrue(lockedReads.get() >= 5);
@@ -7308,6 +7290,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentRechecksSettledEvidenceAfterProviderObservationBeforeCancel() throws Exception {
+        stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -7325,8 +7308,7 @@ class PaymentLinkServiceTest {
         ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
                 service.reportPaidByManualCardTransferForOrder(
                         25073L, "Клиент перевёл напрямую", null,
-                        ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication
-                ));
+                        ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager@example.ru", authentication));
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
         verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-5274"));
@@ -9011,6 +8993,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void activeTochkaPaymentFailsClosedBeforeManualCardSettlementOrProviderCalls() {
+        stubEmployeeTransferAccounting();
         PaymentLinkService service = service(properties());
         Order order = order(3_663L, "ООО Точка Ручной Перевод", BigDecimal.valueOf(321));
         PaymentProfile profile = tochkaEntityProfile(363L);
@@ -9033,9 +9016,8 @@ class PaymentLinkServiceTest {
                         link.getAmountKopecks(),
                         "Выписка проверена",
                         null,
-                        "owner",
-                        authentication
-                )
+                        ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "owner",
+                        authentication)
         );
 
         assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
@@ -10090,6 +10072,21 @@ class PaymentLinkServiceTest {
         link.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
         link.setContractorAllocationId(allocationId);
         return link;
+    }
+
+    private void stubEmployeeTransferAccounting() {
+        org.mockito.Mockito.lenient().when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        org.mockito.Mockito.lenient().doAnswer(call -> {
+            PaymentLink source = call.getArgument(1);
+            source.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            source.setManualActualRecipientType(ContractorRecipientType.SPECIALIST);
+            source.setManualActualRecipientProfileId(7L);
+            source.setManualActualCashDestinationKind(ContractorCashDestinationKind.CONTRACTOR_PROFILE);
+            source.setManualActualReason(call.getArgument(5));
+            source.setManualActualActor(call.getArgument(7));
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(any(), any(), eq("PROFILE:7"),
+                eq(ContractorRecipientType.SPECIALIST), eq(7L), anyString(), any(), anyString());
     }
 
     private void stubManualCardRecipients(

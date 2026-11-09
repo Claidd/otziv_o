@@ -218,8 +218,11 @@
                       <button type="button" class="secondary"
                         (click)="paymentRouteChanged.emit('EMPLOYEE_REQUISITES')"
                         [disabled]="paymentRouteChanging">
-                        Реквизиты сотрудника
+                        Выдать реквизиты без ссылки
                       </button>
+                      @if (paymentRouteContext.paymentLinkId != null) {
+                        <button type="button" class="secondary" (click)="paymentRouteChanged.emit('DIFFERENT_RECIPIENT')" [disabled]="paymentRouteChanging">Сменить получателя</button>
+                      }
                       <button type="button" class="secondary"
                         (click)="paymentRouteChanged.emit('OWNER_TBANK')"
                         [disabled]="paymentRouteChanging">

@@ -51,6 +51,16 @@ public class ManagerPaymentController {
         return paymentRouteChangeService.change(orderId, request, authentication);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/manager/orders/{orderId}/payment-route-change/recipient")
+    public PaymentRouteChangeResponse changeRecipient(
+            @PathVariable Long orderId,
+            @Valid @RequestBody PaymentRouteChangeRequest request,
+            Authentication authentication
+    ) {
+        return paymentRouteChangeService.change(orderId, request, authentication, true);
+    }
+
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @PostMapping("/api/manager/orders/{orderId}/paper-invoice/issued")
     public ManagerPaymentLinkResponse markPaperInvoiceIssued(

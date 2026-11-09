@@ -218,6 +218,8 @@
             (phoneCopied)="copyPhone($event)"
             (copyTextRequested)="copyOrderText(order, $event)"
             (statusUpdated)="updateOrderStatus(order, $event)"
+            [allowRecordTransfer]="canRecordTransfer"
+            (recordTransfer)="manualCardPaymentOrder.set(order)"
             (clientWaitingToggled)="toggleOrderClientWaiting(order)"
             (editOpened)="openOrderEdit(order)"
             (chatBotInviteOpened)="handleOrderChatBotInviteOpened(order)"

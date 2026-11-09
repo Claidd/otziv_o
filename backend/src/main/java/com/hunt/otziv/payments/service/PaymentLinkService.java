@@ -123,7 +123,12 @@ public class PaymentLinkService implements com.hunt.otziv.payments.api.Standalon
 
     @Transactional
     public PaymentRouteReplacement replacePaymentRouteAuthorized(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target, boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication) {
-        var replacement = paymentRouteReplacement.replacePaymentRouteAuthorized(orderId, expectedPaymentLinkId, target, confirmedUnpaid, expectedTargetPaymentProfileId, authentication);
+        return replacePaymentRouteAuthorized(orderId, expectedPaymentLinkId, target, confirmedUnpaid, expectedTargetPaymentProfileId, authentication, false, false);
+    }
+
+    @Transactional
+    public PaymentRouteReplacement replacePaymentRouteAuthorized(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target, boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication, boolean paperInvoiceWithdrawn, boolean differentRecipient) {
+        var replacement = paymentRouteReplacement.replacePaymentRouteAuthorized(orderId, expectedPaymentLinkId, target, confirmedUnpaid, expectedTargetPaymentProfileId, authentication, paperInvoiceWithdrawn, differentRecipient);
         return new PaymentRouteReplacement(replacement.previousPaymentLinkId(), replacement.paymentLinkId(), replacement.target(), replacement.response());
     }
 
@@ -262,6 +267,12 @@ public class PaymentLinkService implements com.hunt.otziv.payments.api.Standalon
      * only after an explicit CANCELED response. Any paid, authorized,
      * inconsistent or unknown provider state fails closed.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public AdminPaymentLinkResponse confirmPaidByManualCardTransferForOrder(Long orderId, boolean recipientStatementChecked, boolean paymentReceived, Long receivedAmountKopecks, String note, String receiptUrl, ContractorRecipientType recipientType, Long recipientProfileId, String recipientKey, String actor, Authentication authentication) {
+        return manualCardPayments.confirmPaidByManualCardTransferForOrder(orderId, recipientStatementChecked, paymentReceived,
+                receivedAmountKopecks, note, receiptUrl, recipientType, recipientProfileId, recipientKey, actor, authentication);
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AdminPaymentLinkResponse confirmPaidByManualCardTransferForOrder(Long orderId, boolean recipientStatementChecked, boolean paymentReceived, Long receivedAmountKopecks, String note, String receiptUrl, String actor, Authentication authentication) {
         return manualCardPayments.confirmPaidByManualCardTransferForOrder(orderId, recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl, actor, authentication);

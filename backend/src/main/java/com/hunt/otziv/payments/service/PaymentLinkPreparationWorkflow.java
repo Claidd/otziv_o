@@ -446,7 +446,12 @@ public class PaymentLinkPreparationWorkflow {
             return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), true);
         }
         boolean typedActualRecipientEnabled = actualPaymentAttributionService.actualRecipientAccountingEnabled();
-        Optional<ManualPaymentTaskRouteSnapshot> taskRoute = typedActualRecipientEnabled ? taskReceiptIntegrationService.reserveForPaymentLink(link, manager.getId(), profile.getId()) : Optional.empty();
+        Optional<ManualPaymentTaskRouteSnapshot> taskRoute = Optional.empty();
+        if (typedActualRecipientEnabled) {
+            taskRoute = configuredMode == InvoicePaymentMode.EMPLOYEE_REQUISITES
+                    ? taskReceiptIntegrationService.reserveForPaymentLink(link, manager.getId(), profile.getId(), ManualPaymentTaskRoutingFilter.NUMBER)
+                    : taskReceiptIntegrationService.reserveForPaymentLink(link, manager.getId(), profile.getId());
+        }
         if (taskRoute.isPresent()) {
             applyManualTaskPayment(link, taskRoute.get());
             link = paymentLinkRepository.save(link);
@@ -924,17 +929,11 @@ public class PaymentLinkPreparationWorkflow {
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     void applyManualTaskPayment(PaymentLink link, ManualPaymentTask task) {
-        String transferNumber = manualTaskTransferNumber(task.getManualPhone());
-        link.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
-        link.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        commonInvoiceRouteSelector.applyTaskRequisites(link, task.getManualPaymentType(), task.getManualPhone(),
+                task.getManualRecipientName(), task.getManualBankName(), task.getManualPaymentUrl(), task.getManualPaymentButtonLabel());
         link.setManualSource(ManualPaymentSource.MANUAL_TASK);
         link.setManualPaymentTask(task);
         link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
-        link.setManualPhone(transferNumber);
-        link.setManualRecipientName(manualRecipientName(task.getManualRecipientName()));
-        link.setManualBankName(limit(task.getManualBankName(), 120));
-        link.setManualPaymentUrl(null);
-        link.setManualPaymentButtonLabel(null);
         link.setManualComment(manualComment(task.getComment(), link));
         link.setReceiptStatus(PaymentReceiptStatus.PENDING);
     }
@@ -942,16 +941,15 @@ public class PaymentLinkPreparationWorkflow {
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     void applyManualTaskPayment(PaymentLink link, ManualPaymentTaskRouteSnapshot snapshot) {
         ManualPaymentTask task = manualPaymentTaskRepository.findByIdForUpdate(snapshot.taskId()).orElseThrow(ManualPaymentTaskRouteErrors::stale);
-        applyManualTaskPayment(link, task);
+        commonInvoiceRouteSelector.applyTaskRequisites(link, snapshot.manualPaymentType(), snapshot.manualPhone(),
+                snapshot.bankRecipientName(), snapshot.bankName(), snapshot.manualPaymentUrl(), snapshot.manualPaymentButtonLabel());
+        link.setManualSource(ManualPaymentSource.MANUAL_TASK);
+        link.setManualPaymentTask(task);
+        link.setManualComment(manualComment(task.getComment(), link));
+        link.setReceiptStatus(PaymentReceiptStatus.PENDING);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
         link.setManualTaskSourceGeneration(snapshot.source().sourceGeneration());
         link.setManualTaskGeneration(snapshot.taskGeneration());
-        link.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
-        link.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
-        link.setManualPhone(manualTaskTransferNumber(snapshot.manualPhone()));
-        link.setManualRecipientName(manualRecipientName(snapshot.bankRecipientName()));
-        link.setManualBankName(limit(snapshot.bankName(), 120));
-        link.setManualPaymentUrl(null);
-        link.setManualPaymentButtonLabel(null);
     }
 
     private void applyPaymentProfile(PaymentLink link, PaymentProfile profile) {

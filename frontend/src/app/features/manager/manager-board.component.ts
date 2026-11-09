@@ -206,6 +206,7 @@ export class ManagerBoardComponent implements OnDestroy {
   readonly chatLinkDraft = signal('');
   readonly chatLinkSaving = signal(false);
 
+  get canRecordTransfer(): boolean { return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']); }
   readonly manualCardPaymentOrder = signal<OrderCardItem | null>(null);
   readonly commonManualPayment = signal<ManagerCommonManualPaymentContext | null>(null);
   private readonly companyFacade = new ManagerBoardCompanyFacade({

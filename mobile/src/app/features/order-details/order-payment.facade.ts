@@ -88,11 +88,12 @@ export class OrderPaymentFacade {
     try {
       const targetLabel = this.paymentRouteTargetLabel(target);
       const confirmed = await this.deps.confirm({ title: 'Сменить получателя оплаты',
-        message: `Переключить заказ на «${targetLabel}»? Продолжайте только если клиент ещё не оплатил: прежний маршрут будет закрыт, а клиенту запланировано обновлённое сообщение.`, confirmText: 'Сменить', danger: true });
+        message: (context.paperInvoiceIssued ? 'Подтвердите, что выписка проверена, денег нет и клиент уведомлён об отзыве бумажного счёта. ' : '') + `Переключить заказ на «${targetLabel}»? Продолжайте только если клиент ещё не оплатил: прежний маршрут будет закрыт, а клиенту запланировано обновлённое сообщение.`, confirmText: 'Сменить', danger: true });
       if (!confirmed || !this.accepts(ticket, route)) return;
       this.deps.error.set(null);
       const response = await firstValueFrom(this.deps.writes.track(this.deps.api.changeManagerOrderPaymentRoute(orderId, {
         expectedPaymentLinkId: context.paymentLinkId, target, confirmedUnpaid: true,
+        ...(context.paperInvoiceIssued ? { paperInvoiceWithdrawn: true } : {}),
         expectedTargetPaymentProfileId: target === 'OWNER_TBANK' ? context.expectedTargetPaymentProfileId ?? null : null
       })));
       if (!this.accepts(ticket, route)) return;
@@ -150,7 +151,9 @@ export class OrderPaymentFacade {
 
       case 'EMPLOYEE_REQUISITES':
 
-        return 'Реквизиты сотрудника';
+        return 'Реквизиты без ссылки';
+      case 'DIFFERENT_RECIPIENT':
+        return 'Реквизиты другого получателя';
 
       case 'OWNER_PAPER_INVOICE':
 

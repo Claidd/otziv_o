@@ -697,9 +697,12 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   <div class="payment-route-options">
                     <button type="button" (click)="changePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('EMPLOYEE_REQUISITES')">
                       <span class="material-icons-sharp">badge</span>
-                      <strong>Реквизиты сотрудника</strong>
+                      <strong>Выдать реквизиты без ссылки</strong>
                       <small>Перевод на назначенные реквизиты</small>
                     </button>
+                    @if (context.paymentLinkId != null) {
+                      <button type="button" (click)="changePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="paymentRouteChanging()">Сменить получателя</button>
+                    }
                     <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('OWNER_TBANK')">
                       <span class="material-icons-sharp">link</span>
                       <strong>{{ context.configuredMode === 'OWNER_TBANK' ? 'Переиздать банковскую ссылку' : 'Банковская ссылка владельца' }}</strong>

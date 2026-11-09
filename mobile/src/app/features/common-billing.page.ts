@@ -134,7 +134,11 @@ type InvoiceAction =
                 && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
                 && invoice.paymentRouteSelectedAt
                 && invoice.status !== 'PAID') {
-                <button type="button" (click)="changePaymentRoute()" [disabled]="!!mutating()">Сменить способ оплаты</button>
+                <button type="button" (click)="changePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="!!mutating()">Выдать реквизиты без ссылки</button>
+                <button type="button" (click)="changePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="!!mutating()">Сменить получателя</button>
+                @if (!isBankPaymentRoute(invoice.paymentRouteType)) {
+                  <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="!!mutating()">Банковская ссылка владельца</button>
+                }
                 @if (isBankPaymentRoute(invoice.paymentRouteType)) {
                   <button type="button" (click)="reissueOwnerBankRoute()" [disabled]="!!mutating()">Обновить банк и ссылку</button>
                 }
@@ -890,7 +894,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     );
   }
 
-  async changePaymentRoute(): Promise<void> {
+  async changePaymentRoute(targetOverride?: CommonInvoicePaymentRouteChangeTarget): Promise<void> {
     const invoice = this.summary();
     const invoiceId = this.invoiceId();
     const ticket = this.routeGuard.capture();
@@ -911,11 +915,12 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         this.error.set(context.blockReason || 'Способ оплаты нельзя изменить без ручной сверки.');
         return;
       }
-      const target: CommonInvoicePaymentRouteChangeTarget = context.currentTarget === 'OWNER_TBANK'
+      const target: CommonInvoicePaymentRouteChangeTarget = targetOverride ?? (context.currentTarget === 'OWNER_TBANK'
         ? 'EMPLOYEE_REQUISITES'
-        : 'OWNER_TBANK';
+        : 'OWNER_TBANK');
       const destination = target === 'EMPLOYEE_REQUISITES'
-        ? 'реквизиты специалиста или менеджера'
+        ? 'реквизиты без ссылки'
+        : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
         : 'банковскую ссылку владельца';
       const recipient = context.currentRecipient?.trim()
         ? ` Получатель сейчас: ${context.currentRecipient}.`
@@ -1017,7 +1022,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     const confirmed = await this.confirm.confirm({
       title: paperEnabled ? 'Вернуть авто-распределение' : 'Бумажный счёт владельца',
       message: paperEnabled
-        ? 'Вернуть распределение специалист → менеджер → владелец? Делайте это только если бумажный счёт не отправлялся и оплаты по нему нет.'
+        ? 'Вернуть распределение специалист → менеджер → владелец? Проверьте отсутствие поступления по выписке. Если счёт уже отправлен, подтвердите, что клиент уведомлён о его отзыве.'
         : 'Включить бумажный счёт владельца? Система безопасно отменит прежний маршрут и освободит резерв. Продолжайте только если клиент ещё не платил.',
       danger: true
     });
@@ -1029,7 +1034,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       'change-paper-invoice-mode',
       () => this.commonBillingApi.changeCommonInvoicePaymentMode(
         invoiceId,
-        paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE'
+        paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE', !!invoice.paperInvoiceIssuedAt
       )
     );
   }

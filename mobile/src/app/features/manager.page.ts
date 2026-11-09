@@ -274,6 +274,8 @@ type CompanyPreservedFields = Pick<
                   (copyPhone)="copyOrderPhone(order)"
                   (copyText)="copyManagerOrderText(order, $event)"
                   (statusChange)="updateOrderStatusFromCard(order, $event)"
+                  [allowRecordTransfer]="!order.commonInvoice"
+                  (recordTransfer)="recordTransfer(order)"
                   (clientWaitingToggle)="toggleOrderClientWaiting(order)"
                   (noteBadgeClick)="focusOrderNote(order)"
                   (noteChange)="setOrderNote(order, $event)"
@@ -2929,6 +2931,14 @@ export class ManagerPage implements OnInit, OnDestroy {
       this.error.set(this.apiErrorMessage(error, order.commonInvoice ? 'Не удалось изменить общий счет.' : 'Не удалось изменить статус заказа.'));
     } finally {
       this.mutationKey.set(null);
+    }
+  }
+
+  async recordTransfer(order: OrderItem): Promise<void> {
+    try {
+      if (await this.manualCardPaymentFlow.confirm(order.id)) await this.load();
+    } catch (error) {
+      this.error.set(this.apiErrorMessage(error, 'Не удалось зарегистрировать перевод'));
     }
   }
 

@@ -106,6 +106,12 @@ public class CommonInvoiceRouteSelector {
 
     @Transactional
     public Optional<PaymentRouteSelection> selectCommonInvoiceTaskRoute(com.hunt.otziv.common_billing.model.CommonInvoice invoice, Manager manager, long amountKopecks) {
+        return selectCommonInvoiceTaskRoute(invoice, manager, amountKopecks, ManualPaymentTaskRoutingFilter.ANY);
+    }
+
+    @Transactional
+    public Optional<PaymentRouteSelection> selectCommonInvoiceTaskRoute(com.hunt.otziv.common_billing.model.CommonInvoice invoice,
+            Manager manager, long amountKopecks, ManualPaymentTaskRoutingFilter filter) {
         // A new task route is safe only while the typed actual-recipient flow
         // is authoritative. Existing frozen routes are handled by the caller
         // before this selector is reached.
@@ -114,14 +120,23 @@ public class CommonInvoiceRouteSelector {
             return Optional.empty();
         }
         PaymentProfile profile = paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
-        Optional<ManualPaymentTaskRouteSnapshot> snapshot = taskReceiptIntegrationService.reserveForCommonInvoice(invoice, manager.getId(), profile.getId(), amountKopecks);
+        Optional<ManualPaymentTaskRouteSnapshot> snapshot = filter.equals(ManualPaymentTaskRoutingFilter.ANY)
+                ? taskReceiptIntegrationService.reserveForCommonInvoice(invoice, manager.getId(), profile.getId(), amountKopecks)
+                : taskReceiptIntegrationService.reserveForCommonInvoice(invoice, manager.getId(), profile.getId(), amountKopecks, filter);
         if (snapshot.isEmpty()) {
             invoice.setPaymentRouteManualTaskSourceGeneration(null);
             return Optional.empty();
         }
         ManualPaymentTaskRouteSnapshot task = snapshot.get();
-        String transferNumber = manualTaskTransferNumber(task.manualPhone());
-        return Optional.of(new PaymentRouteSelection(PaymentMethod.MANUAL_MOBILE_BANK.name(), profile.getId(), normalize(profile.getCode()), normalize(profile.getName()), "", ManualPaymentSource.MANUAL_TASK.name(), task.taskId(), ManualPaymentType.MOBILE_BANK.name(), transferNumber, manualRecipientName(task.bankRecipientName()), limit(task.bankName(), 120), "", "", "Платёжное задание #" + task.taskId(), paymentInstructionTextForTask(task), task.source().sourceGeneration(), task.taskGeneration()));
+        PaymentLink view = new PaymentLink();
+        applyTaskRequisites(view, task.manualPaymentType(), task.manualPhone(), task.bankRecipientName(),
+                task.bankName(), task.manualPaymentUrl(), task.manualPaymentButtonLabel());
+        return Optional.of(new PaymentRouteSelection(view.getPaymentMethod().name(), profile.getId(),
+                normalize(profile.getCode()), normalize(profile.getName()), "", ManualPaymentSource.MANUAL_TASK.name(),
+                task.taskId(), view.getManualPaymentType().name(), view.getManualPhone(), view.getManualRecipientName(),
+                view.getManualBankName(), view.getManualPaymentUrl(), view.getManualPaymentButtonLabel(),
+                "Платёжное задание #" + task.taskId(), paymentInstructionText(view, ""),
+                task.source().sourceGeneration(), task.taskGeneration()));
     }
 
     String commonInvoiceManagerText(Manager manager) {
@@ -259,16 +274,19 @@ public class CommonInvoiceRouteSelector {
         link.setReceiptStatus(PaymentReceiptStatus.PENDING);
     }
 
-    String paymentInstructionTextForTask(ManualPaymentTaskRouteSnapshot task) {
-        PaymentLink view = new PaymentLink();
-        view.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
-        view.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
-        view.setManualPhone(manualTaskTransferNumber(task.manualPhone()));
-        view.setManualRecipientName(task.bankRecipientName());
-        view.setManualBankName(limit(task.bankName(), 120));
-        view.setManualPaymentUrl(null);
-        view.setManualPaymentButtonLabel(null);
-        return paymentInstructionText(view, "");
+    void applyTaskRequisites(PaymentLink link, ManualPaymentType type, String number, String recipient,
+                             String bank, String url, String buttonLabel) {
+        boolean external = type == ManualPaymentType.EXTERNAL_LINK;
+        link.setManualPaymentType(external ? ManualPaymentType.EXTERNAL_LINK : ManualPaymentType.MOBILE_BANK);
+        link.setPaymentMethod(paymentMethodFor(link.getManualPaymentType()));
+        link.setManualPhone(external ? null : manualTaskTransferNumber(number));
+        link.setManualRecipientName(manualRecipientName(recipient));
+        link.setManualBankName(limit(bank, 120));
+        if (external && PaymentUrlPolicy.safe(url, PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL).isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "У задания нет доступной ссылки на оплату");
+        }
+        link.setManualPaymentUrl(external ? manualPaymentUrl(url) : null);
+        link.setManualPaymentButtonLabel(external ? manualButtonLabel(buttonLabel) : null);
     }
 
     void applyPaymentProfile(PaymentLink link, PaymentProfile profile) {

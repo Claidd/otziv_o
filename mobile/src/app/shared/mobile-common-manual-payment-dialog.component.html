@@ -14,6 +14,18 @@
     } @else if (!options()) {
       <p class="notice error" role="alert">{{ error() }}</p>
       <ion-button type="button" expand="block" fill="outline" (click)="load()">Повторить</ion-button>
+    } @else if (options()?.ownerReport; as report) {
+      <p role="status">Поступление ожидает подтверждения владельца. Сообщил {{ report.reportedBy }}.</p>
+      <p>{{ report.request.reason }}</p>
+      @if (report.request.receiptUrl) { <p>Чек: {{ report.request.receiptUrl }}</p> }
+      @for (line of report.request.attributions; track line.rowKey) {
+        <p>{{ candidate(line.recipientKey)?.label || line.recipientKey }} · {{ money(line.amountKopecks) }}</p>
+      }
+      @if (report.canDecide) {
+        <button type="button" [disabled]="saving()" (click)="decideOwnerReport(true)">Подтвердить поступление</button>
+        <button type="button" [disabled]="saving()" (click)="decideOwnerReport(false)">Отклонить запрос</button>
+      }
+      @if (error()) { <p role="alert">{{ error() }}</p> }
     } @else {
       <section class="payment-summary">
         <div><span>Общий счёт</span><strong>#{{ invoiceId }}</strong></div>
@@ -34,6 +46,7 @@
               [disabled]="saving()"
               (ngModelChange)="updateRecipient(index, $event)"
             >
+              <option value="" disabled>Выберите фактического получателя</option>
               @for (candidate of options()!.candidates; track candidate.key) {
                 <option [value]="candidate.key">
                   {{ candidate.label }}{{ candidate.originalRecipient ? ' · изначально' : '' }}

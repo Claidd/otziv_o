@@ -148,6 +148,17 @@ public class CommonBillingAdminController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/payment-route-change/recipient")
+    public CommonInvoiceDetailsResponse changeRecipient(
+            @PathVariable Long invoiceId,
+            @Valid @RequestBody CommonInvoicePaymentRouteChangeRequest request,
+            Principal principal
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.changeCommonInvoiceRecipient(invoiceId, request, principal);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/paper-invoice/issued")
     public CommonInvoiceDetailsResponse markPaperInvoiceIssued(
             @PathVariable Long invoiceId,

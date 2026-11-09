@@ -381,6 +381,10 @@ public class CommonBillingService {
         return invoiceRouteWorkflow.commonInvoicePaymentRouteChangeContext(invoiceId);
     }
 
+    public CommonInvoiceDetailsResponse changeCommonInvoiceRecipient(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, Principal principal) {
+        return invoiceRouteWorkflow.changeCommonInvoicePaymentRoute(invoiceId, request, principal, true);
+    }
+
     public CommonInvoiceDetailsResponse changeCommonInvoicePaymentRoute(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, Principal principal) {
         return invoiceRouteWorkflow.changeCommonInvoicePaymentRoute(invoiceId, request, principal);
     }

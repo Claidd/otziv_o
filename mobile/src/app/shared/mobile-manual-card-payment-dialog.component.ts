@@ -1,3 +1,4 @@
+import { prepareManualTransfer, type ManualTransferLine } from '@otziv/client-common/billing-payments';
 import { ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { ManagerManualPaymentsApi } from '../core/manager-manual-payments.api';
@@ -65,6 +66,37 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
 
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
+  readonly additionalOrders = signal<ManualTransferLine[]>([]);
+  additionalOrderId = '';
+  transferReference = '';
+  transferRubles = '';
+
+  async addTransferOrder(): Promise<void> {
+    const current = this.context;
+    const orderId = Number(this.additionalOrderId);
+    if (!current || this.saving()) return;
+    if (!Number.isSafeInteger(orderId) || orderId <= 0 || orderId === current.orderId || this.additionalOrders().some(row => row.orderId === orderId)) {
+      this.error.set('Введите номер другого заказа.'); return;
+    }
+    this.saving.set(true);
+    try {
+      const other = await firstValueFrom(this.managerManualPaymentsApi.getManagerManualCardPaymentContext(orderId));
+      const profile = this.selectedRecipient()?.recipientProfileId;
+      if (!profile || other.recipientSelectionFrozen || !other.candidates.some(c => c.recipientProfileId === profile)) {
+        throw new Error('По этому заказу выбранный получатель недоступен или уже зарегистрирован перевод.');
+      }
+      this.additionalOrders.update(lines => [...lines, {orderId, amountKopecks: other.amountKopecks}]);
+      this.additionalOrderId = '';
+      this.error.set(null);
+    } catch (failure) {
+      this.error.set(failure instanceof Error ? failure.message : 'Не удалось проверить заказ.');
+    } finally { this.saving.set(false); }
+  }
+
+  removeTransferOrder(orderId: number): void {
+    this.additionalOrders.update(lines => lines.filter(row => row.orderId !== orderId));
+  }
+
   readonly selectedRecipientKey = signal('');
   readonly reason = signal('');
   readonly receiptUrl = signal('');
@@ -104,13 +136,13 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
 
   ngOnInit(): void {
     const defaultRecipient = mobileManualCardPaymentSelectionRecipient(this.context);
-    if (!defaultRecipient) {
+    if (this.context.recipientSelectionFrozen && !defaultRecipient) {
       this.error.set(this.context.recipientSelectionFrozen
         ? 'Ранее выбранный получатель отсутствует в списке доступных получателей. Повтор оплаты заблокирован.'
         : 'Исходный получатель счёта отсутствует в списке доступных получателей. Оплата не изменена.');
       return;
     }
-    this.selectedRecipientKey.set(mobileManualCardRecipientKey(defaultRecipient));
+    this.selectedRecipientKey.set(this.context.recipientSelectionFrozen && defaultRecipient ? mobileManualCardRecipientKey(defaultRecipient) : '');
     if (this.context.recipientSelectionFrozen) {
       const preparedReason = this.context.preparedReason ?? '';
       const preparedReceiptUrl = this.context.preparedReceiptUrl ?? '';
@@ -167,9 +199,25 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
     this.saving.set(true);
     this.error.set(null);
     try {
-      const apiResult = await firstValueFrom(
+      const context = this.context;
+      let apiResult: ManagerManualCardPaymentResult;
+      if (this.additionalOrders().length) {
+        const group = prepareManualTransfer([{orderId: context.orderId, amountKopecks: context.amountKopecks}, ...this.additionalOrders()],
+          this.transferReference, this.transferRubles, submission.recipient.recipientProfileId, submission.reason, submission.receiptUrl);
+        const results = await firstValueFrom(this.managerManualPaymentsApi.recordTransfer(group));
+        const pending = results.filter(item => item.status !== 'COMPLETED');
+        if (pending.length) {
+          this.error.set('Перевод зарегистрирован. Требуется сверка заказов ' + pending.map(item => '№' + item.orderId).join(', '));
+          return;
+        }
+        const current = results.find(item => item.orderId === context.orderId);
+        if (!current) throw new Error('Проверьте результат распределения перевода.');
+        apiResult = current;
+      } else {
+      apiResult = await firstValueFrom(
         this.managerManualPaymentsApi.confirmManagerManualCardPayment(this.context.orderId, request)
       );
+      }
       const outcome: MobileManualCardPaymentOutcome = {
         context: this.context,
         recipient: submission.recipient,
@@ -198,10 +246,10 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
       }
       this.context = { ...context, candidates };
       const defaultRecipient = mobileManualCardPaymentSelectionRecipient(this.context);
-      if (!defaultRecipient) {
+      if (this.context.recipientSelectionFrozen && !defaultRecipient) {
         throw new Error('Актуальный исходный получатель отсутствует в списке. Оплата не изменена.');
       }
-      this.selectedRecipientKey.set(mobileManualCardRecipientKey(defaultRecipient));
+      this.selectedRecipientKey.set(this.context.recipientSelectionFrozen && defaultRecipient ? mobileManualCardRecipientKey(defaultRecipient) : '');
       if (context.recipientSelectionFrozen) {
         this.reason.set(context.preparedReason ?? '');
         this.receiptUrl.set(context.preparedReceiptUrl ?? '');

@@ -144,7 +144,7 @@ describe('ManagerOrderEditModalComponent', () => {
     const routeSection = element.querySelector('.payment-route-change');
     expect(routeSection?.textContent).toContain('Эквайринг Т-Банк');
     const employeeButton = Array.from(routeSection?.querySelectorAll<HTMLButtonElement>('button') ?? [])
-      .find((button) => button.textContent?.includes('Реквизиты сотрудника'));
+      .find((button) => button.textContent?.includes('Выдать реквизиты без ссылки'));
     employeeButton?.click();
     const bankButton = Array.from(routeSection?.querySelectorAll<HTMLButtonElement>('button') ?? [])
       .find((button) => button.textContent?.includes('Банковская ссылка владельца'));

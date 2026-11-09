@@ -5,6 +5,7 @@ import static com.hunt.otziv.common_billing.service.CommonInvoiceTochkaReconcili
 import static com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceDetailsAssembler.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService.*;
+import com.hunt.otziv.payments.service.ManualPaymentTaskRoutingFilter;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoicePresenter.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService.*;
@@ -129,7 +130,7 @@ public class CommonInvoicePaymentRouteWorkflow {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите, что клиент не оплатил по ранее отправленному способу");
         }
         String actor = principal == null ? "system" : normalize(principal.getName());
-        PreparedInvoicePaymentModeChange prepared = writeTransaction(() -> prepareInvoicePaymentModeChange(invoiceId, requestedMode, actor));
+        PreparedInvoicePaymentModeChange prepared = writeTransaction(() -> prepareInvoicePaymentModeChange(invoiceId, requestedMode, actor, Boolean.TRUE.equals(request.paperInvoiceWithdrawn())));
         if (prepared.providerPaymentRefId() == null) {
             return writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
         }
@@ -182,18 +183,27 @@ public class CommonInvoicePaymentRouteWorkflow {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CommonInvoiceDetailsResponse changeCommonInvoicePaymentRoute(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, Principal principal) {
-        if (request == null || request.target() == null || (request.target() != CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES && request.target() != CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK && request.target() != CommonInvoicePaymentRouteChangeTarget.OWNER_BANK_REISSUE)) {
+        return changeCommonInvoicePaymentRoute(invoiceId, request, principal, false);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CommonInvoiceDetailsResponse changeCommonInvoicePaymentRoute(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, Principal principal, boolean differentRecipient) {
+        if (request == null || request.target() == null || (differentRecipient && request.target() != CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES) || (request.target() != CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES && request.target() != CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK && request.target() != CommonInvoicePaymentRouteChangeTarget.OWNER_BANK_REISSUE)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для общего счёта можно выбрать реквизиты сотрудника, банковскую ссылку владельца " + "или переиздать ее по актуальному профилю");
         }
         if (!request.confirmedUnpaid()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите, что клиент ещё не оплатил по прежнему способу");
         }
         String actor = principal == null ? "system" : normalize(principal.getName());
-        boolean changed = writeTransaction(() -> replaceCommonInvoicePaymentRouteLocked(invoiceId, request, actor));
+        boolean changed = writeTransaction(() -> replaceCommonInvoicePaymentRouteLocked(invoiceId, request, actor, differentRecipient));
         return changed ? sendInvoice(invoiceId, true, true) : writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
     }
 
     boolean replaceCommonInvoicePaymentRouteLocked(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, String actor) {
+        return replaceCommonInvoicePaymentRouteLocked(invoiceId, request, actor, false);
+    }
+
+    boolean replaceCommonInvoicePaymentRouteLocked(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, String actor, boolean differentRecipient) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         List<CommonInvoicePaymentRef> paymentRefs = paymentRefRepository.findByInvoiceIdForUpdate(invoiceId);
@@ -212,9 +222,7 @@ public class CommonInvoicePaymentRouteWorkflow {
         if (ownerBankReissue && !currentlyOwnerTbank) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Переиздать по актуальному банковскому профилю можно только ссылку владельца");
         }
-        if ((request.target() == CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK && currentlyOwnerTbank)
-                || (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES
-                        && !currentlyOwnerTbank && !currentlyOwnerManual)) {
+        if ((request.target() == CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK && currentlyOwnerTbank)) {
             return false;
         }
         if (ownerBankReissue) {
@@ -243,6 +251,13 @@ public class CommonInvoicePaymentRouteWorkflow {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "В счете уже используется актуальный платежный профиль менеджера");
             }
         }
+        var filter = ManualPaymentTaskRoutingFilter.NUMBER;
+        if (differentRecipient) {
+            var previousTask = taskReceiptIntegrationService.candidate(invoice).orElse(null);
+            Long previousUserId = contractorPaymentLiveRoutingService.issuedRecipientUserId(invoice.getContractorAllocationId(),
+                    previousTask == null ? null : previousTask.accountingTargetProfileId());
+            filter = ManualPaymentTaskRoutingFilter.otherRecipient(previousUserId, previousTask);
+        }
         String reason = "Способ оплаты общего счёта изменён по просьбе клиента";
         if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {
             taskReceiptIntegrationService.release(invoice, reason);
@@ -258,11 +273,11 @@ public class CommonInvoicePaymentRouteWorkflow {
         PaymentRouteSelection route;
         ContractorPaymentAllocation allocation = null;
         if (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
-            Optional<PaymentRouteSelection> taskRoute = invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remaining);
+            Optional<PaymentRouteSelection> taskRoute = invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remaining, filter);
             if (taskRoute.isPresent()) {
                 route = taskRoute.get();
             } else {
-                allocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(invoice, routeOrders, routeManager, remaining));
+                allocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(invoice, routeOrders, routeManager, remaining, filter.excludedUserId()));
                 if (!isContractorRecipient(allocation)) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось выбрать специалиста или менеджера для общего счёта");
                 }
@@ -409,6 +424,10 @@ public class CommonInvoicePaymentRouteWorkflow {
     }
 
     PreparedInvoicePaymentModeChange prepareInvoicePaymentModeChange(Long invoiceId, InvoicePaymentMode requestedMode, String actor) {
+        return prepareInvoicePaymentModeChange(invoiceId, requestedMode, actor, false);
+    }
+
+    PreparedInvoicePaymentModeChange prepareInvoicePaymentModeChange(Long invoiceId, InvoicePaymentMode requestedMode, String actor, boolean paperInvoiceWithdrawn) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         requireNoBankDocumentModeChange(invoice, requestedMode);
@@ -422,7 +441,7 @@ public class CommonInvoicePaymentRouteWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Отправка прежних реквизитов ещё не подтверждена. Сначала выполните сверку сообщения");
         }
-        if (requestedMode == InvoicePaymentMode.AUTO_ROUTING && invoice.getPaperInvoiceIssuedAt() != null) {
+        if (requestedMode == InvoicePaymentMode.AUTO_ROUTING && invoice.getPaperInvoiceIssuedAt() != null && !paperInvoiceWithdrawn) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Бумажный счёт уже отправлен клиенту. Сначала проверьте его оплату вручную");
         }
         ensurePaperModeSwitchHasNoFinancialEvidence(invoice);
@@ -551,7 +570,10 @@ public class CommonInvoicePaymentRouteWorkflow {
         if(invoice.isPaperInvoiceReviewHold()) throw new ResponseStatusException(HttpStatus.CONFLICT,"По отменённому банковскому счёту есть несверенное поступление. Смена способа оплаты заблокирована");
         requireNoBankDocumentModeChange(invoice, requestedMode);
         Long invoiceId = invoice.getId();
-        if (invoice.getContractorAllocationId() != null) {
+        if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {
+            taskReceiptIntegrationService.release(invoice, "Изменён способ оплаты общего счёта");
+        }
+        else if (invoice.getContractorAllocationId() != null) {
             contractorPaymentLiveRoutingService.releaseCommonInvoiceRouteForPaperInvoice(invoice);
         }
         clearCommonPaymentRouteForModeSwitch(invoice);

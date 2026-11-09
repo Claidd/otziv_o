@@ -89,6 +89,7 @@ export interface CommonInvoiceDetailsResponse {
 
 export type CommonInvoicePaymentRouteChangeTarget =
   | 'EMPLOYEE_REQUISITES'
+  | 'DIFFERENT_RECIPIENT'
   | 'OWNER_TBANK'
   | 'OWNER_BANK_REISSUE';
 
@@ -236,11 +237,11 @@ export class CommonBillingApi {
 
   changeInvoicePaymentMode(
     invoiceId: number,
-    mode: InvoicePaymentMode
+    mode: InvoicePaymentMode, paperInvoiceWithdrawn = false
   ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-mode`,
-      { mode, confirmedUnpaid: true }
+      { mode, confirmedUnpaid: true, ...(paperInvoiceWithdrawn ? { paperInvoiceWithdrawn: true } : {}) }
     );
   }
 
@@ -258,10 +259,11 @@ export class CommonBillingApi {
     expectedPaymentEvidenceToken: string,
     expectedTargetPaymentProfileId?: number | null
   ): Observable<CommonInvoiceDetailsResponse> {
+    const different = target === 'DIFFERENT_RECIPIENT';
     return this.http.post<CommonInvoiceDetailsResponse>(
-      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-route-change`,
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-route-change${different ? '/recipient' : ''}`,
       {
-        target,
+        target: different ? 'EMPLOYEE_REQUISITES' : target,
         confirmedUnpaid: true,
         expectedPaymentEvidenceToken,
         expectedTargetPaymentProfileId: expectedTargetPaymentProfileId ?? null

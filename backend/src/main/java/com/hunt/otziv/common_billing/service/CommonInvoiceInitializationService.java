@@ -1,5 +1,7 @@
 package com.hunt.otziv.common_billing.service;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import static com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoicePresenter.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService.*;
@@ -1149,11 +1151,22 @@ public class CommonInvoiceInitializationService {
         }
         PaymentRouteSelection route;
         ContractorPaymentAllocation liveAllocation = null;
-        Optional<PaymentRouteSelection> taskRoute = hasCurrentCommonPaymentRoute(invoice) ? Optional.empty() : invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remainingKopecks);
+        boolean bankOnly = invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_TBANK;
+        boolean numberOnly = invoice.getInvoicePaymentMode() == InvoicePaymentMode.EMPLOYEE_REQUISITES;
+        Optional<PaymentRouteSelection> taskRoute = hasCurrentCommonPaymentRoute(invoice) || bankOnly ? Optional.empty()
+                : numberOnly ? invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remainingKopecks,
+                        com.hunt.otziv.payments.service.ManualPaymentTaskRoutingFilter.NUMBER)
+                : invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remainingKopecks);
         if (hasCurrentCommonPaymentRoute(invoice)) {
             route = legacyTbankRoute(invoice, remainingKopecks);
         } else if (taskRoute.isPresent()) {
             route = taskRoute.get();
+        } else if (bankOnly || numberOnly) {
+            liveAllocation = requireLiveCommonInvoiceAllocation(invoice, bankOnly
+                    ? contractorPaymentLiveRoutingService.reserveOwnerForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks)
+                    : contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks));
+            route = bankOnly ? invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(routeManager, remainingKopecks)
+                    : contractorCommonPaymentRoute(invoice, liveAllocation);
         } else if (contractorPaymentLiveRoutingService.enabledForNewRoutes()) {
             try {
                 liveAllocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks));
