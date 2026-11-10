@@ -595,7 +595,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
                     if (!persistedUrl.isBlank()) {
                         invoice.setPaymentUrl(persistedUrl);
                     }
-                    invoice.setLastError(null);
+                    if (invoice.getBadReviewBankRefId() == null) invoice.setLastError(null);
                     invoiceRepository.save(invoice);
                 }
             case CONFIRMED ->
@@ -913,7 +913,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
                 invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
                 invoice.setNextReminderAt(null);
                 invoice.setLastError(limit("tbank_payment_refunded: платеж получил статус " + terminalStatus + "; проверьте банк и оплату вручную", 512));
-            } else {
+            } else if (invoice.getBadReviewBankRefId() == null) {
                 invoice.setLastError(limit("tbank_payment_terminal: " + (errorCode.isBlank() ? terminalStatus : errorCode), 512));
             }
             invoiceRepository.save(invoice);
@@ -983,6 +983,16 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             return true;
         }
         boolean terminalWebhook = isTerminalPaymentWebhook(status, success, errorCode);
+        // A separately evidenced transfer settled this invoice. Keep observing the bank
+        // attempt without starting a cancellation that could race a second payment.
+        if (PAYMENT_REF_ARCHIVED.equals(originalStatus)
+                && "actual_recipient_received_observe_only".equals(paymentRef.getReason())
+                && !PAYMENT_REF_CONFIRMED.equals(status)
+                && (!terminalWebhook || Set.of("CANCELED", "REJECTED").contains(status))) {
+            paymentRef.setProviderStatus(status);
+            paymentRefRepository.save(paymentRef);
+            return true;
+        }
         if (!terminalWebhook && (PAYMENT_REF_CANCEL_PENDING.equals(originalStatus) || PAYMENT_REF_CANCELING.equals(originalStatus) || PAYMENT_REF_CANCEL_FAILED.equals(originalStatus) || PAYMENT_REF_CANCEL_FAILED_FINAL.equals(originalStatus))) {
             paymentRef.setReason(paymentRefReasonPreservingProviderOrderMismatch(paymentRef, "cancel_lifecycle_webhook:" + (status.isBlank() ? "UNKNOWN" : status)));
             paymentRefRepository.save(paymentRef);
@@ -1816,7 +1826,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         invoice.setAmountKopecks(amount);
         invoice.setPaidKopecks(Math.min(amount, (preserveRecordedAttentionPayment || preserveExactContractorPayment) ? Math.max(recordedPaid, paid) : paid));
         boolean preserveMigrationPaymentEvidence = isMigrationPaymentRegistryAttention(invoice);
-        if (!preserveMigrationPaymentEvidence && invoice.getStatus() != CommonInvoiceStatus.PAID && invoice.getTbankPaymentAmountKopecks() != null && invoice.getTbankPaymentAmountKopecks() != remainingKopecks(invoice)) {
+        if (!preserveMigrationPaymentEvidence && invoice.getBadReviewBankRefId() == null && invoice.getStatus() != CommonInvoiceStatus.PAID && invoice.getTbankPaymentAmountKopecks() != null && invoice.getTbankPaymentAmountKopecks() != remainingKopecks(invoice)) {
             archiveCurrentPaymentRef(invoice, "remaining_changed");
             clearCurrentPaymentRef(invoice);
         }
@@ -1841,7 +1851,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
 
     private boolean badReviewPaymentOnHold(CommonInvoice invoice) {
         return invoice != null && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
-                && normalize(invoice.getLastError()).startsWith(CommonInvoiceMembershipWorkflow.BAD_REVIEW_SUPPLEMENT_REQUIRED);
+                && (invoice.getBadReviewBankRefId() != null || normalize(invoice.getLastError()).startsWith(CommonInvoiceMembershipWorkflow.BAD_REVIEW_SUPPLEMENT_REQUIRED));
     }
 
     void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items) {

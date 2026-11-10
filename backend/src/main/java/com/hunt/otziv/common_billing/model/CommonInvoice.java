@@ -63,6 +63,15 @@ public class CommonInvoice {
     @Column(name = "bad_review_payable", nullable = false)
     private boolean badReviewPayable;
 
+    @Column(name = "bad_review_bank_ref_id")
+    private Long badReviewBankRefId;
+    @Column(name = "bad_review_bank_order_id")
+    private Long badReviewBankOrderId;
+    @Column(name = "bad_review_bank_task_id")
+    private Long badReviewBankTaskId;
+    @Column(name = "bad_review_bank_check_at")
+    private LocalDateTime badReviewBankCheckAt;
+
     public boolean isRepricedUnpaid() {
         return badReviewPayable && status == CommonInvoiceStatus.UNPAID;
     }

@@ -10271,14 +10271,14 @@ class PaymentLinkServiceTest {
         var routes = new com.hunt.otziv.payments.service.CommonInvoiceRouteSelector(observations, paymentLinkRepository,
                 runtimeSettingsService, paymentProfileService, tochkaPaymentProfileResolver, manualPaymentTaskService,
                 taskReceiptIntegrationService, contractorPaymentLiveRoutingService, actualPaymentAttributionService);
+        var amounts = new com.hunt.otziv.payments.service.PaymentLinkAmountPolicy(badReviewTaskService);
         var presenter = new com.hunt.otziv.payments.service.PaymentLinkPresenter(
                 routes, observations, properties, runtimeSettingsService, paymentProfileService,
-                tochkaPaymentProfileResolver, appSettingService);
+                tochkaPaymentProfileResolver, appSettingService, amounts);
         var cancellation = new com.hunt.otziv.payments.service.PaymentLinkCancellationWorkflow(
                 presenter, routes, observations, paymentLinkRepository, orderRepository, tbankClient,
                 tochkaPaymentProfileResolver, tochkaClient, contractorPaymentShadowService,
                 paymentLinkReturnOutboxService, contractorPaymentTargetAccessPolicy, transactionExecutor);
-        var amounts = new com.hunt.otziv.payments.service.PaymentLinkAmountPolicy(badReviewTaskService);
         var settlement = new com.hunt.otziv.payments.service.PaymentLinkSettlementService(
                 amounts, cancellation, presenter, routes, paymentLinkRepository, orderRepository,
                 reviewRecoveryGateService, orderTransactionService, paymentCheckService,

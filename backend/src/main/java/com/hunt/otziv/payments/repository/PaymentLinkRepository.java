@@ -26,6 +26,12 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> {
+    @Query(value = "SELECT id FROM payment_links WHERE bad_review_bank_check_at<=:now ORDER BY bad_review_bank_check_at,id LIMIT 20", nativeQuery = true)
+    List<Long> dueBadReviewBankChecks(@Param("now") LocalDateTime now);
+
+    @Query(value = "SELECT COUNT(*) FROM payment_links WHERE order_id=:id AND bad_review_bank_check_at IS NOT NULL", nativeQuery = true)
+    int pendingBadReviewBankChecks(@Param("id") long orderId);
+
     @Query(value = "SELECT COUNT(*) FROM bank_recipient_change WHERE target_kind='ORDER' AND target_id=:id AND state IN ('WAITING','POLLING')", nativeQuery = true)
     int pendingRecipientChanges(@Param("id") long id);
 

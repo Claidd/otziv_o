@@ -89,6 +89,12 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
     }
 
     @Transactional
+    public void scheduleRepricedBadReviewInvoice(Order order) {
+        if (canSchedule(order) && !order.isPaperInvoiceAutomationHold())
+            scheduleOrderRetry(order, ClientMessageScenario.BAD_REVIEW_INVOICE, badReviewInvoiceTargetKey(order), 0);
+    }
+
+    @Transactional
     public void scheduleBadReviewInvoiceRetry(Order order) {
         if (!canSchedule(order)) {
             return;

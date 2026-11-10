@@ -69,7 +69,9 @@
               }
             </section>
 
-            @if (!item?.payable) {
+            @if (item?.status === 'AWAITING_BANK_CLOSURE') {
+              <p>Здесь появятся новые реквизиты, когда банк закроет ссылку на прежнюю сумму.</p>
+            } @else if (!item?.payable) {
               <p>Оплата по этому счёту сейчас недоступна.</p>
             } @else if (managerTextRoute()) {
               <section class="common-route-instruction" aria-label="Инструкция по оплате">

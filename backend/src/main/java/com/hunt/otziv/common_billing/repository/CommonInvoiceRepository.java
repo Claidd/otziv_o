@@ -21,6 +21,9 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, Long> {
+    @Query(value = "SELECT invoice_id FROM common_invoices WHERE bad_review_bank_check_at<=:now ORDER BY bad_review_bank_check_at,invoice_id LIMIT 20", nativeQuery = true)
+    List<Long> dueBadReviewBankChecks(@Param("now") LocalDateTime now);
+
     @Query(value = "SELECT COUNT(*) FROM bank_recipient_change WHERE target_kind='INVOICE' AND target_id=:id AND state IN ('WAITING','POLLING')", nativeQuery = true)
     int pendingRecipientChanges(@Param("id") long id);
 
