@@ -28,6 +28,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 @RequiredArgsConstructor
 public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationControl {
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     private static final Set<ClientMessageScenario> PAYMENT_AUTOMATION_SCENARIOS = Set.of(
             ClientMessageScenario.PAYMENT_INVOICE_RETRY,
@@ -89,7 +91,8 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
     }
 
     @Transactional
-    public void scheduleRepricedBadReviewInvoice(Order order) {
+    public void scheduleRepricedBadReviewInvoice(long orderId) {
+        Order order = entityManager.getReference(Order.class, orderId);
         if (canSchedule(order) && !order.isPaperInvoiceAutomationHold())
             scheduleOrderRetry(order, ClientMessageScenario.BAD_REVIEW_INVOICE, badReviewInvoiceTargetKey(order), 0);
     }

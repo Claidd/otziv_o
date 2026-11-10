@@ -1,7 +1,6 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
+import com.hunt.otziv.client_messages.api.ManualPaymentAutomationControl;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.api.UnpaidBankObservation.*;
 import com.hunt.otziv.payments.model.*;
@@ -14,10 +13,9 @@ import static org.mockito.Mockito.*;
 
 class OrderBadReviewBankRepricingTest {
     final OrderPaymentLinkWorkflow orders = mock();
-    final PaymentInvoiceRetryScheduler messages = mock();
+    final ManualPaymentAutomationControl messages = mock();
     final PaymentLinkSettlementService settlement = mock();
-    final ContractorPaymentLiveRoutingService reserves = mock();
-    final OrderBadReviewBankRepricing worker = new OrderBadReviewBankRepricing(mock(PaymentLinkRepository.class), orders, messages, settlement, reserves);
+    final OrderBadReviewBankRepricing worker = new OrderBadReviewBankRepricing(mock(PaymentLinkRepository.class), orders, messages, settlement);
     final PaymentLink link = new PaymentLink();
     final Order order = new Order();
 
@@ -44,14 +42,15 @@ class OrderBadReviewBankRepricingTest {
         assertThat(source).isNotNull();
         assertThat(worker.claim(13)).isNull();
         worker.finish(source, new Result(Outcome.WAITING, "FORM_SHOWED"));
-        verifyNoInteractions(messages, reserves);
+        verifyNoInteractions(messages);
+        verify(orders, never()).releaseClosedPaymentLink(link);
         var closed = new Result(Outcome.CLOSED, "DEADLINE_EXPIRED");
         worker.finish(source, closed);
         worker.finish(source, closed);
         assertThat(link.getStatus()).isEqualTo(PaymentLinkStatus.EXPIRED);
         assertThat(link.getBadReviewBankCheckAt()).isNull();
-        verify(messages).scheduleRepricedBadReviewInvoice(order);
-        verify(reserves).releaseClosedPaymentLink(link);
+        verify(messages).scheduleRepricedBadReviewInvoice(21L);
+        verify(orders).releaseClosedPaymentLink(link);
         verifyNoInteractions(settlement);
     }
 
@@ -59,13 +58,15 @@ class OrderBadReviewBankRepricingTest {
         var source = worker.claim(13);
         worker.finish(source, new Result(Outcome.FINANCIAL, "CONFIRMED"));
         verify(settlement).applyBankStatus(link, "CONFIRMED", true, "0");
-        verifyNoInteractions(messages, reserves);
+        verifyNoInteractions(messages);
+        verify(orders, never()).releaseClosedPaymentLink(link);
     }
 
     @Test void replacementOrConcurrentReceiptCannotBeClosedUsingAnOldObservation() {
         var source = worker.claim(13);
         link.setConfirmedAmountKopecks(120000L);
         worker.finish(source, new Result(Outcome.CLOSED, "REJECTED"));
-        verifyNoInteractions(messages, reserves, settlement);
+        verifyNoInteractions(messages, settlement);
+        verify(orders, never()).releaseClosedPaymentLink(link);
     }
 }

@@ -1,7 +1,6 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
+import com.hunt.otziv.client_messages.api.ManualPaymentAutomationControl;
 import com.hunt.otziv.payments.api.BadReviewBankRepricing;
 import com.hunt.otziv.payments.api.UnpaidBankObservation.*;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
@@ -17,9 +16,8 @@ import org.springframework.stereotype.Service;
 public class OrderBadReviewBankRepricing implements BadReviewBankRepricing {
     private final PaymentLinkRepository links;
     private final OrderPaymentLinkWorkflow orderLinks;
-    private final PaymentInvoiceRetryScheduler messages;
+    private final ManualPaymentAutomationControl messages;
     private final PaymentLinkSettlementService settlement;
-    private final ContractorPaymentLiveRoutingService reserves;
 
     public List<Long> due() { return links.dueBadReviewBankChecks(LocalDateTime.now()); }
 
@@ -48,8 +46,8 @@ public class OrderBadReviewBankRepricing implements BadReviewBankRepricing {
             link.setProviderTerminalStatus(result.status());
             link.setLastError(null);
             link.setBadReviewBankCheckAt(null);
-            reserves.releaseClosedPaymentLink(link);
-            messages.scheduleRepricedBadReviewInvoice(link.getOrder());
+            orderLinks.releaseClosedPaymentLink(link);
+            messages.scheduleRepricedBadReviewInvoice(source.targetId());
         } else if (result.outcome() == Outcome.FINANCIAL) {
             if (result.mappedStatus() != null && !"HISTORY".equals(result.status()))
                 settlement.applyTochkaMappedStatus(link, new MappedPayment(result.mappedStatus(), result.paymentMethod(),
