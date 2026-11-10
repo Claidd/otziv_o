@@ -235,7 +235,7 @@ export class PayGroupPageComponent {
     }
 
     const current = this.invoice();
-    if (!current || current.status === 'PAID' || current.status === 'UNPAID' || current.status === 'DISABLED') {
+    if (!current || current.status === 'PAID' || (current.status === 'UNPAID' && !current.payable) || current.status === 'DISABLED') {
       return;
     }
 
@@ -332,6 +332,8 @@ export class PayGroupPageComponent {
         return 'Не оплачен';
       case 'BAN':
         return 'Бан';
+      case 'ARCHIVED':
+        return 'Архив';
       case 'DISABLED':
         return 'Отключен';
       default:

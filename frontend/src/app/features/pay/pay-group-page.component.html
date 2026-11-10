@@ -69,7 +69,9 @@
               }
             </section>
 
-            @if (managerTextRoute()) {
+            @if (!item?.payable) {
+              <p>Оплата по этому счёту сейчас недоступна.</p>
+            } @else if (managerTextRoute()) {
               <section class="common-route-instruction" aria-label="Инструкция по оплате">
                 <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
                 <div>

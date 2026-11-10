@@ -11,6 +11,12 @@ public interface BankPaperInvoices {
     Snapshot read(long invoiceId);
     Snapshot prepare(long invoiceId);
     void configure(long invoiceId,Principal actor);
+    void waitForBankBeforeIssue(long invoiceId, org.springframework.security.core.Authentication actor, String documentRequest);
+
+    /** Creates the requested local document and outbox entry in the verified mode-change transaction. */
+    interface DocumentPreparation {
+        void prepareAfterBankClosure(long invoiceId, String request, org.springframework.security.core.Authentication actor);
+    }
     String deliveryClient(long invoiceId,String companyClient);
     String composition(long invoiceId);
     void bindDocument(long invoiceId,String documentId);

@@ -125,7 +125,7 @@ public class ContractorPaymentLiveRoutingService {
         if (invoice == null
                 || invoice.getId() == null
                 || invoice.getContractorAllocationId() == null
-                || !PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus())
+                || (!PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus()) && !invoice.isRepricedUnpaid())
                 || invoice.getPaymentRouteAmountKopecks() == null
                 || invoice.getPaymentRouteAmountKopecks() <= 0
                 || remainingKopecks <= 0
@@ -548,7 +548,7 @@ public class ContractorPaymentLiveRoutingService {
                         Math.max(0L, invoice.getAmountKopecks() - invoice.getPaidKopecks())
                 )
                 || invoice.getPaidKopecks() >= invoice.getAmountKopecks()
-                || !PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus())) {
+                || (!PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus()) && !invoice.isRepricedUnpaid())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Платежный маршрут общего счета изменился и требует сверки"
@@ -608,6 +608,19 @@ public class ContractorPaymentLiveRoutingService {
                 "Получатель общего счёта заменён на бумажный счёт владельца",
                 "LIVE_COMMON:PAPER_INVOICE_SWITCH"
         );
+    }
+
+    @Transactional
+    public void releaseCommonInvoiceForRepricing(CommonInvoice invoice) {
+        if (invoice.getContractorAllocationId() == null) return;
+        var allocation = lockAllocationProfileFirst(invoice.getContractorAllocationId()).orElseThrow();
+        if (allocation.getStatus() == ContractorAllocationStatus.RELEASED_UNPAID
+                && allocation.getSourceType() == ContractorAllocationSourceType.COMMON_INVOICE
+                && Objects.equals(allocation.getSourceId(), invoice.getId())
+                && Objects.equals(allocation.getCommonInvoiceId(), invoice.getId())
+                && allocation.getConfirmedKopecks() == 0 && allocation.getClientReportedAt() == null) return;
+        releaseCommonInvoiceRouteForReplacement(invoice, "Пересчитана сумма общего счёта после плохой задачи",
+                "LIVE_COMMON:BAD_REVIEW_REPRICED");
     }
 
     @Transactional

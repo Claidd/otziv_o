@@ -7,6 +7,10 @@ record PreparedCommonInvoiceMessage(Long invoiceId, ClientMessageDelivery.Target
         String managerClientId, String groupId, String message, String telegramCopyTransferNumber,
         boolean reminder, boolean manual, boolean paymentRouteChanged, String operationId,
         boolean alreadyConfirmed, String confirmedChannel, long remainingKopecks) {
+    boolean badReviewNotice() {
+        return operationId != null && operationId.startsWith("bad-review-invoice:");
+    }
+
     PreparedCommonInvoiceMessage asPaymentRouteChanged(String replacement) {
         return new PreparedCommonInvoiceMessage(invoiceId, chatCompany, managerClientId, groupId,
                 replacement, telegramCopyTransferNumber, reminder, manual, true, operationId, alreadyConfirmed, confirmedChannel, remainingKopecks);

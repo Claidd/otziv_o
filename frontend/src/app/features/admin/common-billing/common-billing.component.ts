@@ -983,10 +983,7 @@ export class CommonBillingComponent implements OnDestroy {
     }
     const paperEnabled = invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE';
     const nextMode = paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE';
-    const confirmation = paperEnabled
-      ? 'Вернуть автоматическое распределение специалист → менеджер → владелец? Проверьте отсутствие поступления по выписке. Если счёт уже отправлен, подтвердите, что клиент уведомлён о его отзыве.'
-      : 'Включить бумажный счёт владельца? Система проверит прежнюю банковскую ссылку и отменит её только при подтверждённом отсутствии оплаты. Текущий безопасный резерв будет освобождён, а будущие циклы этого общего счёта тоже станут бумажными. Продолжайте только если клиент ещё не платил.';
-    if (!window.confirm(confirmation)) {
+    if (paperEnabled && !window.confirm('Вернуть автоматическое распределение? Если бумажный счёт уже отправлен, подтвердите его отзыв и отсутствие поступления по выписке.')) {
       return;
     }
     this.invoiceAction(
@@ -2420,7 +2417,7 @@ export class CommonBillingComponent implements OnDestroy {
   private failMutation(err: unknown, fallback: string): void {
     const message = apiErrorDetail(err, fallback);
     this.mutating.set('');
-    if ((err as { status?: number } | null)?.status === 423) this.toastService.info('Смена получателя', message);
+    if ((err as { status?: number } | null)?.status === 423) this.toastService.info('Ожидание банка', message);
     else this.toastService.error(fallback, message);
   }
 }

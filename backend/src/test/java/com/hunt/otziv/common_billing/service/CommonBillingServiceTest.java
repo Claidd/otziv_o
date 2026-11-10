@@ -161,6 +161,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -650,7 +651,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void initializedUnpaidTbankSessionIsCanceledBeforeSwitchingCommonInvoiceToPaperMode() {
+    void closedTbankSessionAllowsPaperWithoutCancelOrRefund() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
@@ -682,25 +683,11 @@ class CommonBillingServiceTest {
                 null,
                 null,
                 "terminal",
-                "NEW",
+                "DEADLINE_EXPIRED",
                 "provider-payment",
                 "provider-order",
                 100_000L
         ));
-        when(tbankClient.cancel(any(), any())).thenReturn(new TbankCancelResponse(
-                true,
-                "0",
-                null,
-                null,
-                "terminal",
-                "CANCELED",
-                "provider-payment",
-                "provider-order",
-                100_000L,
-                100_000L,
-                0L
-        ));
-
         CommonInvoiceDetailsResponse response = service.changeInvoicePaymentMode(
                 invoice.getId(),
                 new InvoicePaymentModeChangeRequest(InvoicePaymentMode.OWNER_PAPER_INVOICE, true),
@@ -711,7 +698,7 @@ class CommonBillingServiceTest {
         assertEquals(InvoicePaymentMode.OWNER_PAPER_INVOICE, invoice.getInvoicePaymentMode());
         assertEquals(InvoicePaymentMode.OWNER_PAPER_INVOICE, account.getInvoicePaymentMode());
         assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
-        assertEquals("CANCELED", ref.getStatus());
+        assertEquals("DEADLINE_EXPIRED", ref.getStatus());
         assertNull(invoice.getTbankOrderId());
         assertNull(invoice.getTbankPaymentId());
         assertNull(invoice.getTbankTerminalKey());
@@ -719,7 +706,7 @@ class CommonBillingServiceTest {
         assertNull(invoice.getPaymentUrl());
         var bankOrder = inOrder(tbankClient);
         bankOrder.verify(tbankClient).getState(any(), eq("provider-payment"));
-        bankOrder.verify(tbankClient).cancel(any(), any());
+        verify(tbankClient, never()).cancel(any(), any());
     }
 
     @Test
@@ -7914,7 +7901,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void unpaidCommonInvoiceAllowsTaskCompletionButRequiresSupplement() {
+    void unpaidCommonInvoiceLocksCurrentCycleForRepricing() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.UNPAID);
@@ -7924,7 +7911,7 @@ class CommonBillingServiceTest {
         stubLockedInvoice(invoice, item, order);
 
         assertEquals(
-                CommonPayableChangeDisposition.SUPPLEMENT_REQUIRED,
+                CommonPayableChangeDisposition.REPRICE_UNPAID,
                 service.prepareLinkedOrderPayableChange(101L)
         );
 
@@ -7943,7 +7930,7 @@ class CommonBillingServiceTest {
         item.setUnpaid(false);
         stubLockedInvoice(invoice, item, order);
 
-        assertTrue(service.createBadReviewSupplementSuccessor(101L, 77L));
+        assertTrue(service.repriceBadReviewInvoice(101L, 77L));
 
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
         assertEquals(CommonInvoiceStatus.UNPAID.name(), invoice.getPreviousStatus());
@@ -7953,54 +7940,32 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    void unpaidCommonCycleCreatesOneCollectingSuccessorAndKeepsPredecessorImmutable() {
-        CommonBillingAccount account = account();
-        CommonInvoice predecessor = invoice(account);
-        predecessor.setStatus(CommonInvoiceStatus.UNPAID);
-        predecessor.setTitle("x".repeat(180));
+    void repeatedBadReviewsUpdateOneInvoiceAndKeepItsPublicTokenAndMembership() {
+        CommonInvoice current = invoice(account());
+        current.setStatus(CommonInvoiceStatus.UNPAID);
+        current.setTitle("Общий счёт");
+        current.setToken("original-public-link");
         Order order = order(101L);
         order.setStatus(status("Не оплачено"));
-        CommonInvoiceOrder sourceItem = item(predecessor, order);
-        sourceItem.setActiveMembership(true);
-        sourceItem.setUnpaid(true);
-        stubLockedInvoice(predecessor, sourceItem, order);
-        when(invoiceRepository.findByCycleIdempotencyKeyForUpdate("BAD_REVIEW_SUCCESSOR:10"))
-                .thenReturn(Optional.empty());
-        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(sourceItem));
-        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
-        when(invoiceRepository.save(any(CommonInvoice.class))).thenAnswer(invocation -> {
-            CommonInvoice saved = invocation.getArgument(0);
-            if (saved.getId() == null) {
-                saved.setId(11L);
-            }
-            return saved;
-        });
+        CommonInvoiceOrder position = item(current, order);
+        position.setActiveMembership(true);
+        position.setUnpaid(true);
+        stubLockedInvoice(current, position, order);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(position));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1200), BigDecimal.valueOf(1400), BigDecimal.valueOf(1400));
 
-        assertTrue(service.createBadReviewSupplementSuccessor(101L, 77L));
-
-        // The invoice goes out after this bad review even though more are scheduled.
-        verify(badReviewTaskService, never()).getSummaryForOrder(any());
-        assertEquals(CommonInvoiceStatus.UNPAID, predecessor.getStatus());
-        assertFalse(sourceItem.isActiveMembership());
-        ArgumentCaptor<Iterable> itemBatches = ArgumentCaptor.forClass(Iterable.class);
-        verify(invoiceOrderRepository, times(3)).saveAll(itemBatches.capture());
-        List<CommonInvoiceOrder> successorItems = new ArrayList<>();
-        itemBatches.getAllValues().get(1).forEach(value -> successorItems.add((CommonInvoiceOrder) value));
-        assertEquals(1, successorItems.size());
-        CommonInvoiceOrder successorItem = successorItems.get(0);
-        assertTrue(successorItem.isActiveMembership());
-        assertFalse(successorItem.isUnpaid());
-        assertEquals(130_000L, successorItem.getAmountKopecks());
-        CommonInvoice successor = successorItem.getInvoice();
-        assertEquals(predecessor, successor.getSupersedesInvoice());
-        assertEquals("BAD_REVIEW_SUCCESSOR", successor.getInvoicePurpose());
-        assertEquals("BAD_REVIEW_SUCCESSOR:10", successor.getCycleIdempotencyKey());
-        assertEquals(180, successor.getTitle().length());
-        assertEquals(CommonInvoiceStatus.READY, successor.getStatus());
-        assertEquals("Не оплачено", order.getStatus().getTitle());
-        verify(orderRepository, never()).save(order);
-        verify(entityManager).flush();
+        assertTrue(service.repriceBadReviewInvoice(101L, 77L));
+        assertEquals(120_000L, current.getAmountKopecks());
+        assertTrue(service.repriceBadReviewInvoice(101L, 78L));
+        assertTrue(service.repriceBadReviewInvoice(101L, 78L));
+        assertEquals(2L, current.getBadReviewRevision());
+        assertTrue(current.isBadReviewNoticePending());
+        assertEquals(140_000L, position.getAmountKopecks());
+        assertTrue(position.isActiveMembership());
+        assertEquals(CommonInvoiceStatus.UNPAID, current.getStatus());
+        assertEquals("original-public-link", current.getToken());
+        assertEquals("Общий счёт", current.getTitle());
+        verify(invoiceRepository, never()).save(argThat(other -> other != current));
     }
 
     private CommonInvoice deliveredBadReviewSuccessor(CommonBillingAccount account) {
@@ -8013,7 +7978,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void nextBadReviewClosesTheUnpaidDeliveredSuccessorAndSendsTheNewAmount() throws Exception {
+    void nextBadReviewKeepsTheDeliveredSuccessorAndQueuesTheNewAmount() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice delivered = deliveredBadReviewSuccessor(account);
         Order order = order(101L);
@@ -8022,30 +7987,16 @@ class CommonBillingServiceTest {
         item.setActiveMembership(true);
         stubLockedInvoice(delivered, item, order);
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
-        when(invoiceRepository.findByCycleIdempotencyKeyForUpdate("BAD_REVIEW_SUCCESSOR:10")).thenReturn(Optional.empty());
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1500));
-        when(invoiceRepository.save(any(CommonInvoice.class))).thenAnswer(invocation -> {
-            CommonInvoice saved = invocation.getArgument(0);
-            if (saved.getId() == null) {
-                saved.setId(11L);
-            }
-            return saved;
-        });
-
-        assertTrue(service.createBadReviewSupplementSuccessor(101L, 78L));
+        assertTrue(service.repriceBadReviewInvoice(101L, 78L));
 
         assertEquals(CommonInvoiceStatus.UNPAID, delivered.getStatus());
         assertNull(delivered.getNextReminderAt());
-        assertFalse(item.isActiveMembership());
+        assertTrue(item.isActiveMembership());
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Не оплачено");
-        ArgumentCaptor<CommonInvoice> saved = ArgumentCaptor.forClass(CommonInvoice.class);
-        verify(invoiceRepository, atLeastOnce()).save(saved.capture());
-        CommonInvoice successor = saved.getAllValues().stream()
-                .filter(invoice -> invoice != delivered).reduce((first, second) -> second).orElseThrow();
-        assertEquals(delivered, successor.getSupersedesInvoice());
-        assertEquals("BAD_REVIEW_SUCCESSOR:10", successor.getCycleIdempotencyKey());
-        assertEquals(CommonInvoiceStatus.READY, successor.getStatus());
-        assertEquals(150_000L, successor.getAmountKopecks());
+        assertEquals(150_000L, delivered.getAmountKopecks());
+        assertTrue(delivered.isBadReviewNoticePending());
+        verify(invoiceRepository, never()).save(argThat(other -> other != delivered));
         assertEquals("Не оплачено", order.getStatus().getTitle());
     }
 
@@ -8058,9 +8009,8 @@ class CommonBillingServiceTest {
         CommonInvoiceOrder item = item(delivered, order);
         item.setActiveMembership(true);
         stubLockedInvoice(delivered, item, order);
-        when(invoiceRepository.findByCycleIdempotencyKeyForUpdate("BAD_REVIEW_SUCCESSOR:10")).thenReturn(Optional.empty());
 
-        assertTrue(service.createBadReviewSupplementSuccessor(101L, 78L));
+        assertTrue(service.repriceBadReviewInvoice(101L, 78L));
 
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, delivered.getStatus());
         assertTrue(delivered.getLastError().startsWith("bad_review_supplement_required:"));
@@ -8069,7 +8019,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void unsentSuccessorTakesTheNewAmountInPlaceButADeliveredOneNeedsTheNext() {
+    void bothUnsentAndDeliveredSuccessorsUseTheSameRepricingPath() {
         CommonBillingAccount account = account();
         CommonInvoice successor = invoice(account);
         successor.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
@@ -8079,11 +8029,11 @@ class CommonBillingServiceTest {
         item.setActiveMembership(true);
         stubLockedInvoice(successor, item, order);
 
-        assertEquals(CommonPayableChangeDisposition.REFRESH_CURRENT_INVOICE, service.prepareLinkedOrderPayableChange(101L));
+        assertEquals(CommonPayableChangeDisposition.REPRICE_UNPAID, service.prepareLinkedOrderPayableChange(101L));
 
         successor.setStatus(CommonInvoiceStatus.INVOICED);
         successor.setSentAt(LocalDateTime.now().minusHours(3));
-        assertEquals(CommonPayableChangeDisposition.SUPPLEMENT_REQUIRED, service.prepareLinkedOrderPayableChange(101L));
+        assertEquals(CommonPayableChangeDisposition.REPRICE_UNPAID, service.prepareLinkedOrderPayableChange(101L));
     }
 
     @Test

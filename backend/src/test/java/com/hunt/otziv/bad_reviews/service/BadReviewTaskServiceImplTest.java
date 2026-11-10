@@ -886,13 +886,13 @@ class BadReviewTaskServiceImplTest {
         ));
         when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
         when(commonBillingService.prepareLinkedOrderPayableChange(181L))
-                .thenReturn(CommonPayableChangeDisposition.SUPPLEMENT_REQUIRED);
-        when(commonBillingService.createBadReviewSupplementSuccessor(181L, 481L)).thenReturn(true);
+                .thenReturn(CommonPayableChangeDisposition.REPRICE_UNPAID);
+        when(commonBillingService.repriceBadReviewInvoice(181L, 481L)).thenReturn(true);
 
         BadReviewTask completed = service.completeTask(481L);
 
         assertEquals(BadReviewTaskStatus.DONE, completed.getStatus());
-        verify(commonBillingService).createBadReviewSupplementSuccessor(181L, 481L);
+        verify(commonBillingService).repriceBadReviewInvoice(181L, 481L);
         verify(commonBillingService, never()).refreshLinkedOrderAmount(181L);
         verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);

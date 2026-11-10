@@ -1027,11 +1027,9 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       return;
     }
     const paperEnabled = invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE';
-    const confirmed = await this.confirm.confirm({
-      title: paperEnabled ? 'Вернуть авто-распределение' : 'Бумажный счёт владельца',
-      message: paperEnabled
-        ? 'Вернуть распределение специалист → менеджер → владелец? Проверьте отсутствие поступления по выписке. Если счёт уже отправлен, подтвердите, что клиент уведомлён о его отзыве.'
-        : 'Включить бумажный счёт владельца? Система безопасно отменит прежний маршрут и освободит резерв. Продолжайте только если клиент ещё не платил.',
+    const confirmed = !paperEnabled || await this.confirm.confirm({
+      title: 'Вернуть авто-распределение',
+      message: 'Если бумажный счёт уже отправлен, подтвердите его отзыв и отсутствие поступления по выписке.',
       danger: true
     });
     if (!confirmed || !this.routeGuard.accepts(ticket)) {
@@ -1637,7 +1635,13 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       this.error.set(null);
     } catch (error) {
       if (this.routeGuard.accepts(ticket)) {
-        this.error.set(this.errorMessage(error, 'Не удалось изменить заказ общего счета.'));
+        if (key === 'change-paper-invoice-mode' && error instanceof HttpErrorResponse && error.status === 423) {
+          this.error.set(null);
+          const toast = await this.toast.create({ message: this.errorMessage(error, 'Ожидаем закрытия ссылки банком'), duration: 5000 });
+          if (this.routeGuard.accepts(ticket)) await toast.present();
+        } else {
+          this.error.set(this.errorMessage(error, 'Не удалось изменить заказ общего счета.'));
+        }
       }
     } finally {
       if (this.routeGuard.accepts(ticket) && this.mutating() === key) {

@@ -677,7 +677,7 @@ public class ContractorPaymentShadowService {
         // Lock the evidence source before profile/allocation accounting locks.
         CommonSourcePrelude commonPrelude = lockCommonSourceOrderFirst(invoiceId);
         CommonInvoice lockedInvoice = commonPrelude == null ? null : commonPrelude.invoice();
-        if (lockedInvoice == null || lockedInvoice.getStatus() != CommonInvoiceStatus.UNPAID) {
+        if (lockedInvoice == null || lockedInvoice.getStatus() != CommonInvoiceStatus.UNPAID || lockedInvoice.isRepricedUnpaid()) {
             return 0;
         }
         List<ContractorPaymentAllocation> candidates = new ArrayList<>();
@@ -1153,11 +1153,9 @@ public class ContractorPaymentShadowService {
                 );
             } else if (!hasFinalCommonActualRecipient(invoice.getId())) {
                 applyCommonInvoiceStatus(allocation, invoice, now);
-                releaseIfCommonInvoiceContainsUnpaidOrder(
-                        allocation,
-                        sourcePrelude.orders(),
-                        now
-                );
+                if (!invoice.isRepricedUnpaid()) {
+                    releaseIfCommonInvoiceContainsUnpaidOrder(allocation, sourcePrelude.orders(), now);
+                }
             }
             taskReturnBridge.recordReturn(taskReturnBinding, allocation);
             clearReconciliationFailure(allocation);
@@ -1618,7 +1616,7 @@ public class ContractorPaymentShadowService {
                     "COMMON:RETURNED_TOTAL:" + returnedTarget
             );
         }
-        if (invoice.getStatus() == CommonInvoiceStatus.UNPAID) {
+        if (invoice.getStatus() == CommonInvoiceStatus.UNPAID && !invoice.isRepricedUnpaid()) {
             release(allocation, ContractorAllocationStatus.RELEASED_UNPAID,
                     "Общий счет не оплачен", now, "COMMON:UNPAID");
         } else if (invoice.getStatus() == CommonInvoiceStatus.ARCHIVED

@@ -1076,7 +1076,7 @@ public class CommonInvoiceInitializationService {
     }
 
     boolean canAcceptPublicPayment(CommonInvoice invoice) {
-        return invoice != null && !isOwnerPaperInvoice(invoice) && PUBLIC_PAYABLE_STATUSES.contains(invoice.getStatus());
+        return invoice != null && !isOwnerPaperInvoice(invoice) && (PUBLIC_PAYABLE_STATUSES.contains(invoice.getStatus()) || invoice.isRepricedUnpaid());
     }
 
     String paymentRefStatus(CommonInvoicePaymentRef ref) {
@@ -1119,6 +1119,13 @@ public class CommonInvoiceInitializationService {
     }
 
     // Called only after composition/payment evidence checks, inside the caller's canonical transaction.
+    void releaseReservationForRepricing(CommonInvoice invoice) {
+        if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK)
+            taskReceiptIntegrationService.release(invoice, "Пересчитана сумма общего счёта после плохой задачи");
+        else if (invoice.getContractorAllocationId() != null)
+            contractorPaymentLiveRoutingService.releaseCommonInvoiceForRepricing(invoice);
+    }
+
     void releaseUnusedCompositionReservation(CommonInvoice invoice) {
         String reason = "Изменение состава неотправленного общего счёта";
         if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {

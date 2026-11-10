@@ -14,6 +14,7 @@ public interface BackgroundDispatchBudget {
         /** Automatic payment reminder: master switch, pause, reminder toggle, business windows,
          *  shared daily limit and per-channel interval. */
         PAYMENT_REMINDER,
+        BAD_REVIEW_INVOICE,
         /** Offer campaign message: master switch, pause and the shared per-channel interval;
          *  the campaign keeps its own schedule and daily quota. */
         OFFER_CAMPAIGN

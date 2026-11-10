@@ -299,6 +299,9 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             Pageable pageable
     );
 
+    @Query("SELECT i.id FROM CommonInvoice i WHERE i.badReviewNoticePending = true AND i.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.UNPAID AND i.account.enabled = true AND i.paymentMessageOperationId IS NULL AND i.paidKopecks = 0 AND i.clientReportedAt IS NULL ORDER BY i.updatedAt, i.id")
+    List<Long> pendingBadReviewNotices(Pageable pageable);
+
     @Query("""
         SELECT invoice.id
         FROM CommonInvoice invoice

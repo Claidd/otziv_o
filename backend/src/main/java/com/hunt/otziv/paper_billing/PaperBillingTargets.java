@@ -98,6 +98,11 @@ public class PaperBillingTargets {
         if(target.kind().equals("ORDER")) orders.markDelivered(target.id());
         else if(isPart(target)) parts.delivered(target.id(),document);else common.delivered(target.id(),document);
     }
+    public void waitForBankBeforeIssue(Target target, Authentication actor, String documentRequest) {
+        paymentTargets.requireCanManageCommonInvoice(target.id());
+        common.waitForBankBeforeIssue(target.id(), actor, documentRequest);
+    }
+
     public void configureCommon(Target t,Authentication auth) {
         if (t.kind().equals("COMMON_INVOICE")) {
             paymentTargets.requireCanManageCommonInvoice(t.id());

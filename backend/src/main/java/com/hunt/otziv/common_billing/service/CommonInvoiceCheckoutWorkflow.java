@@ -81,7 +81,7 @@ public class CommonInvoiceCheckoutWorkflow {
         }
         boolean contractorRoute = invoice.getContractorAllocationId() != null && invoice.getPaymentRouteManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE;
         ContractorPaymentRequisitesSnapshot contractorRequisites = contractorRoute && payable ? contractorPaymentLiveRoutingService.activeCommonInvoiceRequisites(invoice, remaining).orElse(null) : null;
-        boolean contractorRequisitesVisible = !contractorRoute || contractorRequisites != null;
+        boolean contractorRequisitesVisible = payable && (!contractorRoute || contractorRequisites != null);
         String manualPhone = contractorRoute ? contractorRequisites == null ? "" : normalize(contractorRequisites.paymentPhone()) : normalize(invoice.getPaymentRouteManualPhone());
         String manualRecipient = contractorRoute ? contractorRequisites == null ? "" : normalize(contractorRequisites.recipientName()) : normalize(invoice.getPaymentRouteManualRecipient());
         String manualBank = contractorRoute ? contractorRequisites == null ? "" : normalize(contractorRequisites.bankName()) : normalize(invoice.getPaymentRouteManualBankName());

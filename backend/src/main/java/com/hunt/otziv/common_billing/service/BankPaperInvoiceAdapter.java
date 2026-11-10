@@ -46,6 +46,12 @@ public class BankPaperInvoiceAdapter implements BankPaperInvoices {
         return read(id);
     }
     public void configure(long id,Principal actor) { routes.configureBankPaperMode(id,actor); }
+    @org.springframework.beans.factory.annotation.Autowired private BankRecipientChanges bankChanges;
+
+    public void waitForBankBeforeIssue(long id, org.springframework.security.core.Authentication actor, String documentRequest) {
+        bankChanges.paper(id, actor, documentRequest);
+    }
+
     public String deliveryClient(long id,String fallback) {
         var r=jdbc.queryForMap("SELECT a.manager_id,m.client_id FROM common_invoices i JOIN common_billing_accounts a ON a.account_id=i.account_id LEFT JOIN managers m ON m.manager_id=a.manager_id WHERE i.invoice_id=?",id);
         return r.get("manager_id")==null?fallback:r.get("client_id")==null?"":r.get("client_id").toString().trim();

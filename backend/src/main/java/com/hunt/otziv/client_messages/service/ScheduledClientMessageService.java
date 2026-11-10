@@ -4321,15 +4321,17 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     ) {
         LocalDateTime nowStorage = messageTime.nowStorage();
         LocalDateTime nowIrkutsk = messageTime.nowIrkutsk();
-        boolean reminder = purpose == com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER;
-        boolean permitted = reminder
-                ? ClientMessageAutomationPolicy.allowed(appSettingService, ClientMessageScenario.PAYMENT_REMINDER, nowStorage)
+        boolean useAutomationWindows = purpose != com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.OFFER_CAMPAIGN;
+        var scenario = purpose == com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.BAD_REVIEW_INVOICE
+                ? ClientMessageScenario.BAD_REVIEW_INVOICE : ClientMessageScenario.PAYMENT_REMINDER;
+        boolean permitted = useAutomationWindows
+                ? ClientMessageAutomationPolicy.allowed(appSettingService, scenario, nowStorage)
                 : ClientMessageAutomationPolicy.masterAllowed(appSettingService, nowStorage);
         if (!permitted) {
             return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(false, "automation_paused",
                     "Автоответчик выключен или на паузе", nowStorage.plusMinutes(5));
         }
-        if (!reminder) {
+        if (!useAutomationWindows) {
             // Campaigns keep their own schedule and quota. Besides the master switch and pause they keep
             // the sending account's interval; the autoresponder's per-channel interval ignores them, so a
             // running campaign cannot hold back clients served by other accounts.

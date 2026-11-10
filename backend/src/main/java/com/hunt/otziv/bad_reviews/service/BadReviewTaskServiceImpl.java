@@ -706,9 +706,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
             case NOT_LINKED -> false;
             case REFRESH_CURRENT_INVOICE ->
                     commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(change.orderId());
-            case SUPPLEMENT_REQUIRED ->
+            case REPRICE_UNPAID ->
                     commonBillingService != null
-                            && commonBillingService.createBadReviewSupplementSuccessor(change.orderId(), taskId);
+                            && commonBillingService.repriceBadReviewInvoice(change.orderId(), taskId);
         };
     }
 

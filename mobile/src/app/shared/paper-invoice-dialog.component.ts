@@ -36,6 +36,7 @@ const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
       <div class="paper-backdrop" (click)="close()">
         <section role="dialog" aria-modal="true" aria-labelledby="paper-title" (click)="$event.stopPropagation()" (keydown.escape)="close()">
           <header><h2 id="paper-title">Счёт и акт</h2><button type="button" aria-label="Закрыть" (click)="close()" [disabled]="mutating()">×</button></header>
+          @if (bankWait()) { <p role="status" class="hint">{{ bankWait() }}</p> }
           @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
           @if (context(); as c) {
             <p>{{ c.companyTitle }}</p>
@@ -117,7 +118,7 @@ const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
                 <p class="hint">Расчётный счёт клиента вводить не требуется. Счёт получателя: …{{ c.accountLast4 }}.</p>
                 <label class="check"><input [disabled]="busy()" name="confirmed" type="checkbox" [(ngModel)]="confirmed" /> Клиент ещё не оплатил по прежним реквизитам</label>
                 <p class="hint">Реквизиты сохранятся у компаний выбранных заказов. Бумажный режим и плательщик перенесутся в следующие заказы; готовые неоплаченные работы будут выставляться автоматически. Настройку можно изменить в редакторе компании.</p>
-                <div class="actions"><button type="button" (click)="save()" [disabled]="busy() || isCommonSelection() || !!selectedChoice">Сохранить реквизиты</button><button class="primary" type="submit" [disabled]="busy() || !confirmed || !c.configured || (isCommonSelection() && !selectedOrders().length)">{{ busy() ? 'Сохраняем…' : 'Сформировать и отправить' }}</button></div>
+                <div class="actions"><button type="button" (click)="save()" [disabled]="busy() || isCommonSelection() || !!selectedChoice">Сохранить реквизиты</button><button class="primary" type="submit" [disabled]="busy() || !!bankWait() || !confirmed || !c.configured || (isCommonSelection() && !selectedOrders().length)">{{ busy() ? 'Сохраняем…' : 'Сформировать и отправить' }}</button></div>
               </form>
             }
           } @else { <p>Загрузка…</p> }
@@ -148,6 +149,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   readonly opened = signal(false);
   readonly context = signal<Context | null>(null);
   readonly error = signal('');
+  readonly bankWait = signal('');
   readonly busy = signal(false);
   readonly mutating = signal(false);
   readonly cancelForm = signal(false);
@@ -174,7 +176,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     const r = request();
     if (!r) return;
     this.stop(); this.busy.set(false); this.mutating.set(false); ++this.lookupTicket; const ticket = ++this.ticket;
-    this.opened.set(true); this.context.set(null); this.error.set(''); this.candidates.set([]); this.confirmed = false;
+    this.opened.set(true); this.bankWait.set(''); this.context.set(null); this.error.set(''); this.candidates.set([]); this.confirmed = false;
     this.cancelForm.set(false);this.replacement.set(false);this.cancelReason='';this.replacementMode='AUTO_ROUTING';this.cancelConfirmed=false;
     this.selectedOrders.set([]);this.selectedChoice='';this.requestKey=crypto.randomUUID();
     this.http.get<Context>(this.path() + '/context').subscribe({
@@ -261,7 +263,12 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
         if (!this.finishMutation(ticket)) return;
         this.replacement.set(false);
         this.context.update(c => c ? { ...c, document } : c); this.startPolling();
-      }, error: e => { if (ticket === this.ticket) this.failure(e); }
+      }, error: e => {
+        if (ticket !== this.ticket) return;
+        if (e?.status === 423 && this.finishMutation(ticket)) {
+          this.bankWait.set(e?.error?.detail || e?.error?.message || 'Запрос сохранён. После закрытия ссылки банком начнётся выпуск документов.');
+        } else this.failure(e);
+      }
     });
   }
   poll(): void {
