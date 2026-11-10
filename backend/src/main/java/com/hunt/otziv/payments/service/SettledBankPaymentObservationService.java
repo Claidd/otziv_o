@@ -144,7 +144,7 @@ public class SettledBankPaymentObservationService implements SettledBankPaymentO
                 : Observation.ambiguous("tochka_settled_status_changed");
     }
 
-    private List<TochkaPaymentMode> parseTochkaPaymentModes(String value) {
+    static List<TochkaPaymentMode> parseTochkaPaymentModes(String value) {
         List<TochkaPaymentMode> modes = Arrays.stream(normalized(value).split(","))
                 .map(String::trim).filter(mode -> !mode.isBlank())
                 .map(TochkaPaymentMode::fromCode).distinct().toList();
@@ -155,7 +155,7 @@ public class SettledBankPaymentObservationService implements SettledBankPaymentO
         return modes;
     }
 
-    private TochkaPaymentMode observedTochkaPaymentMode(String paymentType, String providerStatus,
+    static TochkaPaymentMode observedTochkaPaymentMode(String paymentType, String providerStatus,
                                                         List<TochkaPaymentMode> allowedModes) {
         String cleanType = normalized(paymentType);
         if (cleanType.isBlank() && Set.of("CREATED", "EXPIRED").contains(upper(providerStatus))) {
@@ -171,11 +171,11 @@ public class SettledBankPaymentObservationService implements SettledBankPaymentO
         return observed;
     }
 
-    private String normalized(String value) {
+    private static String normalized(String value) {
         return value == null ? "" : value.trim();
     }
 
-    private String upper(String value) {
+    private static String upper(String value) {
         return normalized(value).toUpperCase(Locale.ROOT);
     }
 

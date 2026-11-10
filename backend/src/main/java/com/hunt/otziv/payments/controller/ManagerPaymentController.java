@@ -22,6 +22,7 @@ public class ManagerPaymentController {
 
     private final PaymentLinkService paymentLinkService;
     private final PaymentRouteChangeService paymentRouteChangeService;
+    private final com.hunt.otziv.payments.api.OrderBankRecipientChange bankRecipientChanges;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/manager/orders/{orderId}/payment-link")
@@ -49,6 +50,16 @@ public class ManagerPaymentController {
             Authentication authentication
     ) {
         return paymentRouteChangeService.change(orderId, request, authentication);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/manager/orders/{orderId}/payment-route-change/recipient")
+    public PaymentRouteChangeResponse changeRecipient(
+            @PathVariable Long orderId,
+            @Valid @RequestBody PaymentRouteChangeRequest request,
+            Authentication authentication
+    ) {
+        return bankRecipientChanges.order(orderId, request, authentication);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

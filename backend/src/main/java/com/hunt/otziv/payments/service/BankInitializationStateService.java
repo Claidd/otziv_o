@@ -149,7 +149,7 @@ public class BankInitializationStateService {
             case REJECTED, REVERSED, REFUNDED ->
                 false;
             case CANCELED, EXPIRED ->
-                !normalize(link.getLastError()).isBlank();
+                !normalize(link.getLastError()).isBlank() && !lifecycleService.closedForRecipientChange(link);
             default ->
                 true;
         };

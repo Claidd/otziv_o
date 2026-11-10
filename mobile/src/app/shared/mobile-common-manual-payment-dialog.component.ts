@@ -129,6 +129,27 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
     void this.load();
   }
 
+  async decideOwnerReport(accept: boolean): Promise<void> {
+    const report = this.options()?.ownerReport;
+    if (!report?.canDecide || this.saving()) return;
+    this.saving.set(true);
+    this.error.set('');
+    try {
+      if (accept) {
+        const details = await firstValueFrom(this.commonBillingApi.confirmCommonManualPayment(this.invoiceId,
+          report.attentionMode ? 'TBANK_FALLBACK' : 'STANDARD', report.request));
+        await this.modalController.dismiss({ details }, 'completed');
+      } else {
+        await firstValueFrom(this.commonBillingApi.rejectOwnerReport(this.invoiceId, report.id));
+        await this.load();
+      }
+    } catch (error) {
+      this.error.set(error instanceof HttpErrorResponse ? error.error?.message || 'Не удалось сохранить решение' : 'Не удалось сохранить решение');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
   async load(preserveDraft = false): Promise<void> {
     const draftReason = this.reason();
     const draftReceiptUrl = this.receiptUrl();
@@ -178,7 +199,7 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
     }
     this.rows.update(rows => [...rows, {
       rowKey: this.newKey(),
-      recipientKey: candidate.key,
+      recipientKey: '',
       amountRubles: ''
     }]);
   }
@@ -261,6 +282,10 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
       const details = await firstValueFrom(
         this.commonBillingApi.confirmCommonManualPayment(this.invoiceId, this.mode, request)
       );
+      if (details.summary.status !== 'PAID') {
+        await this.load();
+        return;
+      }
       const result: MobileCommonManualPaymentCompleted = { details };
       await this.modalController.dismiss(result, 'completed');
     } catch (error) {

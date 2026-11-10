@@ -61,6 +61,13 @@ export interface CommonManualPaymentAttributionHistoryItem {
 }
 
 export interface CommonManualPaymentOptions {
+  ownerReport?: {
+    id: number;
+    reportedBy: string;
+    attentionMode: boolean;
+    canDecide: boolean;
+    request: CommonManualPaymentAttributionRequest;
+  } | null;
   invoiceId: number;
   remainingKopecks: number;
   defaultRecipientKey: string;
@@ -102,6 +109,10 @@ export class CommonManualPaymentAttributionApi {
     return this.http.get<CommonManualPaymentOptions>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/manual-payment-options`
     );
+  }
+
+  rejectOwnerReport(invoiceId: number, reportId: number): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/owner-reports/${reportId}/reject`, {});
   }
 
   confirm(

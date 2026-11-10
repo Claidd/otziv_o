@@ -223,7 +223,7 @@ public class ManualPaymentTaskContractorCapacityService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public ReservationCapacity validateReservationIntent(
+    public boolean canReserve(
             ManualPaymentTask task,
             ManualPaymentTaskBalance balance,
             long amountKopecks
@@ -235,7 +235,8 @@ public class ManualPaymentTaskContractorCapacityService {
         ContractorAllocationMode mode = accountingPhaseService.lockCurrent();
         ContractorPaymentProfile profile = profileRepository.findByIdForUpdate(current.profileId())
                 .orElseThrow(ManualPaymentTaskRouteErrors::stale);
-        return requireCovered(profile, mode, 0L, task);
+        ReservationCapacity capacity = reservationCapacity(profile, mode, 0L, task);
+        return capacity.projectedOverrunKopecks() <= capacity.profileAcknowledgedOverrunKopecks();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -275,10 +276,14 @@ public class ManualPaymentTaskContractorCapacityService {
         if (allocationAmountKopecks <= 0L) {
             throw ManualPaymentTaskRouteErrors.stale();
         }
-        return requireCovered(profile, mode, allocationAmountKopecks, task);
+        ReservationCapacity capacity = reservationCapacity(profile, mode, allocationAmountKopecks, task);
+        if (capacity.projectedOverrunKopecks() > capacity.profileAcknowledgedOverrunKopecks()) {
+            throw ManualPaymentTaskRouteErrors.stale();
+        }
+        return capacity;
     }
 
-    private ReservationCapacity requireCovered(
+    private ReservationCapacity reservationCapacity(
             ContractorPaymentProfile profile,
             ContractorAllocationMode mode,
             long newAllocationAmountKopecks,
@@ -298,9 +303,6 @@ public class ManualPaymentTaskContractorCapacityService {
         long acknowledged = nonNegative(profile.getManualTaskOverrunAcknowledgedKopecks());
         long requiredAcknowledgement = Math.max(0L,
                 subtractSaturated(effectiveCommitment, projectedPosition));
-        if (requiredAcknowledgement > acknowledged) {
-            throw ManualPaymentTaskRouteErrors.stale();
-        }
         return new ReservationCapacity(
                 positionBefore,
                 effectiveCommitment,

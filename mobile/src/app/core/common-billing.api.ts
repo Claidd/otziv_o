@@ -34,11 +34,11 @@ export class CommonBillingApi {
 
   changeCommonInvoicePaymentMode(
     invoiceId: number,
-    mode: InvoicePaymentMode
+    mode: InvoicePaymentMode, paperInvoiceWithdrawn = false
   ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-mode`),
-      { mode, confirmedUnpaid: true }
+      { mode, confirmedUnpaid: true, ...(paperInvoiceWithdrawn ? { paperInvoiceWithdrawn: true } : {}) }
     );
   }
 
@@ -56,9 +56,10 @@ export class CommonBillingApi {
     expectedPaymentEvidenceToken: string,
     expectedTargetPaymentProfileId?: number | null
   ): Observable<CommonInvoiceDetailsResponse> {
+    const different = target === 'DIFFERENT_RECIPIENT';
     return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-change`),
-      { target, confirmedUnpaid: true, expectedPaymentEvidenceToken, expectedTargetPaymentProfileId }
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-change${different ? '/recipient' : ''}`),
+      { target: different ? 'EMPLOYEE_REQUISITES' : target, confirmedUnpaid: true, expectedPaymentEvidenceToken, expectedTargetPaymentProfileId }
     );
   }
 
@@ -108,6 +109,10 @@ export class CommonBillingApi {
     return this.http.get<CommonManualPaymentOptions>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/manual-payment-options`)
     );
+  }
+
+  rejectOwnerReport(invoiceId: number, reportId: number): Observable<void> {
+    return this.http.post<void>(this.apiUrl(`/api/common-billing/invoices/${invoiceId}/owner-reports/${reportId}/reject`), {});
   }
 
   confirmCommonManualPayment(

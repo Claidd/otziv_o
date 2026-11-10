@@ -41,7 +41,8 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
             approvalFailureMarker,
             targetAccessPolicy,
             actualPaymentFlowPolicy,
-            mock(com.hunt.otziv.common_billing.service.CommonInvoiceOverdueTerm.class)
+            mock(com.hunt.otziv.common_billing.service.CommonInvoiceOverdueTerm.class),
+            mock(com.hunt.otziv.common_billing.service.BankRecipientChanges.class)
     );
 
     @Test

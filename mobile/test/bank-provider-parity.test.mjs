@@ -44,7 +44,7 @@ test('ordinary order payment controls are provider-neutral and expose safe route
   assert.match(orderDetailsSource, /Переиздать банковскую ссылку/);
   assert.match(orderDetailsSource, /Банковская ссылка владельца/);
   assert.match(apiSource, /\/payment-route-change-context/);
-  assert.match(apiSource, /\/payment-route-change`/);
+  assert.match(apiSource, /\/payment-route-change\$\{different \?/);
   assert.match(apiSource, /\/paper-invoice\/issued/);
 });
 

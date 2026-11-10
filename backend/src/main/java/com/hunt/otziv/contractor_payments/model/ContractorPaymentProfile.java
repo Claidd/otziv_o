@@ -118,4 +118,7 @@ public class ContractorPaymentProfile {
     void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+    public Long recipientUserId() {
+        return user == null ? null : user.getId();
+    }
 }

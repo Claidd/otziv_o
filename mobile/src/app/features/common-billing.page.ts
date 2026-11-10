@@ -6,7 +6,7 @@ import { OrderPaymentApi } from '../core/order-payment.api';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
-import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular';
+import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent, ToastController } from '@ionic/angular';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
   CommonInvoiceDetailsResponse,
@@ -134,7 +134,11 @@ type InvoiceAction =
                 && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
                 && invoice.paymentRouteSelectedAt
                 && invoice.status !== 'PAID') {
-                <button type="button" (click)="changePaymentRoute()" [disabled]="!!mutating()">Сменить способ оплаты</button>
+                <button type="button" (click)="changePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="!!mutating()">Выдать реквизиты без ссылки</button>
+                <button type="button" (click)="changePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="!!mutating()">Сменить получателя</button>
+                @if (!isBankPaymentRoute(invoice.paymentRouteType)) {
+                  <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="!!mutating()">Банковская ссылка владельца</button>
+                }
                 @if (isBankPaymentRoute(invoice.paymentRouteType)) {
                   <button type="button" (click)="reissueOwnerBankRoute()" [disabled]="!!mutating()">Обновить банк и ссылку</button>
                 }
@@ -659,6 +663,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   private readonly deliveryWatcher = new DeliveryStatusWatcher();
   private readonly commonBillingApi = inject(CommonBillingApi);
   private readonly orderPaymentApi = inject(OrderPaymentApi);
+  private readonly toast = inject(ToastController);
   readonly paymentInitNoPaymentActionLabel = COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL;
   readonly paymentInitNoPaymentActionHint = commonInvoiceNoPaymentActionHint();
   readonly paymentInitInstructions = commonInvoicePaymentInitInstructions();
@@ -890,7 +895,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     );
   }
 
-  async changePaymentRoute(): Promise<void> {
+  async changePaymentRoute(targetOverride?: CommonInvoicePaymentRouteChangeTarget): Promise<void> {
     const invoice = this.summary();
     const invoiceId = this.invoiceId();
     const ticket = this.routeGuard.capture();
@@ -907,20 +912,21 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       if (!this.routeGuard.accepts(ticket)) {
         return;
       }
-      if (!context.canChange) {
+      if (!context.canChange && !(targetOverride === 'DIFFERENT_RECIPIENT' && context.bankRecipientChangeAvailable)) {
         this.error.set(context.blockReason || 'Способ оплаты нельзя изменить без ручной сверки.');
         return;
       }
-      const target: CommonInvoicePaymentRouteChangeTarget = context.currentTarget === 'OWNER_TBANK'
+      const target: CommonInvoicePaymentRouteChangeTarget = targetOverride ?? (context.currentTarget === 'OWNER_TBANK'
         ? 'EMPLOYEE_REQUISITES'
-        : 'OWNER_TBANK';
+        : 'OWNER_TBANK');
       const destination = target === 'EMPLOYEE_REQUISITES'
-        ? 'реквизиты специалиста или менеджера'
+        ? 'реквизиты без ссылки'
+        : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
         : 'банковскую ссылку владельца';
       const recipient = context.currentRecipient?.trim()
         ? ` Получатель сейчас: ${context.currentRecipient}.`
         : '';
-      const confirmed = await this.confirm.confirm({
+      const confirmed = target === 'DIFFERENT_RECIPIENT' || await this.confirm.confirm({
         title: 'Смена способа оплаты',
         message: `Переключить общий счёт на ${destination}?${recipient} Старый резерв будет освобождён, новый маршрут создан заново, клиенту уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.`,
         danger: true
@@ -940,7 +946,14 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       }
     } catch (error) {
       if (this.routeGuard.accepts(ticket)) {
-        this.error.set(this.errorMessage(error, 'Не удалось изменить способ оплаты.'));
+        const message = this.errorMessage(error, 'Не удалось изменить способ оплаты.');
+        if (error instanceof HttpErrorResponse && error.status === 423) {
+          this.error.set(null);
+          const toast = await this.toast.create({ message, duration: 5000 });
+          if (this.routeGuard.accepts(ticket)) await toast.present();
+        } else {
+          this.error.set(message);
+        }
       }
     } finally {
       if (this.routeGuard.accepts(ticket)) {
@@ -1014,11 +1027,9 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       return;
     }
     const paperEnabled = invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE';
-    const confirmed = await this.confirm.confirm({
-      title: paperEnabled ? 'Вернуть авто-распределение' : 'Бумажный счёт владельца',
-      message: paperEnabled
-        ? 'Вернуть распределение специалист → менеджер → владелец? Делайте это только если бумажный счёт не отправлялся и оплаты по нему нет.'
-        : 'Включить бумажный счёт владельца? Система безопасно отменит прежний маршрут и освободит резерв. Продолжайте только если клиент ещё не платил.',
+    const confirmed = !paperEnabled || await this.confirm.confirm({
+      title: 'Вернуть авто-распределение',
+      message: 'Если бумажный счёт уже отправлен, подтвердите его отзыв и отсутствие поступления по выписке.',
       danger: true
     });
     if (!confirmed || !this.routeGuard.accepts(ticket)) {
@@ -1029,7 +1040,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       'change-paper-invoice-mode',
       () => this.commonBillingApi.changeCommonInvoicePaymentMode(
         invoiceId,
-        paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE'
+        paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE', !!invoice.paperInvoiceIssuedAt
       )
     );
   }
@@ -1624,7 +1635,13 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       this.error.set(null);
     } catch (error) {
       if (this.routeGuard.accepts(ticket)) {
-        this.error.set(this.errorMessage(error, 'Не удалось изменить заказ общего счета.'));
+        if (key === 'change-paper-invoice-mode' && error instanceof HttpErrorResponse && error.status === 423) {
+          this.error.set(null);
+          const toast = await this.toast.create({ message: this.errorMessage(error, 'Ожидаем закрытия ссылки банком'), duration: 5000 });
+          if (this.routeGuard.accepts(ticket)) await toast.present();
+        } else {
+          this.error.set(this.errorMessage(error, 'Не удалось изменить заказ общего счета.'));
+        }
       }
     } finally {
       if (this.routeGuard.accepts(ticket) && this.mutating() === key) {

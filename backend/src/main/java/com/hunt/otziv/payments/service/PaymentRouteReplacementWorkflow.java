@@ -8,10 +8,12 @@ import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingSe
 import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.payments.api.UnpaidBankObservation.Source;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PaymentRouteChangeContextResponse;
 import com.hunt.otziv.payments.dto.PaymentRouteChangeTarget;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
+import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
@@ -78,6 +80,12 @@ public class PaymentRouteReplacementWorkflow {
         PaymentLink current = currentRouteChangeLink(links).orElse(null);
         Long expectedTargetPaymentProfileId = targetPaymentProfileId(order);
         String automationBlockReason = paymentAutomation.paymentRouteReplacementBlockReason(orderId).orElse(null);
+        var pendingChange = paymentLinkRepository.pendingRecipientChangeMessage(orderId);
+        if (pendingChange.isPresent()) {
+            return new PaymentRouteChangeContextResponse(current == null ? null : current.getId(), "Банковская ссылка", "Владелец",
+                    current == null ? "WAITING_BANK" : current.getStatus().name(), false, pendingChange.get(),
+                    invoicePaymentMode(order).name(), false, expectedTargetPaymentProfileId);
+        }
         if (current == null) {
             InvoicePaymentMode configuredMode = invoicePaymentMode(order);
             return new PaymentRouteChangeContextResponse(null, configuredPaymentModeLabel(configuredMode), configuredPaymentModeRecipient(configuredMode), "NOT_CREATED", automationBlockReason == null, automationBlockReason == null ? "" : automationBlockReason, configuredMode.name(), false, expectedTargetPaymentProfileId);
@@ -89,15 +97,44 @@ public class PaymentRouteReplacementWorkflow {
         if (currentRecipient.isBlank()) {
             currentRecipient = "Владелец";
         }
-        return new PaymentRouteChangeContextResponse(current.getId(), currentRoute, currentRecipient, current.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, invoicePaymentMode(order).name(), current.getPaperInvoiceIssuedAt() != null, expectedTargetPaymentProfileId);
+        return new PaymentRouteChangeContextResponse(current.getId(), currentRoute, currentRecipient, current.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, invoicePaymentMode(order).name(), current.getPaperInvoiceIssuedAt() != null, expectedTargetPaymentProfileId, automationBlockReason == null && (bankRecipientEligible(current) || awaitingBankInit(current)));
     }
 
     @Transactional
     public PaymentRouteReplacement replacePaymentRouteAuthorized(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target, boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication) {
+        return replacePaymentRouteAuthorized(orderId, expectedPaymentLinkId, target, confirmedUnpaid, expectedTargetPaymentProfileId, authentication, false, false);
+    }
+
+    @Transactional
+    public PaymentRouteReplacement replacePaymentRouteAuthorized(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target, boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication, boolean paperInvoiceWithdrawn, boolean differentRecipient) {
+        return replace(orderId, expectedPaymentLinkId, target, confirmedUnpaid, expectedTargetPaymentProfileId,
+                authentication, paperInvoiceWithdrawn, differentRecipient, false);
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public PaymentLink lockRecipientChangeSource(long orderId, Long linkId, Authentication actor) {
+        orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        managerAccessService.requireOrderAccess(orderId, actor);
+        if (linkId == null) return null;
+        return paymentLinkRepository.findByIdForUpdate(linkId)
+                .filter(link -> link.getOrder() != null && Objects.equals(orderId, link.getOrder().getId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Ссылка заказа изменилась"));
+    }
+
+    /** Only the bank-change coordinator may complete this path after verifying the exact provider operation. */
+    @Transactional
+    public PaymentRouteReplacement replaceBankRecipient(Long orderId, Long linkId, Authentication actor) {
+        return replace(orderId, linkId, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, actor, false, true, true);
+    }
+
+    private PaymentRouteReplacement replace(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target,
+            boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication,
+            boolean paperInvoiceWithdrawn, boolean differentRecipient, boolean bankChange) {
         if (!confirmedUnpaid) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите, что клиент еще не оплатил по прежним реквизитам");
         }
-        if (target == null) {
+        if (target == null || (differentRecipient && target != PaymentRouteChangeTarget.EMPLOYEE_REQUISITES)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный запрос смены способа оплаты");
         }
         // The manager endpoint already requires an authenticated manager and the
@@ -106,6 +143,9 @@ public class PaymentRouteReplacementWorkflow {
         Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+        if (!bankChange && paymentLinkRepository.pendingRecipientChanges(orderId) > 0)
+            throw new ResponseStatusException(HttpStatus.LOCKED, "Смена получателя уже выполняется. Ожидаем ответ банка");
+        if (order.isPaperInvoiceReviewHold()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Требуется сверка поступления по отменённому счёту");
         orderPaymentIntegrityService.assertPaymentCycleAllowed(order);
         // Match scheduler preparation lock order: Order -> message states -> links.
         // The check also fences known-unsent retries that retain old requisites.
@@ -113,7 +153,20 @@ public class PaymentRouteReplacementWorkflow {
         LocalDateTime now = LocalDateTime.now();
         List<PaymentLink> links = paymentLinkRepository.findByOrderIdForUpdate(orderId);
         PaymentLink current = currentRouteChangeLink(links).orElse(null);
+        if (bankChange) {
+            PaymentLink source = links.stream().filter(link -> Objects.equals(expectedPaymentLinkId, link.getId()))
+                    .findFirst().orElse(null);
+            if (!bankRecipientEligible(source) || preparationWorkflow.hasCompetingBlockingPayment(source, links)
+                    || (current != null && !Objects.equals(current.getId(), expectedPaymentLinkId))
+                    || links.stream().anyMatch(link -> link.getId() > expectedPaymentLinkId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Ссылка уже изменилась или банк сообщил о движении денег");
+            }
+            current = source;
+        }
         if (current == null) {
+            if (differentRecipient) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала выставьте счёт, чтобы сменить получателя");
+            }
             if (expectedPaymentLinkId != null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Активный счет уже изменился. Обновите заказ и повторите");
             }
@@ -133,10 +186,12 @@ public class PaymentRouteReplacementWorkflow {
         if (!expectedPaymentLinkId.equals(current.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Способ оплаты уже изменен другим пользователем. Обновите заказ");
         }
-        String blockReason = routeChangeBlockReason(current);
+        String blockReason = bankChange ? null : routeChangeBlockReason(current);
         if (blockReason != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, blockReason);
         }
+        if (isPaperInvoice(current) && current.getPaperInvoiceIssuedAt() != null && !paperInvoiceWithdrawn)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Проверьте выписку и подтвердите отзыв отправленного бумажного счёта");
         long amountKopecks = amountKopecks(payableSum(order));
         if (amountKopecks <= 0 || amountKopecks != current.getAmountKopecks()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сумма заказа изменилась. Сначала обновите счет обычным способом");
@@ -148,13 +203,22 @@ public class PaymentRouteReplacementWorkflow {
         Manager manager = paymentProfileService.lockManagerForRouting(orderManager(order));
         PaymentProfile profile = target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE ? null : paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
         validateExpectedTargetPaymentProfile(target, expectedTargetPaymentProfileId, profile);
-        String replacementReason = "Способ оплаты изменен по просьбе клиента";
+        String replacementReason = isPaperInvoice(current) && current.getPaperInvoiceIssuedAt() != null
+                ? "Бумажный счёт отозван после проверки выписки: " + authentication.getName()
+                : "Способ оплаты изменен по просьбе клиента";
+        var filter = ManualPaymentTaskRoutingFilter.NUMBER;
+        if (differentRecipient) {
+            var previousTask = taskReceiptIntegrationService.candidate(current).orElse(null);
+            Long previousUserId = contractorPaymentLiveRoutingService.issuedRecipientUserId(current.getContractorAllocationId(),
+                    previousTask == null ? null : previousTask.accountingTargetProfileId());
+            filter = ManualPaymentTaskRoutingFilter.otherRecipient(previousUserId, previousTask);
+        }
         taskReceiptIntegrationService.release(current, replacementReason);
         current.setStatus(PaymentLinkStatus.CANCELED);
         current.setExpiresAt(now);
         current.setLastError(replacementReason);
         paymentLinkRepository.save(current);
-        if (current.getContractorAllocationId() != null) {
+        if (current.getContractorAllocationId() != null && current.getManualSource() != ManualPaymentSource.MANUAL_TASK) {
             contractorPaymentLiveRoutingService.releaseClosedPaymentLink(current);
         }
         PaymentLink replacement = paymentLinkRepository.saveAndFlush(newPaymentLink(order, amountKopecks, now));
@@ -166,13 +230,13 @@ public class PaymentRouteReplacementWorkflow {
         } else if (target == PaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
             Objects.requireNonNull(manager, "manager");
             Objects.requireNonNull(profile, "profile");
-            Optional<ManualPaymentTaskRouteSnapshot> taskRoute = actualPaymentAttributionService.actualRecipientAccountingEnabled() ? taskReceiptIntegrationService.reserveForPaymentLink(replacement, manager.getId(), profile.getId()) : Optional.empty();
+            Optional<ManualPaymentTaskRouteSnapshot> taskRoute = actualPaymentAttributionService.actualRecipientAccountingEnabled() ? taskReceiptIntegrationService.reserveForPaymentLink(replacement, manager.getId(), profile.getId(), filter) : Optional.empty();
             if (taskRoute.isPresent()) {
                 applyManualTaskPayment(replacement, taskRoute.get());
             } else {
                 requireLiveRouteChangeEnabled();
                 prepareLivePaymentLinkSourceOrFail(replacement, now);
-                ContractorPaymentAllocation allocation = requireLiveRoutingAllocation(replacement, contractorPaymentLiveRoutingService.reserveContractorForPaymentLink(replacement), "route_change_contractor_returned_null");
+                ContractorPaymentAllocation allocation = requireLiveRoutingAllocation(replacement, contractorPaymentLiveRoutingService.reserveContractorForPaymentLink(replacement, filter.excludedUserId()), "route_change_contractor_returned_null");
                 if (!isContractorRecipient(allocation)) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось выбрать специалиста или менеджера для оплаты");
                 }
@@ -215,6 +279,37 @@ public class PaymentRouteReplacementWorkflow {
         return preparationWorkflow.currentRouteChangeLink(links);
     }
 
+    static Source recipientSource(PaymentLink link) {
+        if (link == null) return null;
+        var order = link.getOrder();
+        if ((!bankRecipientEligible(link) && !awaitingBankInit(link))
+                || link.getPaymentProfile() == null) return null;
+        var profile = link.getPaymentProfile();
+        return new Source("ORDER", order.getId(), link.getId(), profile.getId(), profile.getProvider(), Objects.toString(link.getTbankPaymentId(), ""),
+                link.getTbankOrderId(), link.getTbankTerminalKey(), link.getAmountKopecks(),
+                link.getPaymentMethod() == com.hunt.otziv.payments.model.PaymentMethod.SBP_QR ? "sbp" : "card", null,
+                Objects.toString(order.getManager() == null ? null : order.getManager().getId()));
+    }
+
+    public static boolean awaitingBankInit(PaymentLink link) {
+        return link != null && link.getBankInitNonce() != null && !link.getBankInitNonce().isBlank()
+                && (link.getTbankPaymentId() == null || link.getTbankPaymentId().isBlank())
+                && link.getTbankOrderId() != null && link.getTbankTerminalKey() != null
+                && link.getConfirmedAmountKopecks() == null && link.getManualActualRecipientFrozenAt() == null
+                && link.getPaidAt() == null && link.getManualReportedAt() == null;
+    }
+
+    public static boolean bankRecipientEligible(PaymentLink link) {
+        if (link == null || link.getTbankPaymentId() == null || link.getTbankPaymentId().isBlank()
+                || link.getPaperBankDocumentId() != null || link.getManualActualRecipientFrozenAt() != null
+                || link.getPaidAt() != null || link.getConfirmedAmountKopecks() != null || link.getManualReportedAt() != null
+                || link.getBankCancelNonce() != null || link.getBankCancelOriginStatus() != null) return false;
+        return (link.getPaymentMethod() == com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM
+                || link.getPaymentMethod() == com.hunt.otziv.payments.model.PaymentMethod.SBP_QR)
+                && Set.of(PaymentLinkStatus.INITIATED, PaymentLinkStatus.AUTHORIZED, PaymentLinkStatus.EXPIRED, PaymentLinkStatus.CANCELED,
+                          PaymentLinkStatus.REJECTED).contains(link.getStatus());
+    }
+
     private String routeChangeBlockReason(PaymentLink link) {
         if (link != null && link.getPaperBankDocumentId() != null) {
             return "По заказу уже выпускаются банковские документы. Проверьте их оплату перед сменой способа";
@@ -225,17 +320,11 @@ public class PaymentRouteReplacementWorkflow {
         if (link.getStatus() != PaymentLinkStatus.CREATED && link.getStatus() != PaymentLinkStatus.WAITING_MANUAL_PAYMENT) {
             return "Платеж уже начат или требует сверки; менять реквизиты автоматически нельзя";
         }
-        if (hasStartedBankPayment(link) || link.getManualReportedAt() != null || link.getConfirmedAmountKopecks() != null || link.getPaidAt() != null) {
+        if (link.getManualActualRecipientFrozenAt() != null || hasStartedBankPayment(link) || link.getManualReportedAt() != null || link.getConfirmedAmountKopecks() != null || link.getPaidAt() != null) {
             return "По счету уже есть признаки оплаты; сначала выполните сверку";
         }
-        if (isPaperInvoice(link) && link.getPaperInvoiceIssuedAt() != null) {
-            return "Бумажный счёт уже отправлен клиенту; менять способ оплаты автоматически нельзя";
-        }
-        return null;
-    }
 
-    private void requireOwnerOrAdmin(Authentication authentication) {
-        preparationWorkflow.requireOwnerOrAdmin(authentication);
+        return null;
     }
 
     public record PaymentRouteReplacement(Long previousPaymentLinkId, Long paymentLinkId, PaymentRouteChangeTarget target, ManagerPaymentLinkResponse response) {

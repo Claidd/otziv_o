@@ -81,6 +81,12 @@ public class ManualPaymentTaskReceiptIntegrationService {
             Long managerId,
             Long paymentProfileId
     ) {
+        return reserveForPaymentLink(link, managerId, paymentProfileId, ManualPaymentTaskRoutingFilter.ANY);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ManualPaymentTaskRouteSnapshot> reserveForPaymentLink(
+            PaymentLink link, Long managerId, Long paymentProfileId, ManualPaymentTaskRoutingFilter filter) {
         if (link == null || link.getId() == null) {
             throw ManualPaymentTaskRouteErrors.stale();
         }
@@ -96,7 +102,7 @@ public class ManualPaymentTaskReceiptIntegrationService {
                 link.getAmountKopecks(),
                 operation("RESERVE", source),
                 SYSTEM_ACTOR
-        )));
+        ), filter));
         result.ifPresent(snapshot -> {
             link.setManualTaskGeneration(snapshot.taskGeneration());
             // Persist the issued phase even for OWNER/EXTERNAL tasks, which
@@ -114,6 +120,12 @@ public class ManualPaymentTaskReceiptIntegrationService {
             Long paymentProfileId,
             long amountKopecks
     ) {
+        return reserveForCommonInvoice(invoice, managerId, paymentProfileId, amountKopecks, ManualPaymentTaskRoutingFilter.ANY);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ManualPaymentTaskRouteSnapshot> reserveForCommonInvoice(
+            CommonInvoice invoice, Long managerId, Long paymentProfileId, long amountKopecks, ManualPaymentTaskRoutingFilter filter) {
         if (invoice == null || invoice.getId() == null || amountKopecks <= 0) {
             throw ManualPaymentTaskRouteErrors.stale();
         }
@@ -129,7 +141,7 @@ public class ManualPaymentTaskReceiptIntegrationService {
                 amountKopecks,
                 operation("RESERVE", source),
                 SYSTEM_ACTOR
-        )));
+        ), filter));
         result.ifPresent(snapshot -> {
             invoice.setPaymentRouteManualTaskGeneration(snapshot.taskGeneration());
             invoice.setPaymentRouteManualTaskAccountingMode(mode);

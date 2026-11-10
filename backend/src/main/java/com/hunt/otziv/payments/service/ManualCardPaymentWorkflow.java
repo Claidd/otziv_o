@@ -140,7 +140,7 @@ public class ManualCardPaymentWorkflow {
     public ManualCardPaymentContextResponse manualCardPaymentContextForOrder(Long orderId, Authentication authentication) {
         OrderManualCardRoute route = selectManualCardPaymentRouteForOrder(orderId, authentication);
         return transactionExecutor.required(() -> {
-            Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+            Order order = lockOrderForManualPayment(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
             managerAccessService.requireOrderAccess(orderId, authentication);
             ensureOrderNotCoveredByActiveCommonInvoice(orderId);
             PaymentLink link = paymentLinkRepository.findByIdForUpdate(route.linkId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
@@ -169,8 +169,14 @@ public class ManualCardPaymentWorkflow {
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AdminPaymentLinkResponse confirmPaidByManualCardTransferForOrder(Long orderId, boolean recipientStatementChecked, boolean paymentReceived, Long receivedAmountKopecks, String note, String receiptUrl, String actor, Authentication authentication) {
+        return confirmPaidByManualCardTransferForOrder(orderId, recipientStatementChecked, paymentReceived, receivedAmountKopecks,
+                note, receiptUrl, null, null, null, actor, authentication);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public AdminPaymentLinkResponse confirmPaidByManualCardTransferForOrder(Long orderId, boolean recipientStatementChecked, boolean paymentReceived, Long receivedAmountKopecks, String note, String receiptUrl, ContractorRecipientType recipientType, Long recipientProfileId, String recipientKey, String actor, Authentication authentication) {
         OrderManualCardRoute route = selectManualCardPaymentRouteForOrder(orderId, authentication);
-        return confirmPaidByManualCardTransfer(route.linkId(), recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl, null, null, null, actor, authentication);
+        return confirmPaidByManualCardTransfer(route.linkId(), recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl, recipientType, recipientProfileId, recipientKey, actor, authentication);
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -210,7 +216,7 @@ public class ManualCardPaymentWorkflow {
     OrderManualCardRoute selectManualCardPaymentRouteForOrder(Long orderId, Authentication authentication) {
         reconcileLegacyTerminalBankRoutesForManualCardPayment(orderId, authentication);
         return transactionExecutor.required(() -> {
-            Order order = orderId == null ? null : orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
+            Order order = orderId == null ? null : lockOrderForManualPayment(orderId).orElse(null);
             if (order == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
             managerAccessService.requireOrderAccess(orderId, authentication);
             List<PaymentLink> orderLinks = paymentLinkRepository.findByOrderIdForUpdate(orderId);
@@ -289,7 +295,7 @@ public class ManualCardPaymentWorkflow {
                 "Текущая оплата, сумма или получатель заказа изменились; обновите заказ и проведите сверку исходного платежа");
     }
 
-    private void requireCurrentManualCardRouteAmount(Order order, PaymentLink link) {
+    void requireCurrentManualCardRouteAmount(Order order, PaymentLink link) {
         if (isCompletedManualCardPayment(link)) {
             return;
         }
@@ -355,7 +361,7 @@ public class ManualCardPaymentWorkflow {
     void prepareReviewRecipient(Long orderId, PaymentLink link, String recipientTypeName,
             Long recipientProfileId, String recipientKey, String reason, String receiptUrl, String actor) {
         ContractorRecipientType recipientType = ContractorRecipientType.valueOf(recipientTypeName);
-        Order order = orderRepository.findByIdForCounterUpdate(orderId)
+        Order order = lockOrderForManualPayment(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         // Reject before freezing a recipient or creating a review that would fence the bank link.
         requireManualCardProviderEligibility(link);
@@ -381,6 +387,12 @@ public class ManualCardPaymentWorkflow {
         if (orderId == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
         }
+        if (!isCompletedManualCardPayment(initialSnapshot) && !signedOwnerApproval
+                && (initialSnapshot.getPaymentMethod() == PaymentMethod.BANK_FORM || initialSnapshot.getPaymentMethod() == PaymentMethod.SBP_QR)
+                && (requestedRecipientType == ContractorRecipientType.OWNER || "OWNER".equals(requestedRecipientKey)
+                    || (requestedRecipientType == null && normalize(requestedRecipientKey).isBlank()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Поступление владельцу по банковской ссылке подтверждает банк");
+        }
         requireManualCardProviderEligibility(initialSnapshot);
         reconcileLegacyTerminalBankRoutesForManualCardPayment(orderId, authentication);
         PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
@@ -395,7 +407,7 @@ public class ManualCardPaymentWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сумма перевода не равна полной сумме заказа. Оплата не зачислена; проверьте выписку и заказ.");
         }
         transactionExecutor.required(() -> {
-            if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            if (lockOrderForManualPayment(orderId).isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
             }
             managerAccessService.requireOrderAccess(orderId, authentication);
@@ -486,7 +498,7 @@ public class ManualCardPaymentWorkflow {
 
     private void reconcileLegacyTerminalBankRoutesForManualCardPayment(Long orderId, Authentication authentication) {
         List<Long> legacyLinkIds = transactionExecutor.required(() -> {
-            if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            if (orderId == null || lockOrderForManualPayment(orderId).isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
             }
             managerAccessService.requireOrderAccess(orderId, authentication);
@@ -506,7 +518,7 @@ public class ManualCardPaymentWorkflow {
     }
 
     private void applyLegacyTerminalObservationForManualCardPayment(Long orderId, Long linkId, BankStateObservation observation, Authentication authentication) {
-        if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+        if (lockOrderForManualPayment(orderId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
         }
         managerAccessService.requireOrderAccess(orderId, authentication);
@@ -529,7 +541,7 @@ public class ManualCardPaymentWorkflow {
     }
 
     private ManualCardPaymentPlan prepareUnstartedManualCardPayment(Long linkId, Long orderId, String note, String receiptUrl, String actor, Authentication authentication, ManualCardPaymentContext context, ContractorRecipientType requestedRecipientType, Long requestedRecipientProfileId, String requestedRecipientKey, Long specialistReviewId) {
-        Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
+        Order order = lockOrderForManualPayment(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
@@ -548,7 +560,7 @@ public class ManualCardPaymentWorkflow {
     }
 
     private ManualCardPaymentPlan prepareManualCardPayment(Long linkId, Long orderId, BankStateObservation observation, String note, String receiptUrl, String actor, Authentication authentication, ManualCardPaymentContext context, ContractorRecipientType requestedRecipientType, Long requestedRecipientProfileId, String requestedRecipientKey, Long specialistReviewId) {
-        Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
+        Order order = lockOrderForManualPayment(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
@@ -606,7 +618,7 @@ public class ManualCardPaymentWorkflow {
 
     private AdminPaymentLinkResponse preflightManualCardPaymentRecipientIntent(Long linkId, Long orderId, long amountKopecks, ManualCardPaymentContext context, String receiptUrl, String actor, ContractorRecipientType requestedRecipientType, Long requestedRecipientProfileId, String requestedRecipientKey, Authentication authentication, Long specialistReviewId) {
         return transactionExecutor.required(() -> {
-            Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
+            Order order = lockOrderForManualPayment(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
             managerAccessService.requireOrderAccess(orderId, authentication);
             ensureOrderNotCoveredByActiveCommonInvoice(orderId);
             PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
@@ -636,6 +648,10 @@ public class ManualCardPaymentWorkflow {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
+    boolean legacyOwnerAccounting() {
+        return !actualPaymentAttributionService.actualRecipientAccountingEnabled();
+    }
+
     void freezeActualRecipientIntentIfRequired(Order order, PaymentLink link, ContractorRecipientType requestedRecipientType, Long requestedRecipientProfileId, String requestedRecipientKey, String reason, String receiptUrl, String actor) {
         requireHistoricalPreCutoverManualCardSelectionIfNeeded(link, requestedRecipientKey);
         if (isHistoricalPreCutoverManualCardSettlement(link, requestedRecipientKey)) {
@@ -660,6 +676,11 @@ public class ManualCardPaymentWorkflow {
      * Repeated under Order + target link + every order-link lock immediately before
      * remote Cancel or direct manual settlement.
      */
+    @Transactional(propagation = Propagation.MANDATORY)
+    java.util.Optional<Order> lockOrderForManualPayment(Long orderId) {
+        return orderRepository.findByIdForCounterUpdate(orderId);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     void requireManualCardPaymentLocalEligibility(Order order, PaymentLink link, Long orderId) {
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
@@ -766,7 +787,7 @@ public class ManualCardPaymentWorkflow {
     }
 
     private AdminPaymentLinkResponse applyDirectManualPayment(Long linkId, Long orderId, long amountKopecks, String note, String receiptUrl, String actor, Authentication authentication, ManualCardPaymentContext context, ContractorRecipientType requestedType, Long requestedProfileId, String requestedRecipientKey, Long specialistReviewId) {
-        Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        Order order = lockOrderForManualPayment(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
         paymentInvoiceRetryScheduler.closePaymentAutomationForManualSettlement(orderId, "Ручная оплата подтверждена; платежные сообщения закрыты");

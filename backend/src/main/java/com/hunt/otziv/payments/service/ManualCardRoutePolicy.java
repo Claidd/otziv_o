@@ -83,7 +83,12 @@ public class ManualCardRoutePolicy {
             ManualCardPaymentRecipientResponse recipient = historicalPreCutoverManualCardRecipient(link);
             return new ManualCardPaymentContextResponse(order == null ? null : order.getId(), link == null ? 0L : link.getAmountKopecks(), recipient, List.of(recipient), "Старая оплата до запуска новой системы будет закрыта без нового учёта выплат.", false, null, null, null, "TASK_RECIPIENT_V1", HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY + ":" + (link == null ? "" : link.getId()));
         }
-        return actualPaymentAttributionService.manualCardPaymentContext(order, link);
+        ManualCardPaymentContextResponse context = actualPaymentAttributionService.manualCardPaymentContext(order, link);
+        if (!isBankPaymentRoute(link) || context.recipientSelectionFrozen()
+                || context.candidates().stream().noneMatch(candidate -> candidate.recipientType() == ContractorRecipientType.OWNER)) return context;
+        return new ManualCardPaymentContextResponse(context.orderId(), context.amountKopecks(), context.originalRecipient(),
+                context.candidates().stream().filter(candidate -> candidate.recipientType() != ContractorRecipientType.OWNER).toList(),
+                context.anomalyWarning(), false, null, null, null, context.contractVersion(), context.routeRevision());
     }
 
     SelectedManagerRecipient resolveManagerRecipient(
@@ -94,6 +99,9 @@ public class ManualCardRoutePolicy {
         }
         List<ManualCardPaymentRecipientResponse> candidates = context.candidates();
         String key = normalize(requestedKey);
+        if ("OWNER".equals(key) && (requestedProfileId != null || (requestedType != null && requestedType != ContractorRecipientType.OWNER))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Указанные тип, профиль и ключ получателя противоречат друг другу");
+        }
         ManualCardPaymentRecipientResponse selected;
         if (!key.isBlank()) {
             selected = candidates.stream()
@@ -102,7 +110,7 @@ public class ManualCardRoutePolicy {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                             "Выбранный получатель больше не доступен; обновите карточку заказа"));
         } else if (requestedType == null && requestedProfileId == null) {
-            selected = context.originalRecipient();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите, кому фактически поступили деньги");
         } else {
             selected = candidates.stream()
                     .filter(candidate -> candidate != null && candidate.recipientType() == requestedType)
@@ -317,7 +325,7 @@ public class ManualCardRoutePolicy {
         String providerStatus = normalize(link.getProviderTerminalStatus());
         return switch(link.getStatus()) {
             case CANCELED ->
-                "CANCELED".equalsIgnoreCase(providerStatus);
+                "CANCELED".equalsIgnoreCase(providerStatus) || lifecycleService.closedForRecipientChange(link);
             case REJECTED ->
                 "REJECTED".equalsIgnoreCase(providerStatus);
             case EXPIRED ->

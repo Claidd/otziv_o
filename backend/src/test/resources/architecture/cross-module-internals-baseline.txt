@@ -196,7 +196,6 @@ com.hunt.otziv.api.controller.DispatchSettingsController -> com.hunt.otziv.l_lea
 com.hunt.otziv.api.controller.DispatchSettingsController -> com.hunt.otziv.l_lead.repository.DispatchSettingsRepository
 com.hunt.otziv.archive.controller.ApiManagerArchiveController -> com.hunt.otziv.manager.dto.api.PageResponse
 com.hunt.otziv.archive.service.ManagerArchiveService -> com.hunt.otziv.manager.dto.api.PageResponse
-com.hunt.otziv.archive.service.ManagerArchiveService -> com.hunt.otziv.manager.service.ManagerPermissionService
 com.hunt.otziv.archive.service.ManagerArchiveService -> com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService
 com.hunt.otziv.archive.service.ManagerArchiveService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.archive.service.ManagerArchiveService -> com.hunt.otziv.u_users.model.User
@@ -452,7 +451,6 @@ com.hunt.otziv.client_messages.service.ClientMessagePreviewService -> com.hunt.o
 com.hunt.otziv.client_messages.service.ClientMessagePreviewService -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.client_messages.service.ClientMessagePreviewService -> com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder
 com.hunt.otziv.client_messages.service.ClientMessagePreviewService -> com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder
-com.hunt.otziv.client_messages.service.ClientMessagePreviewService -> com.hunt.otziv.payments.service.BankPaymentInstructionSource
 com.hunt.otziv.client_messages.service.ClientMessagePreviewService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.client_messages.service.ClientMessageReviewRecoveryReleasedListener -> com.hunt.otziv.review_recovery.event.ReviewRecoveryReleasedEvent
 com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler -> com.hunt.otziv.c_companies.model.Company
@@ -480,7 +478,6 @@ com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.p_products.status.service.OrderStatusNotificationService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.p_products.status.service.OrderStatusTransitionService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse
-com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.service.BankPaymentInstructionSource
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.service.OrderPaymentIntegrityService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.service.PaymentIssueReminderService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.service.PaymentLinkService
@@ -504,32 +501,23 @@ com.hunt.otziv.common_billing.controller.PublicCommonInvoiceController -> com.hu
 com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse -> com.hunt.otziv.p_products.dto.OrderDTOList
 com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionResponse -> com.hunt.otziv.contractor_payments.model.ContractorAllocationMode
 com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionResponse -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
-com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionResponse -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionResponse -> com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind
-com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRowRequest -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.common_billing.dto.CommonManualPaymentRecipientCandidateResponse -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
-com.hunt.otziv.common_billing.dto.CommonManualPaymentRecipientCandidateResponse -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.common_billing.dto.CommonManualPaymentRecipientCandidateResponse -> com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind
-com.hunt.otziv.common_billing.dto.InvoicePaymentModeChangeRequest -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.model.CommonBillingAccount -> com.hunt.otziv.c_companies.model.Company
-com.hunt.otziv.common_billing.model.CommonBillingAccount -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.model.CommonBillingAccount -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.common_billing.model.CommonBillingAccountCompany -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.common_billing.model.CommonInvoice -> com.hunt.otziv.contractor_payments.model.ContractorAllocationMode
-com.hunt.otziv.common_billing.model.CommonInvoice -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.model.CommonInvoice -> com.hunt.otziv.payments.model.ManualPaymentSource
 com.hunt.otziv.common_billing.model.CommonInvoice -> com.hunt.otziv.payments.model.ManualPaymentType
 com.hunt.otziv.common_billing.model.CommonInvoiceOrder -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.common_billing.repository.CommonInvoiceArchiveRepository -> com.hunt.otziv.archive.dto.ArchiveAccessScope
-com.hunt.otziv.common_billing.repository.CommonInvoicePaymentNotificationOutboxRepository -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
-com.hunt.otziv.common_billing.repository.CommonInvoiceRepository -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.repository.CommonInvoiceRepository -> com.hunt.otziv.payments.model.ManualPaymentSource
 com.hunt.otziv.common_billing.repository.CommonInvoiceRepository -> com.hunt.otziv.payments.repository.ManualPaymentLegacyMonthlySourceProjection
 com.hunt.otziv.common_billing.repository.CommonInvoiceRepository -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.common_billing.service.CommonBillingAccountWorkflow -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.common_billing.service.CommonBillingAccountWorkflow -> com.hunt.otziv.c_companies.repository.CompanyRepository
 com.hunt.otziv.common_billing.service.CommonBillingAccountWorkflow -> com.hunt.otziv.p_products.model.Order
-com.hunt.otziv.common_billing.service.CommonBillingAccountWorkflow -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.service.CommonBillingAccountWorkflow -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.common_billing.service.CommonBillingAccountWorkflow -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.common_billing.service.CommonBillingAccountWorkflow -> com.hunt.otziv.u_users.repository.ManagerRepository
@@ -553,7 +541,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceArchiveService -> com.hunt.ot
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveService -> com.hunt.otziv.archive.dto.ArchiveRestoreResult
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveService -> com.hunt.otziv.archive.service.OrderArchiveRestoreService
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveService -> com.hunt.otziv.manager.dto.api.PageResponse
-com.hunt.otziv.common_billing.service.CommonInvoiceArchiveService -> com.hunt.otziv.manager.service.ManagerPermissionService
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveService -> com.hunt.otziv.p_products.status.policy.OrderManualArchivePolicy
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveService -> com.hunt.otziv.u_users.model.User
@@ -563,7 +550,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceArchiveWorkflow -> com.hunt.o
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveWorkflow -> com.hunt.otziv.bad_reviews.service.BadReviewTaskService
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveWorkflow -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveWorkflow -> com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService
-com.hunt.otziv.common_billing.service.CommonInvoiceArchiveWorkflow -> com.hunt.otziv.manager.service.ManagerPermissionService
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveWorkflow -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveWorkflow -> com.hunt.otziv.p_products.status.policy.OrderManualArchivePolicy
 com.hunt.otziv.common_billing.service.CommonInvoiceArchiveWorkflow -> com.hunt.otziv.p_products.status.service.OrderStatusTransitionService
@@ -594,7 +580,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.o
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.contractor_payments.service.ContractorPaymentTransferNumber
-com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.manager.service.ManagerPermissionService
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.p_products.status.service.OrderStatusTransitionService
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.payments.model.ManualPaymentSource
@@ -614,7 +599,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceDetailsAssembler -> com.hunt.
 com.hunt.otziv.common_billing.service.CommonInvoiceDetailsAssembler -> com.hunt.otziv.payments.service.PaymentProfileService
 com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService -> com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation
-com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService -> com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService
 com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService -> com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService
 com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService -> com.hunt.otziv.p_products.model.Order
@@ -673,7 +657,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hun
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.p_products.repository.OrderRepository
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.p_products.service.OrderStatusService
-com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.payments.model.PaymentLink
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.payments.model.PaymentLinkStatus
 com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow -> com.hunt.otziv.payments.repository.PaymentLinkRepository
@@ -682,11 +665,8 @@ com.hunt.otziv.common_billing.service.CommonInvoicePaymentNotificationDeliverySe
 com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation
 com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService
 com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.dto.PaymentRouteSelection
-com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.dto.TbankCancelCommand
-com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.dto.TbankCancelResponse
 com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.dto.TbankGetStateResponse
 com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.dto.TbankPaymentProfile
-com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.model.ManualPaymentSource
 com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.model.PaymentProfile
 com.hunt.otziv.common_billing.service.CommonInvoicePaymentRouteWorkflow -> com.hunt.otziv.payments.service.CommonInvoiceRouteSelector
@@ -701,7 +681,6 @@ com.hunt.otziv.common_billing.service.CommonInvoicePresenter -> com.hunt.otziv.c
 com.hunt.otziv.common_billing.service.CommonInvoicePresenter -> com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService
 com.hunt.otziv.common_billing.service.CommonInvoicePresenter -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.common_billing.service.CommonInvoicePresenter -> com.hunt.otziv.payments.config.TbankPaymentProperties
-com.hunt.otziv.common_billing.service.CommonInvoicePresenter -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.service.CommonInvoicePresenter -> com.hunt.otziv.payments.model.ManualPaymentSource
 com.hunt.otziv.common_billing.service.CommonInvoicePresenter -> com.hunt.otziv.payments.model.ManualPaymentType
 com.hunt.otziv.common_billing.service.CommonInvoicePresenter -> com.hunt.otziv.payments.model.PaymentMethod
@@ -718,7 +697,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceRecoveryWorkflow -> com.hunt.
 com.hunt.otziv.common_billing.service.CommonInvoiceRecoveryWorkflow -> com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy
 com.hunt.otziv.common_billing.service.CommonInvoiceReviewApprovalWorkflow -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.common_billing.service.CommonInvoiceReviewApprovalWorkflow -> com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService
-com.hunt.otziv.common_billing.service.CommonInvoiceRouteState -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.bad_reviews.service.BadReviewTaskService
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler
@@ -773,7 +751,6 @@ com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator 
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile
-com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.model.ContractorRole
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository
@@ -784,7 +761,6 @@ com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator 
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.p_products.model.Order
-com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.payments.model.ManualPaymentSource
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind
 com.hunt.otziv.common_billing.service.CommonManualPaymentAttributionCoordinator -> com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService
@@ -808,7 +784,6 @@ com.hunt.otziv.common_billing.service.CommonManualPaymentTaskReturnService -> co
 com.hunt.otziv.common_billing.service.CommonManualPaymentTaskReturnService -> com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors
 com.hunt.otziv.common_billing.service.PaperInvoiceManagerNotificationService -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.common_billing.service.PaperInvoiceManagerNotificationService -> com.hunt.otziv.p_products.model.Order
-com.hunt.otziv.common_billing.service.PaperInvoiceManagerNotificationService -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.common_billing.service.PaperInvoiceManagerNotificationService -> com.hunt.otziv.personal_reminders.service.PersonalReminderService
 com.hunt.otziv.common_billing.service.PaperInvoiceManagerNotificationService -> com.hunt.otziv.t_telegrambot.service.TelegramService
 com.hunt.otziv.common_billing.service.PaperInvoiceManagerNotificationService -> com.hunt.otziv.u_users.model.Manager
@@ -833,7 +808,6 @@ com.hunt.otziv.contractor_payments.service.ContractorAccrualAdjustmentService ->
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.business_audit.service.BusinessAuditService
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.p_products.model.Order
-com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.payments.model.ManualPaymentSource
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.payments.model.ManualPaymentTask
@@ -914,7 +888,6 @@ com.hunt.otziv.contractor_payments.service.ContractorPaymentRoutingLimitService 
 com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeHealthMonitor -> com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository
 com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeHealthMonitor -> com.hunt.otziv.payments.service.PaymentIssueReminderService
 com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch -> com.hunt.otziv.config.settings.service.AppSettingService
-com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch -> com.hunt.otziv.payments.service.BankPaymentInstructionSource
 com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService -> com.hunt.otziv.common_billing.model.CommonInvoice
 com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService -> com.hunt.otziv.common_billing.model.CommonInvoiceOrder
@@ -965,7 +938,6 @@ com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService -> com.
 com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService -> com.hunt.otziv.z_zp.repository.ZpRepository
 com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService -> com.hunt.otziv.common_billing.model.CommonInvoice
 com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService -> com.hunt.otziv.p_products.model.Order
-com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService -> com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot
 com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService -> com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef
 com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService -> com.hunt.otziv.payments.model.ManualPaymentTask
 com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService -> com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind
@@ -1076,7 +1048,6 @@ com.hunt.otziv.l_lead.repository.LeadsRepository -> com.hunt.otziv.u_users.model
 com.hunt.otziv.l_lead.repository.LeadsRepository -> com.hunt.otziv.u_users.model.Marketolog
 com.hunt.otziv.l_lead.repository.LeadsRepository -> com.hunt.otziv.u_users.model.Operator
 com.hunt.otziv.l_lead.service.DeviceTokenServiceImpl -> com.hunt.otziv.u_users.model.Operator
-com.hunt.otziv.l_lead.service.LeadAccessService -> com.hunt.otziv.manager.service.ManagerPermissionService
 com.hunt.otziv.l_lead.service.LeadAccessService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.l_lead.service.LeadAccessService -> com.hunt.otziv.u_users.model.Marketolog
 com.hunt.otziv.l_lead.service.LeadAccessService -> com.hunt.otziv.u_users.model.Operator
@@ -1421,7 +1392,6 @@ com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics -> com.h
 com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics -> com.hunt.otziv.p_products.model.OrderStatus
-com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics -> com.hunt.otziv.payments.repository.PaymentLinkRepository
 com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics -> com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy
 com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics -> com.hunt.otziv.u_users.model.Manager
@@ -1953,7 +1923,6 @@ com.hunt.otziv.p_products.mapper.OrderDtoMapper -> com.hunt.otziv.u_users.model.
 com.hunt.otziv.p_products.mapper.OrderDtoMapper -> com.hunt.otziv.u_users.model.Worker
 com.hunt.otziv.p_products.model.Order -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.p_products.model.Order -> com.hunt.otziv.c_companies.model.Filial
-com.hunt.otziv.p_products.model.Order -> com.hunt.otziv.payments.model.InvoicePaymentMode
 com.hunt.otziv.p_products.model.Order -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.p_products.model.Order -> com.hunt.otziv.u_users.model.Worker
 com.hunt.otziv.p_products.model.Product -> com.hunt.otziv.c_categories.model.ProductCategory
@@ -2099,7 +2068,6 @@ com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder -> com.hunt.
 com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder -> com.hunt.otziv.c_companies.model.Filial
 com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder -> com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse
-com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder -> com.hunt.otziv.payments.service.BankPaymentInstructionSource
 com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder -> com.hunt.otziv.payments.service.PaymentLinkService
 com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder -> com.hunt.otziv.c_companies.model.Company
@@ -2160,21 +2128,15 @@ com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService
 com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService -> com.hunt.otziv.u_users.service.UserService
 com.hunt.otziv.payments.controller.AdminPaymentController -> com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest
-com.hunt.otziv.payments.controller.AdminPaymentController -> com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse
 com.hunt.otziv.payments.controller.AdminPaymentController -> com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy
 com.hunt.otziv.payments.controller.PaymentReturnReconciliationAdminController -> com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy
 com.hunt.otziv.payments.controller.PublicPaymentController -> com.hunt.otziv.webhook.security.WebhookClientIpResolver
-com.hunt.otziv.payments.dto.ConfirmManualCardPaymentRequest -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
-com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
-com.hunt.otziv.payments.dto.ReportManualCardPaymentRequest -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.model.ManualPaymentTask -> com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile
 com.hunt.otziv.payments.model.ManualPaymentTask -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.payments.model.ManualPaymentTaskLedgerEntry -> com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile
-com.hunt.otziv.payments.model.OwnerManualCardPaymentApproval -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.model.PaymentLink -> com.hunt.otziv.contractor_payments.model.ContractorAllocationMode
 com.hunt.otziv.payments.model.PaymentLink -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
-com.hunt.otziv.payments.model.PaymentLink -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.model.PaymentLink -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.payments.repository.PaymentLinkRepository -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.payments.service.BankObservationApplicationService -> com.hunt.otziv.p_products.model.Order
@@ -2197,17 +2159,12 @@ com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService -> co
 com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService -> com.hunt.otziv.u_users.service.UserService
 com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler
-com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse
 com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
-com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService
 com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy
 com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.manager.service.ManagerAccessService
 com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.payments.service.ManualCardPaymentWorkflow -> com.hunt.otziv.p_products.repository.OrderRepository
-com.hunt.otziv.payments.service.ManualCardRoutePolicy -> com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse
-com.hunt.otziv.payments.service.ManualCardRoutePolicy -> com.hunt.otziv.contractor_payments.dto.ManualCardPaymentRecipientResponse
-com.hunt.otziv.payments.service.ManualCardRoutePolicy -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.service.ManualCardRoutePolicy -> com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService
 com.hunt.otziv.payments.service.ManualCardRoutePolicy -> com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch
 com.hunt.otziv.payments.service.ManualCardRoutePolicy -> com.hunt.otziv.p_products.model.Order
@@ -2223,11 +2180,9 @@ com.hunt.otziv.payments.service.ManualPaymentRecipientMonthlySummaryService -> c
 com.hunt.otziv.payments.service.ManualPaymentRecipientMonthlySummaryService -> com.hunt.otziv.contractor_payments.model.ContractorActualPaymentAttribution
 com.hunt.otziv.payments.service.ManualPaymentRecipientMonthlySummaryService -> com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind
 com.hunt.otziv.payments.service.ManualPaymentRecipientMonthlySummaryService -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
-com.hunt.otziv.payments.service.ManualPaymentRecipientMonthlySummaryService -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.service.ManualPaymentRecipientMonthlySummaryService -> com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository
 com.hunt.otziv.payments.service.ManualPaymentRecipientTelegramNotificationService -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.payments.service.ManualPaymentRecipientTelegramNotificationService -> com.hunt.otziv.c_companies.model.Filial
-com.hunt.otziv.payments.service.ManualPaymentRecipientTelegramNotificationService -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.service.ManualPaymentRecipientTelegramNotificationService -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.payments.service.ManualPaymentRecipientTelegramNotificationService -> com.hunt.otziv.t_telegrambot.service.TelegramService
 com.hunt.otziv.payments.service.ManualPaymentRecipientTelegramNotificationService -> com.hunt.otziv.u_users.model.Manager
@@ -2259,7 +2214,6 @@ com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService -> co
 com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService -> com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType
 com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService -> com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus
 com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
-com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService -> com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService
 com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors -> com.hunt.otziv.config.api.CodedResponseStatusException
 com.hunt.otziv.payments.service.ManualPaymentTaskService -> com.hunt.otziv.common_billing.model.CommonInvoiceStatus
@@ -2285,7 +2239,6 @@ com.hunt.otziv.payments.service.OrderPaymentLinkWorkflow -> com.hunt.otziv.p_pro
 com.hunt.otziv.payments.service.OrderPaymentLinkWorkflow -> com.hunt.otziv.p_products.repository.OrderRepository
 com.hunt.otziv.payments.service.OwnerManualCardApprovalWorkflow -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.payments.service.OwnerManualCardApprovalWorkflow -> com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind
-com.hunt.otziv.payments.service.OwnerManualCardApprovalWorkflow -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.service.OwnerManualCardApprovalWorkflow -> com.hunt.otziv.manager.service.ManagerAccessService
 com.hunt.otziv.payments.service.OwnerManualCardApprovalWorkflow -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.payments.service.OwnerManualCardApprovalWorkflow -> com.hunt.otziv.p_products.repository.OrderRepository
@@ -2330,7 +2283,6 @@ com.hunt.otziv.payments.service.PaymentLinkLifecycleService -> com.hunt.otziv.p_
 com.hunt.otziv.payments.service.PaymentLinkOrderPayableChangedListener -> com.hunt.otziv.p_products.review.event.OrderPayableChangedEvent
 com.hunt.otziv.payments.service.PaymentLinkPreparationWorkflow -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.payments.service.PaymentLinkPreparationWorkflow -> com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation
-com.hunt.otziv.payments.service.PaymentLinkPreparationWorkflow -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.service.PaymentLinkPreparationWorkflow -> com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService
 com.hunt.otziv.payments.service.PaymentLinkPreparationWorkflow -> com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService
 com.hunt.otziv.payments.service.PaymentLinkPreparationWorkflow -> com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch
@@ -2350,8 +2302,6 @@ com.hunt.otziv.payments.service.PaymentLinkPresenter -> com.hunt.otziv.u_users.m
 com.hunt.otziv.payments.service.PaymentLinkReturnOutboxWorker -> com.hunt.otziv.client_messages.service.ScheduledClientMessageService
 com.hunt.otziv.payments.service.PaymentLinkReturnOutboxWorker -> com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService
 com.hunt.otziv.payments.service.PaymentLinkService -> com.hunt.otziv.common_billing.model.CommonInvoice
-com.hunt.otziv.payments.service.PaymentLinkService -> com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse
-com.hunt.otziv.payments.service.PaymentLinkService -> com.hunt.otziv.contractor_payments.model.ContractorRecipientType
 com.hunt.otziv.payments.service.PaymentLinkService -> com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy
 com.hunt.otziv.payments.service.PaymentLinkService -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.payments.service.PaymentLinkService -> com.hunt.otziv.u_users.model.Manager

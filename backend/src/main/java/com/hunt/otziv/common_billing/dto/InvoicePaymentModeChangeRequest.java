@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 
 public record InvoicePaymentModeChangeRequest(
         @NotNull InvoicePaymentMode mode,
-        boolean confirmedUnpaid
+        boolean confirmedUnpaid, Boolean paperInvoiceWithdrawn
 ) {
+    public InvoicePaymentModeChangeRequest(InvoicePaymentMode mode, boolean unpaid) { this(mode, unpaid, false); }
 }

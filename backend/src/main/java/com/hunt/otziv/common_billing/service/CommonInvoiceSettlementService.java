@@ -550,6 +550,23 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         if (invoice == null || ref == null || mapped == null) {
             return;
         }
+        String prior = paymentRefStatus(ref);
+        if (isPaperModeSwitchSafeTerminalStatus(prior) && (invoice.getBadReviewRevision() > 0
+                || "recipient_change_bank_closed".equals(ref.getReason()) || "paper_invoice_mode_switch_provider_closed".equals(ref.getReason()))) {
+            if (mapped.status() == PaymentLinkStatus.INITIATED || mapped.status() == PaymentLinkStatus.EXPIRED) {
+                ref.setProviderStatus(prior);
+            } else {
+                ref.setProviderStatus(limit(mapped.providerStatus(), 32));
+                ref.setStatus(mapped.status() == PaymentLinkStatus.CONFIRMED ? PAYMENT_REF_CONFIRMED : PAYMENT_REF_INIT_CONFLICT);
+                ref.setReason("late_tochka_payment_after_terminal_invoice:" + source);
+                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                invoice.setNextReminderAt(null);
+                invoice.setLastError("late_payment_tochka: движение по прежней банковской ссылке. Требуется сверка сумм");
+                invoiceRepository.save(invoice);
+            }
+            paymentRefRepository.save(ref);
+            return;
+        }
         if (!recordTochkaActualPaymentType(invoice, ref, mapped.providerPaymentType())) {
             return;
         }
@@ -690,13 +707,19 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             invoiceRepository.save(invoice);
             return;
         }
+        if (badReviewPaymentOnHold(invoice)) {
+            ref.setStatus(PAYMENT_REF_CONFIRMED);
+            ref.setReason("bad_review_prior_amount_paid");
+            paymentRefRepository.save(ref);
+            return;
+        }
         if (invoice.getStatus() == CommonInvoiceStatus.PAID) {
             ref.setStatus(PAYMENT_REF_APPLIED);
             ref.setReason(limit("tochka_confirmed_after_paid:" + source, 160));
             paymentRefRepository.save(ref);
             return;
         }
-        if (invoice.getStatus() == CommonInvoiceStatus.UNPAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+        if ((invoice.getStatus() == CommonInvoiceStatus.UNPAID && !invoice.isRepricedUnpaid()) || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
             ref.setStatus(PAYMENT_REF_CONFIRMED);
             ref.setReason(limit("late_tochka_payment_after_terminal_invoice:" + source, 160));
             paymentRefRepository.save(ref);
@@ -747,7 +770,32 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     boolean handleTbankWebhookInTransaction(Map<String, String> payload) {
-        VerifiedWebhookProfile verified = verifyWebhook(payload);
+        return applyVerifiedTbankState(payload, verifyWebhook(payload));
+    }
+
+    void applyRecipientChangeReceipt(com.hunt.otziv.payments.api.UnpaidBankObservation.Source source,
+            com.hunt.otziv.payments.api.UnpaidBankObservation.Result observed,
+            CommonInvoice invoice, CommonInvoicePaymentRef ref) {
+        if ("T_BANK".equals(source.provider()) && "CONFIRMED".equals(observed.status())) {
+            var profile = paymentProfileService.findById(source.profileId()).orElseThrow();
+            var terminal = paymentProfileService.toRuntimeForTerminal(profile, source.merchant());
+            if (!source.merchant().equals(terminal.terminalKey())
+                    || (source.test() != null && source.test() != terminal.testMode())) {
+                throw new IllegalStateException("Терминал изменился после подтверждения платежа");
+            }
+            var fields = Map.of("Status", "CONFIRMED", "Success", "true", "ErrorCode", "0",
+                    "Amount", Long.toString(source.amount()), "OrderId", source.order(),
+                    "PaymentId", source.operation(), "TerminalKey", source.merchant());
+            applyVerifiedTbankState(fields, new VerifiedWebhookProfile(terminal));
+        } else if ("TOCHKA".equals(source.provider()) && "APPROVED".equals(observed.status())) {
+            var mapped = new MappedPayment(observed.mappedStatus(), observed.paymentMethod(),
+                    observed.status(), observed.providerPaymentType());
+            applyTochkaPaymentObservation(invoice, ref, mapped, null, "recipient_change");
+        }
+    }
+
+    // Entry points verify either the webhook signature or the complete bound GetState response.
+    boolean applyVerifiedTbankState(Map<String,String> payload, VerifiedWebhookProfile verified) {
         TbankConfirmedEvidence.requireValidWebhook(payload);
         String orderId = normalize(payload.get("OrderId"));
         String paymentId = normalize(payload.get("PaymentId"));
@@ -807,12 +855,16 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         invoice.setTbankTerminalKey(verified.runtimeProfile().terminalKey());
         if ("CONFIRMED".equals(status)) {
             updateCurrentPaymentAnchorFromWebhook(currentAnchor, paymentId, verified.runtimeProfile().terminalKey(), payload, PAYMENT_REF_CONFIRMED, "current_payment_confirmed");
+            if (badReviewPaymentOnHold(invoice)) {
+                recordCurrentPaymentRef(invoice, PAYMENT_REF_CONFIRMED, "bad_review_prior_amount_paid");
+                return true;
+            }
             if (invoice.getStatus() == CommonInvoiceStatus.PAID) {
                 recordCurrentPaymentRef(invoice, PAYMENT_REF_APPLIED, "confirmed_after_paid");
                 invoiceRepository.save(invoice);
                 return true;
             }
-            if (invoice.getStatus() == CommonInvoiceStatus.UNPAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+            if ((invoice.getStatus() == CommonInvoiceStatus.UNPAID && !invoice.isRepricedUnpaid()) || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
                 recordCurrentPaymentRef(invoice, PAYMENT_REF_CONFIRMED, "confirmed_after_terminal_status");
                 invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
                 invoice.setNextReminderAt(null);
@@ -1787,6 +1839,11 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         }
     }
 
+    private boolean badReviewPaymentOnHold(CommonInvoice invoice) {
+        return invoice != null && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && normalize(invoice.getLastError()).startsWith(CommonInvoiceMembershipWorkflow.BAD_REVIEW_SUPPLEMENT_REQUIRED);
+    }
+
     void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         refreshInvoiceAmounts(invoice, items, Map.of());
     }
@@ -1872,6 +1929,8 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         if (items != null && !items.isEmpty() && items.stream().noneMatch(CommonInvoiceOrder::isActiveMembership)) {
             return;
         }
+        // Freeze the billed snapshot while a completed task is awaiting financial review.
+        if (badReviewPaymentOnHold(invoice)) return;
         boolean changed = false;
         List<String> amountFailures = new ArrayList<>();
         for (CommonInvoiceOrder item : items) {

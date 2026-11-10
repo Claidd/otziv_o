@@ -470,6 +470,11 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
         }
         Set<Long> profileIds = ordinaryCandidateProfileIds(
                 order, link, accountingAllocationId, clientFacingAllocationId);
+        Manager routeManager = orderManagerResolver.resolveForRouting(order);
+        List<Long> team = frozenMode == null && routeManager != null && routeManager.getId() != null
+                ? profileRepository.findTeamProfileIds(List.of(routeManager.getId()), ContractorRole.SPECIALIST)
+                : List.of();
+        profileIds.addAll(team);
         taskCandidate.map(ManualPaymentTaskRouteSnapshot::accountingTargetProfileId)
                 .filter(Objects::nonNull).ifPresent(profileIds::add);
         Map<Long, ContractorPaymentProfile> profiles = lockProfiles(profileIds);
@@ -501,6 +506,9 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
             addCandidate(values, client, profiles, mode, accountingAllocation, link.getAmountKopecks(), true);
         }
         addAssignedCandidates(values, order, profiles, mode, accountingAllocation, link.getAmountKopecks(), client);
+        for (Long profileId : team) {
+            addProfileCandidate(values, profileId, profiles, mode, accountingAllocation, link.getAmountKopecks(), client);
+        }
         addProfileCandidate(values, profileId(accountingAllocation), profiles, mode, accountingAllocation,
                 link.getAmountKopecks(), client);
         addProfileCandidate(

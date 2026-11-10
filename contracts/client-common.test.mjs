@@ -34,20 +34,23 @@ test('routing behavior table preserves common rules and the deliberate legacy em
   }
 });
 
-test('route refresh retains the explanation and receipt, clears consent and rejects a missing safe default on both clients', () => {
+test('route refresh retains the explanation and receipt and requires a fresh recipient choice and consent on both clients', () => {
   const web = loadTsModule('../frontend/src/app/shared/common-manual-payment-route-refresh.ts');
   const mobile = loadTsModule('src/app/shared/common-manual-payment-route-refresh.ts');
-  for (const amount of [0, 125050]) {
-    const options = { remainingKopecks: amount, defaultRecipientKey: 'TASK:16:3', candidates: [{ key: 'TASK:16:3' }] };
+  for (const options of [
+    { remainingKopecks: 0, defaultRecipientKey: 'TASK:16:3', candidates: [{ key: 'TASK:16:3' }] },
+    { remainingKopecks: 125050, defaultRecipientKey: 'TASK:16:3', candidates: [{ key: 'TASK:16:3' }] },
+    { remainingKopecks: 125050, defaultRecipientKey: 'missing', candidates: [{ key: 'OWNER:' }] },
+    { remainingKopecks: 125050, defaultRecipientKey: 'missing', candidates: [] }
+  ]) {
     const first = web.commonManualPaymentDraftAfterRouteRefresh(options, 'reason', 'receipt', () => 'row');
     const second = mobile.mobileCommonManualPaymentDraftAfterRouteRefresh(options, 'reason', 'receipt', () => 'row');
     assert.equal(JSON.stringify(first), JSON.stringify(second));
+    assert.deepEqual(Array.from(first.rows, row => [row.recipientKey, row.amountRubles]),
+      options.remainingKopecks ? [['', '1250,50']] : []);
     assert.equal(first.paymentReceived, false); assert.equal(first.finalAcknowledged, false);
     assert.equal(first.reason, 'reason'); assert.equal(first.receiptUrl, 'receipt');
   }
-  const missing = { remainingKopecks: 1, defaultRecipientKey: 'missing', candidates: [] };
-  assert.throws(() => web.commonManualPaymentDraftAfterRouteRefresh(missing, '', '', () => 'row'));
-  assert.throws(() => mobile.mobileCommonManualPaymentDraftAfterRouteRefresh(missing, '', '', () => 'row'));
 });
 
 for (const app of ['frontend', 'mobile']) {

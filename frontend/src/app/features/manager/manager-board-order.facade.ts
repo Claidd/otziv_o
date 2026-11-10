@@ -333,16 +333,17 @@ export class ManagerBoardOrderFacade {
       return;
     }
     const context = this.paymentRouteContext();
-    if (!order || !context?.canChange || this.paymentRouteChanging()) {
+    if (!order || !context || (!context.canChange && !(target === 'DIFFERENT_RECIPIENT' && context.bankRecipientChangeAvailable)) || this.paymentRouteChanging()) {
       return;
     }
     const targetTitle = target === 'EMPLOYEE_REQUISITES'
-      ? 'реквизиты специалиста/менеджера'
+      ? 'реквизиты без ссылки'
+      : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
       : target === 'OWNER_TBANK'
         ? 'ссылку эквайринга владельца'
         : 'режим бумажного счёта владельца';
-    if (!window.confirm(
-      `Клиент еще не оплатил по прежним реквизитам? Старый счет будет закрыт, а клиенту будут отправлены ${targetTitle}.`
+    if ((target !== 'DIFFERENT_RECIPIENT' || context.paperInvoiceIssued) && !window.confirm(
+      (context.paperInvoiceIssued ? 'Подтвердите, что выписка проверена, денег нет и клиент уведомлён об отзыве бумажного счёта. ' : '') + `Клиент еще не оплатил по прежним реквизитам? Старый счет будет закрыт, а клиенту будут отправлены ${targetTitle}.`
     )) {
       return;
     }
@@ -353,6 +354,7 @@ export class ManagerBoardOrderFacade {
       expectedPaymentLinkId: context.paymentLinkId,
       target,
       confirmedUnpaid: true,
+        ...(context.paperInvoiceIssued ? { paperInvoiceWithdrawn: true } : {}),
       expectedTargetPaymentProfileId: target === 'OWNER_TBANK'
         ? context.expectedTargetPaymentProfileId ?? null
         : null
@@ -369,8 +371,12 @@ export class ManagerBoardOrderFacade {
       error: (err) => {
         const message = this.deps.errorMessage(err, 'Не удалось изменить способ оплаты');
         this.paymentRouteChanging.set(false);
-        this.orderError.set(message);
-        this.deps.toastService.error('Способ оплаты не изменен', message);
+        if (err?.status === 423) {
+          this.deps.toastService.success('Запрос на смену принят', message);
+        } else {
+          this.orderError.set(message);
+          this.deps.toastService.error('Способ оплаты не изменен', message);
+        }
         this.openPaymentRouteChange();
       }
     });

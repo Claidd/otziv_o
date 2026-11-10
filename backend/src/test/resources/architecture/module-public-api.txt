@@ -98,3 +98,17 @@ com.hunt.otziv.u_users.api.UserImageLinks
 # workload_shadow; caller notification_media staff notices; read-only REQUIRED transaction, no
 # authorization of its own (callers pass scheduler-resolved worker ids), sends nothing.
 com.hunt.otziv.workload_shadow.api.MandatoryAccountBlockers
+
+# Immutable payment contracts used at the order/common-invoice boundary.
+com.hunt.otziv.payments.model.InvoicePaymentMode
+com.hunt.otziv.payments.dto.PaymentRouteChangeRequest
+com.hunt.otziv.payments.dto.PaymentRouteChangeResponse
+com.hunt.otziv.payments.dto.PaymentRouteChangeTarget
+com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot
+com.hunt.otziv.payments.service.ManualPaymentTaskRoutingFilter
+com.hunt.otziv.payments.service.BankPaymentInstructionSource
+com.hunt.otziv.contractor_payments.model.ContractorRecipientType
+com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse
+com.hunt.otziv.contractor_payments.dto.ManualCardPaymentRecipientResponse
+# Pure authentication-role predicates; no access to orders or staff records.
+com.hunt.otziv.manager.service.ManagerPermissionService

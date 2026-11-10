@@ -44,7 +44,7 @@ public class CommonInvoiceMessageWorker {
                     // Business state changed. Hold for review; never send obsolete billing text.
                     result = ClientMessageSendResult.failed("invoice_changed", "Delivery requires review");
                 } else {
-                    var admission = automaticReminderAdmission(prepared);
+                    var admission = automaticMessageAdmission(prepared);
                     if (admission != null && !admission.allowed()) {
                         // Pause, master switch, business window, shared daily limit or interval:
                         // keep the frozen message queued and retry later; nothing was sent.
@@ -62,14 +62,16 @@ public class CommonInvoiceMessageWorker {
         }
     }
 
-    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission automaticReminderAdmission(
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission automaticMessageAdmission(
             PreparedCommonInvoiceMessage prepared) {
-        if (dispatchBudget == null || prepared == null || !prepared.reminder() || prepared.manual()
-                || prepared.alreadyConfirmed() || prepared.invoiceId() == null) {
-            return null;
-        }
+        if (prepared == null || prepared.alreadyConfirmed() || prepared.invoiceId() == null) return null;
+        boolean repricing = prepared.badReviewNotice();
+        if (!repricing && (!prepared.reminder() || prepared.manual())) return null;
+        if (dispatchBudget == null) return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(
+                false, "automation_paused", "Правила автоответчика недоступны", null);
         return dispatchBudget.reserveForSender(
-                com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER,
+                prepared.reminder() ? com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER
+                        : com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.BAD_REVIEW_INVOICE,
                 "COMMON_INVOICE",
                 prepared.invoiceId(),
                 prepared.chatCompany(),

@@ -51,7 +51,9 @@ public class PaperBillingStore implements com.hunt.otziv.client_messages.api.Del
                 r.get("paid_at") instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : r.get("paid_at") instanceof LocalDateTime time ? time : null,
                 (String)r.get("cancel_message_delivery"),(String)r.get("cancel_reason"),
                 (String)r.get("cancel_replacement_state"),(String)r.get("cancel_replacement_error"),kind,target,payer,orderIds,
-                (String)r.get("message_delivery"),r.get("delivery_completed_at")!=null);
+                (String)r.get("message_delivery"),r.get("delivery_completed_at")!=null,
+                jdbc.queryForObject("SELECT COALESCE(SUM(amount_kopecks),0) FROM paper_invoice_bank_receipt WHERE document_id=? AND state IN ('PARTIAL','APPLIED')",
+                        Long.class, r.get("id")));
     }
     public String composition(Target target) {
         if(target.kind().equals("COMMON_INVOICE")) return common.composition(target.id());

@@ -54,6 +54,19 @@ public class CommonInvoice {
     @Column(name = "invoice_purpose", nullable = false, length = 32)
     private String invoicePurpose = "STANDARD";
 
+    @Column(name = "bad_review_revision", nullable = false)
+    private long badReviewRevision;
+
+    @Column(name = "bad_review_notice_pending", nullable = false)
+    private boolean badReviewNoticePending;
+
+    @Column(name = "bad_review_payable", nullable = false)
+    private boolean badReviewPayable;
+
+    public boolean isRepricedUnpaid() {
+        return badReviewPayable && status == CommonInvoiceStatus.UNPAID;
+    }
+
     /** Immutable route policy captured when the invoice cycle is created. */
     @Enumerated(EnumType.STRING)
     @Column(name = "invoice_payment_mode", nullable = false, length = 32)

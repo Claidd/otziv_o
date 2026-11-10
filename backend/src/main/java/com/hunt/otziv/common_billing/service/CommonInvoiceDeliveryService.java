@@ -264,6 +264,12 @@ public class CommonInvoiceDeliveryService {
                 ? invoiceRepository.findUnsentActionCandidates(UNSENT_ACTION_STATUSES, before, page)
                 : invoiceRepository.findPendingPaymentRouteChangeCandidates(UNSENT_ACTION_STATUSES, before, page);
         int queued = 0;
+        if (immediateClientMessagesEnabled() && badReviewNoticesEnabled()) {
+            for (long id : invoiceRepository.pendingBadReviewNotices(page)) {
+                try { if (queuePaymentMessage(id, false, false, false, null, false, false)) queued++; }
+                catch (RuntimeException failure) { log.warn("Bad review invoice notice deferred: invoiceId={}", id); }
+            }
+        }
         for (var candidate : candidates) {
             try { if (queuePaymentMessage(candidate.getId(), false, false, false, null, false, false)) queued++; }
             catch (RuntimeException failure) { log.warn("Common invoice queue preparation failed: invoiceId={}", candidate.getId()); }
@@ -357,6 +363,8 @@ public class CommonInvoiceDeliveryService {
         if (checkVisibility) {
             ensureCommonInvoiceVisibleForCurrentUser(invoice);
         }
+        if (invoice.isRepricedUnpaid() && (reminder || !invoice.isBadReviewNoticePending()
+                || !badReviewNoticesEnabled() || !immediateClientMessagesEnabled())) return null;
         if (invoiceInitialization.hasUnresolvedLegacyMessage(invoice)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Историческая отправка не имеет сохранённого идентификатора. Требуется сверка до новой отправки");
@@ -416,7 +424,7 @@ public class CommonInvoiceDeliveryService {
         }
         Company chatCompany = chatCompany(invoice);
         Manager messageManager = manager(invoice, items);
-        String operationKind = paymentRouteChangedRetry ? "ROUTE_CHANGE" : reminder ? "REMINDER" : "INVOICE";
+        String operationKind = invoice.isRepricedUnpaid() ? "BAD_REVIEW" : paymentRouteChangedRetry ? "ROUTE_CHANGE" : reminder ? "REMINDER" : "INVOICE";
         if (invoice.getPaymentMessageOperationId() != null && !invoice.isPaymentMessageConfirmed()
                 && !operationKind.equals(invoice.getPaymentMessageOperationKind())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -425,7 +433,9 @@ public class CommonInvoiceDeliveryService {
         boolean confirmedReplay = invoice.isPaymentMessageConfirmed() && !reminder && !paymentRouteChangedRetry
                 && operationKind.equals(invoice.getPaymentMessageOperationKind());
         if (invoice.getPaymentMessageOperationId() == null || (invoice.isPaymentMessageConfirmed() && !confirmedReplay)) {
-            invoice.setPaymentMessageOperationId("invoice-message:" + invoice.getId() + ":" + java.util.UUID.randomUUID());
+            invoice.setPaymentMessageOperationId(invoice.isRepricedUnpaid()
+                    ? "bad-review-invoice:" + invoice.getId() + ":" + invoice.getBadReviewRevision()
+                    : "invoice-message:" + invoice.getId() + ":" + java.util.UUID.randomUUID());
             invoice.setPaymentMessageOperationKind(operationKind);
             invoice.setPaymentMessageConfirmed(false);
             invoice.setPaymentMessageChannel(null);
@@ -436,7 +446,8 @@ public class CommonInvoiceDeliveryService {
                     chatCompany == null ? null : chatCompany.getGroupId(), "", null, reminder, manual,
                     paymentRouteChangedRetry, invoice.getPaymentMessageOperationId(), true, invoice.getPaymentMessageChannel(), remainingKopecks(invoice));
         }
-        invoice.setLastError(paymentRouteChangedRetry ? PAYMENT_ROUTE_CHANGED_MESSAGE_IN_PROGRESS : MESSAGE_SEND_IN_PROGRESS);
+        if (!invoice.isRepricedUnpaid())
+            invoice.setLastError(paymentRouteChangedRetry ? PAYMENT_ROUTE_CHANGED_MESSAGE_IN_PROGRESS : MESSAGE_SEND_IN_PROGRESS);
         invoiceRepository.save(invoice);
         return new PreparedCommonInvoiceMessage(invoice.getId(), deliveryTarget(chatCompany), messageManager == null ? null : messageManager.getClientId(), chatCompany == null ? null : chatCompany.getGroupId(), paymentRouteChangedRetry ? paymentRouteChangedMessage(invoiceMessage(invoice, items, reminder)) : invoiceMessage(invoice, items, reminder), telegramCopyTransferNumber(invoice), reminder, manual, paymentRouteChangedRetry, invoice.getPaymentMessageOperationId(), false, null, remainingKopecks(invoice));
     }
@@ -452,6 +463,15 @@ public class CommonInvoiceDeliveryService {
         }
     }
 
+    private boolean badReviewNoticesEnabled() {
+        return appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true);
+    }
+
+    private boolean sendable(CommonInvoice invoice) {
+        return SEND_INVOICE_STATUSES.contains(invoice.getStatus()) || (invoice.isRepricedUnpaid() && invoice.isBadReviewNoticePending()
+                && invoice.getPaidKopecks() == 0 && invoice.getClientReportedAt() == null && invoice.getManualConfirmedAt() == null);
+    }
+
     boolean messageDeliveryEnabled() {
         try { return appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true); }
         catch (RuntimeException unavailable) { return false; }
@@ -462,7 +482,7 @@ public class CommonInvoiceDeliveryService {
             var invoice = lockedInvoiceAfterStandalonePaymentPrelude(prepared.invoiceId()).invoice();
             refreshInvoiceAmounts(invoice, invoiceOrderRepository.findByInvoiceIdWithOrders(prepared.invoiceId()));
             return !invoice.isPaperInvoiceAutomationHold() && java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())
-                    && !invoice.isPaymentMessageConfirmed() && SEND_INVOICE_STATUSES.contains(invoice.getStatus())
+                    && !invoice.isPaymentMessageConfirmed() && sendable(invoice)
                     && remainingKopecks(invoice) > 0 && remainingKopecks(invoice) == prepared.remainingKopecks();
         });
     }
@@ -477,7 +497,14 @@ public class CommonInvoiceDeliveryService {
             String code = result == null ? "operation_unknown" : result.errorCode();
             if (result != null && result.sent() && result.messageId() != null && !result.messageId().isBlank() && result.messageId().length() <= 512) {
                 if (invoice != null && java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())) {
-                    if (SEND_INVOICE_STATUSES.contains(invoice.getStatus()) && remainingKopecks(invoice) == prepared.remainingKopecks()) {
+                    if (prepared.badReviewNotice() && invoice.isRepricedUnpaid() && remainingKopecks(invoice) == prepared.remainingKopecks()) {
+                        // The notice has its own durable identity. Never overwrite a concurrent bank-init marker.
+                        invoice.setPaymentMessageConfirmed(true);
+                        invoice.setPaymentMessageChannel(result.channel());
+                        invoice.setBadReviewNoticePending(false);
+                        invoice.setSentAt(LocalDateTime.now());
+                        invoiceRepository.save(invoice);
+                    } else if (!prepared.badReviewNotice() && sendable(invoice) && remainingKopecks(invoice) == prepared.remainingKopecks()) {
                         // Restore only the marker belonging to this exact frozen operation.
                         invoice.setLastError(prepared.paymentRouteChanged() ? PAYMENT_ROUTE_CHANGED_MESSAGE_IN_PROGRESS : MESSAGE_SEND_IN_PROGRESS);
                         finishPaymentMessageSend(prepared, result);
@@ -485,7 +512,7 @@ public class CommonInvoiceDeliveryService {
                         // A paid/closed invoice is never reopened by a late receipt.
                         invoice.setPaymentMessageConfirmed(true);
                         invoice.setPaymentMessageChannel(result.channel());
-                        if (SEND_INVOICE_STATUSES.contains(invoice.getStatus())) {
+                        if (sendable(invoice)) {
                             code = "finalization_required";
                             invoice.setLastError("delivery_confirmed_amount_changed: отправка подтверждена, сумма счета изменилась; требуется сверка");
                         }
@@ -599,7 +626,7 @@ public class CommonInvoiceDeliveryService {
         if (invoice.getStatus() == CommonInvoiceStatus.PAID) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплаченный общий счет нельзя отправлять клиенту");
         }
-        if (invoice.getStatus() == CommonInvoiceStatus.UNPAID) {
+        if (invoice.getStatus() == CommonInvoiceStatus.UNPAID && !invoice.isRepricedUnpaid()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Общий счет в статусе Не оплачено нельзя отправлять клиенту");
         }
         if (invoice.getStatus() == CommonInvoiceStatus.BAN) {
@@ -614,7 +641,7 @@ public class CommonInvoiceDeliveryService {
         if (invoice == null) {
             return;
         }
-        if (!SEND_INVOICE_STATUSES.contains(invoice.getStatus())) {
+        if (!sendable(invoice)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Общий счет еще не готов к отправке");
         }
         ensureAllItemsReady(items, "Общий счет еще собирается: не все заказы готовы к оплате");
@@ -802,7 +829,7 @@ public class CommonInvoiceDeliveryService {
     String invoiceMessage(CommonInvoice invoice, List<CommonInvoiceOrder> items, boolean reminder) {
         StringBuilder builder = new StringBuilder();
         builder.append(invoice.getAccount().getName()).append("\n\n");
-        builder.append(reminder ? "Напоминаем об оплате общего счета." : "Все заказы из общего счета выполнены.");
+        builder.append(invoice.isRepricedUnpaid() ? "Сумма общего счёта обновлена после выполнения дополнительной задачи." : reminder ? "Напоминаем об оплате общего счета." : "Все заказы из общего счета выполнены.");
         builder.append("\n\nЗаказов: ").append(items.size());
         builder.append("\nК оплате: ").append(money(amountRubles(remainingKopecks(invoice)))).append(" руб.");
         if (isOwnerPaperInvoice(invoice)) {

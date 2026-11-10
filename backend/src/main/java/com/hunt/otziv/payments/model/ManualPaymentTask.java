@@ -132,4 +132,7 @@ public class ManualPaymentTask {
     void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+    public Long accountingTargetUserId() {
+        return accountingTargetProfile == null ? null : accountingTargetProfile.recipientUserId();
+    }
 }

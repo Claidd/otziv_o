@@ -66,3 +66,5 @@ export function commonInvoiceDeliveryWarning(lastError: string | null | undefine
 
 export { deliveryOperationMessage, deliveryOperationPending, DeliveryStatusWatcher } from './delivery-operations';
 export * from './manual-payment-review';
+
+export * from './manual-transfer';

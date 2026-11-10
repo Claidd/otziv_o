@@ -693,7 +693,8 @@
       "ownerBankTargetProvider" : "contract-example",
       "canReissueOwnerBank" : false,
       "ownerBankReissueBlockReason" : "contract-example",
-      "ownerManualRoute" : false
+      "ownerManualRoute" : false,
+      "bankRecipientChangeAvailable" : false
     },
     "CommonInvoicePaymentRouteChangeTargetOutput" : "EMPLOYEE_REQUISITES",
     "CommonInvoiceSummaryResponseOutput" : {
@@ -738,6 +739,21 @@
       "invoicePaymentMode" : "contract-example",
       "paperInvoiceIssuedAt" : "2026-09-07T08:00:00"
     },
+    "CommonManualPaymentAttributionRequestOutput" : {
+      "idempotencyKey" : "contract-example",
+      "finalAccountingAcknowledged" : false,
+      "paymentReceived" : false,
+      "effectiveAt" : "2026-09-07T08:00:00",
+      "reason" : "contract-example",
+      "receiptUrl" : "contract-example",
+      "attributions" : [ {
+        "rowKey" : "contract-example",
+        "recipientKey" : "contract-example",
+        "recipientType" : "SPECIALIST",
+        "recipientProfileId" : 2,
+        "amountKopecks" : 2
+      } ]
+    },
     "CommonManualPaymentAttributionResponseOutput" : {
       "id" : 2,
       "attributionKey" : "contract-example",
@@ -764,6 +780,13 @@
       "actualManualPaymentTaskId" : 2,
       "actualManualPaymentTaskGeneration" : 2,
       "actualTaskTargetKind" : "UNRESOLVED"
+    },
+    "CommonManualPaymentAttributionRowRequestOutput" : {
+      "rowKey" : "contract-example",
+      "recipientKey" : "contract-example",
+      "recipientType" : "SPECIALIST",
+      "recipientProfileId" : 2,
+      "amountKopecks" : 2
     },
     "CommonManualPaymentOptionsResponseOutput" : {
       "invoiceId" : 2,
@@ -815,7 +838,49 @@
         "actualTaskTargetKind" : "UNRESOLVED"
       } ],
       "contractVersion" : "contract-example",
-      "routeRevision" : "contract-example"
+      "routeRevision" : "contract-example",
+      "ownerReport" : {
+        "id" : 2,
+        "reportedBy" : "contract-example",
+        "attentionMode" : false,
+        "canDecide" : false,
+        "request" : {
+          "idempotencyKey" : "contract-example",
+          "finalAccountingAcknowledged" : false,
+          "paymentReceived" : false,
+          "effectiveAt" : "2026-09-07T08:00:00",
+          "reason" : "contract-example",
+          "receiptUrl" : "contract-example",
+          "attributions" : [ {
+            "rowKey" : "contract-example",
+            "recipientKey" : "contract-example",
+            "recipientType" : "SPECIALIST",
+            "recipientProfileId" : 2,
+            "amountKopecks" : 2
+          } ]
+        }
+      }
+    },
+    "CommonManualPaymentOptionsResponseOwnerReportOutput" : {
+      "id" : 2,
+      "reportedBy" : "contract-example",
+      "attentionMode" : false,
+      "canDecide" : false,
+      "request" : {
+        "idempotencyKey" : "contract-example",
+        "finalAccountingAcknowledged" : false,
+        "paymentReceived" : false,
+        "effectiveAt" : "2026-09-07T08:00:00",
+        "reason" : "contract-example",
+        "receiptUrl" : "contract-example",
+        "attributions" : [ {
+          "rowKey" : "contract-example",
+          "recipientKey" : "contract-example",
+          "recipientType" : "SPECIALIST",
+          "recipientProfileId" : 2,
+          "amountKopecks" : 2
+        } ]
+      }
     },
     "CommonManualPaymentRecipientCandidateResponseOutput" : {
       "key" : "contract-example",
@@ -3856,7 +3921,8 @@
       "blockReason" : "contract-example",
       "configuredMode" : "contract-example",
       "paperInvoiceIssued" : false,
-      "expectedTargetPaymentProfileId" : 2
+      "expectedTargetPaymentProfileId" : 2,
+      "bankRecipientChangeAvailable" : false
     },
     "PaymentRouteChangeResponseOutput" : {
       "previousPaymentLinkId" : 2,
@@ -4420,7 +4486,8 @@
     },
     "InvoicePaymentModeChangeRequestInput" : {
       "confirmedUnpaid" : false,
-      "mode" : "AUTO_ROUTING"
+      "mode" : "AUTO_ROUTING",
+      "paperInvoiceWithdrawn" : false
     },
     "InvoicePaymentModeInput" : "AUTO_ROUTING",
     "ManagerClientReplyResolutionRequestInput" : {
@@ -4463,6 +4530,21 @@
       "note" : "contract-example",
       "recipientReportedMissing" : false
     },
+    "ManualTransferReceiptServiceLineInput" : {
+      "amountKopecks" : 2,
+      "orderId" : 2
+    },
+    "ManualTransferReceiptServiceTransferInput" : {
+      "amountKopecks" : 2,
+      "bankReference" : "contract-example",
+      "orders" : [ {
+        "amountKopecks" : 2,
+        "orderId" : 2
+      } ],
+      "reason" : "contract-example",
+      "receiptUrl" : "contract-example",
+      "recipientProfileId" : 2
+    },
     "OrderNoteUpdateRequestInput" : {
       "orderComments" : "contract-example"
     },
@@ -4499,6 +4581,7 @@
       "confirmedUnpaid" : false,
       "expectedPaymentLinkId" : 2,
       "expectedTargetPaymentProfileId" : 2,
+      "paperInvoiceWithdrawn" : false,
       "target" : "EMPLOYEE_REQUISITES"
     },
     "PaymentRouteChangeTargetInput" : "EMPLOYEE_REQUISITES",

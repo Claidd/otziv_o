@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.service;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import com.hunt.otziv.p_products.api.PaperInvoiceOrderData;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -68,12 +70,17 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
     }
     @Transactional
     public void resumeOrdinaryInvoice(long id) {
+        resumeOrdinaryInvoice(id, InvoicePaymentMode.AUTO_ROUTING);
+    }
+
+    @Transactional
+    public void resumeOrdinaryInvoice(long id, InvoicePaymentMode mode) {
         var order=orders.findByIdForCounterUpdate(id).orElseThrow();
         requireUnpaidForCancellation(id);
         if(order.isPaperInvoiceReviewHold() || !order.isPaperInvoiceAutomationHold()
                 || !order.isBankPaperInvoice() || !"Опубликовано".equals(order.getStatus().getTitle()))
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Заказ изменился или требует сверки перед новым счётом");
-        order.useAutomaticInvoicePaymentMode();
+        order.setInvoicePaymentMode(mode);
         order.setPaperInvoiceAutomationHold(false);
         order.setStatusChangedAt(java.time.LocalDateTime.now());
         order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(),1));
@@ -83,13 +90,18 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
     public long companyId(long id) { return jdbc.queryForObject("SELECT order_company FROM orders WHERE order_id=?",Long.class,id); }
     @Transactional
     public void resumeCommonOrdinaryInvoice(long id) {
+        resumeCommonOrdinaryInvoice(id, InvoicePaymentMode.AUTO_ROUTING);
+    }
+
+    @Transactional
+    public void resumeCommonOrdinaryInvoice(long id, InvoicePaymentMode mode) {
         var order=orders.findByIdForCounterUpdate(id).orElseThrow();
         requireUnpaidForCancellation(id);
         if(order.isPaperInvoiceReviewHold() || !order.isPaperInvoiceAutomationHold()
                 || !order.isBankPaperInvoice()
                 || !java.util.Set.of("Опубликовано","Ожидает общего счета").contains(order.getStatus().getTitle()))
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Выбранный заказ изменился или требует сверки");
-        order.useAutomaticInvoicePaymentMode();
+        order.setInvoicePaymentMode(mode);
         order.setPaperInvoiceAutomationHold(false);
         order.setStatus(statuses.getOrderStatusByTitle("Опубликовано"));
         order.setStatusChangedAt(java.time.LocalDateTime.now());

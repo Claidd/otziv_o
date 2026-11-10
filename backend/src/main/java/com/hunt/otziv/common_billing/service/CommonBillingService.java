@@ -333,26 +333,20 @@ public class CommonBillingService {
 
     /**
      * Locks and validates a linked common invoice before a bad-review task can
-     * change the payable amount. A frozen, delivered or historical invoice is
-     * never silently rewritten; it needs a supplemental invoice or manual
-     * reconciliation. The invoice lock is retained by the caller transaction
-     * through the later task and amount updates.
+     * change the payable amount. The task transaction retains the lock while
+     * recalculating the existing unpaid invoice or recording a payment hold.
      */
     public CommonPayableChangeDisposition prepareLinkedOrderPayableChange(Long orderId) {
         return invoiceMembershipWorkflow.prepareLinkedOrderPayableChange(orderId);
     }
 
-    /**
-     * Creates the immutable predecessor's idempotent live successor. A delivered successor the
-     * client has not paid is closed as "Не оплачено" first, so the client receives the invoice
-     * with the new amount after every completed bad review. Runs in the task's transaction.
-     */
-    public boolean createBadReviewSupplementSuccessor(Long orderId, Long taskId) {
-        Long delivered = invoiceMembershipWorkflow.deliveredBadReviewSuccessorToSupersede(orderId);
+    /** Keeps the live debt on its current invoice. A legacy delivered successor first enters the unpaid cycle. */
+    public boolean repriceBadReviewInvoice(Long orderId, Long taskId) {
+        Long delivered = invoiceMembershipWorkflow.deliveredSuccessorForRepricing(orderId);
         if (delivered != null) {
-            invoiceArchiveWorkflow.supersedeUnpaidBadReviewSuccessor(delivered, invoiceMembershipWorkflow::supersedableBadReviewSuccessor);
+            invoiceArchiveWorkflow.moveDeliveredSuccessorToUnpaid(delivered, invoiceMembershipWorkflow::canRepriceDeliveredSuccessor);
         }
-        return invoiceMembershipWorkflow.createBadReviewSupplementSuccessor(orderId, taskId);
+        return invoiceMembershipWorkflow.repriceBadReviewInvoice(orderId, taskId);
     }
 
     public CommonInvoiceDetailsResponse approveReviewOrders(Long invoiceId) {
@@ -379,6 +373,10 @@ public class CommonBillingService {
 
     public CommonInvoicePaymentRouteChangeContextResponse commonInvoicePaymentRouteChangeContext(Long invoiceId) {
         return invoiceRouteWorkflow.commonInvoicePaymentRouteChangeContext(invoiceId);
+    }
+
+    public CommonInvoiceDetailsResponse changeCommonInvoiceRecipient(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, Principal principal) {
+        return invoiceRouteWorkflow.changeCommonInvoicePaymentRoute(invoiceId, request, principal, true);
     }
 
     public CommonInvoiceDetailsResponse changeCommonInvoicePaymentRoute(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, Principal principal) {

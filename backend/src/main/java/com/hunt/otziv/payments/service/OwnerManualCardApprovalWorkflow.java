@@ -108,19 +108,21 @@ public class OwnerManualCardApprovalWorkflow {
         OrderManualCardRoute route = selectManualCardPaymentRouteForOrder(orderId, authentication);
         PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(route.linkId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         if (!isCompletedManualCardPayment(snapshot)) {
+            if ("OWNER".equals(normalize(recipientKey)) && recipientProfileId == null
+                    && (recipientType == null || recipientType == ContractorRecipientType.OWNER)
+                    && isBankRoute(snapshot) && transactionExecutor.required(() ->
+                        ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(route.linkId()).isPresent())) {
+                return requestOwnerManualCardPaymentApproval(orderId, route, cleanReason, cleanReceiptUrl,
+                        ContractorRecipientType.OWNER, null, "OWNER", cleanActor, authentication);
+            }
             // A non-empty recipientKey takes precedence over the other request fields
             // when the actual recipient is frozen. Route approval by that same
             // canonical selection, rather than by an untrusted recipientType.
             ManualCardRoutePolicy.SelectedManagerRecipient selected = manualCardPayments.resolveManagerRecipientForOrder(
                     orderId, recipientType, recipientProfileId, recipientKey, authentication);
             if (selected.recipientType() == ContractorRecipientType.OWNER) {
-                // Previously issued owner approvals retain their original authorisation workflow.
-                var legacy = transactionExecutor.required(() ->
-                        ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(route.linkId()).orElse(null));
-                if (legacy != null) {
-                    return requestOwnerManualCardPaymentApproval(orderId, route, cleanReason, cleanReceiptUrl,
-                            selected.recipientType(), selected.recipientProfileId(), selected.recipientKey(), cleanActor, authentication);
-                }
+                return requestOwnerManualCardPaymentApproval(orderId, route, cleanReason, cleanReceiptUrl,
+                        selected.recipientType(), selected.recipientProfileId(), selected.recipientKey(), cleanActor, authentication);
             }
             if (selected.recipientType() != null) {
                 var review = transactionExecutor.required(() -> specialistReviewService.requestRecipient(
@@ -152,6 +154,10 @@ public class OwnerManualCardApprovalWorkflow {
             PaymentLink link = paymentLinkRepository.findByIdForUpdate(route.linkId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
             if (!hasOrderBinding(link, orderId) || link.getAmountKopecks() != route.amountKopecks() || !isOwnerApprovalEligibleRoute(link)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Маршрут оплаты изменился. Запрос владельцу не отправлен.");
+            }
+            if (isBankRoute(link)
+                    && ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(link.getId()).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплату владельцу по банковской ссылке подтверждает банк");
             }
             requireManualCardPaymentLocalEligibility(order, link, orderId);
             if (actor.isBlank() || actor.length() > 150) {
@@ -318,7 +324,17 @@ public class OwnerManualCardApprovalWorkflow {
         }
     }
 
+    private boolean isBankRoute(PaymentLink link) {
+        return link.getPaymentMethod() == com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM
+                || link.getPaymentMethod() == com.hunt.otziv.payments.model.PaymentMethod.SBP_QR;
+    }
+
     private boolean isFrozenOwnerRecipientForApproval(PaymentLink link, String recipientKey) {
+        if (link.getManualActualRecipientFrozenAt() == null && !isBankRoute(link)
+                && link.getManualSource() != ManualPaymentSource.MANUAL_TASK && "OWNER".equals(normalize(recipientKey))) {
+            // In legacy accounting the approval itself persists the exact owner, amount and source.
+            return manualCardPayments.legacyOwnerAccounting();
+        }
         if (link.getManualActualRecipientFrozenAt() == null
                 || link.getManualActualRecipientType() != ContractorRecipientType.OWNER
                 || link.getManualActualRecipientProfileId() != null) {

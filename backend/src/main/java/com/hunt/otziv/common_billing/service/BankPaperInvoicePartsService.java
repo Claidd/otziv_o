@@ -1,5 +1,7 @@
 package com.hunt.otziv.common_billing.service;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import com.hunt.otziv.common_billing.api.*;
 import com.hunt.otziv.common_billing.model.*;
 import com.hunt.otziv.common_billing.repository.*;
@@ -205,6 +207,11 @@ public class BankPaperInvoicePartsService implements BankPaperInvoiceParts {
     }
     @Transactional
     public void resumeOrdinaryInvoice(long part) {
+        resumeOrdinaryInvoice(part, InvoicePaymentMode.AUTO_ROUTING);
+    }
+
+    @Transactional
+    public void resumeOrdinaryInvoice(long part, InvoicePaymentMode mode) {
         var parent=delivery.lockedInvoiceAfterStandalonePaymentPrelude(parent(part)).invoice();
         requireUnpaid(part);
         var cancelled=jdbc.queryForMap("SELECT * FROM common_invoice_paper_parts WHERE part_id=? FOR UPDATE",part);
@@ -221,7 +228,10 @@ public class BankPaperInvoicePartsService implements BankPaperInvoiceParts {
         items.saveAll(selected);
         // Membership stays active: each ordinary receipt contributes to the same
         // total and successor orders remain deferred until the whole invoice is paid.
-        for(long order:memberIds) orders.resumeCommonOrdinaryInvoice(order);
+        for(long order:memberIds) {
+            if (mode == InvoicePaymentMode.AUTO_ROUTING) orders.resumeCommonOrdinaryInvoice(order);
+            else orders.resumeCommonOrdinaryInvoice(order, mode);
+        }
         parent.setNextReminderAt(null);invoices.save(parent);
     }
 

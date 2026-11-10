@@ -176,6 +176,9 @@
       >
         {{ action.label }}
       </button>
+      @if (action.status === 'Оплачено' && allowRecordTransfer && !order.commonInvoice && order.status !== 'Оплачено') {
+        <button type="button" [disabled]="order.waitingForClient || !!mutationKey" (click)="recordTransfer.emit()">Оплата конкретному специалисту</button>
+      }
     }
     @if (canManageClientWaiting()) {
       <button

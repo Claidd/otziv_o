@@ -56,7 +56,7 @@ class DeliveryResponseCompatibilityTest {
         var mvc = MockMvcBuilders.standaloneSetup(
                 new CommonBillingAdminController(billing, mock(com.hunt.otziv.common_billing.service.CommonInvoiceDisputedOrderArchiveWorkflow.class), mock(CommonBillingPublicationApprovalFailureMarker.class),
                         mock(ContractorPaymentTargetAccessPolicy.class), mock(ContractorActualPaymentAttributionFlowPolicy.class),
-                        mock(com.hunt.otziv.common_billing.service.CommonInvoiceOverdueTerm.class)),
+                        mock(com.hunt.otziv.common_billing.service.CommonInvoiceOverdueTerm.class), mock(com.hunt.otziv.common_billing.service.BankRecipientChanges.class)),
                 new ApiManagerControlController(manager, new PerformanceMetrics(new SimpleMeterRegistry()),
                         mock(ManagerQueueStateService.class), mock(ManagerSiteActivityService.class), mock(ManagerClientDeliveryStatus.class),
                         mock(com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow.class)))

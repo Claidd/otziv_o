@@ -1,5 +1,7 @@
 package com.hunt.otziv.common_billing.service;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import static com.hunt.otziv.common_billing.service.CommonInvoiceCancellationService.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoicePresenter.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService.*;
@@ -263,6 +265,8 @@ public class CommonInvoiceInitializationService {
     PreparedCommonPaymentInit preparePaymentInit(String token, String cleanEmail) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceByTokenAfterStandalonePaymentPrelude(token);
         CommonInvoice invoice = paymentPrelude.invoice();
+        if (invoiceRepository.pendingRecipientChanges(invoice.getId()) > 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Для счёта меняется получатель. Дождитесь новых реквизитов");
         if (invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Архивный общий счет недоступен для оплаты");
         }
@@ -1072,7 +1076,7 @@ public class CommonInvoiceInitializationService {
     }
 
     boolean canAcceptPublicPayment(CommonInvoice invoice) {
-        return invoice != null && !isOwnerPaperInvoice(invoice) && PUBLIC_PAYABLE_STATUSES.contains(invoice.getStatus());
+        return invoice != null && !isOwnerPaperInvoice(invoice) && (PUBLIC_PAYABLE_STATUSES.contains(invoice.getStatus()) || invoice.isRepricedUnpaid());
     }
 
     String paymentRefStatus(CommonInvoicePaymentRef ref) {
@@ -1115,6 +1119,13 @@ public class CommonInvoiceInitializationService {
     }
 
     // Called only after composition/payment evidence checks, inside the caller's canonical transaction.
+    void releaseReservationForRepricing(CommonInvoice invoice) {
+        if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK)
+            taskReceiptIntegrationService.release(invoice, "Пересчитана сумма общего счёта после плохой задачи");
+        else if (invoice.getContractorAllocationId() != null)
+            contractorPaymentLiveRoutingService.releaseCommonInvoiceForRepricing(invoice);
+    }
+
     void releaseUnusedCompositionReservation(CommonInvoice invoice) {
         String reason = "Изменение состава неотправленного общего счёта";
         if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {
@@ -1149,11 +1160,22 @@ public class CommonInvoiceInitializationService {
         }
         PaymentRouteSelection route;
         ContractorPaymentAllocation liveAllocation = null;
-        Optional<PaymentRouteSelection> taskRoute = hasCurrentCommonPaymentRoute(invoice) ? Optional.empty() : invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remainingKopecks);
+        boolean bankOnly = invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_TBANK;
+        boolean numberOnly = invoice.getInvoicePaymentMode() == InvoicePaymentMode.EMPLOYEE_REQUISITES;
+        Optional<PaymentRouteSelection> taskRoute = hasCurrentCommonPaymentRoute(invoice) || bankOnly ? Optional.empty()
+                : numberOnly ? invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remainingKopecks,
+                        com.hunt.otziv.payments.service.ManualPaymentTaskRoutingFilter.NUMBER)
+                : invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remainingKopecks);
         if (hasCurrentCommonPaymentRoute(invoice)) {
             route = legacyTbankRoute(invoice, remainingKopecks);
         } else if (taskRoute.isPresent()) {
             route = taskRoute.get();
+        } else if (bankOnly || numberOnly) {
+            liveAllocation = requireLiveCommonInvoiceAllocation(invoice, bankOnly
+                    ? contractorPaymentLiveRoutingService.reserveOwnerForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks)
+                    : contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks));
+            route = bankOnly ? invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(routeManager, remainingKopecks)
+                    : contractorCommonPaymentRoute(invoice, liveAllocation);
         } else if (contractorPaymentLiveRoutingService.enabledForNewRoutes()) {
             try {
                 liveAllocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks));

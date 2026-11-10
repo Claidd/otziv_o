@@ -83,7 +83,7 @@ test('manual-card dialog preserves the exact pending/completed backend outcome i
   );
   assert.match(
     submit,
-    /const\s+\w+\s*=\s*await firstValueFrom\(\s*this\.managerManualPaymentsApi\.confirmManagerManualCardPayment\(/
+    /\w+\s*=\s*await firstValueFrom\(\s*this\.managerManualPaymentsApi\.confirmManagerManualCardPayment\(/
   );
   assert.match(
     submit,

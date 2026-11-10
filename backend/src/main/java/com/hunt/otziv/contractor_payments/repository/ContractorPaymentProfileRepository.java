@@ -16,6 +16,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface ContractorPaymentProfileRepository extends JpaRepository<ContractorPaymentProfile, Long> {
 
+    @Query("""
+            SELECT DISTINCT p.id FROM ContractorPaymentProfile p JOIN p.user u JOIN u.managers m
+            WHERE m.id IN :managerIds AND u.active = true AND p.enabled = true AND p.role = :role
+            ORDER BY p.id
+            """)
+    List<Long> findTeamProfileIds(@Param("managerIds") Collection<Long> managerIds, @Param("role") ContractorRole role);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM ContractorPaymentProfile p WHERE p.id = :id")
     Optional<ContractorPaymentProfile> findByIdForUpdate(@Param("id") Long id);

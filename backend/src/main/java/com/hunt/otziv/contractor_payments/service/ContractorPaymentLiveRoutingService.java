@@ -125,7 +125,7 @@ public class ContractorPaymentLiveRoutingService {
         if (invoice == null
                 || invoice.getId() == null
                 || invoice.getContractorAllocationId() == null
-                || !PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus())
+                || (!PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus()) && !invoice.isRepricedUnpaid())
                 || invoice.getPaymentRouteAmountKopecks() == null
                 || invoice.getPaymentRouteAmountKopecks() <= 0
                 || remainingKopecks <= 0
@@ -548,7 +548,7 @@ public class ContractorPaymentLiveRoutingService {
                         Math.max(0L, invoice.getAmountKopecks() - invoice.getPaidKopecks())
                 )
                 || invoice.getPaidKopecks() >= invoice.getAmountKopecks()
-                || !PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus())) {
+                || (!PUBLIC_PAYABLE_COMMON_STATUSES.contains(invoice.getStatus()) && !invoice.isRepricedUnpaid())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Платежный маршрут общего счета изменился и требует сверки"
@@ -608,6 +608,19 @@ public class ContractorPaymentLiveRoutingService {
                 "Получатель общего счёта заменён на бумажный счёт владельца",
                 "LIVE_COMMON:PAPER_INVOICE_SWITCH"
         );
+    }
+
+    @Transactional
+    public void releaseCommonInvoiceForRepricing(CommonInvoice invoice) {
+        if (invoice.getContractorAllocationId() == null) return;
+        var allocation = lockAllocationProfileFirst(invoice.getContractorAllocationId()).orElseThrow();
+        if (allocation.getStatus() == ContractorAllocationStatus.RELEASED_UNPAID
+                && allocation.getSourceType() == ContractorAllocationSourceType.COMMON_INVOICE
+                && Objects.equals(allocation.getSourceId(), invoice.getId())
+                && Objects.equals(allocation.getCommonInvoiceId(), invoice.getId())
+                && allocation.getConfirmedKopecks() == 0 && allocation.getClientReportedAt() == null) return;
+        releaseCommonInvoiceRouteForReplacement(invoice, "Пересчитана сумма общего счёта после плохой задачи",
+                "LIVE_COMMON:BAD_REVIEW_REPRICED");
     }
 
     @Transactional
@@ -674,10 +687,31 @@ public class ContractorPaymentLiveRoutingService {
         return reserveForPaymentLink(link, PaymentLinkRoutePreference.CONTRACTOR_ONLY);
     }
 
+    public Long issuedRecipientUserId(Long allocationId, Long issuedTaskProfileId) {
+        if (issuedTaskProfileId != null) {
+            return profileRepository.findById(issuedTaskProfileId)
+                    .map(ContractorPaymentProfile::getUser).map(user -> user.getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Профиль получателя задания недоступен"));
+        }
+        return allocationId == null ? null : allocationRepository.findById(allocationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Резерв прежнего получателя не найден"))
+                .getRecipientUserId();
+    }
+
+    @Transactional
+    public ContractorPaymentAllocation reserveContractorForPaymentLink(PaymentLink link, Long excludedUserId) {
+        return reserveForPaymentLink(link, PaymentLinkRoutePreference.CONTRACTOR_ONLY, excludedUserId);
+    }
+
     private ContractorPaymentAllocation reserveForPaymentLink(
             PaymentLink link,
             PaymentLinkRoutePreference preference
     ) {
+        return reserveForPaymentLink(link, preference, null);
+    }
+
+    private ContractorPaymentAllocation reserveForPaymentLink(PaymentLink link, PaymentLinkRoutePreference preference,
+                                                               Long excludedUserId) {
         if (!enabledForNewRoutes()) {
             return null;
         }
@@ -725,7 +759,7 @@ public class ContractorPaymentLiveRoutingService {
                     order.getWorker(),
                     effectiveManager(order),
                     amount,
-                    null
+                    null, excludedUserId
             );
         }
 
@@ -795,6 +829,12 @@ public class ContractorPaymentLiveRoutingService {
         return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.OWNER, true);
     }
 
+    @Transactional
+    public ContractorPaymentAllocation reserveContractorForCommonInvoice(CommonInvoice invoice, List<Order> orders,
+            Manager manager, long amount, Long excludedUserId) {
+        return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.CONTRACTOR_ONLY, true, excludedUserId);
+    }
+
     private ContractorPaymentAllocation reserveForCommonInvoice(
             CommonInvoice invoice,
             List<Order> orders,
@@ -803,6 +843,11 @@ public class ContractorPaymentLiveRoutingService {
             CommonInvoiceRoutePreference preference,
             boolean explicitReplacement
     ) {
+        return reserveForCommonInvoice(invoice, orders, manager, amount, preference, explicitReplacement, null);
+    }
+
+    private ContractorPaymentAllocation reserveForCommonInvoice(CommonInvoice invoice, List<Order> orders,
+            Manager manager, long amount, CommonInvoiceRoutePreference preference, boolean explicitReplacement, Long excludedUserId) {
         if (!enabledForNewRoutes()) {
             return null;
         }
@@ -881,7 +926,7 @@ public class ContractorPaymentLiveRoutingService {
                             completeWorkerSet && workers.size() == 1 ? workers.getFirst() : null,
                             manager,
                             amount,
-                            specialistPrecondition
+                            specialistPrecondition, excludedUserId
                     )
                     : ContractorPaymentRouteDecision.owner(
                             ContractorRoutingDecisionReason.PRIOR_PAYMENT_EVIDENCE,
@@ -1009,11 +1054,12 @@ public class ContractorPaymentLiveRoutingService {
             Object specialistSubject,
             Object managerSubject,
             long amount,
-            ContractorRoutingDecisionReason specialistPrecondition
+            ContractorRoutingDecisionReason specialistPrecondition, Long excludedUserId
     ) {
         List<RouteCandidate> candidates = new ArrayList<>(2);
         addCandidate(candidates, specialistSubject, ContractorRole.SPECIALIST);
         addCandidate(candidates, managerSubject, ContractorRole.MANAGER);
+        if (excludedUserId != null) candidates.removeIf(candidate -> excludedUserId.equals(candidate.userId()));
         ContractorRoutingDecisionReason specialistRejection = specialistPrecondition;
         if (specialistRejection == null && user(specialistSubject) == null) {
             specialistRejection = ContractorRoutingDecisionReason.SPECIALIST_NOT_ASSIGNED;

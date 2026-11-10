@@ -105,6 +105,8 @@ public class CommonInvoiceManualPaymentWorkflow {
 
     private final TbankClient tbankClient;
 
+    private final CommonOwnerReceiptApprovals ownerReceipts;
+
     CommonInvoiceDetailsResponse invoiceAfterOrderPrelude(Long invoiceId) {
         CommonInvoice invoice = lockedInvoiceAfterOrderPrelude(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
@@ -242,7 +244,8 @@ public class CommonInvoiceManualPaymentWorkflow {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CommonInvoiceDetailsResponse markPaidWithAttributions(Long invoiceId, CommonManualPaymentAttributionRequest request, Principal principal) {
         validateCommonManualPaymentAttributionRequest(request);
-        PreparedManualPaymentBankReconciliation prepared = writeTransaction(() -> prepareManualPaymentBankReconciliation(invoiceId));
+        if (stageOwnerReport(invoiceId, request, false, principal)) return writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
+        PreparedManualPaymentBankReconciliation prepared = writeTransaction(() -> prepareManualPaymentBankReconciliation(invoiceId, request));
         if (prepared.providerPaymentRefId() == null) {
             return writeTransaction(() -> markPaidWithAttributionsLocked(invoiceId, request, principal));
         }
@@ -284,6 +287,8 @@ public class CommonInvoiceManualPaymentWorkflow {
         ensureCommonInvoiceNotNeedsAttention(invoice);
         promoteCollectingInvoiceToReadyIfPossible(invoice, items);
         ensureCommonInvoiceCanBeMarkedPaid(invoice);
+        requireManualRecipientsAllowed(invoice, request);
+        ownerReceipts.accept(invoice, items, request, principal);
         long manualAmountKopecks = remainingKopecks(invoice);
         ensureNoCurrentCommonTbankPaymentForManualCard(invoice);
         ensureCommonPaymentRefsSafeForManualCard(paymentRefRepository.findByInvoiceIdForUpdate(invoiceId));
@@ -294,12 +299,42 @@ public class CommonInvoiceManualPaymentWorkflow {
         return invoiceAfterOrderPrelude(invoiceId);
     }
 
+    private boolean stageOwnerReport(Long invoiceId, CommonManualPaymentAttributionRequest request, boolean attention, Principal principal) {
+        if (!CommonOwnerReceiptApprovals.includesOwner(request)) return false;
+        return writeTransaction(() -> {
+            CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+            ensureCommonInvoiceVisibleForCurrentUser(invoice);
+            if (invoice.getStatus() == CommonInvoiceStatus.PAID) return false;
+            requireNoIntegratedPaperDocument(invoice);
+            requireManualRecipientsAllowed(invoice, request);
+            List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+            refreshInvoiceAmounts(invoice, items);
+            if (attention) {
+                if (!attentionError(invoice).startsWith(STANDALONE_PAYMENT_ROUTE_CONFLICT))
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Платёжное состояние счёта изменилось");
+            } else {
+                promoteCollectingInvoiceToReadyIfPossible(invoice, items);
+                ensureCommonInvoiceCanBeMarkedPaid(invoice);
+            }
+            return ownerReceipts.stage(invoice, items, request, attention, principal,
+                    commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice)));
+        });
+    }
+
     PreparedManualPaymentBankReconciliation prepareManualPaymentBankReconciliation(Long invoiceId) {
+        return prepareManualPaymentBankReconciliation(invoiceId, null);
+    }
+
+    PreparedManualPaymentBankReconciliation prepareManualPaymentBankReconciliation(Long invoiceId, CommonManualPaymentAttributionRequest request) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         requireNoIntegratedPaperDocument(invoice);
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         if (invoice.getStatus() == CommonInvoiceStatus.PAID) {
             return PreparedManualPaymentBankReconciliation.completed(invoiceId);
+        }
+        if (request != null) {
+            requireManualRecipientsAllowed(invoice, request);
+            ownerReceipts.requireMatchingReport(invoice.getId(), request);
         }
         CommonInvoiceStatus originalStatus = manualPaymentReconciliationOriginalStatus(invoice);
         if (!MARK_PAID_STATUSES.contains(originalStatus)) {
@@ -536,7 +571,7 @@ public class CommonInvoiceManualPaymentWorkflow {
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         refreshInvoiceAmounts(invoice, items);
-        return commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice));
+        return ownerReceipts.attach(commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice)));
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -558,6 +593,7 @@ public class CommonInvoiceManualPaymentWorkflow {
         CommonInvoice invoice = paymentPrelude.invoice();
         actualPaymentAttributionFlowPolicy.requireLegacyFlowLocked();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        ensureGenericConfirmationDoesNotUseContractorSource(invoice);
         ensureCommonInvoiceNeedsAttention(invoice);
         if (!attentionError(invoice).startsWith(STANDALONE_PAYMENT_ROUTE_CONFLICT)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежное состояние общего счета изменилось; обновите карточку");
@@ -587,6 +623,7 @@ public class CommonInvoiceManualPaymentWorkflow {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CommonInvoiceDetailsResponse reportPaidByManualCardTransferWithAttributions(Long invoiceId, CommonManualPaymentAttributionRequest request, Principal principal) {
         String reason = validateCommonManualPaymentAttributionRequest(request);
+        if (stageOwnerReport(invoiceId, request, true, principal)) return writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
         CommonInvoice snapshot = invoiceRepository.findByIdWithAccount(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(snapshot);
         if (snapshot.getStatus() == CommonInvoiceStatus.PAID) {
@@ -595,6 +632,8 @@ public class CommonInvoiceManualPaymentWorkflow {
         if (!attentionError(snapshot).startsWith(STANDALONE_PAYMENT_ROUTE_CONFLICT)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ручное зачисление из этой карточки доступно только для конфликта одиночных платежей");
         }
+        requireManualRecipientsAllowed(snapshot, request);
+        ownerReceipts.requireMatchingReport(invoiceId, request);
         List<Long> orderIds = invoiceOrderRepository.findOrderIdsByInvoiceId(invoiceId).stream().filter(Objects::nonNull).distinct().toList();
         reconcileStandaloneBankRoutesBeforeCommonManualPayment(orderIds);
         return writeTransaction(() -> reportPaidByManualCardTransferWithAttributionsLocked(invoiceId, request, reason, principal));
@@ -628,6 +667,8 @@ public class CommonInvoiceManualPaymentWorkflow {
         Set<PaymentLink> appliedStandalonePayments = synchronizeConfirmedStandalonePaymentsOrThrow(invoice, items, paymentPrelude.paymentLinksByOrder());
         closeStandaloneRoutesForCommonManualPaymentOrThrow(paymentLinksRequiringCommonInvoiceRouteCheck(paymentPrelude.paymentLinksByOrder(), items, appliedStandalonePayments), invoiceId, reason, principal);
         refreshInvoiceAmounts(invoice, items);
+        requireManualRecipientsAllowed(invoice, request);
+        ownerReceipts.accept(invoice, items, request, principal);
         long manualAmountKopecks = remainingKopecks(invoice);
         applyManualPaymentEvidence(invoice, items, new ManualPaymentConfirmationRequest(reason, ""), principal);
         markTypedManualPaymentItems(items, CommonManualPaymentAttributionCoordinator.evidenceReference(invoice.getId(), request.idempotencyKey()));
@@ -723,7 +764,16 @@ public class CommonInvoiceManualPaymentWorkflow {
         return settlementService.isManualPayment(link);
     }
 
+    private void requireManualRecipientsAllowed(CommonInvoice invoice, CommonManualPaymentAttributionRequest request) {
+        if (CommonOwnerReceiptApprovals.hasBankRoute(invoice)
+                && CommonOwnerReceiptApprovals.includesOwner(request)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Поступление владельцу по банковской ссылке подтверждает банк");
+        }
+    }
+
     void ensureGenericConfirmationDoesNotUseContractorSource(CommonInvoice invoice) {
+        if (CommonOwnerReceiptApprovals.hasBankRoute(invoice))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплату по банковской ссылке подтверждает банк. Для перевода сотруднику укажите получателя");
         if (isFrozenLiveContractorSource(invoice) || isFrozenManualTaskSource(invoice)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Поступление по зафиксированному получателю подтверждается только с указанием фактического получателя");
         }

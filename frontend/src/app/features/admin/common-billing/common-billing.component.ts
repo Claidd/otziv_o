@@ -983,16 +983,13 @@ export class CommonBillingComponent implements OnDestroy {
     }
     const paperEnabled = invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE';
     const nextMode = paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE';
-    const confirmation = paperEnabled
-      ? 'Вернуть автоматическое распределение специалист → менеджер → владелец? Продолжайте только если бумажный счёт ещё не отправлялся и оплаты по нему нет.'
-      : 'Включить бумажный счёт владельца? Система проверит прежнюю банковскую ссылку и отменит её только при подтверждённом отсутствии оплаты. Текущий безопасный резерв будет освобождён, а будущие циклы этого общего счёта тоже станут бумажными. Продолжайте только если клиент ещё не платил.';
-    if (!window.confirm(confirmation)) {
+    if (paperEnabled && !window.confirm('Вернуть автоматическое распределение? Если бумажный счёт уже отправлен, подтвердите его отзыв и отсутствие поступления по выписке.')) {
       return;
     }
     this.invoiceAction(
       invoice.id,
       'change-paper-invoice-mode',
-      () => this.commonBillingApi.changeInvoicePaymentMode(invoice.id, nextMode),
+      () => this.commonBillingApi.changeInvoicePaymentMode(invoice.id, nextMode, !!invoice.paperInvoiceIssuedAt),
       paperEnabled ? 'Автоматическое распределение восстановлено' : 'Режим бумажного счёта включён'
     );
   }
@@ -1016,7 +1013,7 @@ export class CommonBillingComponent implements OnDestroy {
           return;
         }
         this.mutating.set('');
-        if (!context.canChange) {
+        if (!context.canChange && !(targetOverride === 'DIFFERENT_RECIPIENT' && context.bankRecipientChangeAvailable)) {
           this.toastService.error('Способ оплаты нельзя изменить', context.blockReason || 'Нужна ручная сверка');
           return;
         }
@@ -1025,12 +1022,13 @@ export class CommonBillingComponent implements OnDestroy {
             ? 'EMPLOYEE_REQUISITES'
             : 'OWNER_TBANK');
         const destination = target === 'EMPLOYEE_REQUISITES'
-          ? 'реквизиты специалиста или менеджера'
+          ? 'реквизиты без ссылки'
+          : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
           : 'банковскую ссылку владельца';
         const currentRecipient = context.currentRecipient?.trim()
           ? ` Получатель сейчас: ${context.currentRecipient}.`
           : '';
-        if (!window.confirm(
+        if (target !== 'DIFFERENT_RECIPIENT' && !window.confirm(
           `Сменить способ оплаты на ${destination}?${currentRecipient} `
           + 'Старый безопасный резерв будет освобождён, новый маршрут создан заново, '
           + 'а клиенту сразу уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.'
@@ -1045,8 +1043,8 @@ export class CommonBillingComponent implements OnDestroy {
             target,
             context.paymentEvidenceToken
           ),
-          target === 'EMPLOYEE_REQUISITES'
-            ? 'Общий счёт переведён на реквизиты сотрудника'
+          target !== 'OWNER_TBANK'
+            ? 'Новые реквизиты для общего счёта подготовлены'
             : 'Общий счёт переведён на банковскую ссылку владельца'
         );
       },
@@ -2419,6 +2417,7 @@ export class CommonBillingComponent implements OnDestroy {
   private failMutation(err: unknown, fallback: string): void {
     const message = apiErrorDetail(err, fallback);
     this.mutating.set('');
-    this.toastService.error(fallback, message);
+    if ((err as { status?: number } | null)?.status === 423) this.toastService.info('Ожидание банка', message);
+    else this.toastService.error(fallback, message);
   }
 }

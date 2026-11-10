@@ -6,5 +6,5 @@ package com.hunt.otziv.common_billing.service;
 public enum CommonPayableChangeDisposition {
     NOT_LINKED,
     REFRESH_CURRENT_INVOICE,
-    SUPPLEMENT_REQUIRED
+    REPRICE_UNPAID
 }

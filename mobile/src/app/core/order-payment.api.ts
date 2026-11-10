@@ -28,9 +28,10 @@ export class OrderPaymentApi {
     orderId: number,
     request: PaymentRouteChangeRequest
   ): Observable<PaymentRouteChangeResponse> {
+    const different = request.target === 'DIFFERENT_RECIPIENT';
     return this.http.post<PaymentRouteChangeResponse>(
-      this.apiUrl(`/api/manager/orders/${orderId}/payment-route-change`),
-      request
+      this.apiUrl(`/api/manager/orders/${orderId}/payment-route-change${different ? '/recipient' : ''}`),
+      different ? { ...request, target: 'EMPLOYEE_REQUISITES' } : request
     );
   }
 

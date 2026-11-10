@@ -63,9 +63,10 @@
             name="recipient"
             required
             [ngModel]="selectedRecipientKey()"
-            (ngModelChange)="selectedRecipientKey.set($event)"
+            (ngModelChange)="selectedRecipientKey.set($event); additionalOrders.set([])"
             [disabled]="saving() || paymentContext.recipientSelectionFrozen"
           >
+            <option value="" disabled>Выберите фактического получателя</option>
             @for (candidate of paymentContext.candidates; track recipientKey(candidate)) {
               <option [value]="recipientKey(candidate)">{{ recipientLabel(candidate) }}</option>
             }
@@ -102,7 +103,9 @@
           </p>
         }
 
-        @if (!paymentContext.recipientSelectionFrozen && selectedRecipient()?.key !== 'LEGACY_PRE_CUTOVER_MANUAL_CARD') {
+        @if (selectedRecipient()?.recipientType === 'OWNER') {
+          <p role="status">Запрос получит владелец или администратор. Заказ будет оплачен после подтверждения поступления.</p>
+        } @else if (selectedRecipient() && !paymentContext.recipientSelectionFrozen && selectedRecipient()?.key !== 'LEGACY_PRE_CUTOVER_MANUAL_CARD') {
           <p class="manual-payment-warning recipient-change" role="status">
             После успешной отметки заказ сразу считается оплаченным. Специалист или получатель могут в течение 24 часов сообщить менеджеру, что перевод не поступил. Если возражений нет, система подтвердит оплату без возражений. Доставка уведомления отображается отдельно.
           </p>
@@ -116,6 +119,24 @@
           Проверьте описание выбранного варианта выше: новые оплаты влияют на расчёт и доступный лимит получателя, а исторические оплаты до запуска только закрывают старый заказ без нового учёта выплат.
         </p>
 
+        @if (!paymentContext.recipientSelectionFrozen && selectedRecipient()?.recipientProfileId) {
+          <section aria-label="Распределение перевода">
+            <label>Ещё один заказ в этом переводе
+              <input name="additionalOrder" inputmode="numeric" [(ngModel)]="additionalOrderId" [disabled]="saving()">
+            </label>
+            <button type="button" (click)="addTransferOrder()" [disabled]="saving() || !additionalOrderId">Добавить заказ</button>
+            @if (additionalOrders().length) {
+              <p>Заказ №{{ paymentContext.orderId }} · {{ money(paymentContext.amountKopecks) }}</p>
+              @for (line of additionalOrders(); track line.orderId) {
+                <p>Заказ №{{ line.orderId }} · {{ money(line.amountKopecks) }}
+                  <button type="button" [disabled]="saving()" (click)="removeTransferOrder(line.orderId)">Убрать</button>
+                </p>
+              }
+              <label>Номер операции в выписке<input name="transferReference" [(ngModel)]="transferReference" required maxlength="100" [disabled]="saving()"></label>
+              <label>Полная сумма перевода, ₽<input name="transferRubles" [(ngModel)]="transferRubles" required inputmode="decimal" [disabled]="saving()"></label>
+            }
+          </section>
+        }
         <label>
           <span>Причина ручной оплаты</span>
           <textarea

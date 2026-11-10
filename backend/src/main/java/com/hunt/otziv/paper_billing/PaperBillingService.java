@@ -10,7 +10,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Service @RequiredArgsConstructor
-public class PaperBillingService {
+public class PaperBillingService implements com.hunt.otziv.common_billing.api.BankPaperInvoices.DocumentPreparation {
     private final PaperBillingStore store;
     private final PaperBillingTargets targets;
     private final PaperBillingSettings settings;
@@ -77,16 +77,31 @@ public class PaperBillingService {
     }
     Document automaticIssue(Target target,IssueRequest request,Authentication auth) {return issue(target,request,auth,false);}
     private Document issue(Target target,IssueRequest request,Authentication auth,boolean rememberSettings) {
-        return issue(target,request,auth,rememberSettings,null);
+        return issue(target,request,auth,rememberSettings,null,false);
     }
+    private record DeferredIssue(long companyId, IssueRequest request, BankSetup setup) {}
+
+    public void prepareAfterBankClosure(long invoiceId, String payload, Authentication actor) {
+        DeferredIssue deferred;
+        try { deferred = json.readValue(payload, DeferredIssue.class); }
+        catch (java.io.IOException invalid) { throw new IllegalStateException("Некорректный запрос выпуска документов", invalid); }
+        var target = new Target("COMMON_INVOICE", invoiceId);
+        if (targets.company(target, actor) != deferred.companyId()) throw problem("Компания-плательщик изменилась");
+        BankSetup setup = deferred.setup();
+        if (!setup.account().split("/")[0].endsWith(settings.getAccountLast4()) || !setup.customer().equals(bank.customer())
+                || !setup.vatKind().equals(bank.vatKind()) || !setup.serviceName().equals(bank.serviceName()))
+            throw problem("Настройки банковского документа изменились. Проверьте счёт перед выпуском");
+        issue(target, deferred.request(), actor, true, setup, true);
+    }
+
     private record BankSetup(String account,String serviceName,String vatKind,String customer) {}
     private BankSetup bankSetup() {return new BankSetup(bank.supplierAccount(),bank.serviceName(),bank.vatKind(),bank.customer());}
-    private Document issue(Target target,IssueRequest request,Authentication auth,boolean rememberSettings,BankSetup setup) {
+    private Document issue(Target target,IssueRequest request,Authentication auth,boolean rememberSettings,BankSetup setup,boolean modeVerified) {
         if (!bank.configured() || !settings.isBankOperationsEnabled()) throw problem("Выпуск документов Точки ещё не включён владельцем");
         if (request==null || request.payer()==null || !request.confirmedUnpaid()) throw problem("Подтвердите, что прежний счёт не оплачен");
         request.payer().validate();
         if(target.kind().equals("COMMON_INVOICE") && request.orderIds()!=null && !request.orderIds().isEmpty())
-            return issuePart(target,request,auth,rememberSettings);
+            return issuePart(target,request,auth,rememberSettings,modeVerified,setup);
         long company=targets.company(target,auth);
         var existing=store.target(target);
         if (existing.isPresent()) {
@@ -101,7 +116,11 @@ public class PaperBillingService {
             if(payers!=null) payers.remember(company,request.payer(),auth.getName());else store.savePayer(company,encode(request.payer()),auth.getName());
         }
         var bankSettings=setup==null?bankSetup():setup;
-        targets.configureCommon(target,auth);
+        if (!modeVerified) {
+            if (rememberSettings && target.kind().equals("COMMON_INVOICE"))
+                waitForPaperIssue(target, company, request, auth, bankSettings);
+            targets.configureCommon(target,auth);
+        }
         var transaction=new TransactionTemplate(transactions);
         transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
         return transaction.execute(status -> {
@@ -144,17 +163,27 @@ public class PaperBillingService {
             return store.document(store.row(id));
         });
     }
+    private void waitForPaperIssue(Target target, long company, IssueRequest request, Authentication actor, BankSetup setup) {
+        String payload;
+        try { payload = json.writeValueAsString(new DeferredIssue(company, request, setup)); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { throw new IllegalStateException(invalid); }
+        targets.waitForBankBeforeIssue(target, actor, payload);
+    }
+
     private void requireNoPartsForWholeTarget(Target target) {
         if(parts!=null && target.kind().equals("COMMON_INVOICE") && !parts.partIds(target.id()).isEmpty())
             throw problem("Для этого общего счёта уже создавались отдельные комплекты. Выберите свободные заказы для нового счёта; единый счёт на всю сумму недоступен");
     }
-    private Document issuePart(Target parent,IssueRequest request,Authentication actor,boolean rememberSettings) {
+    private Document issuePart(Target parent,IssueRequest request,Authentication actor,boolean rememberSettings,boolean modeVerified,BankSetup setup) {
         String key=clean(request.requestKey());
         if(!key.matches("[A-Za-z0-9-]{8,64}")) throw problem("Обновите форму перед созданием счёта");
-        targets.company(parent,actor);
+        long company = targets.company(parent,actor);
         requireCancellationNotice(parent);
-        targets.configureParts(parent,actor);
-        var bankSettings=bankSetup(); // Read bank settings before taking canonical source locks.
+        var bankSettings = setup == null ? bankSetup() : setup;
+        if (!modeVerified) {
+            if (rememberSettings) waitForPaperIssue(parent, company, request, actor, bankSettings);
+            targets.configureParts(parent,actor);
+        }
         var tx=new TransactionTemplate(transactions);tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
         return tx.execute(status->{
             var part=targets.createPart(parent,request.orderIds(),key,actor);
@@ -162,7 +191,7 @@ public class PaperBillingService {
             if(store.jdbc().queryForObject("SELECT COUNT(*) FROM paper_invoice_document WHERE parent_invoice_id=? AND cancelled_at IS NOT NULL AND cancel_message_delivery NOT IN ('SENT','SKIPPED')",Long.class,parent.id())>0)
                 throw problem("Дождитесь подтверждённого уведомления об отмене прежнего комплекта");
             // The document path keeps the same canonical locks, snapshots and cancellation fences.
-            return issue(part,new IssueRequest(request.payer(),request.confirmedUnpaid(),List.of(),null,request.payerChoiceId(),request.payerChoiceVersion()),actor,rememberSettings,bankSettings);
+            return issue(part,new IssueRequest(request.payer(),request.confirmedUnpaid(),List.of(),null,request.payerChoiceId(),request.payerChoiceVersion()),actor,rememberSettings,bankSettings,modeVerified);
         });
     }
     private void rememberRules(Target target,Payer payer,String actor) {

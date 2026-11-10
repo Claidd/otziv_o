@@ -1,5 +1,7 @@
 package com.hunt.otziv.paper_billing;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +34,13 @@ public final class PaperBillingModels {
         public IssueRequest(Payer payer,boolean confirmedUnpaid) {this(payer,confirmedUnpaid,List.of(),null,null,null);}
         public IssueRequest(Payer payer,boolean confirmedUnpaid,List<Long> orders,String key) {this(payer,confirmedUnpaid,orders,key,null,null);}
     }
-    public record CancelRequest(String reason, boolean confirmed, boolean replaceWithOrdinary) {
+    public record CancelRequest(String reason, boolean confirmed, boolean replaceWithOrdinary, InvoicePaymentMode replacementMode) {
+        public CancelRequest {
+            if (replacementMode == InvoicePaymentMode.OWNER_PAPER_INVOICE || (!replaceWithOrdinary && replacementMode != null)) {
+                throw problem("Выберите способ оплаты после отмены бумажного счёта");
+            }
+        }
+        public CancelRequest(String reason, boolean confirmed, boolean replaceWithOrdinary) {this(reason, confirmed, replaceWithOrdinary, null);}
         public CancelRequest(String reason,boolean confirmed) {this(reason,confirmed,false);}
     }
     public record Context(boolean enabled, boolean configured, boolean lookupAvailable, String accountLast4,
@@ -42,10 +50,10 @@ public final class PaperBillingModels {
     public record Document(String id, String number, long amountKopecks, String stage,
             String invoiceDelivery, String actDelivery, String error, LocalDateTime paidAt,String cancellationDelivery,String cancellationReason,
             String replacementState,String replacementError,String targetKind,Long targetId,Payer payer,List<Long> orderIds,
-            String messageDelivery,boolean deliveryCompleted) {
+            String messageDelivery,boolean deliveryCompleted,long receivedKopecks) {
         public Document(String id,String number,long amount,String stage,String invoiceDelivery,String actDelivery,String error,
                 LocalDateTime paidAt,String cancellationDelivery,String cancellationReason,String replacementState,String replacementError) {
-            this(id,number,amount,stage,invoiceDelivery,actDelivery,error,paidAt,cancellationDelivery,cancellationReason,replacementState,replacementError,null,null,null,List.of(),null,false);
+            this(id,number,amount,stage,invoiceDelivery,actDelivery,error,paidAt,cancellationDelivery,cancellationReason,replacementState,replacementError,null,null,null,List.of(),null,false,0);
         }
     }
     public record BankReceipt(String customerCode, String accountId, String paymentId, String payerInn,

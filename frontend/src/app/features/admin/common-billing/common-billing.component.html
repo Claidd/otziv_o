@@ -374,15 +374,10 @@
             && invoice?.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
             && invoice?.paymentRouteSelectedAt
             && invoice?.status !== 'PAID') {
-            <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute()" [disabled]="!!mutating()">
-              <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
-              {{ isOwnerManualRoute(invoice) ? 'Выставить ссылку T-Bank' : 'Сменить способ оплаты' }}
-            </button>
-            @if (isOwnerManualRoute(invoice)) {
-              <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
-                Реквизиты сотрудника
-              </button>
+            <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="!!mutating()">Выдать реквизиты без ссылки</button>
+            <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="!!mutating()">Сменить получателя</button>
+            @if (!isOwnerBankRoute(invoice)) {
+              <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute('OWNER_TBANK')" [disabled]="!!mutating()">Банковская ссылка владельца</button>
             }
             @if (isOwnerBankRoute(invoice)) {
               <button type="button" class="secondary" (click)="reissueCommonInvoiceOwnerBankRoute()" [disabled]="!!mutating()">

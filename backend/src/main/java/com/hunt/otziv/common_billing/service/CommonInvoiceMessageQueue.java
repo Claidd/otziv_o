@@ -66,6 +66,15 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
         if (!Objects.equals(stored, prepared)) throw new IllegalStateException("Billing operation already has a different envelope");
     }
 
+    /** Only commands for which the worker can still prove no delivery took place may be replaced. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean supersedeUnsentRepricing(long invoiceId, String operationId) {
+        return operationId.startsWith("bad-review-invoice:") && jdbc.update("""
+                UPDATE common_invoice_message_queue SET state='SUPERSEDED',error_code='amount_changed'
+                WHERE invoice_id=? AND operation_id=? AND state IN ('QUEUED','RETRYABLE') AND lease_until IS NULL
+                """, invoiceId, operationId) == 1;
+    }
+
     Optional<PreparedCommonInvoiceMessage> unresolved(long invoiceId) {
         return jdbc.query("SELECT operation_id FROM common_invoice_message_queue WHERE invoice_id=? AND state NOT IN ('SENT','SUPERSEDED') ORDER BY created_at LIMIT 1",
                 (rs, row) -> rs.getString(1), invoiceId).stream().findFirst().map(this::snapshot);

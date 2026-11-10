@@ -1,3 +1,4 @@
+import type { ManualTransferRequest } from '@otziv/client-common/billing-payments';
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
@@ -14,6 +15,10 @@ export class ManagerManualPaymentsApi {
     return this.http.get<ManualCardPaymentContext>(
       this.apiUrl(`/api/manager/orders/${orderId}/manual-card-payment-context`)
     );
+  }
+
+  recordTransfer(request: ManualTransferRequest): Observable<ManagerManualCardPaymentResult[]> {
+    return this.http.post<ManagerManualCardPaymentResult[]>(this.apiUrl('/api/manager/manual-transfer-receipts'), request);
   }
 
   confirmManagerManualCardPayment(

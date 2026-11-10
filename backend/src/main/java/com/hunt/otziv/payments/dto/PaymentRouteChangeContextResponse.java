@@ -9,8 +9,13 @@ public record PaymentRouteChangeContextResponse(
         String blockReason,
         String configuredMode,
         boolean paperInvoiceIssued,
-        Long expectedTargetPaymentProfileId
+        Long expectedTargetPaymentProfileId,
+        boolean bankRecipientChangeAvailable
 ) {
+    public PaymentRouteChangeContextResponse(Long link, String route, String recipient, String status, boolean canChange,
+            String reason, String mode, boolean paperIssued, Long profile) {
+        this(link, route, recipient, status, canChange, reason, mode, paperIssued, profile, false);
+    }
     public PaymentRouteChangeContextResponse(
             Long paymentLinkId,
             String currentRoute,

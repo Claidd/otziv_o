@@ -49,6 +49,12 @@ public class PaymentLinkLifecycleService {
         return (link.getPaymentMethod() == PaymentMethod.BANK_FORM || link.getPaymentMethod() == PaymentMethod.SBP_QR) && !normalize(link.getTbankPaymentId()).isBlank();
     }
 
+    boolean closedForRecipientChange(PaymentLink link) {
+        String terminal = normalize(link.getProviderTerminalStatus());
+        return link.getId() != null && Set.of("CANCELED", "EXPIRED", "DEADLINE_EXPIRED", "REJECTED").contains(terminal)
+                && paymentLinkRepository.completedBankRecipientChange(link.getId(), terminal) > 0;
+    }
+
     boolean hasBankInitReservation(PaymentLink link) {
         return link != null && !normalize(link.getBankInitNonce()).isBlank();
     }

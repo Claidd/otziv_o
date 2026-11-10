@@ -21,6 +21,12 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, Long> {
+    @Query(value = "SELECT COUNT(*) FROM bank_recipient_change WHERE target_kind='INVOICE' AND target_id=:id AND state IN ('WAITING','POLLING')", nativeQuery = true)
+    int pendingRecipientChanges(@Param("id") long id);
+
+    @Query(value = "SELECT message FROM bank_recipient_change WHERE target_kind='INVOICE' AND target_id=:id AND state IN ('WAITING','POLLING') ORDER BY id DESC LIMIT 1", nativeQuery = true)
+    Optional<String> pendingRecipientChangeMessage(@Param("id") long id);
+
 
     boolean existsBySupersedesInvoice_Id(Long invoiceId);
 
@@ -292,6 +298,9 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("readyBefore") LocalDateTime readyBefore,
             Pageable pageable
     );
+
+    @Query("SELECT i.id FROM CommonInvoice i WHERE i.badReviewNoticePending = true AND i.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.UNPAID AND i.account.enabled = true AND i.paymentMessageOperationId IS NULL AND i.paidKopecks = 0 AND i.clientReportedAt IS NULL ORDER BY i.updatedAt, i.id")
+    List<Long> pendingBadReviewNotices(Pageable pageable);
 
     @Query("""
         SELECT invoice.id

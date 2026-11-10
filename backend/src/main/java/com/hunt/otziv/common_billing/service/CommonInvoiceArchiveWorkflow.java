@@ -127,7 +127,7 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
 
     /**
      * "Не оплачено" starts the bad-review cycle: bad reviews on schedule, and after each completed
-     * one an invoice with the new amount ({@link #supersedeUnpaidBadReviewSuccessor}). While it runs
+     * one an invoice with the new amount ({@link #moveDeliveredSuccessorToUnpaid}). While it runs
      * the invoice needs no manager; a reason is returned when the cycle stalls or has ended.
      */
     @Override
@@ -179,20 +179,18 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
     }
 
     /**
-     * The next bad review changes the amount of a delivered successor the client has not paid:
-     * that successor closes as "Не оплачено" by the same business move (its payment link archived,
-     * reminders stopped, orders kept in "Не оплачено"), so the next successor can carry the new
-     * amount. {@code stillSupersedable} rechecks the payment traces under the invoice lock.
+     * Moves the legacy live successor into the unpaid cycle before updating its own positions.
+     * Rechecks payment evidence under the same locks as an ordinary unpaid transition.
      */
     @Transactional
-    public boolean supersedeUnpaidBadReviewSuccessor(Long invoiceId, java.util.function.Predicate<CommonInvoice> stillSupersedable) {
+    public boolean moveDeliveredSuccessorToUnpaid(Long invoiceId, java.util.function.Predicate<CommonInvoice> safeForRepricing) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
         CommonInvoice invoice = paymentPrelude.invoice();
-        if (invoice == null || stillSupersedable == null || !stillSupersedable.test(invoice)) {
+        if (invoice == null || safeForRepricing == null || !safeForRepricing.test(invoice)) {
             return false;
         }
-        moveLockedInvoiceToUnpaid(invoiceId, invoice, "bad_review_superseded");
-        log.info("Common invoice {} moved to Не оплачено: the next bad review supersedes its amount", invoiceId);
+        moveLockedInvoiceToUnpaid(invoiceId, invoice, "bad_review_repricing");
+        log.info("Common invoice {} moved to Не оплачено: recalculating its amount after a bad review", invoiceId);
         return true;
     }
 
@@ -228,6 +226,8 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
         taskReceiptIntegrationService.release(invoice, "Общий счет переведен в статус Не оплачено");
         changedItems.forEach(item -> item.setUnpaid(true));
         archiveAndClearCurrentPaymentRef(invoice, archiveReason);
+        invoice.setBadReviewPayable(false);
+        invoice.setBadReviewNoticePending(false);
         invoice.setStatus(CommonInvoiceStatus.UNPAID);
         invoice.setNextReminderAt(null);
         invoice.setLastError(null);
@@ -346,6 +346,8 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
     public CommonInvoiceDetailsResponse restoreLiveArchivedInvoice(Long invoiceId, Principal principal) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        if ("BAD_REVIEW_REPLACED".equals(invoice.getCloseReason()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Этот исторический счёт заменён другим общим счётом");
         if (invoice.getStatus() != CommonInvoiceStatus.ARCHIVED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Из live можно восстановить только общий счет, закрытый вручную");
         }

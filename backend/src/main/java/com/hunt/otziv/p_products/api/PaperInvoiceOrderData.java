@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.api;
 
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
+
 /** Order-owned scalar read and canonical lock. Caller must authorize the order before reading company data. */
 public interface PaperInvoiceOrderData {
     long companyId(long orderId);
@@ -11,7 +13,9 @@ public interface PaperInvoiceOrderData {
     void requireUnpaidForCancellation(long orderId);
     void holdForPaymentReview(long orderId);
     void resumeOrdinaryInvoice(long orderId);
+    void resumeOrdinaryInvoice(long orderId, InvoicePaymentMode mode);
     void resumeCommonOrdinaryInvoice(long orderId);
+    void resumeCommonOrdinaryInvoice(long orderId, InvoicePaymentMode mode);
     void rememberPayer(long orderId,String choiceId);
     void markCommonDelivered(long orderId);
     record AutomaticOrder(long orderId,long companyId,String choiceId) {}
