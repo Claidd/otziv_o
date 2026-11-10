@@ -59,6 +59,63 @@ class RecipientBankSessionTest {
         verify(tbank,never()).cancel(any(),any());
     }
 
+    TbankCancelResponse cancelResponse(boolean success, String status, String paymentId) {
+        return new TbankCancelResponse(success,"0",null,null,"merchant",status,paymentId,"order",100L,100L,0L);
+    }
+
+    @ParameterizedTest @ValueSource(strings={"NEW","FORM_SHOWED"})
+    void closeUnpaidCancelsAnOpenTbankFormAndReportsItClosed(String status) {
+        var source = source("T_BANK");
+        state(status,"order");
+        when(tbank.cancel(eq(terminal),any())).thenReturn(cancelResponse(true,"CANCELED","operation"));
+        var result = service.closeUnpaid(source);
+        assertThat(result.outcome()).isEqualTo(Outcome.CLOSED);
+        assertThat(result.status()).isEqualTo("CANCELED");
+        verify(tbank).cancel(eq(terminal),argThat(command -> "operation".equals(command.paymentId()) && command.amountKopecks()==100L));
+    }
+
+    @ParameterizedTest @ValueSource(strings={"AUTHORIZING","AUTHORIZED","CONFIRMED","CANCELED"})
+    void closeUnpaidDoesNotCancelStartedOrFinishedPayments(String status) {
+        var source = source("T_BANK");
+        when(tbank.getState(terminal,"operation")).thenReturn(new TbankGetStateResponse(true,"0",null,null,"merchant",status,
+                "operation","order","CANCELED".equals(status) ? 0L : 100L));
+        service.closeUnpaid(source);
+        verify(tbank,never()).cancel(any(),any());
+    }
+
+    @Test void paymentCompletedBeforeCancelIsReportedAsMoneyMovement() {
+        var source = source("T_BANK");
+        state("FORM_SHOWED","order");
+        when(tbank.cancel(eq(terminal),any())).thenReturn(cancelResponse(true,"REFUNDED","operation"));
+        assertThat(service.closeUnpaid(source).outcome()).isEqualTo(Outcome.FINANCIAL);
+    }
+
+    @Test void cancelReportingTheRemainingAmountIsAccepted() {
+        var source = source("T_BANK");
+        state("NEW","order");
+        when(tbank.cancel(eq(terminal),any())).thenReturn(new TbankCancelResponse(true,"0",null,null,"merchant","CANCELED",
+                "operation","order",0L,100L,0L));
+        assertThat(service.closeUnpaid(source).status()).isEqualTo("CANCELED");
+    }
+
+    @Test void cancelOfAnotherOriginalAmountIsRejected() {
+        var source = source("T_BANK");
+        state("NEW","order");
+        when(tbank.cancel(eq(terminal),any())).thenReturn(new TbankCancelResponse(true,"0",null,null,"merchant","CANCELED",
+                "operation","order",null,50L,0L));
+        assertThatThrownBy(() -> service.closeUnpaid(source)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test void unconfirmedCancelKeepsTheRouteForAnotherObservation() {
+        var source = source("T_BANK");
+        state("NEW","order");
+        when(tbank.cancel(eq(terminal),any())).thenReturn(cancelResponse(false,"NEW","operation"),
+                cancelResponse(true,"CANCELED","another"), cancelResponse(true,"NEW","operation"));
+        assertThatThrownBy(() -> service.closeUnpaid(source)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.closeUnpaid(source)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.closeUnpaid(source)).isInstanceOf(IllegalStateException.class);
+    }
+
     @Test void mismatchedAmountDoesNotReleaseTheRoute() {
         var source = source("T_BANK");
         when(tbank.getState(terminal,"operation")).thenReturn(new TbankGetStateResponse(true,"0",null,null,
@@ -88,6 +145,10 @@ class RecipientBankSessionTest {
         assertThat(result.outcome()).isEqualTo(switch(status) {
             case "CREATED" -> Outcome.WAITING; case "EXPIRED" -> Outcome.CLOSED; default -> Outcome.FINANCIAL;
         });
+        // Tochka has no cancellation API: closing only observes, the replacement keeps watching the link.
+        assertThat(service.closeUnpaid(source).outcome()).isEqualTo(result.outcome());
+        assertThatThrownBy(() -> service.cancelUnpaid(source)).isInstanceOf(IllegalStateException.class);
         verify(tochka,never()).refund(any(),any());
+        verifyNoInteractions(tbank);
     }
 }

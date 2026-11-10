@@ -47,44 +47,25 @@ public class ManualTransferReceiptService {
         if (sum != transfer.amountKopecks() || lines.stream().map(Line::orderId).distinct().count() != lines.size())
             throw conflict("Проверьте сумму перевода и список заказов");
         String url = payments.validatedReceiptUrl(transfer.receiptUrl());
-        var bankSources = transactions.required(() -> {
-            Map<Long, Source> sources = new HashMap<>();
-            boolean replay = Boolean.TRUE.equals(jdbc.queryForObject("""
-                    SELECT EXISTS(SELECT 1 FROM manual_transfer_receipts WHERE recipient_profile_id=? AND bank_reference=?)
-                    """, Boolean.class, transfer.recipientProfileId(), transfer.bankReference().trim()));
-            for (Line line : lines) {
-                access.requireOrderAccess(line.orderId(), actor);
-                if (replay) {
-                    var pending = jdbc.queryForList("""
-                            SELECT r.payment_link_id FROM manual_transfer_receipts t
-                            JOIN manual_transfer_orders o ON o.receipt_id=t.id
-                            JOIN specialist_manual_payment_reviews r ON r.id=o.review_id
-                            WHERE t.recipient_profile_id=? AND t.bank_reference=? AND o.order_id=? AND r.credited_at IS NULL
-                            """, Long.class, transfer.recipientProfileId(), transfer.bankReference().trim(), line.orderId());
-                    if (!pending.isEmpty()) {
-                        var source = bankSource(links.findByIdWithOrder(pending.getFirst()).orElseThrow());
-                        if (source != null) sources.put(line.orderId(), source);
-                    }
-                    continue;
-                }
-                payments.lockOrderForManualPayment(line.orderId()).orElseThrow(() -> conflict("Заказ не найден"));
-                var link = routes.selectManualCardPaymentRoute(links.findByOrderIdForUpdate(line.orderId()));
-                if (link.getAmountKopecks() != line.amountKopecks()) throw conflict("Сумма заказа изменилась");
-                var source = bankSource(link);
-                if (source != null) sources.put(line.orderId(), source);
-            }
-            return sources;
-        });
+        var bankSources = transactions.required(() -> lockedBankSources(transfer, lines, actor));
         Map<Source, Result> observations = new HashMap<>();
-        bankSources.values().forEach(source -> observations.put(source, payments.verifyUnpaidBank(source)));
+        // Observe every link before cancelling any, so one paid link leaves the other forms untouched.
+        bankSources.values().forEach(source -> observations.put(source, payments.observeUnpaidBank(source)));
+        if (observations.entrySet().stream().anyMatch(e -> ManualCardPaymentWorkflow.requiresTbankCancel(e.getKey(), e.getValue()))) {
+            // Cancel closes client forms irreversibly: recheck every line under its order lock after GetState.
+            if (!bankSources.equals(transactions.required(() -> lockedBankSources(transfer, lines, actor))))
+                throw conflict("Банковская ссылка изменилась, повторите проверку");
+            observations.replaceAll((source, observed) -> ManualCardPaymentWorkflow.requiresTbankCancel(source, observed)
+                    ? payments.cancelUnpaidBank(source) : observed);
+        }
         return transactions.required(() -> {
-            List<Long> reviewIds = reserve(transfer, lines, url, actor, bankSources);
+            List<Long> reviewIds = reserve(transfer, lines, url, actor, bankSources, observations);
             List<ManagerManualCardPaymentResultResponse> results = new ArrayList<>();
             for (Long id : reviewIds) {
                 var review = reviews.lockById(id).orElseThrow();
                 if (review.getCreditedAt() == null) {
                     var link = links.findByIdForUpdate(review.getPaymentLinkId()).orElseThrow();
-                    var source = bankSource(link);
+                    var source = boundSource(link, bankSources.get(review.getOrderId()), observations);
                     if (!Objects.equals(source, bankSources.get(review.getOrderId())))
                         throw conflict("Банковская ссылка изменилась, повторите проверку");
                     settlement.creditTransferLine(review, link, source, observations.get(source), actor);
@@ -95,6 +76,47 @@ public class ManualTransferReceiptService {
         });
     }
 
+    /** Bank links of the transfer lines, with every local obstacle to their credit checked under the order locks. */
+    private Map<Long, Source> lockedBankSources(Transfer transfer, List<Line> lines, Authentication actor) {
+        Map<Long, Source> sources = new HashMap<>();
+        boolean replay = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM manual_transfer_receipts WHERE recipient_profile_id=? AND bank_reference=?)
+                """, Boolean.class, transfer.recipientProfileId(), transfer.bankReference().trim()));
+        for (Line line : lines) {
+            access.requireOrderAccess(line.orderId(), actor);
+            if (replay) {
+                var pending = jdbc.queryForList("""
+                        SELECT r.payment_link_id FROM manual_transfer_receipts t
+                        JOIN manual_transfer_orders o ON o.receipt_id=t.id
+                        JOIN specialist_manual_payment_reviews r ON r.id=o.review_id
+                        WHERE t.recipient_profile_id=? AND t.bank_reference=? AND o.order_id=? AND r.credited_at IS NULL
+                        """, Long.class, transfer.recipientProfileId(), transfer.bankReference().trim(), line.orderId());
+                if (!pending.isEmpty()) {
+                    var source = bankSource(links.findByIdWithOrder(pending.getFirst()).orElseThrow());
+                    if (source != null) sources.put(line.orderId(), source);
+                }
+                continue;
+            }
+            Order order = payments.lockOrderForManualPayment(line.orderId()).orElseThrow(() -> conflict("Заказ не найден"));
+            var link = routes.selectManualCardPaymentRoute(links.findByOrderIdForUpdate(line.orderId()));
+            if (link.getAmountKopecks() != line.amountKopecks()) throw conflict("Сумма заказа изменилась");
+            var source = bankSource(link);
+            if (source == null) continue;
+            if (reviews.lockByPaymentLinkId(link.getId()).isPresent())
+                throw conflict("По заказу №" + line.orderId() + " уже зарегистрирован перевод");
+            payments.requireTransferLineSettleable(order, link, transfer.recipientProfileId());
+            sources.put(line.orderId(), source);
+        }
+        return sources;
+    }
+
+    /** The bound source, also when T-Bank's notification about our verified Cancel already closed the link. */
+    private Source boundSource(PaymentLink link, Source expected, Map<Source, Result> observations) {
+        if (expected != null && ManualCardPaymentWorkflow.closedByVerifiedCancel(link, observations.get(expected)))
+            return PaymentRouteReplacementWorkflow.bankSource(link);
+        return bankSource(link);
+    }
+
     private Source bankSource(PaymentLink link) {
         if (link.getStatus() != PaymentLinkStatus.INITIATED) return null;
         var source = PaymentRouteReplacementWorkflow.bankSource(link);
@@ -102,7 +124,8 @@ public class ManualTransferReceiptService {
         return source;
     }
 
-    private List<Long> reserve(Transfer transfer, List<Line> lines, String url, Authentication actor, Map<Long, Source> bankSources) {
+    private List<Long> reserve(Transfer transfer, List<Line> lines, String url, Authentication actor, Map<Long, Source> bankSources,
+            Map<Source, Result> observations) {
         Map<Long, Order> lockedOrders = new HashMap<>();
         for (Line line : lines) {
             Order order = payments.lockOrderForManualPayment(line.orderId()).orElseThrow(() -> conflict("Заказ не найден"));
@@ -132,7 +155,7 @@ public class ManualTransferReceiptService {
         for (Line line : lines) {
             Order order = lockedOrders.get(line.orderId());
             var link = routes.selectManualCardPaymentRoute(links.findByOrderIdForUpdate(line.orderId()));
-            if (!Objects.equals(bankSource(link), bankSources.get(line.orderId())))
+            if (!Objects.equals(boundSource(link, bankSources.get(line.orderId()), observations), bankSources.get(line.orderId())))
                 throw conflict("Банковская ссылка изменилась, повторите проверку");
             if (line.amountKopecks() != link.getAmountKopecks() || reviews.lockByPaymentLinkId(link.getId()).isPresent())
                 throw conflict("По заказу №" + line.orderId() + " изменилась сумма или уже зарегистрирован перевод");

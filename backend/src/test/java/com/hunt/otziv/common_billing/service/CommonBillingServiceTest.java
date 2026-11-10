@@ -1993,7 +1993,7 @@ class CommonBillingServiceTest {
 
 
     @Test
-    void attributedMarkPaidObservesUnpaidTbankSessionBeforeCreditingActualRecipient() throws Exception {
+    void attributedMarkPaidCancelsUnpaidTbankSessionBeforeCreditingActualRecipient() throws Exception {
         CommonInvoice invoice = invoice(account());
         invoice.setStatus(CommonInvoiceStatus.READY);
         invoice.setAmountKopecks(100_000L);
@@ -2023,6 +2023,10 @@ class CommonBillingServiceTest {
                 true, "0", null, null, "terminal", "FORM_SHOWED",
                 "active-payment", "active-order", 100_000L
         ));
+        when(tbankClient.cancel(any(), any())).thenReturn(new TbankCancelResponse(
+                true, "0", null, null, "terminal", "CANCELED",
+                "active-payment", "active-order", 100_000L, 100_000L, 0L
+        ));
         CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
                 "active-tbank",
                 true,
@@ -2047,8 +2051,7 @@ class CommonBillingServiceTest {
         assertNotNull(response);
         assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
         assertTrue(invoiceItem.isPaid());
-        assertEquals("ARCHIVED", ref.getStatus());
-        assertTrue(ref.isObserveReplacedBank());
+        assertEquals("CANCELED", ref.getStatus());
         assertNull(invoice.getTbankPaymentId());
         assertNull(invoice.getPaymentUrl());
         verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
@@ -2058,7 +2061,7 @@ class CommonBillingServiceTest {
         verify(paymentNotificationOutboxRepository).enqueueClient(10L);
         var bankOrder = inOrder(tbankClient);
         bankOrder.verify(tbankClient).getState(any(), eq("active-payment"));
-        verify(tbankClient, never()).cancel(any(), any());
+        bankOrder.verify(tbankClient).cancel(any(), any());
     }
 
     @Test
@@ -2088,7 +2091,11 @@ class CommonBillingServiceTest {
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
         when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
-        when(tbankClient.getState(any(), eq("active-payment"))).thenAnswer(ignored -> {
+        when(tbankClient.getState(any(), eq("active-payment"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "FORM_SHOWED",
+                "active-payment", "active-order", 100_000L
+        ));
+        when(tbankClient.cancel(any(), any())).thenAnswer(ignored -> {
             assertTrue(invoice.getLastError().startsWith("manual_payment_tbank_reconciliation_in_progress:INVOICED"));
             ref.setStatus("CANCELED");
             invoice.setTbankOrderId(null);
@@ -2096,9 +2103,9 @@ class CommonBillingServiceTest {
             invoice.setTbankTerminalKey(null);
             invoice.setTbankPaymentAmountKopecks(null);
             invoice.setPaymentUrl(null);
-            return new TbankGetStateResponse(
-                    true, "0", null, null, "terminal", "FORM_SHOWED",
-                    "active-payment", "active-order", 100_000L
+            return new TbankCancelResponse(
+                    true, "0", null, null, "terminal", "CANCELED",
+                    "active-payment", "active-order", 100_000L, 100_000L, 0L
             );
         });
         CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
@@ -2157,11 +2164,15 @@ class CommonBillingServiceTest {
         stubLockedInvoice(invoice, invoiceItem, order);
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
         when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
-        when(tbankClient.getState(any(), eq("active-payment"))).thenAnswer(ignored -> {
+        when(tbankClient.getState(any(), eq("active-payment"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "FORM_SHOWED",
+                "active-payment", "active-order", 100_000L
+        ));
+        when(tbankClient.cancel(any(), any())).thenAnswer(ignored -> {
             ref.setStatus("CONFIRMED");
-            return new TbankGetStateResponse(
-                    true, "0", null, null, "terminal", "FORM_SHOWED",
-                    "active-payment", "active-order", 100_000L
+            return new TbankCancelResponse(
+                    true, "0", null, null, "terminal", "CANCELED",
+                    "active-payment", "active-order", 100_000L, 100_000L, 0L
             );
         });
         CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(

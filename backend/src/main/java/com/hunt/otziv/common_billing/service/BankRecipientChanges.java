@@ -260,7 +260,9 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
                 // Exercise the real reservation rules without publishing instructions or retaining a reserve
                 // while a still-payable bank link is outstanding. Recheck under locks at final handover.
                 if (!job.capacityChecked()) {
-                    if (!"PAPER".equals(job.action())) checkCapacity(source, actor,job.action());
+                    // T-Bank Cancel below is irreversible, so rehearse the order switch first. A common
+                    // invoice paper switch cannot be rehearsed while this request is still pending.
+                    if (!"PAPER".equals(job.action()) || "ORDER".equals(source.kind())) checkCapacity(source, actor,job.action());
                     if (jdbc.update("UPDATE bank_recipient_change SET state='POLLING' WHERE id=? AND lease_token=?",
                             id,claim.lease()) != 1) return null;
                 } else {
@@ -271,7 +273,8 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
                 }
                 Result result;
                 try {
-                    result = bank.observe(source);
+                    // An unpaid T-Bank form is cancelled here; Tochka cannot cancel and is only observed.
+                    result = bank.closeUnpaid(source);
                 } catch (RuntimeException unavailable) {
                     update(claim, "POLLING", "Банк пока не ответил. Проверка повторится автоматически.");
                     return null;

@@ -21,6 +21,8 @@ import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepositor
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.payments.dto.TbankCancelCommand;
+import com.hunt.otziv.payments.dto.TbankCancelResponse;
 import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.PaymentLink;
@@ -433,7 +435,9 @@ public class CommonInvoiceManualPaymentWorkflow {
         }
         String knownStatus = isPaperModeSwitchSafeTerminalStatus(refStatus) || isPaperModeSwitchFinancialStatus(refStatus) ? refStatus : "";
         if (knownStatus.isBlank()) {
-            paymentRef.setStatus("VERIFYING_RECEIPT");
+            // Marked before GetState/Cancel so a concurrent webhook sees the cancellation lifecycle.
+            paymentRef.setStatus(PAYMENT_REF_CANCELING);
+            paymentRef.setCancelAttempts(cancelAttempts(paymentRef) + 1);
             paymentRef.setReason(limit("manual_payment_tbank_reconciliation", 160));
             paymentRefRepository.save(paymentRef);
             invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
@@ -501,7 +505,44 @@ public class CommonInvoiceManualPaymentWorkflow {
         if (!"NEW".equals(providerStatus) && !"FORM_SHOWED".equals(providerStatus)) {
             return manualPaymentBankAmbiguous(HttpStatus.CONFLICT, "T-Bank вернул неоднозначный статус " + readableProviderStatus(providerStatus) + ". Ничего не зачислено; нужна сверка");
         }
-        return new PaperInvoiceBankResolution(true, providerStatus, PAYMENT_REF_ARCHIVED, null, null);
+        // The client must not be able to pay the old form after the transfer is credited.
+        try {
+            TbankCancelResponse response = tbankClient.cancel(runtimeProfile, new TbankCancelCommand(prepared.paymentId(), prepared.amountKopecks()));
+            String cancelMismatch = manualPaymentBankCancelMismatch(prepared, response, runtimeProfile);
+            if (cancelMismatch != null) {
+                return manualPaymentBankAmbiguous(HttpStatus.CONFLICT, cancelMismatch);
+            }
+            String cancelStatus = normalize(response.status()).toUpperCase(Locale.ROOT);
+            if (PAYMENT_REF_CANCELED.equals(cancelStatus)) {
+                return PaperInvoiceBankResolution.safe(cancelStatus);
+            }
+            if (isPaperModeSwitchFinancialStatus(cancelStatus)) {
+                return manualPaymentBankPaymentDetected(cancelStatus);
+            }
+            return manualPaymentBankAmbiguous(HttpStatus.CONFLICT, "T-Bank не подтвердил отмену ссылки: статус " + readableProviderStatus(cancelStatus) + ". Ничего не зачислено");
+        } catch (RuntimeException failure) {
+            log.warn("Исход отмены T-Bank перед ручным подтверждением неоднозначен: invoiceId={}, paymentId={}", prepared.invoiceId(), maskPaymentId(prepared.paymentId()), failure);
+            return manualPaymentBankAmbiguous(HttpStatus.BAD_GATEWAY, "T-Bank не подтвердил отмену ссылки. Счёт оставлен на безопасной сверке; повторите позже");
+        }
+    }
+
+    String manualPaymentBankCancelMismatch(PreparedManualPaymentBankReconciliation prepared, TbankCancelResponse response, TbankPaymentProfile runtimeProfile) {
+        if (response == null || !response.success()) {
+            return "T-Bank не подтвердил отмену ссылки. Ничего не зачислено";
+        }
+        if (!normalize(response.paymentId()).isBlank() && !prepared.paymentId().equals(normalize(response.paymentId()))) {
+            return "PaymentId отмены T-Bank не совпал с общим счётом. Ничего не зачислено";
+        }
+        if (!normalize(response.orderId()).isBlank() && !prepared.tbankOrderId().isBlank() && !prepared.tbankOrderId().equals(normalize(response.orderId()))) {
+            return "OrderId отмены T-Bank не совпал с общим счётом. Ничего не зачислено";
+        }
+        if (!normalize(response.terminalKey()).isBlank() && !normalize(runtimeProfile.terminalKey()).equals(normalize(response.terminalKey()))) {
+            return "TerminalKey отмены T-Bank не совпал с общим счётом. Ничего не зачислено";
+        }
+        if (response.amount() != null && response.amount() != prepared.amountKopecks()) {
+            return "Сумма отмены T-Bank не совпала с общим счётом. Ничего не зачислено";
+        }
+        return null;
     }
 
     PaperInvoiceBankResolution manualPaymentBankPaymentDetected(String providerStatus) {
@@ -510,7 +551,7 @@ public class CommonInvoiceManualPaymentWorkflow {
     }
 
     PaperInvoiceBankResolution manualPaymentBankAmbiguous(HttpStatus status, String message) {
-        return new PaperInvoiceBankResolution(false, "UNKNOWN", "VERIFYING_RECEIPT", status == null ? HttpStatus.CONFLICT : status, message);
+        return new PaperInvoiceBankResolution(false, "UNKNOWN", PAYMENT_REF_CANCEL_FAILED, status == null ? HttpStatus.CONFLICT : status, message);
     }
 
     String manualPaymentBankStateMismatch(PreparedManualPaymentBankReconciliation prepared, TbankGetStateResponse state, TbankPaymentProfile runtimeProfile) {

@@ -5392,7 +5392,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void manualCardPaymentForOrderObservesNewBankSessionThenSettlesAndIsIdempotent() throws Exception {
+    void manualCardPaymentForOrderCancelsNewBankSessionThenSettlesAndIsIdempotent() throws Exception {
         stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
@@ -5407,6 +5407,11 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.save(link)).thenReturn(link);
         when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5208")))
                 .thenReturn(tbankState("NEW", "payment-5208", "order-5208", 100_000L));
+        when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class)))
+                .thenReturn(new TbankCancelResponse(
+                        true, "0", null, null, "terminal", "CANCELED",
+                        "payment-5208", "order-5208", 100_000L, 100_000L, 0L
+                ));
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
@@ -5429,8 +5434,8 @@ class PaymentLinkServiceTest {
                 authentication);
 
         assertEquals(PaymentLinkStatus.CANCELED, link.getStatus());
-        assertNull(link.getProviderTerminalStatus());
-        assertTrue(link.isObserveReplacedBank());
+        assertEquals("CANCELED", link.getProviderTerminalStatus());
+        assertFalse(link.isObserveReplacedBank());
         assertNull(link.getConfirmedAmountKopecks());
         assertNull(link.getManualConfirmedBy());
         assertNull(link.getManualConfirmedAt());
@@ -5453,17 +5458,52 @@ class PaymentLinkServiceTest {
         verify(paymentCheckService).assertActiveCheckBoundToPaymentLink(25047L, manualEvidence.getId());
         verify(paymentCheckService, never()).assertActiveCheckBoundToPaymentLink(25047L, 5208L);
         verify(tbankClient, times(1)).getState(any(TbankPaymentProfile.class), eq("payment-5208"));
-        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(tbankClient, times(1)).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService, times(1)).handlePaymentStatus(order);
         verify(paymentInvoiceRetryScheduler, times(1)).closePaymentAutomationForManualSettlement(
                 25047L,
                 "Ручная оплата подтверждена; платежные сообщения закрыты"
         );
-        verify(managerAccessService, times(11)).requireOrderAccess(25047L, authentication);
+        verify(managerAccessService, times(12)).requireOrderAccess(25047L, authentication);
     }
 
     @Test
-    void managerManualCardReportRetainsFormShowedAndDoesNotRequestSecondOwnerReview() throws Exception {
+    void manualCardPaymentCreditsWhenCancelNotificationClosesLinkBeforeCredit() throws Exception {
+        stubEmployeeTransferAccounting();
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(25076L, "Уведомление об отмене раньше зачисления", BigDecimal.valueOf(1000));
+        PaymentLink link = initiatedBankLink(5276L, order, 100_000L);
+
+        when(orderRepository.findByIdForCounterUpdate(25076L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25076L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5276L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5276L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.save(link)).thenReturn(link);
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5276")))
+                .thenReturn(tbankState("FORM_SHOWED", "payment-5276", "order-5276", 100_000L));
+        when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class))).thenAnswer(invocation -> {
+            // T-Bank's CANCELED notification is applied before the synchronous response returns.
+            link.setStatus(PaymentLinkStatus.CANCELED);
+            link.setProviderTerminalStatus("CANCELED");
+            return new TbankCancelResponse(true, "0", null, null, "terminal", "CANCELED",
+                    "payment-5276", "order-5276", null, 100_000L, 0L);
+        });
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+
+        service.confirmPaidByManualCardTransferForOrder(
+                25076L, true, true, 100_000L, "выписка проверена", null, ContractorRecipientType.SPECIALIST, 7L, "PROFILE:7", "manager", authentication);
+
+        assertEquals(PaymentLinkStatus.CANCELED, link.getStatus());
+        assertEquals("CANCELED", link.getProviderTerminalStatus());
+        assertTrue(link.getLastError().startsWith("manual_card_payment_completed:"));
+        verify(tbankClient, times(1)).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(orderTransactionService).handlePaymentStatus(order);
+    }
+
+    @Test
+    void managerManualCardReportCancelsFormShowedAndDoesNotRequestSecondOwnerReview() throws Exception {
         stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
@@ -5484,6 +5524,11 @@ class PaymentLinkServiceTest {
         });
         when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5270")))
                 .thenReturn(tbankState("FORM_SHOWED", "payment-5270", "order-5270", 100_000L));
+        when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class)))
+                .thenReturn(new TbankCancelResponse(
+                        true, "0", null, null, "terminal", "CANCELED",
+                        "payment-5270", "order-5270", 100_000L, 100_000L, 0L
+                ));
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.reportPaidByManualCardTransferForOrder(
@@ -5494,7 +5539,7 @@ class PaymentLinkServiceTest {
 
         assertTrue(link.getManualComment().startsWith("Заявлено менеджером: оплата переводом"));
         verifyNoInteractions(manualCardPaymentReviewNotificationService);
-        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(tbankClient).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService).handlePaymentStatus(order);
     }
 
@@ -5706,6 +5751,7 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByIdForUpdate(5220L)).thenReturn(Optional.of(active));
         when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5220")))
                 .thenReturn(tbankState("NEW", "payment-5220", "order-5220", 100_000L));
+        stubTbankCancelAccepted();
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
@@ -5740,6 +5786,7 @@ class PaymentLinkServiceTest {
                 .thenReturn(tbankState("DEADLINE_EXPIRED", "payment-5224", "order-5224", 100_000L));
         when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5223")))
                 .thenReturn(tbankState("NEW", "payment-5223", "order-5223", 100_000L));
+        stubTbankCancelAccepted();
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
@@ -5747,8 +5794,8 @@ class PaymentLinkServiceTest {
 
         assertEquals("DEADLINE_EXPIRED", locallyExpired.getProviderTerminalStatus());
         assertEquals(PaymentLinkStatus.CANCELED, active.getStatus());
-        assertNull(active.getProviderTerminalStatus());
-        assertTrue(active.isObserveReplacedBank());
+        assertEquals("CANCELED", active.getProviderTerminalStatus());
+        assertFalse(active.isObserveReplacedBank());
         verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-5224"));
         verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-5223"));
         verify(orderTransactionService).handlePaymentStatus(order);
@@ -5847,6 +5894,7 @@ class PaymentLinkServiceTest {
                 .thenReturn(tbankState("REJECTED", "payment-5232", "order-5232", 100_000L));
         when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5230")))
                 .thenReturn(tbankState("NEW", "payment-5230", "order-5230", 100_000L));
+        stubTbankCancelAccepted();
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmPaidByManualCardTransferForOrder(
@@ -5855,8 +5903,8 @@ class PaymentLinkServiceTest {
         assertEquals("DEADLINE_EXPIRED", firstLegacy.getProviderTerminalStatus());
         assertEquals(PaymentLinkStatus.REJECTED, secondLegacy.getStatus());
         assertEquals("REJECTED", secondLegacy.getProviderTerminalStatus());
-        assertNull(current.getProviderTerminalStatus());
-        assertTrue(current.isObserveReplacedBank());
+        assertEquals("CANCELED", current.getProviderTerminalStatus());
+        assertFalse(current.isObserveReplacedBank());
         verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-5231"));
         verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-5232"));
         verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-5230"));
@@ -6519,6 +6567,7 @@ class PaymentLinkServiceTest {
             accessGranted.set(true);
             return null;
         }).when(managerAccessService).requireOrderAccess(25271L, authentication);
+        stubTbankCancelAccepted();
         when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5371")))
                 .thenAnswer(invocation -> {
                     assertTrue(accessGranted.get());
@@ -6558,7 +6607,7 @@ class PaymentLinkServiceTest {
         assertEquals(OwnerManualCardPaymentApprovalStatus.CONFIRMED, approvalRef.get().getStatus());
         assertEquals(PaymentLinkStatus.CANCELED, link.getStatus());
         verify(tbankClient, times(1)).getState(any(TbankPaymentProfile.class), eq("payment-5371"));
-        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(tbankClient, times(1)).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService, times(1)).handlePaymentStatus(order);
         verify(contractorPaymentTargetAccessPolicy, never()).requireCanManagePaymentLink(5371L);
         verify(managerAccessService, atLeastOnce()).requireOrderAccess(25271L, authentication);
@@ -7119,7 +7168,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void manualCardPaymentReadTimeoutLeavesOrderUnpaidAndAllowsRetry() throws Exception {
+    void manualCardPaymentCancelTimeoutLeavesOrderUnpaidAndResumesAfterBankCanceled() throws Exception {
         stubEmployeeTransferAccounting();
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
@@ -7133,8 +7182,12 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByIdForUpdate(5210L)).thenReturn(Optional.of(link));
         when(paymentLinkRepository.save(link)).thenReturn(link);
         when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5210")))
-                .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "provider timeout"))
-                .thenReturn(tbankState("NEW", "payment-5210", "order-5210", 100_000L));
+                .thenReturn(
+                        tbankState("NEW", "payment-5210", "order-5210", 100_000L),
+                        tbankState("CANCELED", "payment-5210", "order-5210", 100_000L)
+                );
+        when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class)))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "provider timeout"));
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         ResponseStatusException timeout = assertThrows(
@@ -7153,8 +7206,10 @@ class PaymentLinkServiceTest {
 
         assertNull(link.getConfirmedAmountKopecks());
         assertTrue(link.getLastError().startsWith("manual_card_payment_completed:"));
+        assertEquals("CANCELED", link.getProviderTerminalStatus());
+        assertFalse(link.isObserveReplacedBank());
         verify(orderTransactionService, times(1)).handlePaymentStatus(order);
-        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(tbankClient, times(1)).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
     }
 
     @Test
@@ -10067,6 +10122,14 @@ class PaymentLinkServiceTest {
         link.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
         link.setContractorAllocationId(allocationId);
         return link;
+    }
+
+    private void stubTbankCancelAccepted() {
+        when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class))).thenAnswer(invocation -> {
+            TbankCancelCommand command = invocation.getArgument(1);
+            return new TbankCancelResponse(true, "0", null, null, "terminal", "CANCELED",
+                    command.paymentId(), null, command.amountKopecks(), command.amountKopecks(), 0L);
+        });
     }
 
     private void stubEmployeeTransferAccounting() {
