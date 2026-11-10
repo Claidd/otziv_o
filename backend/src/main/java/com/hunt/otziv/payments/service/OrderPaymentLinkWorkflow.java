@@ -78,6 +78,25 @@ public class OrderPaymentLinkWorkflow {
      * payable amount have changed together.
      */
     @Transactional
+    public boolean awaitBankForBadReview(Long orderId) {
+        if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) return false;
+        var links = paymentLinkRepository.findByOrderIdForUpdate(orderId);
+        var outstanding = links.stream().filter(link -> link.getBadReviewBankCheckAt() != null
+                || link.getStatus() == PaymentLinkStatus.INITIATED || link.getStatus() == PaymentLinkStatus.AUTHORIZED
+                || PaymentRouteReplacementWorkflow.awaitingBankInit(link)).toList();
+        if (outstanding.size() != 1) return false;
+        var link = outstanding.getFirst();
+        if (PaymentRouteReplacementWorkflow.repricingSource(link) == null
+                || paymentLinkRepository.pendingRecipientChanges(orderId) > 0) return false;
+        if (links.stream().anyMatch(other -> other != link && !Set.of(PaymentLinkStatus.CANCELED,
+                PaymentLinkStatus.REJECTED, PaymentLinkStatus.EXPIRED, PaymentLinkStatus.FAILED).contains(other.getStatus())))
+            return false;
+        if (link.getBadReviewBankCheckAt() == null) link.setBadReviewBankCheckAt(LocalDateTime.now());
+        paymentLinkRepository.save(link);
+        return true;
+    }
+
+    @Transactional
     public int retireOpenLinksBeforePayableChange(Long orderId, String reason) {
         if (orderId == null || orderId <= 0) {
             return 0;
@@ -102,7 +121,7 @@ public class OrderPaymentLinkWorkflow {
                 link.setStatus(PaymentLinkStatus.EXPIRED);
                 link.setLastError(retirementReason);
                 paymentLinkRepository.save(link);
-                contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+                releaseClosedPaymentLink(link);
                 retired++;
                 continue;
             }
@@ -171,7 +190,7 @@ public class OrderPaymentLinkWorkflow {
             if (canRetireStaleLink(link)) {
                 expireIfAmountChanged(link);
                 if (link.getContractorAllocationId() != null) {
-                    contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+                    releaseClosedPaymentLink(link);
                 }
                 continue;
             }
@@ -222,6 +241,16 @@ public class OrderPaymentLinkWorkflow {
 
     private boolean hasOrderBinding(PaymentLink link, Long orderId) {
         return lifecycleService.hasOrderBinding(link, orderId);
+    }
+
+    void releaseClosedPaymentLink(PaymentLink link) {
+        contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+    }
+
+    PaymentLink lockForBadReviewBankCheck(long linkId) {
+        Long orderId = paymentLinkRepository.findOrderIdById(linkId).orElse(null);
+        if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) return null;
+        return paymentLinkRepository.findByIdForUpdate(linkId).filter(link -> orderId.equals(link.getOrderId())).orElse(null);
     }
 
     private void expireIfPastDue(PaymentLink link) {

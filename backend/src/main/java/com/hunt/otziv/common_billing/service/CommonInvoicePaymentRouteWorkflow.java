@@ -335,8 +335,15 @@ public class CommonInvoicePaymentRouteWorkflow {
     }
 
     CommonInvoicePaymentRef bankRecipientRef(CommonInvoice invoice, List<CommonInvoicePaymentRef> refs) {
-        if (invoice == null || refs.isEmpty() || !isTbankCommonRoute(invoice)
-                || invoice.isPaperInvoiceReviewHold() || (!SEND_INVOICE_STATUSES.contains(invoice.getStatus()) && !invoice.isRepricedUnpaid())
+        if (invoice == null || invoice.getBadReviewBankRefId() != null
+                || (!SEND_INVOICE_STATUSES.contains(invoice.getStatus()) && !invoice.isRepricedUnpaid())) return null;
+        return boundUnpaidBankRef(invoice, refs);
+    }
+
+    CommonInvoicePaymentRef boundUnpaidBankRef(CommonInvoice invoice, List<CommonInvoicePaymentRef> refs) {
+        if (refs.isEmpty() || !isTbankCommonRoute(invoice) || invoice.isPaperInvoiceReviewHold()
+                || invoice.isPaperInvoiceAutomationHold() || invoice.getPaperBankDocumentId() != null
+                || invoice.getPaperInvoiceIssuedAt() != null || invoice.getPaidAt() != null
                 || invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE
                 || invoice.getPaidKopecks() != 0 || invoice.getClientReportedAt() != null
                 || invoice.getManualConfirmedAt() != null || hasUnresolvedPaymentMessage(invoice)) return null;
@@ -417,7 +424,7 @@ public class CommonInvoicePaymentRouteWorkflow {
         if (!hasFrozenCommonPaymentRoute(invoice)) {
             return "Способ оплаты общего счёта ещё не сформирован";
         }
-        if (!SEND_INVOICE_STATUSES.contains(invoice.getStatus())) {
+        if (!SEND_INVOICE_STATUSES.contains(invoice.getStatus()) && !invoice.isRepricedUnpaid()) {
             return "Общий счёт уже закрыт или требует отдельной сверки";
         }
         if (invoice.getPaidKopecks() > 0 || invoice.getClientReportedAt() != null || invoice.getManualConfirmedAt() != null) {

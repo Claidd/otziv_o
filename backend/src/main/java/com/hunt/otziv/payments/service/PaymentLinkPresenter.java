@@ -60,6 +60,8 @@ public class PaymentLinkPresenter {
 
     private final AppSettingService appSettingService;
 
+    private final PaymentLinkAmountPolicy amounts;
+
     boolean isPaperInvoice(PaymentLink link) {
         return commonInvoiceRouteSelector.isPaperInvoice(link);
     }
@@ -80,14 +82,16 @@ public class PaymentLinkPresenter {
     PublicPaymentLinkResponse toPublicResponse(PaymentLink link) {
         Order order = link.getOrder();
         ManualRouteReadView requisites = manualRouteReadView(link);
-        boolean payable = isPayable(link, requisites);
+        boolean payable = link.getBadReviewBankCheckAt() == null && isPayable(link, requisites);
         boolean contractorRequisitesVisible = !requisites.contractorRoute() || (requisites.available() && payable);
         String provider = publicPaymentProvider(link);
         boolean tochkaProvider = PaymentProfile.PROVIDER_TOCHKA.equals(provider);
         TochkaPaymentProfile publicTochkaProfile = tochkaProvider ? resolvePublicTochkaProfile(link.getPaymentProfile()) : null;
         boolean tochkaEnabled = publicTochkaProfile != null && (publicTochkaProfile.paymentModes().contains(TochkaPaymentMode.CARD) || publicTochkaProfile.paymentModes().contains(TochkaPaymentMode.SBP));
         boolean providerPayable = payable && (!tochkaProvider || tochkaEnabled);
-        return new PublicPaymentLinkResponse(link.getToken(), order == null ? null : order.getId(), companyTitle(order), filialTitle(order), link.getDescription(), amountRubles(link.getAmountKopecks()), link.getAmountKopecks(), link.getDescription(), "", link.getStatus().name(), paymentMethodName(link), provider, link.getExpiresAt(), providerPayable, tochkaProvider ? (tochkaEnabled ? publicTochkaPaymentPageMode(publicTochkaProfile).name() : TbankPaymentPageMode.BANK_ONLY.name()) : paymentPageModeName(), !tochkaProvider, !tochkaProvider && runtimeSettingsService.isTpayEnabled(), !tochkaProvider && runtimeSettingsService.isSberpayEnabled(), !tochkaProvider && runtimeSettingsService.isMirpayEnabled(), manualPaymentTypeName(link), contractorRequisitesVisible ? requisites.phone() : "", contractorRequisitesVisible ? requisites.recipientName() : "", contractorRequisitesVisible ? requisites.bankName() : "", contractorRequisitesVisible && isManualPayment(link) ? requisites.paymentUrl() : "", manualButtonLabel(link), contractorRequisitesVisible ? requisites.comment() : "", link.getReceiptStatus() == null ? null : link.getReceiptStatus().name());
+        boolean waiting = link.getBadReviewBankCheckAt() != null;
+        long displayAmount = waiting ? amounts.currentAmountKopecks(link) : link.getAmountKopecks();
+        return new PublicPaymentLinkResponse(link.getToken(), order == null ? null : order.getId(), companyTitle(order), filialTitle(order), link.getDescription(), amountRubles(displayAmount), displayAmount, link.getDescription(), "", waiting ? "AWAITING_BANK_CLOSURE" : link.getStatus().name(), paymentMethodName(link), provider, link.getExpiresAt(), providerPayable, tochkaProvider ? (tochkaEnabled ? publicTochkaPaymentPageMode(publicTochkaProfile).name() : TbankPaymentPageMode.BANK_ONLY.name()) : paymentPageModeName(), !tochkaProvider, !tochkaProvider && runtimeSettingsService.isTpayEnabled(), !tochkaProvider && runtimeSettingsService.isSberpayEnabled(), !tochkaProvider && runtimeSettingsService.isMirpayEnabled(), manualPaymentTypeName(link), contractorRequisitesVisible ? requisites.phone() : "", contractorRequisitesVisible ? requisites.recipientName() : "", contractorRequisitesVisible ? requisites.bankName() : "", contractorRequisitesVisible && isManualPayment(link) ? requisites.paymentUrl() : "", manualButtonLabel(link), contractorRequisitesVisible ? requisites.comment() : "", link.getReceiptStatus() == null ? null : link.getReceiptStatus().name());
     }
 
     TochkaPaymentProfile resolvePublicTochkaProfile(PaymentProfile profile) {

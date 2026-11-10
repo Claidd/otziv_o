@@ -805,7 +805,7 @@ class BadReviewTaskServiceImplTest {
 
         lenient().doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "DONE is not mutable"))
                 .when(assignmentMutationGuardService).assertBadTask(44L);
-        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 44L, 17L, false);
+        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 44L, 17L, false, false);
 
         verify(transactionRunner).required(any());
         verify(badReviewTaskRepository).findByIdForMutation(44L);
@@ -824,7 +824,7 @@ class BadReviewTaskServiceImplTest {
         when(badReviewTaskRepository.findByIdForMutation(45L)).thenReturn(Optional.of(task));
         when(orderRepository.findByIdForCounterUpdate(19L)).thenReturn(Optional.of(task.getOrder()));
 
-        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 45L, 19L, false);
+        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 45L, 19L, false, false);
 
         verify(badReviewTaskRepository).findByIdForMutation(45L);
         verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
@@ -839,7 +839,7 @@ class BadReviewTaskServiceImplTest {
         when(badReviewTaskRepository.findByIdForMutation(45L)).thenReturn(Optional.of(
                 BadReviewTask.builder().id(45L).order(order(20L)).status(BadReviewTaskStatus.DONE).build()));
 
-        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 45L, 19L, false);
+        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 45L, 19L, false, false);
 
         verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
         verify(paymentLinkService, never()).expireStaleLinksForOrder(any());
@@ -1189,6 +1189,22 @@ class BadReviewTaskServiceImplTest {
         mutationLocks.verify(paymentInvoiceRetryScheduler).assertPaymentAutomationMutable(22L);
         mutationLocks.verify(paymentLinkService)
                 .retireOpenLinksBeforePayableChange(22L, "Выполненная дополнительная задача изменила сумму счета");
+    }
+
+    @Test
+    void openedBankLinkAllowsTaskCompletionAndDefersDelivery() {
+        var order = order(22L);
+        var task = BadReviewTask.builder().id(52L).order(order).status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(200)).build();
+        stubPayableMutation(task);
+        when(paymentLinkServiceProvider.getIfAvailable()).thenReturn(paymentLinkService);
+        when(paymentLinkService.awaitBankForBadReview(22L)).thenReturn(true);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        service.completeTask(52L);
+        assertEquals(BadReviewTaskStatus.DONE, task.getStatus());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
+        verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
+        verify(paymentLinkService, never()).retireOpenLinksBeforePayableChange(any(), anyString());
     }
 
     @Test

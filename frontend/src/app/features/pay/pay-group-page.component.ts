@@ -314,6 +314,8 @@ export class PayGroupPageComponent {
 
   private statusText(status?: string): string {
     switch (status) {
+      case 'AWAITING_BANK_CLOSURE':
+        return 'Обновляем реквизиты';
       case 'COLLECTING':
         return 'Собирается';
       case 'READY':

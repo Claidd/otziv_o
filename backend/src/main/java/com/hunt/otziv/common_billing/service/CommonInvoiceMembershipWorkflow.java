@@ -126,6 +126,10 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
 
     private final SpecialistPaymentReviewGate specialistReviewGuard;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private CommonInvoiceBadReviewBankRepricing bankRepricing;
+
     @Transactional
     public boolean attachOrderIfNeeded(Order order) {
         if (order == null || order.getId() == null) {
@@ -279,7 +283,8 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Состав общего счета изменился. Обновите данные и повторите действие");
         }
         boolean unpaidCycle = !item.isPaid() && item.isUnpaid() && (invoice.getStatus() == CommonInvoiceStatus.UNPAID || (invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION && attentionError(invoice).startsWith(BAD_REVIEW_SUPPLEMENT_REQUIRED)));
-        if (unpaidCycle || (!item.isPaid() && (BAD_REVIEW_SUCCESSOR_PURPOSE.equals(invoice.getInvoicePurpose()) || invoice.isBadReviewPayable())
+        if (unpaidCycle || (!item.isPaid() && (invoice.getBadReviewBankRefId() != null || invoice.getSentAt() != null
+                || BAD_REVIEW_SUCCESSOR_PURPOSE.equals(invoice.getInvoicePurpose()) || invoice.isBadReviewPayable())
                 && Set.of(CommonInvoiceStatus.COLLECTING, CommonInvoiceStatus.READY, CommonInvoiceStatus.INVOICED, CommonInvoiceStatus.REMINDER,
                         CommonInvoiceStatus.UNPAID, CommonInvoiceStatus.PARTIALLY_PAID, CommonInvoiceStatus.NEEDS_ATTENTION).contains(invoice.getStatus())))
             return CommonPayableChangeDisposition.REPRICE_UNPAID;
@@ -297,6 +302,8 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         if (binding == null || taskId == null) return false;
         var invoice = lockedInvoice(binding.getInvoice().getId()).orElseThrow();
         var items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        if ((invoice.getPaymentRouteProfileId() != null || invoice.getBadReviewBankRefId() != null)
+                && bankRepricing.arm(invoice, items, orderId, taskId)) return true;
         boolean unpaid = invoice.getStatus() == CommonInvoiceStatus.UNPAID;
         boolean unsentSuccessor = refreshableBadReviewSuccessor(invoice);
         if ((!unpaid && !unsentSuccessor) || items.isEmpty()
@@ -405,7 +412,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
      * when it has no started payment, issued document, or unresolved delivery.
      */
     public boolean canRepriceDeliveredSuccessor(CommonInvoice invoice) {
-        if (invoice == null || invoice.getId() == null || !BAD_REVIEW_SUCCESSOR_PURPOSE.equals(invoice.getInvoicePurpose())
+        if (invoice == null || invoice.getId() == null
                 || !safeToReprice(invoice)
                 || (invoice.getStatus() != CommonInvoiceStatus.INVOICED && invoice.getStatus() != CommonInvoiceStatus.REMINDER)
                 || invoice.getSentAt() == null || invoice.getPaidKopecks() > 0 || invoice.getClientReportedAt() != null

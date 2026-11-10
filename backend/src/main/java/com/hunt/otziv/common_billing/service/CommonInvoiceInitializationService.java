@@ -1076,7 +1076,7 @@ public class CommonInvoiceInitializationService {
     }
 
     boolean canAcceptPublicPayment(CommonInvoice invoice) {
-        return invoice != null && !isOwnerPaperInvoice(invoice) && (PUBLIC_PAYABLE_STATUSES.contains(invoice.getStatus()) || invoice.isRepricedUnpaid());
+        return invoice != null && invoice.getBadReviewBankRefId() == null && !isOwnerPaperInvoice(invoice) && (PUBLIC_PAYABLE_STATUSES.contains(invoice.getStatus()) || invoice.isRepricedUnpaid());
     }
 
     String paymentRefStatus(CommonInvoicePaymentRef ref) {

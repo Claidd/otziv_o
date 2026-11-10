@@ -193,6 +193,10 @@ public class PaymentLinkService implements com.hunt.otziv.payments.api.Standalon
         return orderPaymentLinks.retireOpenLinksBeforePayableChange(orderId, reason);
     }
 
+    public boolean awaitBankForBadReview(Long orderId) {
+        return orderPaymentLinks.awaitBankForBadReview(orderId);
+    }
+
     /**
      * Refreshes the bank state of the current payment before an explicit
      * automation retry. A payment that has already finished is applied through

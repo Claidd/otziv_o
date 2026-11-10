@@ -200,6 +200,8 @@ class CommonBillingServiceTest {
     private CommonInvoiceOrderRepository invoiceOrderRepository;
     @Mock
     private CommonInvoicePaymentRefRepository paymentRefRepository;
+
+    private CommonInvoiceBadReviewBankRepricing badReviewBank;
     @Mock
     private CommonInvoicePaymentNotificationOutboxRepository paymentNotificationOutboxRepository;
     @Mock
@@ -456,6 +458,14 @@ class CommonBillingServiceTest {
                 publicationBlockerService,
                 org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
         ReflectionTestUtils.setField(service, "invoiceMembershipWorkflow", membership);
+        var billingProvider = org.mockito.Mockito.<org.springframework.beans.factory.ObjectProvider<CommonBillingService>>mock();
+        var membershipProvider = org.mockito.Mockito.<org.springframework.beans.factory.ObjectProvider<CommonInvoiceMembershipWorkflow>>mock();
+        lenient().when(billingProvider.getObject()).thenReturn(service);
+        lenient().when(membershipProvider.getObject()).thenReturn(membership);
+        badReviewBank = new CommonInvoiceBadReviewBankRepricing(invoiceRepository, invoiceOrderRepository, paymentRefRepository,
+                (CommonInvoicePaymentRouteWorkflow) ReflectionTestUtils.getField(service, "invoiceRouteWorkflow"), settlement,
+                billingProvider, membershipProvider);
+        ReflectionTestUtils.setField(membership, "bankRepricing", badReviewBank);
         CommonBillingCompanyReconciliationWorkflow companyReconciliation = new CommonBillingCompanyReconciliationWorkflow(
                 membership, manualPayments, initialization, settlement, accountRepository,
                 accountCompanyRepository, invoiceRepository, invoiceOrderRepository, orderRepository,
@@ -7978,6 +7988,45 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void bankClosureResumesLatestOfTwoBadReviewsWithoutReplacingTheInvoiceOrPayingTwice() {
+        var invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.UNPAID);
+        invoice.setToken("stable-public-token");
+        invoice.setPaymentRouteType("BANK_LINK");
+        invoice.setPaymentRouteProfileId(1L);
+        invoice.setPaymentRouteAmountKopecks(100000L);
+        invoice.setTbankPaymentId("bank-1");
+        var order = order(101L);
+        var item = item(invoice, order);
+        item.setUnpaid(true);
+        item.setActiveMembership(true);
+        stubLockedInvoice(invoice, item, order);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId())).thenReturn(List.of(item));
+        var ref = paymentRef(43L, invoice, "CURRENT", "bank-order-1", "bank-1", "merchant-1", 100000L);
+        ref.setPaymentProfileId(1L);
+        when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of(ref));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1200), BigDecimal.valueOf(1400));
+        service.repriceBadReviewInvoice(101L, 11L);
+        var observed = badReviewBank.claim(invoice.getId());
+        assertNotNull(observed);
+        service.repriceBadReviewInvoice(101L, 12L);
+        assertEquals(140000L, invoice.getAmountKopecks());
+        assertEquals(100000L, ref.getAmountKopecks());
+        assertFalse(invoice.isBadReviewNoticePending());
+        var closed = new com.hunt.otziv.payments.api.UnpaidBankObservation.Result(
+                com.hunt.otziv.payments.api.UnpaidBankObservation.Outcome.CLOSED, "DEADLINE_EXPIRED");
+        badReviewBank.finish(observed, closed);
+        badReviewBank.finish(observed, closed);
+        assertEquals("stable-public-token", invoice.getToken());
+        assertEquals(140000L, invoice.getAmountKopecks());
+        assertEquals(0L, invoice.getPaidKopecks());
+        assertEquals(CommonInvoiceStatus.UNPAID, invoice.getStatus());
+        assertNull(invoice.getBadReviewBankRefId());
+        assertTrue(invoice.isBadReviewNoticePending());
+        assertEquals(1L, invoice.getBadReviewRevision());
+    }
+
+    @Test
     void nextBadReviewKeepsTheDeliveredSuccessorAndQueuesTheNewAmount() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice delivered = deliveredBadReviewSuccessor(account);
@@ -9015,6 +9064,36 @@ class CommonBillingServiceTest {
         assertEquals(null, invoice.getLastError());
         verify(paymentRefRepository, never()).save(ref);
         verify(invoiceRepository, never()).save(invoice);
+    }
+
+    @Test
+    void archivedAttemptForTransferKeepsListeningUntilSecondPayment() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setPaymentMethod("MANUAL");
+        CommonInvoicePaymentRef ref = paymentRef(48L, invoice, "ARCHIVED", "bank-order", "bank-payment", "terminal", 100_000L);
+        ref.setReason("actual_recipient_received_observe_only");
+        paymentRefStore.put(ref.getId(), ref);
+        PaymentProfile profile = paymentProfile();
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        for (String status : List.of("AUTHORIZED", "CONFIRMED")) {
+            Map<String, String> payload = confirmedWebhookPayload();
+            payload.put("OrderId", "bank-order");
+            payload.put("PaymentId", "bank-payment");
+            payload.put("Status", status);
+            when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+            assertTrue(service.handleTbankWebhook(payload));
+            if ("AUTHORIZED".equals(status)) {
+                assertEquals("ARCHIVED", ref.getStatus());
+                assertEquals("AUTHORIZED", ref.getProviderStatus());
+                assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+            }
+        }
+        assertEquals("CONFIRMED", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("late_tbank_payment"));
     }
 
     @Test

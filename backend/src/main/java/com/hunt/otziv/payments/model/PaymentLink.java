@@ -54,6 +54,9 @@ public class PaymentLink {
     @Column(name = "row_version", nullable = false)
     private Long rowVersion;
 
+    @Column(name = "bad_review_bank_check_at")
+    private LocalDateTime badReviewBankCheckAt;
+
     @Column(nullable = false, length = 96)
     private String token;
 

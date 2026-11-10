@@ -114,7 +114,7 @@ public class PublicPaymentLinkResolutionService {
         if (link == null || link.getOrder() == null || link.getOrder().getId() == null) {
             return false;
         }
-        if (hasBankInitReservation(link)) {
+        if (link.getBadReviewBankCheckAt() != null || hasBankInitReservation(link)) {
             return false;
         }
         if (isManualPaidRetiredLink(link)) {

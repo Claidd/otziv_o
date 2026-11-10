@@ -130,7 +130,9 @@ export class PayPageComponent {
     }
     return this.bankPaymentTitle();
   });
-  readonly checkoutSubtitle = computed(() => this.showSbpPayment()
+  readonly checkoutSubtitle = computed(() => this.payment()?.status === 'AWAITING_BANK_CLOSURE'
+    ? 'Здесь появятся новые реквизиты, когда банк закроет ссылку на прежнюю сумму.'
+    : this.showSbpPayment()
     ? 'Оплата через банковское приложение'
     : 'Оплата на защищенной странице банка'
   );
@@ -670,6 +672,8 @@ export class PayPageComponent {
 
   private statusText(status?: string): string {
     switch (status) {
+      case 'AWAITING_BANK_CLOSURE':
+        return 'Обновляем реквизиты';
       case 'CREATED':
         return 'Готова к оплате';
       case 'WAITING_MANUAL_PAYMENT':

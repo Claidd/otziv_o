@@ -232,7 +232,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
                 taskId,
                 expectedOrderId,
                 "Выполненная дополнительная задача изменила сумму счета",
-                authentication
+                authentication, true
         );
         Long orderId = preparedChange.orderId();
         BadReviewTask task = requireTask(taskId, authentication);
@@ -250,7 +250,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
                 savedTask.getId()
         );
         gamificationEventService.recordBadReviewTaskDone(savedTask);
-        if (!linkedToCommonInvoice) {
+        if (preparedChange.waitingForBank()) {
+            paymentInvoiceRetryScheduler.cancelBadReviewInvoiceRetry(savedTask.getOrder(), "Ожидаем закрытия ссылки на прежнюю сумму");
+        } else if (!linkedToCommonInvoice) {
             // Durable retry state is committed atomically with DONE. The
             // immediate post-commit delivery cancels it after a successful send.
             paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(savedTask.getOrder());
@@ -263,7 +265,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
                     "Заказ обслуживается общим платежным циклом"
             );
         }
-        runCompletionSideEffectsAfterCommit(savedTask, linkedToCommonInvoice);
+        runCompletionSideEffectsAfterCommit(savedTask, linkedToCommonInvoice, preparedChange.waitingForBank());
         auditTaskCompleted(savedTask);
         log.info("Плохая задача {} выполнена, заказ {}, доплата {}",
                 savedTask.getId(),
@@ -277,10 +279,10 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         return requireTask(taskId);
     }
 
-    private void runCompletionSideEffects(BadReviewTask savedTask, boolean linkedToCommonInvoice) {
+    private void runCompletionSideEffects(BadReviewTask savedTask, boolean linkedToCommonInvoice, boolean waitingForBank) {
         Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
         try {
-            CompletionInvoiceDelivery delivery = prepareCompletionSideEffects(savedTask, linkedToCommonInvoice);
+            CompletionInvoiceDelivery delivery = prepareCompletionSideEffects(savedTask, linkedToCommonInvoice, waitingForBank);
             deliverCompletionInvoice(delivery);
         } catch (RuntimeException e) {
             log.warn("Плохая задача {} уже отмечена выполненной, но пост-действия не завершились. orderId={}",
@@ -290,7 +292,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
 
     private CompletionInvoiceDelivery prepareCompletionSideEffects(
             BadReviewTask savedTask,
-            boolean linkedToCommonInvoice
+            boolean linkedToCommonInvoice, boolean waitingForBank
     ) {
         if (savedTask == null || savedTask.getStatus() != BadReviewTaskStatus.DONE) {
             return null;
@@ -298,7 +300,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
         BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
         expireStalePaymentLinks(savedTask.getOrder());
-        CompletionInvoiceDelivery delivery = prepareBadReviewInvoiceIfEnabled(
+        CompletionInvoiceDelivery delivery = waitingForBank ? null : prepareBadReviewInvoiceIfEnabled(
                 savedTask,
                 summary,
                 linkedToCommonInvoice
@@ -326,7 +328,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         if (linkedToCommonInvoice) {
             log.info("Счет после плохого отзыва не отправлен отдельно: заказ {} входит в общий счет", order.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "common_billing_linked",
-                    "Заказ входит в общий счет; сумма общего счета пересчитана", safeBadReviewInvoicePreview(order, summary), 0);
+                    "Заказ входит в общий счёт. Отправкой управляет общий счёт", safeBadReviewInvoicePreview(order, summary), 0);
             return null;
         }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)) {
@@ -534,24 +536,24 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         return transactionRunner.required(() -> cancelTaskLocked(taskId, snapshotStatus, observedOrderId));
     }
 
-    private void runCompletionSideEffectsAfterCommit(BadReviewTask savedTask, boolean linkedToCommonInvoice) {
+    private void runCompletionSideEffectsAfterCommit(BadReviewTask savedTask, boolean linkedToCommonInvoice, boolean waitingForBank) {
         Long taskId = savedTask == null ? null : savedTask.getId();
         Long orderId = savedTask == null || savedTask.getOrder() == null ? null : savedTask.getOrder().getId();
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    runCompletionSideEffectsById(taskId, orderId, linkedToCommonInvoice);
+                    runCompletionSideEffectsById(taskId, orderId, linkedToCommonInvoice, waitingForBank);
                 }
             });
             return;
         }
         // Unit tests and non-transactional maintenance callers retain the same
         // observable behaviour.
-        runCompletionSideEffects(savedTask, linkedToCommonInvoice);
+        runCompletionSideEffects(savedTask, linkedToCommonInvoice, waitingForBank);
     }
 
-    private void runCompletionSideEffectsById(Long taskId, Long expectedOrderId, boolean linkedToCommonInvoice) {
+    private void runCompletionSideEffectsById(Long taskId, Long expectedOrderId, boolean linkedToCommonInvoice, boolean waitingForBank) {
         try {
             CompletionInvoiceDelivery delivery = transactionRunner.required(() -> {
                 if (taskId == null || expectedOrderId == null
@@ -562,7 +564,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
                 BadReviewTask task = badReviewTaskRepository.findByIdForMutation(taskId).orElse(null);
                 if (task == null || task.getStatus() != BadReviewTaskStatus.DONE || task.getOrder() == null
                         || !Objects.equals(task.getOrder().getId(), expectedOrderId)) return null;
-                return prepareCompletionSideEffects(task, linkedToCommonInvoice);
+                return prepareCompletionSideEffects(task, linkedToCommonInvoice, waitingForBank);
             });
             // The runner has committed and released the task row lock. The
             // orchestrator may now open its own short transaction safely.
@@ -658,12 +660,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
     private PreparedTaskPayableChange prepareTaskPayableChangeLocked(Long taskId,
             Long expectedOrderId,
             String reason) {
-        return prepareTaskPayableChangeLocked(taskId, expectedOrderId, reason, null);
+        return prepareTaskPayableChangeLocked(taskId, expectedOrderId, reason, null, false);
     }
 
     private PreparedTaskPayableChange prepareTaskPayableChangeLocked(Long taskId,
             Long expectedOrderId,
-            String reason, Authentication authentication) {
+            String reason, Authentication authentication, boolean completing) {
         validateTaskIdAndAccess(taskId, authentication);
         Long orderId = badReviewTaskRepository.findOrderIdById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
@@ -691,10 +693,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         // keeps concurrent task mutations out of the PREPARED/send window.
         paymentInvoiceRetryScheduler.assertPaymentAutomationMutable(orderId);
         PaymentLinkService paymentLinkService = paymentLinkServiceProvider.getIfAvailable();
-        if (paymentLinkService != null) {
+        boolean waitingForBank = paymentLinkService != null && completing && commonDisposition == CommonPayableChangeDisposition.NOT_LINKED
+                && paymentLinkService.awaitBankForBadReview(orderId);
+        if (paymentLinkService != null && !waitingForBank) {
             paymentLinkService.retireOpenLinksBeforePayableChange(orderId, reason);
         }
-        return new PreparedTaskPayableChange(orderId, commonDisposition);
+        return new PreparedTaskPayableChange(orderId, commonDisposition, waitingForBank);
     }
 
     private boolean applyLinkedCommonInvoiceChange(PreparedTaskPayableChange change, Long taskId) {
@@ -714,7 +718,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
 
     private record PreparedTaskPayableChange(
             Long orderId,
-            CommonPayableChangeDisposition commonDisposition
+            CommonPayableChangeDisposition commonDisposition, boolean waitingForBank
     ) {
     }
 

@@ -145,6 +145,8 @@ public class PaymentRouteReplacementWorkflow {
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
         if (!bankChange && paymentLinkRepository.pendingRecipientChanges(orderId) > 0)
             throw new ResponseStatusException(HttpStatus.LOCKED, "Смена получателя уже выполняется. Ожидаем ответ банка");
+        if (paymentLinkRepository.pendingBadReviewBankChecks(orderId) > 0)
+            throw new ResponseStatusException(HttpStatus.LOCKED, "Ожидаем перевыставления счёта после плохой задачи");
         if (order.isPaperInvoiceReviewHold()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Требуется сверка поступления по отменённому счёту");
         orderPaymentIntegrityService.assertPaymentCycleAllowed(order);
         // Match scheduler preparation lock order: Order -> message states -> links.
@@ -280,10 +282,22 @@ public class PaymentRouteReplacementWorkflow {
     }
 
     static Source recipientSource(PaymentLink link) {
-        if (link == null) return null;
+        if (link == null || (!bankRecipientEligible(link) && !awaitingBankInit(link))) return null;
+        return bankSource(link);
+    }
+
+    static Source repricingSource(PaymentLink link) {
+        if (link.getBadReviewBankCheckAt() != null && link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION
+                && link.getTbankPaymentId() != null && link.getPaidAt() == null && link.getConfirmedAmountKopecks() == null
+                && link.getManualReportedAt() == null && link.getManualActualRecipientFrozenAt() == null
+                && link.getBankCancelNonce() == null && link.getBankCancelOriginStatus() == null
+                && link.getPaperBankDocumentId() == null) return bankSource(link);
+        return recipientSource(link);
+    }
+
+    private static Source bankSource(PaymentLink link) {
+        if (link.getPaymentProfile() == null || link.getTbankOrderId() == null || link.getTbankTerminalKey() == null) return null;
         var order = link.getOrder();
-        if ((!bankRecipientEligible(link) && !awaitingBankInit(link))
-                || link.getPaymentProfile() == null) return null;
         var profile = link.getPaymentProfile();
         return new Source("ORDER", order.getId(), link.getId(), profile.getId(), profile.getProvider(), Objects.toString(link.getTbankPaymentId(), ""),
                 link.getTbankOrderId(), link.getTbankTerminalKey(), link.getAmountKopecks(),
