@@ -313,6 +313,7 @@ export interface PaymentRouteChangeContext {
   currentRecipient: string;
   status: string;
   canChange: boolean;
+  bankRecipientChangeAvailable?: boolean;
   blockReason: string;
   configuredMode?: 'AUTO_ROUTING' | PaymentRouteChangeTarget | string;
   paperInvoiceIssued?: boolean;
@@ -787,6 +788,7 @@ export interface CommonInvoicePaymentRouteChangeContextResponse {
   currentRecipient: string;
   status: string;
   canChange: boolean;
+  bankRecipientChangeAvailable?: boolean;
   blockReason: string;
   paymentEvidenceToken: string;
   currentPaymentProfileId?: number | null;

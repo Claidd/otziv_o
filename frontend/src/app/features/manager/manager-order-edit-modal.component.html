@@ -212,7 +212,11 @@
                     @if (paymentRouteContext.configuredMode === 'OWNER_PAPER_INVOICE') {
                       <button type="button" class="secondary" (click)="paymentRouteChanged.emit('OWNER_PAPER_INVOICE')">Счёт и акт Точки</button>
                     }
-                    <div class="payment-route-change__warning">{{ paymentRouteContext.blockReason }}</div>
+                    @if (paymentRouteContext.bankRecipientChangeAvailable) {
+                      <button type="button" class="secondary" (click)="paymentRouteChanged.emit('DIFFERENT_RECIPIENT')" [disabled]="paymentRouteChanging">Сменить получателя</button>
+                    } @else {
+                      <div class="payment-route-change__warning">{{ paymentRouteContext.blockReason }}</div>
+                    }
                   } @else {
                     <div class="payment-route-change__options">
                       <button type="button" class="secondary"

@@ -325,7 +325,7 @@ public class ManualCardRoutePolicy {
         String providerStatus = normalize(link.getProviderTerminalStatus());
         return switch(link.getStatus()) {
             case CANCELED ->
-                "CANCELED".equalsIgnoreCase(providerStatus);
+                "CANCELED".equalsIgnoreCase(providerStatus) || lifecycleService.closedForRecipientChange(link);
             case REJECTED ->
                 "REJECTED".equalsIgnoreCase(providerStatus);
             case EXPIRED ->

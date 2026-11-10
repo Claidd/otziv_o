@@ -265,6 +265,8 @@ public class CommonInvoiceInitializationService {
     PreparedCommonPaymentInit preparePaymentInit(String token, String cleanEmail) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceByTokenAfterStandalonePaymentPrelude(token);
         CommonInvoice invoice = paymentPrelude.invoice();
+        if (invoiceRepository.pendingRecipientChanges(invoice.getId()) > 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Для счёта меняется получатель. Дождитесь новых реквизитов");
         if (invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Архивный общий счет недоступен для оплаты");
         }

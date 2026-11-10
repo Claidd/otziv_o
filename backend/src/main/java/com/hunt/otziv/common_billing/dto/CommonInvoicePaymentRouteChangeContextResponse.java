@@ -14,6 +14,7 @@ public record CommonInvoicePaymentRouteChangeContextResponse(
         String ownerBankTargetProvider,
         boolean canReissueOwnerBank,
         String ownerBankReissueBlockReason,
-        boolean ownerManualRoute
+        boolean ownerManualRoute,
+        boolean bankRecipientChangeAvailable
 ) {
 }

@@ -747,7 +747,11 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     boolean handleTbankWebhookInTransaction(Map<String, String> payload) {
-        VerifiedWebhookProfile verified = verifyWebhook(payload);
+        return applyVerifiedTbankState(payload, verifyWebhook(payload));
+    }
+
+    // Entry points verify either the webhook signature or the complete bound GetState response.
+    boolean applyVerifiedTbankState(Map<String,String> payload, VerifiedWebhookProfile verified) {
         TbankConfirmedEvidence.requireValidWebhook(payload);
         String orderId = normalize(payload.get("OrderId"));
         String paymentId = normalize(payload.get("PaymentId"));

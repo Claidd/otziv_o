@@ -46,6 +46,22 @@ import org.springframework.web.server.ResponseStatusException;
 /** Real Spring advice and real creation/init/state/resolution owners; no provider I/O. */
 class PaymentLinkInitializationWorkflowTransactionTest {
     @Test
+    void onlyVerifiedRecipientReplacementReleasesAnAmbiguousClosedLink() {
+        Fixture f = new Fixture();
+        f.link.setStatus(PaymentLinkStatus.CANCELED);
+        f.link.setTbankPaymentId("original-operation");
+        f.link.setLastError("previous route closed");
+        f.link.setProviderTerminalStatus("EXPIRED");
+        assertThat(f.state.blocksCreationOfAnotherBankPayment(f.link)).isTrue();
+
+        when(f.links.completedBankRecipientChange(71L, "EXPIRED")).thenReturn(1);
+        assertThat(f.state.blocksCreationOfAnotherBankPayment(f.link)).isFalse();
+
+        f.link.setProviderTerminalStatus("AUTHORIZED");
+        assertThat(f.state.blocksCreationOfAnotherBankPayment(f.link)).isTrue();
+    }
+
+    @Test
     void callerIsSuspendedAndReservationCommitsBeforeBankThenOrderIsLockedBeforeLinkAgain() {
         Fixture f = new Fixture();
         when(f.bank.init(any(), any())).thenAnswer(call -> {

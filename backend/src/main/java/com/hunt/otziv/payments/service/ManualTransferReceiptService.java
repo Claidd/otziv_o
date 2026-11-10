@@ -2,7 +2,7 @@ package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.manager.service.ManagerAccessService;
-import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
@@ -23,7 +23,6 @@ public class ManualTransferReceiptService {
     public record Transfer(@NotBlank @Size(max=100) String bankReference, @NotNull @Positive Long recipientProfileId,
             @Positive long amountKopecks, @NotEmpty @Size(max=100) List<@NotNull @Valid Line> orders,
             @NotBlank @Size(max=500) String reason, @Size(max=1024) String receiptUrl) {}
-    private final OrderRepository orders;
     private final PaymentLinkRepository links;
     private final ManagerAccessService access;
     private final SpecialistManualPaymentReviewRepository reviews;
@@ -54,9 +53,11 @@ public class ManualTransferReceiptService {
     }
 
     private List<Long> reserve(Transfer transfer, List<Line> lines, String url, Authentication actor) {
+        Map<Long, Order> lockedOrders = new HashMap<>();
         for (Line line : lines) {
-            orders.findByIdForCounterUpdate(line.orderId()).orElseThrow(() -> conflict("Заказ не найден"));
+            Order order = payments.lockOrderForManualPayment(line.orderId()).orElseThrow(() -> conflict("Заказ не найден"));
             access.requireOrderAccess(line.orderId(), actor);
+            lockedOrders.put(line.orderId(), order);
         }
         jdbc.update("""
                 INSERT INTO manual_transfer_receipts(recipient_profile_id,bank_reference,amount_kopecks,reason,receipt_url,created_by)
@@ -79,7 +80,7 @@ public class ManualTransferReceiptService {
         }
         List<Long> reviewIds = new ArrayList<>();
         for (Line line : lines) {
-            var order = orders.findById(line.orderId()).orElseThrow();
+            Order order = lockedOrders.get(line.orderId());
             var link = routes.selectManualCardPaymentRoute(links.findByOrderIdForUpdate(line.orderId()));
             if (line.amountKopecks() != link.getAmountKopecks() || reviews.lockByPaymentLinkId(link.getId()).isPresent())
                 throw conflict("По заказу №" + line.orderId() + " изменилась сумма или уже зарегистрирован перевод");

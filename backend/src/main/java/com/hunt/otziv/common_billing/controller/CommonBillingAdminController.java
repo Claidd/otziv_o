@@ -43,6 +43,7 @@ public class CommonBillingAdminController {
     private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
     private final ContractorActualPaymentAttributionFlowPolicy actualPaymentFlowPolicy;
     private final com.hunt.otziv.common_billing.service.CommonInvoiceOverdueTerm overdueTerm;
+    private final com.hunt.otziv.common_billing.service.BankRecipientChanges bankRecipientChanges;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/common-billing/accounts")
@@ -155,7 +156,7 @@ public class CommonBillingAdminController {
             Principal principal
     ) {
         requireCanMutateInvoice(invoiceId);
-        return commonBillingService.changeCommonInvoiceRecipient(invoiceId, request, principal);
+        return bankRecipientChanges.invoice(invoiceId, request, org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication());
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

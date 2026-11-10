@@ -320,6 +320,8 @@ public class PaymentLinkPreparationWorkflow {
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     private PaymentInstructionPreparation prepareForOrder(Long orderId, Authentication authentication, boolean requireAuthorization) {
         Optional<Order> lockedOrder = orderRepository.findByIdForCounterUpdate(orderId);
+        if (lockedOrder.isPresent() && paymentLinkRepository.pendingRecipientChanges(orderId) > 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ожидаем смену получателя по прежней банковской ссылке");
         Order order = (requireAuthorization ? lockedOrder : lockedOrder.or(() -> orderRepository.findByIdForMutation(orderId))).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         specialistReviewGuard.requireNoPendingReview(orderId);
         if (requireAuthorization) {
@@ -888,7 +890,7 @@ public class PaymentLinkPreparationWorkflow {
         return bankInitializationState.blocksCreationOfAnotherBankPayment(link);
     }
 
-    private boolean hasCompetingBlockingPayment(PaymentLink current, List<PaymentLink> orderLinks) {
+    boolean hasCompetingBlockingPayment(PaymentLink current, List<PaymentLink> orderLinks) {
         return bankInitializationState.hasCompetingBlockingPayment(current, orderLinks);
     }
 

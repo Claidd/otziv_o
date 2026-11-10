@@ -689,7 +689,11 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                 </article>
 
                 @if (!context.canChange) {
-                  <p class="sheet-error">{{ context.blockReason || 'Получателя сейчас нельзя изменить.' }}</p>
+                  @if (context.bankRecipientChangeAvailable) {
+                    <button type="button" (click)="changePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="paymentRouteChanging()">Сменить получателя</button>
+                  } @else {
+                    <p class="sheet-error">{{ context.blockReason || 'Получателя сейчас нельзя изменить.' }}</p>
+                  }
                   @if (context.configuredMode === 'OWNER_PAPER_INVOICE') {
                     <button type="button" (click)="changePaymentRoute('OWNER_PAPER_INVOICE')">Счёт и акт Точки</button>
                   }

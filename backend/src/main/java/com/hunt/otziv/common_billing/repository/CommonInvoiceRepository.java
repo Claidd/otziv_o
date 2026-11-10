@@ -21,6 +21,12 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, Long> {
+    @Query(value = "SELECT COUNT(*) FROM bank_recipient_change WHERE target_kind='INVOICE' AND target_id=:id AND state IN ('WAITING','POLLING')", nativeQuery = true)
+    int pendingRecipientChanges(@Param("id") long id);
+
+    @Query(value = "SELECT message FROM bank_recipient_change WHERE target_kind='INVOICE' AND target_id=:id AND state IN ('WAITING','POLLING') ORDER BY id DESC LIMIT 1", nativeQuery = true)
+    Optional<String> pendingRecipientChangeMessage(@Param("id") long id);
+
 
     boolean existsBySupersedesInvoice_Id(Long invoiceId);
 

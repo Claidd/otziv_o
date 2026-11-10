@@ -349,6 +349,8 @@ public class PaymentLinkInitializationWorkflow {
         // A disclosed legacy token must not be able to create a second bank
         // payment after the order has moved under one common payment route.
         ensureOrderNotCoveredByActiveCommonInvoice(observedOrderId);
+        if (paymentLinkRepository.pendingRecipientChanges(observedOrderId) > 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Для заказа меняется получатель. Дождитесь новых реквизитов");
         PaymentLink source = findPublicLinkForUpdate(token);
         if (!hasOrderBinding(source, observedOrderId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежная ссылка изменилась; повторите запрос");

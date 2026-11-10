@@ -1016,7 +1016,7 @@ export class CommonBillingComponent implements OnDestroy {
           return;
         }
         this.mutating.set('');
-        if (!context.canChange) {
+        if (!context.canChange && !(targetOverride === 'DIFFERENT_RECIPIENT' && context.bankRecipientChangeAvailable)) {
           this.toastService.error('Способ оплаты нельзя изменить', context.blockReason || 'Нужна ручная сверка');
           return;
         }
@@ -1031,7 +1031,7 @@ export class CommonBillingComponent implements OnDestroy {
         const currentRecipient = context.currentRecipient?.trim()
           ? ` Получатель сейчас: ${context.currentRecipient}.`
           : '';
-        if (!window.confirm(
+        if (target !== 'DIFFERENT_RECIPIENT' && !window.confirm(
           `Сменить способ оплаты на ${destination}?${currentRecipient} `
           + 'Старый безопасный резерв будет освобождён, новый маршрут создан заново, '
           + 'а клиенту сразу уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.'
@@ -2420,6 +2420,7 @@ export class CommonBillingComponent implements OnDestroy {
   private failMutation(err: unknown, fallback: string): void {
     const message = apiErrorDetail(err, fallback);
     this.mutating.set('');
-    this.toastService.error(fallback, message);
+    if ((err as { status?: number } | null)?.status === 423) this.toastService.info('Смена получателя', message);
+    else this.toastService.error(fallback, message);
   }
 }

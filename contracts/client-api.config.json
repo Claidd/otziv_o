@@ -25,7 +25,8 @@
     "CommonInvoiceDetailsResponse": ["delivery"],
     "CommonManualPaymentOptionsResponse": ["ownerReport"],
     "CommonInvoiceOrderResponse": ["detachBlockedReason", "ordinaryAfterPaperCancel"],
-    "CommonInvoicePaymentRouteChangeContextResponse": ["ownerManualRoute"]
+    "CommonInvoicePaymentRouteChangeContextResponse": ["ownerManualRoute", "bankRecipientChangeAvailable"],
+    "PaymentRouteChangeContextResponse": ["bankRecipientChangeAvailable"]
   },
   "releaseEvidence": "releases/inventory.json records actual latest published Android/backend artifacts; no minimum supported release is inferred."
 }

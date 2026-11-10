@@ -82,12 +82,12 @@ export class OrderPaymentFacade {
   async changePaymentRoute(target: PaymentRouteChangeTarget): Promise<void> {
     const orderId = this.deps.orderId(); const route = this.deps.capture(); const ticket = this.session.capture();
     const current = this.paymentRouteContext();
-    if (!orderId || !route || !ticket || !current?.canChange || this.pendingRoutes.has(orderId) || this.paymentRouteTargetActive(target)) return;
+    if (!orderId || !route || !ticket || !current || (!current.canChange && !(target === 'DIFFERENT_RECIPIENT' && current.bankRecipientChangeAvailable)) || this.pendingRoutes.has(orderId) || this.paymentRouteTargetActive(target)) return;
     const context = { ...current };
     this.pendingRoutes.add(orderId); this.paymentRouteChanging.set(true);
     try {
       const targetLabel = this.paymentRouteTargetLabel(target);
-      const confirmed = await this.deps.confirm({ title: 'Сменить получателя оплаты',
+      const confirmed = (target === 'DIFFERENT_RECIPIENT' && !context.paperInvoiceIssued) || await this.deps.confirm({ title: 'Сменить получателя оплаты',
         message: (context.paperInvoiceIssued ? 'Подтвердите, что выписка проверена, денег нет и клиент уведомлён об отзыве бумажного счёта. ' : '') + `Переключить заказ на «${targetLabel}»? Продолжайте только если клиент ещё не оплатил: прежний маршрут будет закрыт, а клиенту запланировано обновлённое сообщение.`, confirmText: 'Сменить', danger: true });
       if (!confirmed || !this.accepts(ticket, route)) return;
       this.deps.error.set(null);
@@ -100,7 +100,13 @@ export class OrderPaymentFacade {
       this.paymentLink.set(null); this.paymentRouteVisible.set(false); this.paymentRouteContext.set(null); this.deps.reload();
       await this.presentPaymentRouteSuccessToast(response.clientNotificationScheduled ? 'Получатель изменён. Сообщение клиенту запланировано.' : 'Получатель изменён.', route);
     } catch (error) {
-      if (this.accepts(ticket, route)) this.deps.error.set(this.deps.errorMessage(error, 'Не удалось сменить получателя оплаты'));
+      if (this.accepts(ticket, route)) {
+        const message = this.deps.errorMessage(error, 'Не удалось сменить получателя оплаты');
+        if ((error as { status?: number } | null)?.status === 423) {
+          this.paymentRouteVisible.set(false);
+          await this.presentPaymentRouteSuccessToast(message, route);
+        } else this.deps.error.set(message);
+      }
     } finally {
       this.pendingRoutes.delete(orderId);
       if (this.accepts(ticket, route)) this.paymentRouteChanging.set(false);

@@ -26,6 +26,15 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> {
+    @Query(value = "SELECT COUNT(*) FROM bank_recipient_change WHERE target_kind='ORDER' AND target_id=:id AND state IN ('WAITING','POLLING')", nativeQuery = true)
+    int pendingRecipientChanges(@Param("id") long id);
+
+    @Query(value = "SELECT message FROM bank_recipient_change WHERE target_kind='ORDER' AND target_id=:id AND state IN ('WAITING','POLLING') ORDER BY id DESC LIMIT 1", nativeQuery = true)
+    Optional<String> pendingRecipientChangeMessage(@Param("id") long id);
+
+    @Query(value = "SELECT COUNT(*) FROM bank_recipient_change WHERE target_kind='ORDER' AND source_id=:id AND state='DONE' AND closed_status=:terminal AND replacement_id IS NOT NULL", nativeQuery = true)
+    int completedBankRecipientChange(@Param("id") long id, @Param("terminal") String terminal);
+
     // A locking scalar read sees commits made while the caller waited for the order mutex,
     // even when its transaction established an earlier MySQL REPEATABLE READ snapshot.
     @Query(value="SELECT paper_bank_document_id FROM payment_links WHERE order_id=:orderId AND paper_bank_document_id IS NOT NULL FOR UPDATE",nativeQuery=true)

@@ -47,6 +47,11 @@ public class PaymentRouteChangeService {
                         request.expectedTargetPaymentProfileId(),
                         authentication
                 );
+        return notifyReplacement(orderId, replacement);
+    }
+
+    @Transactional
+    public PaymentRouteChangeResponse notifyReplacement(Long orderId, PaymentLinkService.PaymentRouteReplacement replacement) {
         Runnable notification = replacement.response() == null
                 ? null
                 : () -> notificationWorker.send(replacement.paymentLinkId());

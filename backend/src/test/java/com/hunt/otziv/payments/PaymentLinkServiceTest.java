@@ -6796,6 +6796,30 @@ class PaymentLinkServiceTest {
                 .recordPaymentLinkFinalAttribution(any(), any(), any());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"EXPIRED", "DEADLINE_EXPIRED", "REJECTED"})
+    void actualTransferUsesReplacementWhenBankAlreadyConfirmedClosure(String terminal) {
+        PaymentLinkService service = service(properties());
+        Order order = order(25246L, "Автокар", BigDecimal.valueOf(1000));
+        PaymentLink oldBank = new PaymentLink();
+        oldBank.setId(6304L);
+        oldBank.setOrder(order);
+        oldBank.setStatus(PaymentLinkStatus.CANCELED);
+        oldBank.setPaymentMethod(PaymentMethod.BANK_FORM);
+        oldBank.setTbankPaymentId("old-bank-operation");
+        oldBank.setProviderTerminalStatus(terminal);
+        PaymentLink manual = contractorManualLink(7158L, order, 100_000L, PaymentLinkStatus.WAITING_MANUAL_PAYMENT, 305L);
+        var expected = new ManualCardPaymentContextResponse(25246L, 100_000L, null, List.of(), null, false, null, null, null);
+        when(paymentLinkRepository.completedBankRecipientChange(6304L, terminal)).thenReturn(1);
+        when(orderRepository.findByIdForCounterUpdate(25246L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25246L)).thenReturn(List.of(oldBank, manual));
+        when(paymentLinkRepository.findByIdForUpdate(7158L)).thenReturn(Optional.of(manual));
+        when(actualPaymentAttributionService.manualCardPaymentContext(order, manual)).thenReturn(expected);
+
+        assertSame(expected, service.manualCardPaymentContextForOrder(25246L, authentication));
+        verifyNoInteractions(tbankClient);
+    }
+
     @Test
     void manualCardPaymentPrefersLiveManualRouteOverExpiredReminderHistory() {
         PaymentLinkService service = service(properties());

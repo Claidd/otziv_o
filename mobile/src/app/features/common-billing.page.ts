@@ -6,7 +6,7 @@ import { OrderPaymentApi } from '../core/order-payment.api';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
-import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular';
+import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent, ToastController } from '@ionic/angular';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
   CommonInvoiceDetailsResponse,
@@ -663,6 +663,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   private readonly deliveryWatcher = new DeliveryStatusWatcher();
   private readonly commonBillingApi = inject(CommonBillingApi);
   private readonly orderPaymentApi = inject(OrderPaymentApi);
+  private readonly toast = inject(ToastController);
   readonly paymentInitNoPaymentActionLabel = COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL;
   readonly paymentInitNoPaymentActionHint = commonInvoiceNoPaymentActionHint();
   readonly paymentInitInstructions = commonInvoicePaymentInitInstructions();
@@ -911,7 +912,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       if (!this.routeGuard.accepts(ticket)) {
         return;
       }
-      if (!context.canChange) {
+      if (!context.canChange && !(targetOverride === 'DIFFERENT_RECIPIENT' && context.bankRecipientChangeAvailable)) {
         this.error.set(context.blockReason || 'Способ оплаты нельзя изменить без ручной сверки.');
         return;
       }
@@ -925,7 +926,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       const recipient = context.currentRecipient?.trim()
         ? ` Получатель сейчас: ${context.currentRecipient}.`
         : '';
-      const confirmed = await this.confirm.confirm({
+      const confirmed = target === 'DIFFERENT_RECIPIENT' || await this.confirm.confirm({
         title: 'Смена способа оплаты',
         message: `Переключить общий счёт на ${destination}?${recipient} Старый резерв будет освобождён, новый маршрут создан заново, клиенту уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.`,
         danger: true
@@ -945,7 +946,14 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       }
     } catch (error) {
       if (this.routeGuard.accepts(ticket)) {
-        this.error.set(this.errorMessage(error, 'Не удалось изменить способ оплаты.'));
+        const message = this.errorMessage(error, 'Не удалось изменить способ оплаты.');
+        if (error instanceof HttpErrorResponse && error.status === 423) {
+          this.error.set(null);
+          const toast = await this.toast.create({ message, duration: 5000 });
+          if (this.routeGuard.accepts(ticket)) await toast.present();
+        } else {
+          this.error.set(message);
+        }
       }
     } finally {
       if (this.routeGuard.accepts(ticket)) {

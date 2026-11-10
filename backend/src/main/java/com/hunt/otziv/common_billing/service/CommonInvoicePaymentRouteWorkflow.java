@@ -154,6 +154,8 @@ public class CommonInvoicePaymentRouteWorkflow {
         List<CommonInvoicePaymentRef> paymentRefs = paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(invoiceId);
         List<CommonInvoiceOrder> routeItems = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         String blockReason = commonInvoiceRouteChangePreviewBlockReason(invoice, paymentRefs);
+        var pendingRecipient = invoiceRepository.pendingRecipientChangeMessage(invoiceId);
+        if (pendingRecipient.isPresent()) blockReason = pendingRecipient.get();
         PaymentProfile ownerBankTargetProfile = null;
         String ownerBankReissueBlockReason = null;
         if (!isTbankCommonRoute(invoice)) {
@@ -178,7 +180,7 @@ public class CommonInvoicePaymentRouteWorkflow {
         CommonInvoicePaymentRouteChangeTarget currentTarget = isTbankCommonRoute(invoice) || ownerManualRoute
                 ? CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK
                 : CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES;
-        return new CommonInvoicePaymentRouteChangeContextResponse(commonInvoiceRouteLabel(invoice), currentTarget, commonInvoiceRouteRecipient(invoice, routeItems), invoice.getStatus() == null ? "UNKNOWN" : invoice.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, commonInvoiceRouteChangeToken(invoice, paymentRefs), invoice.getPaymentRouteProfileId(), ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getId(), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getName()), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getProvider()), ownerBankReissueBlockReason == null, ownerBankReissueBlockReason == null ? "" : ownerBankReissueBlockReason, ownerManualRoute);
+        return new CommonInvoicePaymentRouteChangeContextResponse(commonInvoiceRouteLabel(invoice), currentTarget, commonInvoiceRouteRecipient(invoice, routeItems), invoice.getStatus() == null ? "UNKNOWN" : invoice.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, commonInvoiceRouteChangeToken(invoice, paymentRefs), invoice.getPaymentRouteProfileId(), ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getId(), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getName()), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getProvider()), ownerBankReissueBlockReason == null, ownerBankReissueBlockReason == null ? "" : ownerBankReissueBlockReason, ownerManualRoute, pendingRecipient.isEmpty() && bankRecipientRef(invoice, paymentRefs) != null);
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -204,9 +206,16 @@ public class CommonInvoicePaymentRouteWorkflow {
     }
 
     boolean replaceCommonInvoicePaymentRouteLocked(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, String actor, boolean differentRecipient) {
+        return replaceCommonInvoicePaymentRouteLocked(invoiceId, request, actor, differentRecipient, false);
+    }
+
+    private boolean replaceCommonInvoicePaymentRouteLocked(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request,
+            String actor, boolean differentRecipient, boolean completingBankChange) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         List<CommonInvoicePaymentRef> paymentRefs = paymentRefRepository.findByInvoiceIdForUpdate(invoiceId);
+        if (!completingBankChange && invoiceRepository.pendingRecipientChanges(invoiceId) > 0)
+            throw new ResponseStatusException(HttpStatus.LOCKED, "Смена получателя уже выполняется. Ожидаем ответ банка");
         String expectedToken = normalize(request.expectedPaymentEvidenceToken());
         String currentToken = commonInvoiceRouteChangeToken(invoice, paymentRefs);
         if (expectedToken.isBlank() || !MessageDigest.isEqual(expectedToken.getBytes(StandardCharsets.UTF_8), currentToken.getBytes(StandardCharsets.UTF_8))) {
@@ -305,6 +314,52 @@ public class CommonInvoicePaymentRouteWorkflow {
         invoiceRepository.save(invoice);
         log.info("Common invoice payment route replaced: invoiceId={}, target={}, actor={}, allocationId={}", invoiceId, request.target(), actor, invoice.getContractorAllocationId());
         return true;
+    }
+
+    String bankRecipientRouteVersion(CommonInvoice invoice) {
+        var items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        String positions = items.stream()
+                .filter(CommonInvoiceOrder::isActiveMembership)
+                .map(item -> item.orderId() + "/" + item.getAmountKopecks() + "/" + item.isOrdinaryAfterPaperCancel())
+                .sorted().collect(java.util.stream.Collectors.joining(","));
+        Manager routeManager = manager(invoice);
+        return invoice.getPaymentRouteSelectedAt() + "|" + (routeManager == null ? null : routeManager.getId())
+                + "|" + positions;
+    }
+
+    CommonInvoicePaymentRef bankRecipientRef(CommonInvoice invoice, List<CommonInvoicePaymentRef> refs) {
+        if (invoice == null || refs.isEmpty() || !isTbankCommonRoute(invoice)
+                || invoice.isPaperInvoiceReviewHold() || !SEND_INVOICE_STATUSES.contains(invoice.getStatus())
+                || invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE
+                || invoice.getPaidKopecks() != 0 || invoice.getClientReportedAt() != null
+                || invoice.getManualConfirmedAt() != null || hasUnresolvedPaymentMessage(invoice)) return null;
+        var latest = refs.stream().max(java.util.Comparator.comparing(CommonInvoicePaymentRef::getId)).orElseThrow();
+        if (refs.stream().anyMatch(ref -> ref != latest && !MANUAL_COMMON_PAYMENT_SAFE_REF_STATUSES.contains(paymentRefStatus(ref)))
+                || !(PAYMENT_REF_CURRENT.equals(paymentRefStatus(latest)) || PAYMENT_REF_INIT_PREPARED.equals(paymentRefStatus(latest))
+                    || isPaperModeSwitchSafeTerminalStatus(paymentRefStatus(latest)))
+                || (providerPaymentId(latest).isBlank() && !PAYMENT_REF_INIT_PREPARED.equals(paymentRefStatus(latest)))
+                || providerOrderId(latest).isBlank() || providerMerchantId(latest).isBlank()
+                || !Objects.equals(invoice.getPaymentRouteAmountKopecks(), latest.getAmountKopecks())
+                || !Objects.equals(invoice.getPaymentRouteProfileId(), latest.getPaymentProfileId())
+                || (invoice.getTbankPaymentId() != null && !invoice.getTbankPaymentId().equals(providerPaymentId(latest)))
+                || (PROVIDER_TOCHKA.equals(normalizedPaymentProvider(latest)) && invoice.getPaymentUrl() != null
+                    && !Objects.equals(invoice.getPaymentUrl(), latest.getProviderPaymentUrl()))) return null;
+        return latest;
+    }
+
+    boolean replaceClosedBankRecipient(CommonInvoice invoice, List<CommonInvoicePaymentRef> refs, long sourceId,
+            String closedStatus, String actor) {
+        var source = bankRecipientRef(invoice, refs);
+        if (source == null || source.getId() != sourceId || !isPaperModeSwitchSafeTerminalStatus(closedStatus))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Банковская операция общего счёта изменилась");
+        source.setStatus("DEADLINE_EXPIRED".equals(closedStatus) ? "EXPIRED" : closedStatus);
+        source.setProviderStatus(closedStatus);
+        source.setReason("recipient_change_bank_closed");
+        paymentRefRepository.save(source);
+        clearCurrentPaymentRef(invoice);
+        var request = new CommonInvoicePaymentRouteChangeRequest(CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES,
+                true, commonInvoiceRouteChangeToken(invoice, refs));
+        return replaceCommonInvoicePaymentRouteLocked(invoice.getId(), request, actor, true, true);
     }
 
     String commonInvoiceRouteChangeBlockReason(CommonInvoice invoice, List<CommonInvoicePaymentRef> paymentRefs) {
@@ -430,6 +485,8 @@ public class CommonInvoicePaymentRouteWorkflow {
     PreparedInvoicePaymentModeChange prepareInvoicePaymentModeChange(Long invoiceId, InvoicePaymentMode requestedMode, String actor, boolean paperInvoiceWithdrawn) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        if (invoiceRepository.pendingRecipientChanges(invoiceId) > 0)
+            throw new ResponseStatusException(HttpStatus.LOCKED, "Смена получателя уже выполняется. Ожидаем ответ банка");
         requireNoBankDocumentModeChange(invoice, requestedMode);
         if (invoice.getStatus() == CommonInvoiceStatus.PAID || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.BAN) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Закрытый общий счёт изменить нельзя");
@@ -568,6 +625,8 @@ public class CommonInvoicePaymentRouteWorkflow {
 
     void applyInvoicePaymentModeChange(CommonInvoice invoice, InvoicePaymentMode requestedMode, String actor) {
         if(invoice.isPaperInvoiceReviewHold()) throw new ResponseStatusException(HttpStatus.CONFLICT,"По отменённому банковскому счёту есть несверенное поступление. Смена способа оплаты заблокирована");
+        if (invoiceRepository.pendingRecipientChanges(invoice.getId()) > 0)
+            throw new ResponseStatusException(HttpStatus.LOCKED, "Смена получателя уже выполняется. Ожидаем ответ банка");
         requireNoBankDocumentModeChange(invoice, requestedMode);
         Long invoiceId = invoice.getId();
         if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {

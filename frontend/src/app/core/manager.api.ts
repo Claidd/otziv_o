@@ -555,6 +555,7 @@ export interface PaymentRouteChangeContext {
   currentRecipient: string;
   status: string;
   canChange: boolean;
+  bankRecipientChangeAvailable?: boolean;
   blockReason: string;
   configuredMode?: 'AUTO_ROUTING' | 'EMPLOYEE_REQUISITES' | 'DIFFERENT_RECIPIENT' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE' | string;
   paperInvoiceIssued?: boolean;

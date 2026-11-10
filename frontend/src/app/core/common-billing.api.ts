@@ -99,6 +99,7 @@ export interface CommonInvoicePaymentRouteChangeContextResponse {
   currentRecipient: string;
   status: string;
   canChange: boolean;
+  bankRecipientChangeAvailable?: boolean;
   blockReason: string;
   paymentEvidenceToken: string;
   currentPaymentProfileId?: number | null;

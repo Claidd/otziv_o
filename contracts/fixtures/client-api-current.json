@@ -693,7 +693,8 @@
       "ownerBankTargetProvider" : "contract-example",
       "canReissueOwnerBank" : false,
       "ownerBankReissueBlockReason" : "contract-example",
-      "ownerManualRoute" : false
+      "ownerManualRoute" : false,
+      "bankRecipientChangeAvailable" : false
     },
     "CommonInvoicePaymentRouteChangeTargetOutput" : "EMPLOYEE_REQUISITES",
     "CommonInvoiceSummaryResponseOutput" : {
@@ -3920,7 +3921,8 @@
       "blockReason" : "contract-example",
       "configuredMode" : "contract-example",
       "paperInvoiceIssued" : false,
-      "expectedTargetPaymentProfileId" : 2
+      "expectedTargetPaymentProfileId" : 2,
+      "bankRecipientChangeAvailable" : false
     },
     "PaymentRouteChangeResponseOutput" : {
       "previousPaymentLinkId" : 2,
