@@ -1,7 +1,7 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
-import com.hunt.otziv.manager.service.ManagerAccessService;
+import com.hunt.otziv.manager.api.PaymentReviewOrderAccess;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
@@ -24,7 +24,7 @@ public class ManualTransferReceiptService {
             @Positive long amountKopecks, @NotEmpty @Size(max=100) List<@NotNull @Valid Line> orders,
             @NotBlank @Size(max=500) String reason, @Size(max=1024) String receiptUrl) {}
     private final PaymentLinkRepository links;
-    private final ManagerAccessService access;
+    private final PaymentReviewOrderAccess access;
     private final SpecialistManualPaymentReviewRepository reviews;
     private final SpecialistManualPaymentReviewService reviewService;
     private final SpecialistManualPaymentReviewSettlementService settlement;

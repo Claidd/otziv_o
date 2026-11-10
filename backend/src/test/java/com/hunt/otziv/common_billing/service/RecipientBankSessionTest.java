@@ -5,7 +5,6 @@ import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.service.*;
 import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.*;
 import com.hunt.otziv.payments.tochka.dto.TochkaPaymentProfile;
-import com.hunt.otziv.payments.tochka.model.TochkaPaymentMode;
 import com.hunt.otziv.payments.tochka.service.*;
 import java.math.BigDecimal;
 import java.util.List;
@@ -13,7 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
-import static com.hunt.otziv.common_billing.service.RecipientBankSession.*;
+import com.hunt.otziv.payments.api.UnpaidBankObservation.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -23,10 +22,9 @@ class RecipientBankSessionTest {
     final TbankClient tbank = mock();
     final TochkaClient tochka = mock();
     final TochkaPaymentProfileResolver resolver = mock();
-    final CommonInvoiceSettlementService settlement = mock();
     final PaymentProfile entity = new PaymentProfile();
     final TbankPaymentProfile terminal = new TbankPaymentProfile(1L,"test","test",true,"merchant","test",true);
-    final RecipientBankSession service = new RecipientBankSession(profiles,settings,tbank,tochka,resolver,new TochkaPaymentOperationMapper(),settlement);
+    final RecipientBankObservationService service = new RecipientBankObservationService(profiles,settings,tbank,tochka,resolver,new TochkaPaymentOperationMapper());
     Source source(String provider) {
         when(profiles.findById(1L)).thenReturn(Optional.of(entity));
         when(settings.isTbankEnabled()).thenReturn(true);
@@ -81,10 +79,7 @@ class RecipientBankSessionTest {
         when(profile.testMode()).thenReturn(true);
         when(profile.merchantId()).thenReturn("merchant");
         when(profile.customerCode()).thenReturn("customer");
-        var modes = List.of(TochkaPaymentMode.CARD);
-        when(settlement.parseTochkaPaymentModes("card")).thenReturn(modes);
         String type = "APPROVED".equals(status) ? "card" : null;
-        when(settlement.observedTochkaPaymentMode(type,status,modes)).thenReturn(TochkaPaymentMode.CARD);
         var payment = new PaymentOperation("customer",null,type,null,null,null,BigDecimal.ONE,status,"operation",null,"merchant",null,"order",List.of());
         when(tochka.getPaymentInfo(profile,"operation")).thenReturn(new PaymentInfoResponse(new PaymentInfoData(List.of(payment)),null));
         assertThat(service.observe(source).outcome()).isEqualTo(switch(status) {

@@ -35,7 +35,7 @@ class ManagerPaymentControllerTest {
     void delegatesToTransactionalAuthorizedCreation() {
         ManagerPaymentLinkResponse expected = org.mockito.Mockito.mock(ManagerPaymentLinkResponse.class);
         when(paymentLinkService.createForOrderAuthorized(41L, authentication)).thenReturn(expected);
-        ManagerPaymentController controller = new ManagerPaymentController(paymentLinkService, paymentRouteChangeService, org.mockito.Mockito.mock(com.hunt.otziv.common_billing.service.BankRecipientChanges.class));
+        ManagerPaymentController controller = new ManagerPaymentController(paymentLinkService, paymentRouteChangeService, org.mockito.Mockito.mock(com.hunt.otziv.payments.api.OrderBankRecipientChange.class));
 
         ManagerPaymentLinkResponse response = controller.createPaymentLink(41L, authentication);
 
@@ -48,7 +48,7 @@ class ManagerPaymentControllerTest {
         ResponseStatusException denied = new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND);
         org.mockito.Mockito.doThrow(denied)
                 .when(paymentLinkService).createForOrderAuthorized(99L, authentication);
-        ManagerPaymentController controller = new ManagerPaymentController(paymentLinkService, paymentRouteChangeService, org.mockito.Mockito.mock(com.hunt.otziv.common_billing.service.BankRecipientChanges.class));
+        ManagerPaymentController controller = new ManagerPaymentController(paymentLinkService, paymentRouteChangeService, org.mockito.Mockito.mock(com.hunt.otziv.payments.api.OrderBankRecipientChange.class));
 
         assertThrows(ResponseStatusException.class, () -> controller.createPaymentLink(99L, authentication));
 
@@ -61,7 +61,7 @@ class ManagerPaymentControllerTest {
                 51L, "Оплата по реквизитам", "Специалист", "CREATED", true, ""
         );
         when(paymentRouteChangeService.context(41L, authentication)).thenReturn(expected);
-        ManagerPaymentController controller = new ManagerPaymentController(paymentLinkService, paymentRouteChangeService, org.mockito.Mockito.mock(com.hunt.otziv.common_billing.service.BankRecipientChanges.class));
+        ManagerPaymentController controller = new ManagerPaymentController(paymentLinkService, paymentRouteChangeService, org.mockito.Mockito.mock(com.hunt.otziv.payments.api.OrderBankRecipientChange.class));
 
         PaymentRouteChangeContextResponse response = controller.paymentRouteChangeContext(41L, authentication);
 
@@ -79,7 +79,7 @@ class ManagerPaymentControllerTest {
                 org.mockito.Mockito.mock(ManagerPaymentLinkResponse.class)
         );
         when(paymentRouteChangeService.change(41L, request, authentication)).thenReturn(expected);
-        ManagerPaymentController controller = new ManagerPaymentController(paymentLinkService, paymentRouteChangeService, org.mockito.Mockito.mock(com.hunt.otziv.common_billing.service.BankRecipientChanges.class));
+        ManagerPaymentController controller = new ManagerPaymentController(paymentLinkService, paymentRouteChangeService, org.mockito.Mockito.mock(com.hunt.otziv.payments.api.OrderBankRecipientChange.class));
 
         PaymentRouteChangeResponse response = controller.changePaymentRoute(41L, request, authentication);
 

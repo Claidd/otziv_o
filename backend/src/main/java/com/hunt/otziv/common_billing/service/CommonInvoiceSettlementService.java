@@ -773,6 +773,27 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         return applyVerifiedTbankState(payload, verifyWebhook(payload));
     }
 
+    void applyRecipientChangeReceipt(com.hunt.otziv.payments.api.UnpaidBankObservation.Source source,
+            com.hunt.otziv.payments.api.UnpaidBankObservation.Result observed,
+            CommonInvoice invoice, CommonInvoicePaymentRef ref) {
+        if ("T_BANK".equals(source.provider()) && "CONFIRMED".equals(observed.status())) {
+            var profile = paymentProfileService.findById(source.profileId()).orElseThrow();
+            var terminal = paymentProfileService.toRuntimeForTerminal(profile, source.merchant());
+            if (!source.merchant().equals(terminal.terminalKey())
+                    || (source.test() != null && source.test() != terminal.testMode())) {
+                throw new IllegalStateException("Терминал изменился после подтверждения платежа");
+            }
+            var fields = Map.of("Status", "CONFIRMED", "Success", "true", "ErrorCode", "0",
+                    "Amount", Long.toString(source.amount()), "OrderId", source.order(),
+                    "PaymentId", source.operation(), "TerminalKey", source.merchant());
+            applyVerifiedTbankState(fields, new VerifiedWebhookProfile(terminal));
+        } else if ("TOCHKA".equals(source.provider()) && "APPROVED".equals(observed.status())) {
+            var mapped = new MappedPayment(observed.mappedStatus(), observed.paymentMethod(),
+                    observed.status(), observed.providerPaymentType());
+            applyTochkaPaymentObservation(invoice, ref, mapped, null, "recipient_change");
+        }
+    }
+
     // Entry points verify either the webhook signature or the complete bound GetState response.
     boolean applyVerifiedTbankState(Map<String,String> payload, VerifiedWebhookProfile verified) {
         TbankConfirmedEvidence.requireValidWebhook(payload);

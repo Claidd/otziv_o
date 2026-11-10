@@ -6,11 +6,12 @@ import com.hunt.otziv.common_billing.dto.*;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoicePaymentRef;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+import com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization;
 import com.hunt.otziv.payments.dto.*;
-import com.hunt.otziv.payments.model.PaymentMethod;
-import com.hunt.otziv.payments.model.PaymentLink;
-import com.hunt.otziv.payments.service.*;
+import com.hunt.otziv.payments.api.OrderBankRecipientChange;
+import com.hunt.otziv.payments.api.OrderRecipientRoutes;
+import com.hunt.otziv.payments.api.OrderRecipientRoutes.SourceChanged;
+import com.hunt.otziv.payments.api.UnpaidBankObservation;
 import com.hunt.otziv.u_users.api.DeferredUserAuthority;
 import com.hunt.otziv.u_users.api.DeferredUserAuthority.Actor;
 import java.util.List;
@@ -27,12 +28,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
-import static com.hunt.otziv.common_billing.service.RecipientBankSession.*;
+import com.hunt.otziv.payments.api.UnpaidBankObservation.*;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class BankRecipientChanges {
+public class BankRecipientChanges implements OrderBankRecipientChange {
     private static final String WAIT = "Запрос принят. Ожидаем ответ банка. Система продолжит смену получателя автоматически.";
     private static final String TBANK_WAIT = "Запрос принят. Ссылка Т-Банка ещё действует. После её закрытия без оплаты система сама выдаст новые реквизиты.";
     private static final String TOCHKA_WAIT = "Запрос принят. Ссылка Точки ещё действует. После её истечения система сама выдаст новые реквизиты, если клиент не оплатит.";
@@ -42,24 +43,24 @@ public class BankRecipientChanges {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final DeferredUserAuthority authority;
-    private final PaymentRouteReplacementWorkflow orderRoutes;
-    private final PaymentRouteChangeService orderChanges;
-    private final PaymentLinkService payments;
+    private final OrderRecipientRoutes orderRoutes;
     private final CommonInvoicePaymentRouteWorkflow invoices;
     private final CommonInvoicePaymentRefRepository refs;
-    private final ContractorPaymentTargetAccessPolicy invoiceAccess;
-    private final RecipientBankSession bank;
+    private final PaymentReviewTargetAuthorization invoiceAccess;
+    private final UnpaidBankObservation bank;
+    private final CommonInvoiceSettlementService settlement;
     private final com.hunt.otziv.security.credentials.CredentialCipher cipher;
     private final org.springframework.beans.factory.ObjectProvider<com.hunt.otziv.common_billing.api.BankPaperInvoices.DocumentPreparation> paperDocuments;
 
+    @Override
     public PaymentRouteChangeResponse order(long id, PaymentRouteChangeRequest request, Authentication actor) {
         if (!request.confirmedUnpaid() || request.target() != PaymentRouteChangeTarget.EMPLOYEE_REQUISITES)
             throw conflict("Подтвердите смену получателя неоплаченного заказа");
         Long job = tx.execute(status -> {
-            var source = orderSource(id, request.expectedPaymentLinkId(), actor);
+            var source = orderRoutes.lockedSource(id, request.expectedPaymentLinkId(), actor);
             return source == null ? null : enqueue(source, actor, "RECIPIENT");
         });
-        if (job == null) return orderChanges.change(id, request, actor, true);
+        if (job == null) return orderRoutes.changeNow(id, request, actor);
         var result = process(job);
         if (result instanceof PaymentRouteChangeResponse response) return response;
         if ("DONE".equals(jdbc.queryForObject("SELECT state FROM bank_recipient_change WHERE id=?",String.class,job))) {
@@ -111,22 +112,6 @@ public class BankRecipientChanges {
         process(job);
         if ("DONE".equals(jdbc.queryForObject("SELECT state FROM bank_recipient_change WHERE id=?", String.class, job))) return true;
         throw statusOf(job);
-    }
-
-    private Source orderSource(long id, Long linkId, Authentication actor) {
-        return orderSource(orderRoutes.lockRecipientChangeSource(id, linkId, actor));
-    }
-
-    private Source orderSource(PaymentLink link) {
-        if (link == null) return null;
-        var order = link.getOrder();
-        if ((!PaymentRouteReplacementWorkflow.bankRecipientEligible(link) && !PaymentRouteReplacementWorkflow.awaitingBankInit(link))
-                || link.getPaymentProfile() == null) return null;
-        var profile = link.getPaymentProfile();
-        return new Source("ORDER", order.getId(), link.getId(), profile.getId(), profile.getProvider(), Objects.toString(link.getTbankPaymentId(), ""),
-                link.getTbankOrderId(), link.getTbankTerminalKey(), link.getAmountKopecks(),
-                link.getPaymentMethod() == PaymentMethod.SBP_QR ? "sbp" : "card", null,
-                Objects.toString(order.getManager() == null ? null : order.getManager().getId()));
     }
 
     private CommonInvoice lockedInvoice(long id) {
@@ -248,12 +233,12 @@ public class BankRecipientChanges {
                             var history = refs.findByInvoiceIdForUpdate(invoice.getId());
                             if (source.equals(invoiceSource(invoice,history))) {
                                 var ref = invoices.bankRecipientRef(invoice,history);
-                                bank.applyCommonReceipt(source,result,invoice,ref);
+                                settlement.applyRecipientChangeReceipt(source,result,invoice,ref);
                             }
                             update(claim,"STOPPED",resultMessage);
                         });
                     } else {
-                        if (financial) payments.reconcileBankLink(source.sourceId(), java.time.LocalDateTime.now());
+                        if (financial) orderRoutes.reconcile(source.sourceId());
                         update(claim, financial ? "STOPPED" : "POLLING",message);
                     }
                     return null;
@@ -317,7 +302,7 @@ public class BankRecipientChanges {
     }
     private Source resolveInitialization(Source initial, Authentication actor) {
         Source current;
-        if ("ORDER".equals(initial.kind())) current = orderSource(initial.targetId(),initial.sourceId(),actor);
+        if ("ORDER".equals(initial.kind())) current = orderRoutes.lockedSource(initial.targetId(),initial.sourceId(),actor);
         else {
             var invoice = lockedInvoice(initial.targetId());
             current = invoiceSource(invoice,refs.findByInvoiceIdForUpdate(invoice.getId()));
@@ -329,13 +314,7 @@ public class BankRecipientChanges {
 
     private Object replace(Source source, Authentication actor, String closed, boolean publish) {
         if ("ORDER".equals(source.kind())) {
-            var link = orderRoutes.lockRecipientChangeSource(source.targetId(), source.sourceId(), actor);
-            if (!source.equals(orderSource(link))) throw new SourceChanged("Ссылка или состояние заказа изменились");
-            if (publish) link.setProviderTerminalStatus(closed);
-            var result = orderRoutes.replaceBankRecipient(source.targetId(),source.sourceId(),actor);
-            if (!publish) return null;
-            return orderChanges.notifyReplacement(source.targetId(), new PaymentLinkService.PaymentRouteReplacement(
-                    result.previousPaymentLinkId(),result.paymentLinkId(),result.target(),result.response()));
+            return orderRoutes.replace(source, closed, publish, actor);
         }
         var invoice = lockedInvoice(source.targetId());
         var history = refs.findByInvoiceIdForUpdate(invoice.getId());
@@ -361,8 +340,6 @@ public class BankRecipientChanges {
     private <T> T decode(String value, Class<T> type) {
         try {return json.readValue(value,type);} catch (JsonProcessingException e) {throw new IllegalStateException(e);}
     }
-    private static final class SourceChanged extends ResponseStatusException {
-        SourceChanged(String reason) {super(HttpStatus.CONFLICT,reason);}
-    }
+
     private static ResponseStatusException conflict(String message) {return new ResponseStatusException(HttpStatus.CONFLICT,message);}
 }

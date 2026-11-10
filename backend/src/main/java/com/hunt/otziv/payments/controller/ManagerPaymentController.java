@@ -22,7 +22,7 @@ public class ManagerPaymentController {
 
     private final PaymentLinkService paymentLinkService;
     private final PaymentRouteChangeService paymentRouteChangeService;
-    private final com.hunt.otziv.common_billing.service.BankRecipientChanges bankRecipientChanges;
+    private final com.hunt.otziv.payments.api.OrderBankRecipientChange bankRecipientChanges;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/manager/orders/{orderId}/payment-link")

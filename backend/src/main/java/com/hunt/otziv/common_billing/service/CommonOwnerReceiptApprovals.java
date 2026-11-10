@@ -127,7 +127,7 @@ public class CommonOwnerReceiptApprovals {
     }
 
     private String fingerprint(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
-        var positions = items.stream().map(i -> i.getOrder().getId() + "/" + i.getAmountKopecks() + "/" + i.isPaid()
+        var positions = items.stream().map(i -> i.orderId() + "/" + i.getAmountKopecks() + "/" + i.isPaid()
                 + "/" + i.isActiveMembership() + "/" + i.isOrdinaryAfterPaperCancel()).sorted().toList();
         String source = java.util.Arrays.asList(invoice.getId(), invoice.getPaymentRouteSelectedAt(), invoice.getPaymentRouteType(),
                 invoice.getInvoicePaymentMode(), invoice.getContractorAllocationId(), invoice.getPaymentRouteManualTaskSourceGeneration(),

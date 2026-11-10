@@ -8,6 +8,7 @@ import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingSe
 import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.payments.api.UnpaidBankObservation.Source;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PaymentRouteChangeContextResponse;
 import com.hunt.otziv.payments.dto.PaymentRouteChangeTarget;
@@ -276,6 +277,18 @@ public class PaymentRouteReplacementWorkflow {
 
     private Optional<PaymentLink> currentRouteChangeLink(List<PaymentLink> links) {
         return preparationWorkflow.currentRouteChangeLink(links);
+    }
+
+    static Source recipientSource(PaymentLink link) {
+        if (link == null) return null;
+        var order = link.getOrder();
+        if ((!bankRecipientEligible(link) && !awaitingBankInit(link))
+                || link.getPaymentProfile() == null) return null;
+        var profile = link.getPaymentProfile();
+        return new Source("ORDER", order.getId(), link.getId(), profile.getId(), profile.getProvider(), Objects.toString(link.getTbankPaymentId(), ""),
+                link.getTbankOrderId(), link.getTbankTerminalKey(), link.getAmountKopecks(),
+                link.getPaymentMethod() == com.hunt.otziv.payments.model.PaymentMethod.SBP_QR ? "sbp" : "card", null,
+                Objects.toString(order.getManager() == null ? null : order.getManager().getId()));
     }
 
     public static boolean awaitingBankInit(PaymentLink link) {

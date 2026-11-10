@@ -28,8 +28,6 @@ public record ManualPaymentTaskRoutingFilter(boolean numberOnly, boolean exclude
         if (excludeOwner && task.getAccountingTargetKind() == ManualPaymentTaskAccountingTargetKind.OWNER) return false;
         if (excludedTaskId != null && excludedTaskId.equals(task.getId())) return false;
         if (!excludedTransferNumber.isEmpty() && excludedTransferNumber.equals(digits(task.getManualPhone()))) return false;
-        var profile = task.getAccountingTargetProfile();
-        return excludedUserId == null || profile == null || profile.getUser() == null
-                || !Objects.equals(excludedUserId, profile.getUser().getId());
+        return excludedUserId == null || !Objects.equals(excludedUserId, task.accountingTargetUserId());
     }
 }
