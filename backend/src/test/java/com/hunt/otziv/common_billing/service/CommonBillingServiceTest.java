@@ -11496,6 +11496,49 @@ class CommonBillingServiceTest {
         verifyNoInteractions(tbankClient, tochkaClient, taskReceiptIntegrationService, messageSender);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"T_BANK", "TOCHKA"})
+    void repeatedBankConfirmationWhileBadReviewAmountIsOnHoldPreservesOneReceipt(String provider) {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setAmountKopecks(100_000L);
+        String hold = CommonInvoiceMembershipWorkflow.BAD_REVIEW_SUPPLEMENT_REQUIRED + " order=101;task=11";
+        invoice.setLastError(hold);
+        CommonInvoicePaymentRef ref;
+        if (PaymentProfile.PROVIDER_TOCHKA.equals(provider)) {
+            ref = tochkaCancelPendingRef(invoice);
+            ref.setStatus("CURRENT");
+            ref.setReason("tochka_payment_created:init");
+            var settlement = (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+            var confirmation = new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp");
+            settlement.applyTochkaPaymentObservation(invoice, ref, confirmation, null, "webhook");
+            settlement.applyTochkaPaymentObservation(invoice, ref, confirmation, null, "reconciliation");
+        } else {
+            invoice.setTbankOrderId("old-order");
+            invoice.setTbankPaymentId("old-payment");
+            invoice.setTbankTerminalKey("terminal");
+            invoice.setTbankPaymentAmountKopecks(100_000L);
+            ref = paymentRef(44L, invoice, "CURRENT", "old-order", "old-payment", "terminal", 100_000L);
+            paymentRefStore.put(ref.getId(), ref);
+            var payload = confirmedWebhookPayload();
+            var profile = paymentProfile();
+            when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+            when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+            when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+            when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+            assertTrue(service.handleTbankWebhook(payload));
+            assertTrue(service.handleTbankWebhook(payload));
+        }
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals(hold, invoice.getLastError());
+        assertEquals(100_000L, invoice.getAmountKopecks());
+        assertEquals(0L, invoice.getPaidKopecks());
+        assertEquals("CONFIRMED", ref.getStatus());
+        assertEquals("bad_review_prior_amount_paid", ref.getReason());
+        assertEquals(1, paymentRefStore.size());
+        verifyNoInteractions(orderTransactionService, messageSender);
+    }
+
     @Test
     void lateCurrentTbankConfirmationForArchivedInvoicePreservesReceiptForReconciliation() throws Exception {
         CommonInvoice invoice = archivedInvoiceWithHistory();
