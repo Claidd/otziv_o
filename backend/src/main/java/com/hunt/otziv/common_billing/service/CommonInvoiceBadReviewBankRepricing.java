@@ -22,7 +22,7 @@ public class CommonInvoiceBadReviewBankRepricing implements BadReviewBankReprici
     private final CommonInvoiceSettlementService settlement;
     private final ObjectProvider<CommonBillingService> billing;
     private final ObjectProvider<CommonInvoiceMembershipWorkflow> membership;
-    private static final String WAIT = "Ожидаем закрытия прежней банковской ссылки. Система перевыставит счёт автоматически.";
+    static final String WAIT = "Ожидаем закрытия прежней банковской ссылки. Система перевыставит счёт автоматически.";
 
     public List<Long> due() { return invoices.dueBadReviewBankChecks(LocalDateTime.now()); }
 

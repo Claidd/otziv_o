@@ -39,6 +39,7 @@ import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -364,30 +365,57 @@ public class CommonInvoicePaymentRouteWorkflow {
     void switchClosedBankToPaper(CommonInvoice invoice, List<CommonInvoicePaymentRef> refs, long sourceId,
             String closedStatus, String actor) {
         var source = bankRecipientRef(invoice, refs);
-        if (source == null || source.getId() != sourceId || !isPaperModeSwitchSafeTerminalStatus(closedStatus))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Банковская операция общего счёта изменилась");
         ensurePaperModeSwitchHasNoFinancialEvidence(invoice);
-        source.setStatus("DEADLINE_EXPIRED".equals(closedStatus) ? "EXPIRED" : closedStatus);
-        source.setProviderStatus(closedStatus);
-        source.setReason("paper_invoice_mode_switch_provider_closed");
-        paymentRefRepository.save(source);
+        retireBankRef(source, sourceId, closedStatus, "paper_invoice_mode_switch_provider_closed");
         clearCurrentPaymentRef(invoice);
         applyInvoicePaymentModeChange(invoice, InvoicePaymentMode.OWNER_PAPER_INVOICE, actor);
     }
 
     boolean replaceClosedBankRecipient(CommonInvoice invoice, List<CommonInvoicePaymentRef> refs, long sourceId,
             String closedStatus, String actor) {
+        return replaceClosedBankRecipient(invoice,refs,sourceId,closedStatus,actor,true);
+    }
+
+    boolean replaceClosedBankRecipient(CommonInvoice invoice,List<CommonInvoicePaymentRef> refs,long sourceId,
+            String closedStatus,String actor,boolean differentRecipient) {
         var source = bankRecipientRef(invoice, refs);
-        if (source == null || source.getId() != sourceId || !isPaperModeSwitchSafeTerminalStatus(closedStatus))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Банковская операция общего счёта изменилась");
-        source.setStatus("DEADLINE_EXPIRED".equals(closedStatus) ? "EXPIRED" : closedStatus);
-        source.setProviderStatus(closedStatus);
-        source.setReason("recipient_change_bank_closed");
-        paymentRefRepository.save(source);
+        retireBankRef(source, sourceId, closedStatus, "recipient_change_bank_closed");
         clearCurrentPaymentRef(invoice);
         var request = new CommonInvoicePaymentRouteChangeRequest(CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES,
                 true, commonInvoiceRouteChangeToken(invoice, refs));
-        return replaceCommonInvoicePaymentRouteLocked(invoice.getId(), request, actor, true, true);
+        return replaceCommonInvoicePaymentRouteLocked(invoice.getId(), request, actor, differentRecipient, true);
+    }
+
+    com.hunt.otziv.payments.api.UnpaidBankObservation.Source bankSnapshot(CommonInvoice invoice, CommonInvoicePaymentRef ref, String version) {
+        return new com.hunt.otziv.payments.api.UnpaidBankObservation.Source("INVOICE", invoice.getId(), ref.getId(),
+                ref.getPaymentProfileId(), normalizedPaymentProvider(ref), providerPaymentId(ref), providerOrderId(ref),
+                providerMerchantId(ref), ref.getAmountKopecks(), ref.getProviderPaymentMode(), ref.getProviderTestMode(), version);
+    }
+
+    void restoreBankRecipientForSettlement(CommonInvoice invoice, CommonInvoicePaymentRef ref) {
+        String reason = "Получена оплата по предыдущей банковской ссылке";
+        if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) taskReceiptIntegrationService.release(invoice, reason);
+        else if (invoice.getContractorAllocationId() != null)
+            contractorPaymentLiveRoutingService.releaseCommonInvoiceRouteForReplacement(invoice, reason, "LIVE_COMMON:PAID_PREVIOUS_BANK");
+        CommonInvoiceRouteState.clearPaymentRoute(invoice);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.OWNER_TBANK);
+        invoice.setPaymentRouteType(TbankRuntimeSettingsService.PAYMENT_SOURCE_BANK_LINK);
+        invoice.setPaymentRouteProfileId(ref.getPaymentProfileId());
+        invoice.setPaymentRouteTerminalKey(providerMerchantId(ref));
+        invoice.setPaymentRouteAmountKopecks(ref.getAmountKopecks());
+        invoice.setPaymentRouteSelectedAt(ref.getCreatedAt());
+    }
+
+    private void retireBankRef(CommonInvoicePaymentRef ref, long expectedId, String bankStatus, String reason) {
+        if (ref == null || ref.getId() != expectedId) throw new ResponseStatusException(HttpStatus.CONFLICT, "Банковская операция изменилась");
+        boolean observe = PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref)) && "CREATED".equals(bankStatus);
+        if (!observe && !isPaperModeSwitchSafeTerminalStatus(bankStatus))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Банк не подтвердил состояние ссылки");
+        ref.setObserveReplacedBank(observe);
+        ref.setProviderStatus(bankStatus);
+        ref.setStatus(observe ? PAYMENT_REF_ARCHIVED : "DEADLINE_EXPIRED".equals(bankStatus) ? "EXPIRED" : bankStatus);
+        ref.setReason(observe ? "route_replaced_observe_only" : reason);
+        paymentRefRepository.save(ref);
     }
 
     String commonInvoiceRouteChangeBlockReason(CommonInvoice invoice, List<CommonInvoicePaymentRef> paymentRefs) {

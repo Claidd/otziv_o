@@ -3317,6 +3317,23 @@
       "targetOverrunAcknowledgedBy" : "contract-example"
     },
     "ManualPaymentTypeOutput" : "MOBILE_BANK",
+    "ManualReceiptCorrectionsReceiptOutput" : {
+      "id" : 2,
+      "orderId" : 2,
+      "invoiceId" : 2,
+      "amountKopecks" : 2,
+      "recipient" : "contract-example",
+      "actor" : "contract-example",
+      "reason" : "contract-example",
+      "correction" : "contract-example",
+      "correctedBy" : "contract-example",
+      "correctionReason" : "contract-example",
+      "canAssignOwner" : false
+    },
+    "ManualReceiptCorrectionsRecipientOutput" : {
+      "id" : 2,
+      "name" : "contract-example"
+    },
     "OptionResponseOutput" : {
       "id" : 2,
       "label" : "contract-example"
@@ -4529,6 +4546,14 @@
       "expectedReviewId" : 2,
       "note" : "contract-example",
       "recipientReportedMissing" : false
+    },
+    "ManualReceiptCorrectionsActionInput" : "REASSIGN",
+    "ManualReceiptCorrectionsRequestInput" : {
+      "action" : "REASSIGN",
+      "owner" : false,
+      "reason" : "contract-example",
+      "recipientProfileId" : 2,
+      "requestKey" : "contract-example"
     },
     "ManualTransferReceiptServiceLineInput" : {
       "amountKopecks" : 2,

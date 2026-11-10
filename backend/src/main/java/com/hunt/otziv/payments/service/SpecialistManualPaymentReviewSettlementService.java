@@ -3,6 +3,8 @@ package com.hunt.otziv.payments.service;
 import com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization;
 import com.hunt.otziv.payments.dto.SpecialistManualPaymentReviewResponse;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
+import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.api.UnpaidBankObservation;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
 import com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory;
@@ -201,6 +203,15 @@ public class SpecialistManualPaymentReviewSettlementService {
         } finally {
             SecurityContextHolder.setContext(previous);
         }
+    }
+
+    void creditTransferLine(SpecialistManualPaymentReview review, PaymentLink link,
+            UnpaidBankObservation.Source source, UnpaidBankObservation.Result observation, Authentication actor) {
+        if (claimImmediate(review.getId()) == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Состояние отметки изменилось, проверьте перевод целиком");
+        }
+        manualPayments.postTransferLine(review, link, source, observation, actor);
+        if (!finishImmediate(review.getId())) throw new IllegalStateException("Отсутствует подтверждение зачисления");
     }
 
     private Claim claimImmediate(Long reviewId) {

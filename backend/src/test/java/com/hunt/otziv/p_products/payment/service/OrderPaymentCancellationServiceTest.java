@@ -377,6 +377,28 @@ class OrderPaymentCancellationServiceTest {
                 any(), any(), any(), any(), any(), any(), any(), any());
     }
 
+    @Test
+    void voidManualPrepaymentKeepsWorkInProgressAndHasNoPayrollToReverse() {
+        var order = order(17L, "В работе");
+        var receipt = new PaymentLink();
+        receipt.setId(49L);
+        receipt.setStatus(PaymentLinkStatus.CONFIRMED);
+        receipt.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.MANUAL_MOBILE_BANK);
+        receipt.setManualConfirmedAt(LocalDateTime.now());
+        receipt.setConfirmedAmountKopecks(100000L);
+        receipt.setLastError("prepaid_waiting_order_completion");
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(order.getId())).thenReturn(List.of(receipt));
+
+        service.reopen(order.getId(), receipt.getId(), 100000L, false, () -> "admin", "Ошибочная отметка");
+
+        assertEquals(PaymentLinkStatus.CANCELED, receipt.getStatus());
+        assertEquals("В работе", order.getStatus().getTitle());
+        verify(paymentLinkRepository).saveAndFlush(receipt);
+        verify(paymentCheckRepository, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(contractorCompletionRewardService, orderDeletionService);
+    }
+
     private Order order(Long id, String statusTitle) {
         Order order = new Order();
         order.setId(id);

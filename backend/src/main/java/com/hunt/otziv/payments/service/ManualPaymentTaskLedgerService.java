@@ -477,6 +477,18 @@ public class ManualPaymentTaskLedgerService {
         capacityService.synchronize(beforeCommitment, task, balance);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void reverseActualReceipt(long task, long generation, ManualPaymentTaskLedgerSourceKind kind, long sourceId,
+            long amount, String key, String actor, String reason) {
+        var rows = ledgerRepository.findArchivedSourceHistoryNewestFirst(task,generation,kind,sourceId);
+        var receipts = rows.stream().filter(row -> row.getConfirmedDeltaKopecks() > 0).toList();
+        if (receipts.size() != 1 || rows.stream().mapToLong(row -> row.getConfirmedDeltaKopecks()).sum() < amount)
+            throw conflict("Не удалось однозначно связать поступление с записью платёжного задания");
+        var entry = receipts.getFirst();
+        correct(new ManualPaymentTaskCorrectionCommand(task,new ManualPaymentTaskSourceRef(kind,sourceId,entry.getSourceGeneration()),
+                0, -amount, entry.getId(),key,actor,reason));
+    }
+
     @Transactional
     public ManualPaymentTaskBalance correct(ManualPaymentTaskCorrectionCommand command) {
         requireCorrectionCommand(command);

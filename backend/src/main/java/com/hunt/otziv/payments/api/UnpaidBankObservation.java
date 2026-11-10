@@ -11,6 +11,10 @@ public interface UnpaidBankObservation {
     record Result(Outcome outcome, String status, PaymentLinkStatus mappedStatus, PaymentMethod paymentMethod,
             String providerPaymentType) {
         public Result(Outcome outcome, String status) { this(outcome, status, null, null, null); }
+        public boolean openUnpaid(Source source) {
+            return outcome==Outcome.WAITING && ("TOCHKA".equals(source.provider()) && "CREATED".equals(status)
+                    || "T_BANK".equals(source.provider()) && ("NEW".equals(status) || "FORM_SHOWED".equals(status)));
+        }
     }
     Result observe(Source source);
 }

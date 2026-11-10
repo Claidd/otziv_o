@@ -41,6 +41,10 @@ import org.springframework.web.server.ResponseStatusException;
 /** Authorizes and replaces one unpaid order payment route under the existing order/link lock scope. */
 public class PaymentRouteReplacementWorkflow {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.hunt.otziv.payments.api.AlternatePaperReceipt alternatePaperReceipt;
+
     private final PaymentLinkAmountPolicy amountPolicy;
 
     private final PaymentLinkLifecycleService lifecycleService;
@@ -124,8 +128,43 @@ public class PaymentRouteReplacementWorkflow {
 
     /** Only the bank-change coordinator may complete this path after verifying the exact provider operation. */
     @Transactional
-    public PaymentRouteReplacement replaceBankRecipient(Long orderId, Long linkId, Authentication actor) {
-        return replace(orderId, linkId, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, actor, false, true, true);
+    public PaymentRouteReplacement replaceBankRoute(Long orderId, Long linkId, PaymentRouteChangeTarget target, boolean differentRecipient, Authentication actor) {
+        return replace(orderId, linkId, target, true, null, actor, false, differentRecipient, true);
+    }
+
+    boolean releaseRoutesAfterObservedReceipt(PaymentLink paidLink) {
+        var order = paidLink.getOrder();
+        if (orderPaymentIntegrityService.hasSettledPaymentEvidence(order)) return false;
+        var replacements = paymentLinkRepository.findByOrderIdForUpdate(order.getId()).stream()
+                .filter(link -> link.getId() > paidLink.getId())
+                .filter(link -> !Set.of(PaymentLinkStatus.CANCELED, PaymentLinkStatus.EXPIRED, PaymentLinkStatus.REJECTED).contains(link.getStatus()))
+                .toList();
+        var documents = replacements.stream().filter(link -> link.getPaperBankDocumentId() != null).toList();
+        if (documents.size() > 1 || replacements.stream().anyMatch(this::hasConflictingReplacement)) return false;
+        if (!documents.isEmpty() && !alternatePaperReceipt.closeUnpaidDocument("ORDER",order.getId(),
+                documents.getFirst().getPaperBankDocumentId(),paidLink.getAmountKopecks())) return false;
+        String reason = "Получена оплата по предыдущей банковской ссылке";
+        for (var link : replacements) {
+            if (link.getStatus() == PaymentLinkStatus.INITIATED) link.setObserveReplacedBank(true);
+            taskReceiptIntegrationService.release(link, reason);
+            link.setStatus(PaymentLinkStatus.CANCELED);
+            link.setExpiresAt(LocalDateTime.now());
+            link.setLastError(reason);
+            if (link.getContractorAllocationId() != null && link.getManualSource() != ManualPaymentSource.MANUAL_TASK)
+                contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+        }
+        return true;
+    }
+
+    private boolean hasConflictingReplacement(PaymentLink link) {
+        if (link.getPaperBankDocumentId() == null) {
+            if (link.getStatus() == PaymentLinkStatus.INITIATED && bankRecipientEligible(link) && bankSource(link) != null)
+                return false;
+            return routeChangeBlockReason(link) != null;
+        }
+        return !Set.of(PaymentLinkStatus.CREATED, PaymentLinkStatus.WAITING_MANUAL_PAYMENT).contains(link.getStatus())
+                || link.getManualReportedAt() != null || link.getManualActualRecipientFrozenAt() != null
+                || link.getConfirmedAmountKopecks() != null || link.getPaidAt() != null;
     }
 
     private PaymentRouteReplacement replace(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target,
@@ -295,11 +334,12 @@ public class PaymentRouteReplacementWorkflow {
         return recipientSource(link);
     }
 
-    private static Source bankSource(PaymentLink link) {
-        if (link.getPaymentProfile() == null || link.getTbankOrderId() == null || link.getTbankTerminalKey() == null) return null;
+    static Source bankSource(PaymentLink link) {
+        if (link.getTbankOrderId() == null || link.getTbankTerminalKey() == null) return null;
         var order = link.getOrder();
         var profile = link.getPaymentProfile();
-        return new Source("ORDER", order.getId(), link.getId(), profile.getId(), profile.getProvider(), Objects.toString(link.getTbankPaymentId(), ""),
+        return new Source("ORDER", order.getId(), link.getId(), profile == null ? null : profile.getId(),
+                profile == null ? PaymentProfile.PROVIDER_TBANK : profile.normalizedProvider(), Objects.toString(link.getTbankPaymentId(), ""),
                 link.getTbankOrderId(), link.getTbankTerminalKey(), link.getAmountKopecks(),
                 link.getPaymentMethod() == com.hunt.otziv.payments.model.PaymentMethod.SBP_QR ? "sbp" : "card", null,
                 Objects.toString(order.getManager() == null ? null : order.getManager().getId()));

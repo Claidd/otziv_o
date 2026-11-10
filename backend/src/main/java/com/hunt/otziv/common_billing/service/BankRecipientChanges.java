@@ -36,7 +36,8 @@ import com.hunt.otziv.payments.api.UnpaidBankObservation.*;
 public class BankRecipientChanges implements OrderBankRecipientChange {
     private static final String WAIT = "Запрос принят. Ожидаем ответ банка. Система продолжит смену получателя автоматически.";
     private static final String TBANK_WAIT = "Запрос принят. Ссылка Т-Банка ещё действует. После её закрытия без оплаты система сама выдаст новые реквизиты.";
-    private static final String TOCHKA_WAIT = "Запрос принят. Ссылка Точки ещё действует. После её истечения система сама выдаст новые реквизиты, если клиент не оплатит.";
+    @org.springframework.beans.factory.annotation.Value("${otziv.payments.tbank.redirect-due:P7D}")
+    private java.time.Duration redirectDue;
     private record Job(long id, Source source, Actor actor, String closedStatus, boolean capacityChecked, String action) {}
     private record Claim(Job job, String lease) {}
     private final TransactionTemplate tx;
@@ -56,11 +57,22 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
     public PaymentRouteChangeResponse order(long id, PaymentRouteChangeRequest request, Authentication actor) {
         if (!request.confirmedUnpaid() || request.target() != PaymentRouteChangeTarget.EMPLOYEE_REQUISITES)
             throw conflict("Подтвердите смену получателя неоплаченного заказа");
+        return changeOrder(id,request,actor,"RECIPIENT");
+    }
+
+    @Override
+    public PaymentRouteChangeResponse method(long id,PaymentRouteChangeRequest request,Authentication actor) {
+        if (!request.confirmedUnpaid() || request.target()==null || request.target()==PaymentRouteChangeTarget.OWNER_TBANK)
+            throw conflict("Подтвердите смену способа оплаты неоплаченного заказа");
+        return changeOrder(id,request,actor,request.target()==PaymentRouteChangeTarget.OWNER_PAPER_INVOICE?"PAPER":"REQUISITES");
+    }
+
+    private PaymentRouteChangeResponse changeOrder(long id,PaymentRouteChangeRequest request,Authentication actor,String action) {
         Long job = tx.execute(status -> {
             var source = orderRoutes.lockedSource(id, request.expectedPaymentLinkId(), actor);
-            return source == null ? null : enqueue(source, actor, "RECIPIENT");
+            return source == null ? null : enqueue(source, actor, action);
         });
-        if (job == null) return orderRoutes.changeNow(id, request, actor);
+        if (job == null) return "RECIPIENT".equals(action)?orderRoutes.changeNow(id, request, actor):orderRoutes.changeMethodNow(id,request,actor);
         var result = process(job);
         if (result instanceof PaymentRouteChangeResponse response) return response;
         if ("DONE".equals(jdbc.queryForObject("SELECT state FROM bank_recipient_change WHERE id=?",String.class,job))) {
@@ -71,6 +83,10 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
     }
 
     public CommonInvoiceDetailsResponse invoice(long id, CommonInvoicePaymentRouteChangeRequest request, Authentication actor) {
+        return invoice(id,request,actor,true);
+    }
+
+    public CommonInvoiceDetailsResponse invoice(long id, CommonInvoicePaymentRouteChangeRequest request, Authentication actor, boolean differentRecipient) {
         if (!request.confirmedUnpaid() || request.target() != CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES)
             throw conflict("Подтвердите смену получателя общего счёта");
         Long job = tx.execute(status -> {
@@ -79,9 +95,9 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
             if (!Objects.equals(request.expectedPaymentEvidenceToken(), invoices.commonInvoiceRouteChangeToken(invoice,history)))
                 throw conflict("Состояние общего счёта изменилось. Обновите карточку");
             var source = invoiceSource(invoice, history);
-            return source == null ? null : enqueue(source, actor, "RECIPIENT");
+            return source == null ? null : enqueue(source, actor, differentRecipient?"RECIPIENT":"REQUISITES");
         });
-        if (job == null) return invoices.changeCommonInvoicePaymentRoute(id, request, actor, true);
+        if (job == null) return invoices.changeCommonInvoicePaymentRoute(id, request, actor, differentRecipient);
         process(job);
         var state = jdbc.queryForObject("SELECT state FROM bank_recipient_change WHERE id=?", String.class, job);
         if ("DONE".equals(state)) return tx.execute(status -> invoices.invoiceAfterOrderPrelude(id));
@@ -90,9 +106,18 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
 
     /** Returns false when the invoice has no bank operation and can switch in the caller. */
     public boolean paper(long invoiceId, Authentication actor, String documentRequest) {
+        return paper(invoiceId,null,actor,documentRequest,false);
+    }
+
+    @Override
+    public boolean paperDocument(long orderId,Long linkId,Authentication actor,String documentRequest) {
+        return paper(orderId,linkId,actor,documentRequest,true);
+    }
+
+    private boolean paper(long invoiceId,Long linkId,Authentication actor,String documentRequest,boolean order) {
         Long job = tx.execute(status -> {
-            var invoice = lockedInvoice(invoiceId);
-            var source = invoiceSource(invoice, refs.findByInvoiceIdForUpdate(invoiceId));
+            var source = order?orderRoutes.lockedSource(invoiceId,linkId,actor)
+                    :invoiceSource(lockedInvoice(invoiceId), refs.findByInvoiceIdForUpdate(invoiceId));
             if (source == null) return null;
             long jobId = enqueue(source, actor, "PAPER");
             if (documentRequest != null) {
@@ -124,10 +149,7 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
     private Source invoiceSource(CommonInvoice invoice, List<CommonInvoicePaymentRef> history) {
         var ref = invoices.bankRecipientRef(invoice, history);
         if (ref == null) return null;
-        return new Source("INVOICE", invoice.getId(), ref.getId(), ref.getPaymentProfileId(), invoices.normalizedPaymentProvider(ref),
-                invoices.providerPaymentId(ref), invoices.providerOrderId(ref), invoices.providerMerchantId(ref),
-                ref.getAmountKopecks(), ref.getProviderPaymentMode(), ref.getProviderTestMode(),
-                invoices.bankRecipientRouteVersion(invoice));
+        return invoices.bankSnapshot(invoice, ref, invoices.bankRecipientRouteVersion(invoice));
     }
 
     private long enqueue(Source source, Authentication actor, String action) {
@@ -160,6 +182,44 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
                 """,Long.class)) {
             try { process(id); }
             catch (RuntimeException error) { log.warn("Recipient change {} deferred ({})",id,error.getClass().getSimpleName()); }
+        }
+    }
+
+    @Scheduled(initialDelay=45000, fixedDelay=30000)
+    public void observeReplacedLinks() {
+        var ids = jdbc.queryForList("""
+                SELECT payment_ref_id FROM common_invoice_payment_refs
+                WHERE observe_replaced_bank AND (next_provider_check_at IS NULL OR next_provider_check_at<=NOW(6))
+                ORDER BY next_provider_check_at,payment_ref_id LIMIT 20
+                """, Long.class);
+        for (long id : ids) {
+            try {
+                Source source = tx.execute(status -> {
+                    if (jdbc.update("""
+                            UPDATE common_invoice_payment_refs SET next_provider_check_at=DATE_ADD(NOW(6),INTERVAL 3 MINUTE)
+                            WHERE payment_ref_id=? AND observe_replaced_bank AND (next_provider_check_at IS NULL OR next_provider_check_at<=NOW(6))
+                            """,id) != 1) return null;
+                    var ref = refs.findById(id).orElseThrow();
+                    return invoices.bankSnapshot(ref.getInvoice(),ref,"");
+                });
+                if (source == null) continue;
+                var result = bank.observe(source);
+                tx.executeWithoutResult(status -> {
+                    var invoice = invoices.lockedInvoice(source.targetId()).orElseThrow();
+                    var ref = refs.findByIdForUpdate(id).orElseThrow();
+                    if (!ref.isObserveReplacedBank() || !source.equals(invoices.bankSnapshot(invoice,ref,""))) return;
+                    if (result.outcome() == Outcome.CLOSED) {
+                        ref.setProviderStatus(result.status());
+                        ref.setObserveReplacedBank(false);
+                    } else if (result.outcome() == Outcome.FINANCIAL) {
+                        if ("CONFIRMED".equals(result.status()) || "APPROVED".equals(result.status()))
+                            settlement.applyRecipientChangeReceipt(source,result,invoice,ref);
+                        else settlement.reviewReplacedBankMovement(invoice,ref,result.status());
+                    }
+                });
+            } catch (RuntimeException failure) {
+                log.warn("Не удалось сверить прежнюю банковскую ссылку общего счёта, попытка {} ({})",id,failure.getClass().getSimpleName());
+            }
         }
     }
 
@@ -200,7 +260,7 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
                 // Exercise the real reservation rules without publishing instructions or retaining a reserve
                 // while a still-payable bank link is outstanding. Recheck under locks at final handover.
                 if (!job.capacityChecked()) {
-                    if (!"PAPER".equals(job.action())) checkCapacity(source, actor);
+                    if (!"PAPER".equals(job.action())) checkCapacity(source, actor,job.action());
                     if (jdbc.update("UPDATE bank_recipient_change SET state='POLLING' WHERE id=? AND lease_token=?",
                             id,claim.lease()) != 1) return null;
                 } else {
@@ -213,19 +273,20 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
                 try {
                     result = bank.observe(source);
                 } catch (RuntimeException unavailable) {
-                    update(claim, "POLLING", WAIT);
+                    update(claim, "POLLING", "Банк пока не ответил. Проверка повторится автоматически.");
                     return null;
                 }
-                if (result.outcome() != Outcome.CLOSED) {
+                boolean unpaidTochka = "TOCHKA".equals(source.provider()) && result.openUnpaid(source);
+                if (result.outcome() != Outcome.CLOSED && !unpaidTochka) {
                     boolean financial = result.outcome() == Outcome.FINANCIAL;
                     String message = financial ? "Банк сообщил о движении денег. Смена получателя остановлена."
                             : switch (Objects.toString(result.status(), "")) {
-                                case "CREATED" -> TOCHKA_WAIT;
                                 case "NEW", "FORM_SHOWED" -> TBANK_WAIT;
-                                default -> WAIT;
+                                default -> "Статус банка " + result.status() + ". Проверка повторится автоматически.";
                             };
-                    if (!financial && "PAPER".equals(job.action()))
+                    if (!financial && "PAPER".equals(job.action()) && "T_BANK".equals(source.provider()) && result.openUnpaid(source))
                         message = "Ожидаем закрытия банковской ссылки без оплаты. Система сама включит бумажный счёт.";
+                    if (!financial && "T_BANK".equals(source.provider())) message += expiryMessage(source);
                     final String resultMessage = message;
                     if (financial && "INVOICE".equals(source.kind())) {
                         tx.executeWithoutResult(status -> {
@@ -244,13 +305,13 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
                     return null;
                 }
                 closed = result.status();
-                bankClosed = true;
-                if (jdbc.update("UPDATE bank_recipient_change SET closed_status=? WHERE id=? AND lease_token=?",closed,id,claim.lease()) != 1)
+                bankClosed = !unpaidTochka;
+                if (bankClosed && jdbc.update("UPDATE bank_recipient_change SET closed_status=? WHERE id=? AND lease_token=?",closed,id,claim.lease()) != 1)
                     return null;
             }
             String verified = closed;
             Object response = tx.execute(status -> {
-                if ("PAPER".equals(job.action())) {
+                if ("PAPER".equals(job.action()) && "INVOICE".equals(source.kind())) {
                     var invoice = lockedInvoice(source.targetId());
                     var history = refs.findByInvoiceIdForUpdate(invoice.getId());
                     if (!source.equals(invoiceSource(invoice,history))) throw new SourceChanged("Состав или ссылка счёта изменились");
@@ -263,11 +324,18 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
                     }
                     return null;
                 }
-                var result = replace(source,actor,verified,true);
+                var result = replace(source,actor,verified,true,job.action());
                 if (result instanceof PaymentRouteChangeResponse order) {
                     jdbc.update("UPDATE bank_recipient_change SET replacement_id=? WHERE id=? AND lease_token=?",order.paymentLinkId(),id,claim.lease());
                 }
                 if (!update(claim,"DONE","Получатель изменён")) throw conflict("Запрос уже обрабатывается");
+                if ("PAPER".equals(job.action())) {
+                    var payload = jdbc.queryForObject("SELECT paper_request FROM bank_recipient_change WHERE id=?", String.class,id);
+                    if (payload!=null) {
+                        paperDocuments.getObject().prepareOrderAfterBankClosure(source.targetId(),cipher.decrypt(payload),actor);
+                        jdbc.update("UPDATE bank_recipient_change SET paper_request=NULL WHERE id=?",id);
+                    }
+                }
                 return result;
             });
             if ("INVOICE".equals(source.kind()) && !"PAPER".equals(job.action())) invoices.sendInvoice(source.targetId(), true,true);
@@ -289,9 +357,28 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
         return null;
     }
 
-    private void checkCapacity(Source source, Authentication actor) {
+    private String expiryMessage(Source source) {
+        String sql = "ORDER".equals(source.kind())
+                ? "SELECT bank_expires_at,initiated_at FROM payment_links WHERE id=?"
+                : "SELECT provider_expires_at,created_at FROM common_invoice_payment_refs WHERE payment_ref_id=?";
+        return jdbc.query(sql, rs -> {
+            if (!rs.next()) return "";
+            var deadline = rs.getObject(1, java.time.LocalDateTime.class);
+            boolean estimate = deadline == null;
+            if (estimate) {
+                var start = rs.getObject(2, java.time.LocalDateTime.class);
+                if (start == null) return "";
+                deadline = start.plus(redirectDue);
+            }
+            var moscow = deadline.atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(java.time.ZoneId.of("Europe/Moscow"));
+            return (estimate ? " Ориентировочный срок до " : " Срок действия до ")
+                    + moscow.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " мск.";
+        }, source.sourceId());
+    }
+
+    private void checkCapacity(Source source, Authentication actor,String action) {
         tx.executeWithoutResult(status -> {
-            replace(source,actor,"CANCELED",false);
+            replace(source,actor,"CANCELED",false,action);
             status.setRollbackOnly();
         });
     }
@@ -312,14 +399,16 @@ public class BankRecipientChanges implements OrderBankRecipientChange {
         return current;
     }
 
-    private Object replace(Source source, Authentication actor, String closed, boolean publish) {
+    private Object replace(Source source, Authentication actor, String closed, boolean publish,String action) {
         if ("ORDER".equals(source.kind())) {
+            if (!"RECIPIENT".equals(action)) return orderRoutes.replaceMethod(source,closed,publish,
+                    "PAPER".equals(action)?PaymentRouteChangeTarget.OWNER_PAPER_INVOICE:PaymentRouteChangeTarget.EMPLOYEE_REQUISITES,actor);
             return orderRoutes.replace(source, closed, publish, actor);
         }
         var invoice = lockedInvoice(source.targetId());
         var history = refs.findByInvoiceIdForUpdate(invoice.getId());
         if (!source.equals(invoiceSource(invoice,history))) throw new SourceChanged("Маршрут или состав общего счёта изменился");
-        invoices.replaceClosedBankRecipient(invoice, history, source.sourceId(),closed,actor.getName());
+        invoices.replaceClosedBankRecipient(invoice, history, source.sourceId(),closed,actor.getName(),"RECIPIENT".equals(action));
         return null;
     }
 

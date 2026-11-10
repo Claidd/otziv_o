@@ -49,7 +49,8 @@ import {
   StatusAction,
   managerErrorMessage,
   managerOrderActions,
-  managerOrderReviewCopyText
+  managerOrderReviewCopyText,
+  managerPayableOrderSum
 } from '../../manager/manager-board.config';
 
 type AccountDraft = {
@@ -533,9 +534,15 @@ export class CommonBillingComponent implements OnDestroy {
   readonly paperInvoiceAwaitingDeliveryConfirmation = computed(() =>
     paperInvoiceRequiresDeliveryConfirmation(this.currentInvoice())
   );
+  readonly canRecordBadReviewReceipt = computed(() => {
+    const invoice = this.currentInvoice();
+    return invoice?.status === 'NEEDS_ATTENTION' && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+      && this.manualAttributionRequired() === true && invoice.paidKopecks === 0
+      && (invoice.lastError?.startsWith('bad_review_supplement_required:') || invoice.lastError?.startsWith('Ожидаем закрытия прежней банковской ссылки.'));
+  });
   readonly canMarkPaid = computed(() => {
     const invoice = this.currentInvoice();
-    return canMarkCommonInvoicePaid(invoice) && (invoice?.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+    return this.canRecordBadReviewReceipt() || canMarkCommonInvoicePaid(invoice) && (invoice?.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
       || this.paperWorkflow().contextAvailable && !this.paperWorkflow().bankManaged);
   });
   readonly canConfirmContractorSource = computed(() => {
@@ -1013,7 +1020,7 @@ export class CommonBillingComponent implements OnDestroy {
           return;
         }
         this.mutating.set('');
-        if (!context.canChange && !(targetOverride === 'DIFFERENT_RECIPIENT' && context.bankRecipientChangeAvailable)) {
+        if (!context.canChange && !((targetOverride === 'DIFFERENT_RECIPIENT' || targetOverride === 'EMPLOYEE_REQUISITES') && context.bankRecipientChangeAvailable)) {
           this.toastService.error('Способ оплаты нельзя изменить', context.blockReason || 'Нужна ручная сверка');
           return;
         }
@@ -1717,6 +1724,10 @@ export class CommonBillingComponent implements OnDestroy {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2
     }).format((value ?? 0) / 100)} ₽`;
+  }
+
+  orderAmountKopecks(order: OrderCardItem): number {
+    return Math.round(managerPayableOrderSum(order) * 100);
   }
 
   selectedAccountTitle(): string {

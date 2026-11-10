@@ -18,6 +18,7 @@ public interface ContractorActualPaymentAttributionRepository
 
     Optional<ContractorActualPaymentAttribution> findByAttributionKey(String attributionKey);
 
+    @Query("SELECT COUNT(a)>0 FROM ContractorActualPaymentAttribution a WHERE a.corrected=false AND a.sourceKind=:sourceKind AND a.sourceId=:sourceId AND (a.evidenceId=:evidenceId OR (:evidenceId IS NULL AND a.evidenceId IS NULL))")
     boolean existsBySourceKindAndSourceIdAndEvidenceId(
             ContractorActualPaymentSourceKind sourceKind,
             Long sourceId,
@@ -26,7 +27,7 @@ public interface ContractorActualPaymentAttributionRepository
 
     @Query("""
         SELECT DISTINCT a.sourceId FROM ContractorActualPaymentAttribution a
-        WHERE a.sourceKind = :kind AND a.sourceId IN :ids AND a.evidenceId IS NULL
+        WHERE a.corrected=false AND a.sourceKind = :kind AND a.sourceId IN :ids AND a.evidenceId IS NULL
         """)
     List<Long> findSourcesWithLegacyAttribution(@Param("kind") ContractorActualPaymentSourceKind kind,
                                                @Param("ids") Collection<Long> ids);
@@ -39,6 +40,7 @@ public interface ContractorActualPaymentAttributionRepository
     @Query("SELECT a FROM ContractorActualPaymentAttribution a WHERE a.id = :id")
     Optional<ContractorActualPaymentAttribution> findByIdForUpdate(@Param("id") Long id);
 
+    @Query("SELECT a FROM ContractorActualPaymentAttribution a WHERE a.corrected=false AND a.sourceKind=:sourceKind AND a.sourceId=:sourceId ORDER BY a.effectiveAt,a.id")
     List<ContractorActualPaymentAttribution> findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
             ContractorActualPaymentSourceKind sourceKind,
             Long sourceId
@@ -48,7 +50,7 @@ public interface ContractorActualPaymentAttributionRepository
     @Query("""
         SELECT a
         FROM ContractorActualPaymentAttribution a
-        WHERE a.sourceKind = :sourceKind
+        WHERE a.corrected=false AND a.sourceKind = :sourceKind
           AND a.sourceId = :sourceId
         ORDER BY a.effectiveAt, a.id
     """)
@@ -57,6 +59,7 @@ public interface ContractorActualPaymentAttributionRepository
             @Param("sourceId") Long sourceId
     );
 
+    @Query("SELECT a FROM ContractorActualPaymentAttribution a WHERE a.corrected=false AND a.effectiveAt>=:from AND a.effectiveAt<:to ORDER BY a.effectiveAt,a.id")
     List<ContractorActualPaymentAttribution>
             findAllByEffectiveAtGreaterThanEqualAndEffectiveAtLessThanOrderByEffectiveAtAscIdAsc(
                     LocalDateTime from,
@@ -69,7 +72,7 @@ public interface ContractorActualPaymentAttributionRepository
                COUNT(a.id) AS transferCount,
                COALESCE(SUM(a.amountKopecks), 0) AS transferAmountKopecks
         FROM ContractorActualPaymentAttribution a
-        WHERE a.accountingMode = :mode
+        WHERE a.corrected=false AND a.accountingMode = :mode
           AND a.actualRecipientProfileId IN :profileIds
           AND a.effectiveAt >= :from
           AND a.effectiveAt < :to

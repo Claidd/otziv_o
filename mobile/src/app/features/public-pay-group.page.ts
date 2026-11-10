@@ -44,6 +44,9 @@ import { isBankPaymentRoute } from '../shared/bank-payment-source';
               <div><small>Осталось</small><b>{{ formatRubles(invoice.remaining) }} ₽</b></div>
               <div><small>Готово</small><strong>{{ readyOrders() }} из {{ invoice.orders.length }}</strong></div>
             </section>
+            @if (invoice.status !== 'PAID') {
+              <p>Если нужны другие реквизиты, напишите менеджеру в чат, куда пришёл счёт.</p>
+            }
 
             <section class="order-list">
               @for (order of invoice.orders; track order.orderId) {

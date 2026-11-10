@@ -17,6 +17,9 @@
           </div>
           <span class="brand-mark" aria-hidden="true">О!</span>
         </header>
+        @if (item?.status !== 'PAID') {
+          <p>Если нужны другие реквизиты, напишите менеджеру в чат, куда пришёл счёт.</p>
+        }
 
         @if (item?.status === 'PAID') {
           <article class="payment-complete-card" aria-live="polite">

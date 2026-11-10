@@ -11,6 +11,27 @@ import { map, Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import { SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
 
+export interface ManualReceiptEntry {
+  id: number;
+  orderId: number | null;
+  invoiceId: number | null;
+  amountKopecks: number;
+  recipient: string;
+  actor: string;
+  reason: string;
+  canAssignOwner: boolean;
+  correction: 'REASSIGN' | 'VOID' | null;
+  correctedBy: string | null;
+  correctionReason: string | null;
+}
+export interface ManualReceiptCorrection {
+  action: 'REASSIGN' | 'VOID';
+  requestKey: string;
+  recipientProfileId: number | null;
+  owner: boolean;
+  reason: string;
+}
+
 export interface ManagerPaymentLinkResponse {
   token: string;
   url: string;
@@ -451,6 +472,18 @@ export class PaymentsApi {
       `${appEnvironment.apiBaseUrl}/api/admin/payments/owner-approvals/${approvalId}/revoke-pending`,
       request
     );
+  }
+
+  getManualReceipts(target: number, invoice: boolean) {
+    return this.http.get<ManualReceiptEntry[]>(`${appEnvironment.apiBaseUrl}/api/admin/payments/manual-receipts`, { params: { target, invoice } });
+  }
+
+  getCorrectionRecipients() {
+    return this.http.get<{ id: number; name: string }[]>(`${appEnvironment.apiBaseUrl}/api/admin/payments/manual-receipts/recipients`);
+  }
+
+  correctManualReceipt(id: number, request: ManualReceiptCorrection) {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/admin/payments/manual-receipts/${id}/correction`, request);
   }
 
   getSpecialistPaymentReviews(): Observable<SpecialistPaymentReview[]> {

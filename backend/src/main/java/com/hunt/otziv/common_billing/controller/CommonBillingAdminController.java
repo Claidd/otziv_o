@@ -145,6 +145,8 @@ public class CommonBillingAdminController {
             Principal principal
     ) {
         requireCanMutateInvoice(invoiceId);
+        if (request.target()==com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES)
+            return bankRecipientChanges.invoice(invoiceId, request, org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication(),false);
         return commonBillingService.changeCommonInvoicePaymentRoute(invoiceId, request, principal);
     }
 

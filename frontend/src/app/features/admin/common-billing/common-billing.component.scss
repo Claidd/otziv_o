@@ -681,6 +681,10 @@ button .material-icons-sharp {
   align-content: start;
 }
 
+.invoice-position-amount {
+  text-align: center;
+}
+
 .invoice-order-card-toolbar {
   display: grid;
   grid-template-columns: 2rem 2rem minmax(0, 1fr) 2rem 2rem;

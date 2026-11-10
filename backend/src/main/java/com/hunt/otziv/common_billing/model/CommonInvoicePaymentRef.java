@@ -89,6 +89,9 @@ public class CommonInvoicePaymentRef {
     @Column(name = "provider_status", length = 32)
     private String providerStatus;
 
+    @Column(name = "observe_replaced_bank", nullable = false)
+    private boolean observeReplacedBank;
+
     @Column(name = "provider_payment_url", length = 1024)
     private String providerPaymentUrl;
 

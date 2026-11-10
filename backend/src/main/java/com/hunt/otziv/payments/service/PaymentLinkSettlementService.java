@@ -52,6 +52,10 @@ public class PaymentLinkSettlementService {
 
     private final PaymentLinkAmountPolicy amountPolicy;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private PaymentRouteReplacementWorkflow paymentRoutes;
+
     private final PaymentLinkCancellationWorkflow cancellationWorkflow;
 
     private final PaymentLinkPresenter paymentPresenter;
@@ -96,6 +100,13 @@ public class PaymentLinkSettlementService {
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     void applyTochkaMappedStatus(PaymentLink link, MappedPayment mapped, boolean providerTestMode) {
+        if (link.isObserveReplacedBank()) {
+            if (mapped.status() == PaymentLinkStatus.INITIATED) return;
+            if (mapped.status() == PaymentLinkStatus.EXPIRED) {
+                finishUnpaidBankObservation(link, mapped.providerStatus());
+                return;
+            }
+        }
         switch(mapped.status()) {
             case INITIATED ->
                 {
@@ -106,8 +117,11 @@ public class PaymentLinkSettlementService {
                 }
             case CONFIRMED ->
                 confirmPayment(link, providerTestMode);
-            case EXPIRED ->
-                markFinalBankStatus(link, PaymentLinkStatus.EXPIRED, mapped.providerStatus());
+            case EXPIRED -> {
+                if (!shouldIgnoreStaleBankStatus(link, "DEADLINE_EXPIRED")) {
+                    markFinalBankStatus(link, PaymentLinkStatus.EXPIRED, mapped.providerStatus());
+                }
+            }
             case REFUNDED, PARTIAL_REFUNDED ->
                 markFinalBankStatus(link, mapped.status(), mapped.providerStatus());
             case NEEDS_RECONCILIATION ->
@@ -186,6 +200,13 @@ public class PaymentLinkSettlementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "CONFIRMED Т-Банка без успешного ответа и реквизитов платежа требует сверки");
         }
+        if (link.isObserveReplacedBank()) {
+            if (Set.of("CANCELED","DEADLINE_EXPIRED","REJECTED").contains(status) && success && "0".equals(errorCode)) {
+                finishUnpaidBankObservation(link,status);
+                return;
+            }
+            if (!"CONFIRMED".equals(status) && !isRefundOrReversalBankStatus(status)) return;
+        }
         switch(status) {
             case "CONFIRMED" ->
                 confirmPayment(link);
@@ -246,6 +267,12 @@ public class PaymentLinkSettlementService {
         }
     }
 
+    private void finishUnpaidBankObservation(PaymentLink link, String providerStatus) {
+        link.setProviderTerminalStatus(providerStatus);
+        link.setObserveReplacedBank(false);
+        // Keep the marker linking the manual receipt to its original bank instruction.
+    }
+
     private void confirmPayment(PaymentLink link) {
         confirmPayment(link, (Boolean) null);
     }
@@ -268,11 +295,13 @@ public class PaymentLinkSettlementService {
             rememberCompanyPayerEmail(link);
             return;
         }
+        boolean observed = link.isObserveReplacedBank();
+        link.setObserveReplacedBank(false);
         if (hasAnotherConfirmedPayment(link)) {
             markDuplicateConfirmedPayment(link);
             return;
         }
-        if (link.getStatus() == PaymentLinkStatus.CANCELED || link.getStatus() == PaymentLinkStatus.EXPIRED) {
+        if (!observed && (link.getStatus() == PaymentLinkStatus.CANCELED || link.getStatus() == PaymentLinkStatus.EXPIRED)) {
             markClosedLinkConfirmed(link);
             return;
         }
@@ -287,6 +316,10 @@ public class PaymentLinkSettlementService {
             link.setLastError(null);
             rememberCompanyPayerEmail(link);
             log.info("T-Bank payment confirmed in test mode without applying order transition: linkId={}, orderId={}", link.getId(), link.getOrder() == null ? null : link.getOrder().getId());
+            return;
+        }
+        if (observed && !paymentRoutes.releaseRoutesAfterObservedReceipt(link)) {
+            markClosedLinkConfirmed(link);
             return;
         }
         if (!canApplyOrderPaymentNow(link.getOrder())) {

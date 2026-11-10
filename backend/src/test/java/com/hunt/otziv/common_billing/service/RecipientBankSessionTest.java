@@ -71,7 +71,8 @@ class RecipientBankSessionTest {
         verify(tbank,never()).cancel(any(),any());
     }
     @ParameterizedTest @ValueSource(strings={"CREATED","EXPIRED","APPROVED"})
-    void tochkaWaitsForBankClosureAndNeverRefunds(String status) {
+    void tochkaAllowsReplacementOnlyForVerifiedUnpaidFormOrClosure(String status) {
+        entity.setProvider("TOCHKA");
         var source = source("TOCHKA");
         var profile = mock(TochkaPaymentProfile.class);
         when(profiles.isTochkaProvider(entity)).thenReturn(true);
@@ -82,7 +83,9 @@ class RecipientBankSessionTest {
         String type = "APPROVED".equals(status) ? "card" : null;
         var payment = new PaymentOperation("customer",null,type,null,null,null,BigDecimal.ONE,status,"operation",null,"merchant",null,"order",List.of());
         when(tochka.getPaymentInfo(profile,"operation")).thenReturn(new PaymentInfoResponse(new PaymentInfoData(List.of(payment)),null));
-        assertThat(service.observe(source).outcome()).isEqualTo(switch(status) {
+        var result = service.observe(source);
+        assertThat(result.openUnpaid(source)).isEqualTo("CREATED".equals(status));
+        assertThat(result.outcome()).isEqualTo(switch(status) {
             case "CREATED" -> Outcome.WAITING; case "EXPIRED" -> Outcome.CLOSED; default -> Outcome.FINANCIAL;
         });
         verify(tochka,never()).refund(any(),any());

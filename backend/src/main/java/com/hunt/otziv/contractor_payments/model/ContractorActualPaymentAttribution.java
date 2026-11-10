@@ -151,6 +151,9 @@ public class ContractorActualPaymentAttribution {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @org.hibernate.annotations.Formula("(exists (select 1 from manual_receipt_corrections mc where mc.original_id = id))")
+    private boolean corrected;
+
     public static ContractorActualPaymentAttribution create(
             String attributionKey,
             ContractorActualPaymentSourceKind sourceKind,

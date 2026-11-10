@@ -29,6 +29,7 @@ public class PaperBillingTargets {
     private final com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization paymentTargets;
     private final com.hunt.otziv.payments.api.BankPaperPaymentCancellation cancellation;
     @org.springframework.beans.factory.annotation.Autowired private com.hunt.otziv.common_billing.api.BankPaperInvoiceParts parts;
+    @org.springframework.beans.factory.annotation.Autowired private com.hunt.otziv.payments.api.OrderBankRecipientChange bankChanges;
     boolean isPart(Target target) {return target.kind().equals("COMMON_PART");}
     public long companyInfoId(long order) {return orders.companyId(order);}
     public void rememberRule(long order,String choice) {orders.rememberPayer(order,choice);}
@@ -99,6 +100,14 @@ public class PaperBillingTargets {
         else if(isPart(target)) parts.delivered(target.id(),document);else common.delivered(target.id(),document);
     }
     public void waitForBankBeforeIssue(Target target, Authentication actor, String documentRequest) {
+        if (target.kind().equals("ORDER")) {
+            var context=links.paymentRouteChangeContextAuthorized(target.id(),actor);
+            if (context.bankRecipientChangeAvailable()) {
+                paymentTargets.requireCanManagePaymentLink(context.paymentLinkId());
+                bankChanges.paperDocument(target.id(),context.paymentLinkId(),actor,documentRequest);
+            }
+            return;
+        }
         paymentTargets.requireCanManageCommonInvoice(target.id());
         common.waitForBankBeforeIssue(target.id(), actor, documentRequest);
     }

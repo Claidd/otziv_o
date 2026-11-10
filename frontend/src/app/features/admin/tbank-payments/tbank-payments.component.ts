@@ -75,6 +75,7 @@ import {
   manualPaymentAccountingSourceLabel
 } from '../../../shared/manual-payment-recipient-summary';
 import { manualPaymentTaskWorklist } from '../../../shared/manual-payment-task-visibility';
+import { ManualReceiptCorrectionComponent } from './manual-receipt-correction.component';
 import { SpecialistPaymentReviewsComponent } from './specialist-payment-reviews.component';
 
 type PaymentMetric = {
@@ -142,7 +143,7 @@ export function validContractorAuditEffectiveAt(input: string): boolean {
 
 @Component({
   selector: 'app-tbank-payments',
-  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, ManagerManualCardPaymentModalComponent, MobileBottomPagerComponent, RouterLink, SpecialistPaymentReviewsComponent],
+  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, ManagerManualCardPaymentModalComponent, MobileBottomPagerComponent, RouterLink, SpecialistPaymentReviewsComponent, ManualReceiptCorrectionComponent],
   templateUrl: './tbank-payments.component.html',
   styleUrl: './tbank-payments.component.scss'
 })

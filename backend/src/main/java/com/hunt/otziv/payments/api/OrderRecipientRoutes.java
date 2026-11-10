@@ -10,7 +10,10 @@ import org.springframework.web.server.ResponseStatusException;
 public interface OrderRecipientRoutes {
     UnpaidBankObservation.Source lockedSource(long orderId, Long linkId, Authentication actor);
     PaymentRouteChangeResponse changeNow(long orderId, PaymentRouteChangeRequest request, Authentication actor);
+    PaymentRouteChangeResponse changeMethodNow(long orderId, PaymentRouteChangeRequest request, Authentication actor);
     PaymentRouteChangeResponse replace(UnpaidBankObservation.Source expected, String bankStatus, boolean publish, Authentication actor);
+    PaymentRouteChangeResponse replaceMethod(UnpaidBankObservation.Source expected, String bankStatus, boolean publish,
+            com.hunt.otziv.payments.dto.PaymentRouteChangeTarget target, Authentication actor);
     void reconcile(long linkId);
 
     class SourceChanged extends ResponseStatusException {

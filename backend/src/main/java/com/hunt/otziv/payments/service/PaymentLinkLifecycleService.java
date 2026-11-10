@@ -50,6 +50,8 @@ public class PaymentLinkLifecycleService {
     }
 
     boolean closedForRecipientChange(PaymentLink link) {
+        if (link.getId() != null && link.getStatus() == PaymentLinkStatus.CANCELED
+                && paymentLinkRepository.retiredForObservedRouteChange(link.getId()) > 0) return true;
         String terminal = normalize(link.getProviderTerminalStatus());
         return link.getId() != null && Set.of("CANCELED", "EXPIRED", "DEADLINE_EXPIRED", "REJECTED").contains(terminal)
                 && paymentLinkRepository.completedBankRecipientChange(link.getId(), terminal) > 0;

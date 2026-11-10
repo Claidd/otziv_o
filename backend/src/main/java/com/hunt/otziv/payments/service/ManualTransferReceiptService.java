@@ -4,6 +4,10 @@ import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.manager.api.PaymentReviewOrderAccess;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
+import com.hunt.otziv.payments.api.UnpaidBankObservation.Source;
+import com.hunt.otziv.payments.api.UnpaidBankObservation.Result;
+import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
 import jakarta.validation.Valid;
@@ -43,16 +47,62 @@ public class ManualTransferReceiptService {
         if (sum != transfer.amountKopecks() || lines.stream().map(Line::orderId).distinct().count() != lines.size())
             throw conflict("Проверьте сумму перевода и список заказов");
         String url = payments.validatedReceiptUrl(transfer.receiptUrl());
-        List<Long> reviewIds = transactions.required(() -> reserve(transfer, lines, url, actor));
-        List<ManagerManualCardPaymentResultResponse> results = new ArrayList<>();
-        for (Long id : reviewIds) {
-            settlement.creditNow(id);
-            results.add(reviewService.result(reviews.findById(id).orElseThrow()));
-        }
-        return results;
+        var bankSources = transactions.required(() -> {
+            Map<Long, Source> sources = new HashMap<>();
+            boolean replay = Boolean.TRUE.equals(jdbc.queryForObject("""
+                    SELECT EXISTS(SELECT 1 FROM manual_transfer_receipts WHERE recipient_profile_id=? AND bank_reference=?)
+                    """, Boolean.class, transfer.recipientProfileId(), transfer.bankReference().trim()));
+            for (Line line : lines) {
+                access.requireOrderAccess(line.orderId(), actor);
+                if (replay) {
+                    var pending = jdbc.queryForList("""
+                            SELECT r.payment_link_id FROM manual_transfer_receipts t
+                            JOIN manual_transfer_orders o ON o.receipt_id=t.id
+                            JOIN specialist_manual_payment_reviews r ON r.id=o.review_id
+                            WHERE t.recipient_profile_id=? AND t.bank_reference=? AND o.order_id=? AND r.credited_at IS NULL
+                            """, Long.class, transfer.recipientProfileId(), transfer.bankReference().trim(), line.orderId());
+                    if (!pending.isEmpty()) {
+                        var source = bankSource(links.findByIdWithOrder(pending.getFirst()).orElseThrow());
+                        if (source != null) sources.put(line.orderId(), source);
+                    }
+                    continue;
+                }
+                payments.lockOrderForManualPayment(line.orderId()).orElseThrow(() -> conflict("Заказ не найден"));
+                var link = routes.selectManualCardPaymentRoute(links.findByOrderIdForUpdate(line.orderId()));
+                if (link.getAmountKopecks() != line.amountKopecks()) throw conflict("Сумма заказа изменилась");
+                var source = bankSource(link);
+                if (source != null) sources.put(line.orderId(), source);
+            }
+            return sources;
+        });
+        Map<Source, Result> observations = new HashMap<>();
+        bankSources.values().forEach(source -> observations.put(source, payments.verifyUnpaidBank(source)));
+        return transactions.required(() -> {
+            List<Long> reviewIds = reserve(transfer, lines, url, actor, bankSources);
+            List<ManagerManualCardPaymentResultResponse> results = new ArrayList<>();
+            for (Long id : reviewIds) {
+                var review = reviews.lockById(id).orElseThrow();
+                if (review.getCreditedAt() == null) {
+                    var link = links.findByIdForUpdate(review.getPaymentLinkId()).orElseThrow();
+                    var source = bankSource(link);
+                    if (!Objects.equals(source, bankSources.get(review.getOrderId())))
+                        throw conflict("Банковская ссылка изменилась, повторите проверку");
+                    settlement.creditTransferLine(review, link, source, observations.get(source), actor);
+                }
+                results.add(reviewService.result(review));
+            }
+            return results;
+        });
     }
 
-    private List<Long> reserve(Transfer transfer, List<Line> lines, String url, Authentication actor) {
+    private Source bankSource(PaymentLink link) {
+        if (link.getStatus() != PaymentLinkStatus.INITIATED) return null;
+        var source = PaymentRouteReplacementWorkflow.bankSource(link);
+        if (source == null || source.operation().isBlank()) throw conflict("Банк ещё не подтвердил реквизиты ссылки");
+        return source;
+    }
+
+    private List<Long> reserve(Transfer transfer, List<Line> lines, String url, Authentication actor, Map<Long, Source> bankSources) {
         Map<Long, Order> lockedOrders = new HashMap<>();
         for (Line line : lines) {
             Order order = payments.lockOrderForManualPayment(line.orderId()).orElseThrow(() -> conflict("Заказ не найден"));
@@ -82,6 +132,8 @@ public class ManualTransferReceiptService {
         for (Line line : lines) {
             Order order = lockedOrders.get(line.orderId());
             var link = routes.selectManualCardPaymentRoute(links.findByOrderIdForUpdate(line.orderId()));
+            if (!Objects.equals(bankSource(link), bankSources.get(line.orderId())))
+                throw conflict("Банковская ссылка изменилась, повторите проверку");
             if (line.amountKopecks() != link.getAmountKopecks() || reviews.lockByPaymentLinkId(link.getId()).isPresent())
                 throw conflict("По заказу №" + line.orderId() + " изменилась сумма или уже зарегистрирован перевод");
             payments.requireManualCardPaymentLocalEligibility(order, link, line.orderId());

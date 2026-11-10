@@ -65,6 +65,11 @@ public class ManualPaymentTaskReceiptIntegrationService {
     private final PaymentLinkRepository paymentLinkRepository;
     private final CommonInvoiceRepository commonInvoiceRepository;
 
+    public void reverseReceiptForCorrection(long task, long generation, String kind, long sourceId, long amount,
+            String key, String actor, String reason) {
+        ledgerService.reverseActualReceipt(task,generation,ManualPaymentTaskLedgerSourceKind.valueOf(kind),sourceId,amount,key,actor,reason);
+    }
+
     public record LegacySourceLocks(
             List<ManualPaymentTaskSourceRef> sources,
             ContractorAllocationMode accountingMode

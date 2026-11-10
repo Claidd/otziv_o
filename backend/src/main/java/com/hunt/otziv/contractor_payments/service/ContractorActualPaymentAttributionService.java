@@ -248,6 +248,7 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
             List<ContractorActualPaymentAttribution> result = new ArrayList<>(commands.size());
             for (ContractorActualPaymentRecipientCommand command : commands) {
                 ContractorActualPaymentAttribution row = replays.get(command.attributionKey());
+                if (row != null && row.isCorrected()) throw conflict("Эта запись исправлена администратором. Откройте историю поступлений.");
                 requireSameReplay(row, source, command, originalAllocationId, clientFacingAllocationId);
                 requireOriginalBinding(row, original, profiles);
                 requireClientFacingBinding(row, clientFacingAllocation, profiles);
@@ -1413,6 +1414,52 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
         }
         allocationRepository.saveAndFlush(allocation);
     }
+    /** Both halves of an administrative correction run in the same transaction as the source debt. */
+    ContractorActualPaymentAttribution correctRecordedRecipient(ContractorActualPaymentAttribution original, Long profileId,
+            boolean voidReceipt, String actor, String reason, String key) {
+        var ids = new java.util.TreeSet<Long>();
+        addId(ids,original.getActualRecipientProfileId());
+        addId(ids,profileId);
+        var profiles = lockProfiles(ids);
+        for (var profile : profiles.values()) targetAccessPolicy.requireCanManageUser(userId(profile));
+        if (original.getActualManualPaymentTaskId() != null) {
+            taskReceiptIntegrationService.reverseReceiptForCorrection(original.getActualManualPaymentTaskId(),
+                    original.getActualManualPaymentTaskGeneration(), original.getSourceKind().name(),original.getSourceId(),
+                    original.getAmountKopecks(),key,actor,reason);
+        }
+        var now = LocalDateTime.now();
+        if (original.getActualRecipientProfileId() != null) {
+            var allocation = allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                    original.getAccountingMode(),ContractorAllocationSourceType.ACTUAL_PAYMENT,original.getId()).orElse(null);
+            Long allocationId = allocation == null ? original.getOriginalAllocationId() : allocation.getId();
+            if (allocationId == null) throw conflict("У ручного поступления отсутствует распределение");
+            var locked = allocationRepository.findByIdForUpdate(allocationId).orElseThrow();
+            if (!Objects.equals(profileId(locked),original.getActualRecipientProfileId()) || locked.isNeedsReturnAmount()
+                    || !eventRepository.existsByAllocationIdAndExternalRef(allocationId,confirmationRef(original.getId()))
+                    || locked.getConfirmedKopecks()-locked.getReturnedKopecks() < original.getAmountKopecks())
+                throw conflict("Учёт исходного получателя изменился, проверьте возвраты");
+            if (!accountingService.recordReturnTotal(locked,Math.addExact(locked.getReturnedKopecks(),original.getAmountKopecks()),
+                    now,reason,key)) throw conflict("Не удалось провести сторно исходной записи");
+            allocationRepository.saveAndFlush(locked);
+        }
+        if (voidReceipt) return null;
+        var profile = profileId == null ? null : profiles.get(profileId);
+        var type = profile == null ? ContractorRecipientType.OWNER : ContractorRecipientType.valueOf(profile.getRole().name());
+        long available = profile == null ? 0L : capacity(profile,original.getAccountingMode(),null,false);
+        var replacement = ContractorActualPaymentAttribution.createWithDestinations(key,original.getSourceKind(),original.getSourceId(),
+                original.getEvidenceId(),original.getOrderId(),original.getCommonInvoiceId(),original.getOriginalAllocationId(),
+                original.getClientFacingAllocationId(),original.getAccountingMode(),original.getOriginalRecipientType(),
+                original.getOriginalRecipientProfileId(),original.getOriginalRecipientUserId(),original.getOriginalRecipientNameSnapshot(),
+                type, profileId,userId(profile),recipientName(profile,type),original.getCurrentWorkerId(),original.getCurrentManagerId(),
+                original.getAmountKopecks(),profile == null ? null : available,profile == null ? 0L : Math.max(0,original.getAmountKopecks()-available),
+                original.getEffectiveAt(),original.getReason(),original.getEvidenceReference(),original.getReceiptUrl(),actor,original.getId(),
+                original.getOriginalCashDestinationKind(),original.getOriginalManualPaymentTaskId(),original.getOriginalManualPaymentTaskGeneration(),
+                original.getOriginalManualPaymentTaskTargetKind(),profile == null ? ContractorCashDestinationKind.OWNER : ContractorCashDestinationKind.CONTRACTOR_PROFILE,null,null,null);
+        replacement = attributionRepository.saveAndFlush(replacement);
+        applyNew(replacement,profile,null,false,available);
+        return replacement;
+    }
+
     private void applyNew(
             ContractorActualPaymentAttribution row,
             ContractorPaymentProfile actualProfile,
