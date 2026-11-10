@@ -10,7 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository @RequiredArgsConstructor
-public class PaperBillingStore implements com.hunt.otziv.client_messages.api.DeliveryQueueHealth {
+public class PaperBillingStore implements com.hunt.otziv.client_messages.api.DeliveryQueueHealth, com.hunt.otziv.payments.api.AlternatePaperReceipt {
     private static final String WITH_FILES = "SELECT d.*,f.invoice_pdf,f.act_pdf,f.invoice_original_pdf,f.act_original_pdf "
             + "FROM paper_invoice_document d LEFT JOIN paper_invoice_files f ON f.document_id=d.id ";
     private final JdbcTemplate jdbc;
@@ -32,6 +32,36 @@ public class PaperBillingStore implements com.hunt.otziv.client_messages.api.Del
         if(target.kind().equals("COMMON_INVOICE"))return jdbc.queryForList("SELECT "+columns+" FROM paper_invoice_document WHERE (target_kind=? AND target_id=?) OR parent_invoice_id=? ORDER BY created_at DESC,id DESC LIMIT 200",target.kind(),target.id(),target.id());
         return jdbc.queryForList("SELECT "+columns+" FROM paper_invoice_document WHERE target_kind=? AND target_id=? ORDER BY created_at DESC,id DESC LIMIT 100",target.kind(),target.id());
     }
+    @Override
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public boolean closeUnpaidDocument(String kind, long targetId, String documentId, long amountKopecks) {
+        record Document(String id, long amount, boolean clear, boolean part) {}
+        String scope = "COMMON_INVOICE".equals(kind)
+                ? "((target_kind='COMMON_INVOICE' AND target_id=?) OR (target_kind='COMMON_PART' AND parent_invoice_id=?))"
+                : "(target_kind='ORDER' AND target_id=? AND id=?)";
+        Object[] args = "COMMON_INVOICE".equals(kind) ? new Object[]{targetId, targetId} : new Object[]{targetId, documentId};
+        var documents = jdbc.query("""
+                SELECT id,amount_kopecks,(paid_at IS NULL AND cancel_requested_at IS NULL
+                  AND stage IN ('PENDING','INVOICE_CREATED','ACT_CREATED','FILES_READY','WAITING_PAYMENT')
+                  AND 'SENDING' NOT IN (message_delivery,invoice_delivery,act_delivery)) AS clear_for_receipt, target_kind='COMMON_PART'
+                FROM paper_invoice_document WHERE cancelled_at IS NULL AND """ + " " + scope + " ORDER BY id FOR UPDATE",
+                (rs, n) -> new Document(rs.getString(1), rs.getLong(2), rs.getBoolean(3), rs.getBoolean(4)), args);
+        if (documents.stream().noneMatch(d -> d.id().equals(documentId))
+                || documents.stream().anyMatch(d -> !d.clear() || d.amount() <= 0 || !d.part() && d.amount() != amountKopecks)
+                || documents.stream().mapToLong(Document::amount).reduce(0L, Math::addExact) > amountKopecks) return false;
+        for (var doc : documents) {
+            if (Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS(SELECT 1 FROM paper_invoice_bank_receipt WHERE document_id=?)", Boolean.class, doc.id()))) return false;
+        }
+        String reason = "Долг закрыт оплатой по прежней банковской ссылке. Выданный бумажный документ требует сверки.";
+        for (var doc : documents) {
+            jdbc.update("UPDATE paper_invoice_document SET stage='NEEDS_REVIEW',paper_next_reminder_at=NULL,error_text=?,updated_at=NOW(6) WHERE id=?",
+                    reason, doc.id());
+            event(doc.id(), "PAID_BY_PREVIOUS_LINK", reason);
+        }
+        return true;
+    }
+
     public void event(String id,String key,String body) {
         jdbc.update("INSERT IGNORE INTO paper_invoice_event(document_id,event_key,body) VALUES(?,?,?)",id,key,body);
     }

@@ -58,6 +58,7 @@
             >
             @for (order of invoiceOrderCards(); track trackOrderCard($index, order)) {
               @let invoiceOrder = invoiceOrderInfo(order);
+              @let currentAmount = orderAmountKopecks(order);
               <article
                 class="invoice-order-card-wrap"
                 [class.paid]="invoiceOrder?.paid"
@@ -95,7 +96,7 @@
                   >
                     <span class="material-icons-sharp" aria-hidden="true">archive</span>
                   </button>
-                  <span>{{ formatKopecks(invoiceOrder?.amountKopecks) }}</span>
+                  <span aria-label="Текущая сумма заказа">{{ formatKopecks(currentAmount) }}</span>
                   <a
                     class="order-details-link toolbar-action toolbar-action--details"
                     [routerLink]="['/orders', order.companyId, order.id]"
@@ -113,6 +114,9 @@
                     <span class="material-icons-sharp" aria-hidden="true">{{ invoiceOrder?.paid ? 'check_circle' : 'done' }}</span>
                   </button>
                 </div>
+                @if (invoiceOrder && invoiceOrder.amountKopecks !== currentAmount) {
+                  <small class="invoice-position-amount">В общем счёте {{ formatKopecks(invoiceOrder.amountKopecks) }}</small>
+                }
               </article>
             } @empty {
               <p class="empty-text">Неоплаченных заказов в этом счёте нет.</p>
@@ -406,6 +410,9 @@
             </button>
           }
           @if (invoiceNeedsAttention()) {
+            @if (canRecordBadReviewReceipt()) {
+              <button type="button" class="success" (click)="markInvoicePaid()" [disabled]="!!mutating()">Оплата конкретному специалисту</button>
+            }
             @if (attentionHasManualTbankReconciliationRetry()) {
               <button type="button" class="success" (click)="retryManualTbankReconciliation()" [disabled]="!!mutating()">
                 <span class="material-icons-sharp" aria-hidden="true">sync_lock</span>
@@ -491,6 +498,9 @@
                 Проверить оплату в банке
               </button>
             } @else if (invoice?.contractorPaymentRoute) {
+              @if (manualAttributionRequired() && canMarkPaid()) {
+                <button type="button" class="success" (click)="markInvoicePaid()" [disabled]="!!mutating()">Оплата конкретному специалисту</button>
+              }
               <button type="button" class="success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource()">
                 <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
                 Сверить поступление

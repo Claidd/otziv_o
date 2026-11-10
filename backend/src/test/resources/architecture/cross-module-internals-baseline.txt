@@ -636,8 +636,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService -> com.
 com.hunt.otziv.common_billing.service.CommonInvoiceInitializationService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy
 com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.p_products.model.Order
-com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.payments.dto.TbankCancelCommand
-com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.payments.dto.TbankCancelResponse
 com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.payments.dto.TbankGetStateResponse
 com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.payments.dto.TbankPaymentProfile
 com.hunt.otziv.common_billing.service.CommonInvoiceManualPaymentWorkflow -> com.hunt.otziv.payments.model.ManualPaymentSource

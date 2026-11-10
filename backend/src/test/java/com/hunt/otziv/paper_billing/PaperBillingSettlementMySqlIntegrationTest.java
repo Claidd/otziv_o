@@ -24,7 +24,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
     @BeforeEach void setup() {
         var ds=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());
         jdbc=new JdbcTemplate(ds);
-        for(String table:List.of("paper_invoice_files","paper_invoice_event","paper_invoice_staff_notice","company_billing_payer_audit","company_billing_payer","paper_invoice_bank_receipt","paper_invoice_document","paper_invoice_statement_cursor","payment_links","common_invoices","orders"))
+        for(String table:List.of("common_invoice_paper_part_orders","common_invoice_paper_parts","paper_invoice_files","paper_invoice_event","paper_invoice_staff_notice","company_billing_payer_audit","company_billing_payer","paper_invoice_bank_receipt","paper_invoice_document","paper_invoice_statement_cursor","payment_links","common_invoices","orders"))
             jdbc.execute("DROP TABLE IF EXISTS "+table);
         jdbc.execute("CREATE TABLE orders(order_id BIGINT PRIMARY KEY)");
         jdbc.execute("INSERT INTO orders VALUES(42)");
@@ -38,6 +38,8 @@ class PaperBillingSettlementMySqlIntegrationTest {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_352__paper_invoice_delivery_and_staff_notices.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_353__paper_invoice_cancellation.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_354__paper_cancel_ordinary_invoice.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_356__common_invoice_paper_parts.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_358__paper_part_reminders.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_363__paper_invoice_payment_reference.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_364__paper_files_and_delivery_backoff.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_387__paper_invoice_replacement_mode.sql")).execute(ds);
@@ -133,7 +135,6 @@ class PaperBillingSettlementMySqlIntegrationTest {
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE document_id=? AND event_key='delivery-attention'",Integer.class,id));
     }
     @Test void paymentArrivingDuringReminderDoesNotLeaveAPaidInvoiceInReview() {
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_358__paper_part_reminders.sql")).execute(jdbc.getDataSource());
         jdbc.update("UPDATE paper_invoice_document SET target_kind='COMMON_PART',target_id=1,paper_next_reminder_at=DATE_SUB(NOW(6),INTERVAL 1 MINUTE) WHERE id=?",id);
         var settings=new PaperBillingSettings();settings.setEnabled(true);settings.setBankOperationsEnabled(true);settings.setDeliveryEnabled(true);
         var bank=mock(PaperBillingBankClient.class);when(bank.configured()).thenReturn(true);
@@ -264,15 +265,35 @@ class PaperBillingSettlementMySqlIntegrationTest {
         catch(InterruptedException e) {Thread.currentThread().interrupt();throw new IllegalStateException(e);}
     }
 
-    @Test void partialAndRemainderCloseOnceAfterMatchingBothReceipts() {
+    @Test void ordinaryOrderRequiresOneFullTransferAndKeepsShortReceiptsForReview() {
         settlement.accept(receipt("p1",200000,"7707083893"));
         settlement.accept(receipt("p1",200000,"7707083893"));
+        settlement.accept(receipt("p2",50000,"7707083893"));
         verifyNoInteractions(finance);
-        assertEquals(200000L, store.document(store.row(id)).receivedKopecks());
+        assertNull(store.row(id).get("paid_at"));
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt WHERE state='NEEDS_REVIEW'",Integer.class));
+    }
+    @Test void alreadyRecordedLegacyPartialCanBeCompletedOnce() {
+        settlement.accept(receipt("p1",200000,"7707083893"));
+        jdbc.update("UPDATE paper_invoice_bank_receipt SET state='PARTIAL' WHERE payment_id='p1'");
+        store.jdbc().update("UPDATE paper_invoice_document SET stage='WAITING_PAYMENT' WHERE id=?",id);
         settlement.accept(receipt("p2",50000,"7707083893"));
         settlement.accept(receipt("p2",50000,"7707083893"));
         verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);
-        assertNotNull(store.row(id).get("paid_at"));
+    }
+    @Test void exactReceiptOnAnotherRouteStopsDocumentCollectionAndQuarantinesDuplicate() {
+        assertTrue(store.closeUnpaidDocument("ORDER",42L,id,250000L));
+        settlement.accept(receipt("second",250000,"7707083893"));
+        settlement.accept(receipt("second",250000,"7707083893"));
+        verifyNoInteractions(finance);
+        assertNull(store.row(id).get("paid_at"));
+        assertEquals("NEEDS_REVIEW",jdbc.queryForObject("SELECT state FROM paper_invoice_bank_receipt",String.class));
+    }
+    @Test void previousFullReceiptAlsoStopsCollectionOnAnIssuedSubset() {
+        jdbc.update("UPDATE paper_invoice_document SET target_kind='COMMON_PART',parent_invoice_id=7 WHERE id=?",id);
+        assertTrue(store.closeUnpaidDocument("COMMON_INVOICE",7,id,300000));
+        assertEquals("NEEDS_REVIEW",store.row(id).get("stage"));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE event_key='PAID_BY_PREVIOUS_LINK'",Integer.class));
     }
     @Test void wrongPayerAndDuplicateFullTransfersRequireReview() {
         settlement.accept(receipt("p1",250000,"380124742639"));

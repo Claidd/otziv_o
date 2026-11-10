@@ -159,6 +159,10 @@ type InvoiceAction =
                 <button type="button" class="success" (click)="markPaperInvoiceIssued()" [disabled]="!!mutating()">Счёт отправлен</button>
               }
               @if (invoice.status === 'NEEDS_ATTENTION') {
+                @if (manualAttributionRequired() && invoice.paidKopecks === 0 && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+                    && (invoice.lastError?.startsWith('bad_review_supplement_required:') || invoice.lastError?.startsWith('Ожидаем закрытия прежней банковской ссылки.'))) {
+                  <button type="button" (click)="runInvoiceAction('paid')" [disabled]="!!mutating()">Оплата конкретному специалисту</button>
+                }
                 @if (attentionPolicy(invoice).latePayment) {
                   <button type="button" (click)="runInvoiceAction('late-payment')" [disabled]="!!mutating()">Поздняя оплата</button>
                 }
@@ -191,6 +195,9 @@ type InvoiceAction =
                 <button type="button" (click)="copyPublicUrl(invoice)" [disabled]="!invoice.publicUrl || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE'">Ссылка</button>
                 <button type="button" (click)="runInvoiceAction('approve-review-orders')" [disabled]="!!mutating() || !canApproveReviewOrders()">Одобрить все</button>
                 @if (invoice.contractorPaymentRoute) {
+                  @if (manualAttributionRequired() && canMarkInvoicePaid(invoice)) {
+                    <button type="button" (click)="runInvoiceAction('paid')" [disabled]="!!mutating()">Оплата конкретному специалисту</button>
+                  }
                   <button type="button" class="success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource(invoice)">Сверить поступление</button>
                 } @else {
                   <button type="button" class="success" (click)="runInvoiceAction('paid')" [disabled]="!!mutating() || !canMarkInvoicePaid(invoice)">Оплачен</button>
@@ -790,7 +797,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return;
       }
       if (required) {
-        await this.runAttributedPayment(ticket, invoiceId, 'STANDARD');
+        await this.runAttributedPayment(ticket, invoiceId, this.isBankPaymentRoute(invoice?.paymentRouteType) ? 'TBANK_FALLBACK' : 'STANDARD');
         return;
       }
     }
@@ -912,7 +919,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       if (!this.routeGuard.accepts(ticket)) {
         return;
       }
-      if (!context.canChange && !(targetOverride === 'DIFFERENT_RECIPIENT' && context.bankRecipientChangeAvailable)) {
+      if (!context.canChange && !((targetOverride === 'DIFFERENT_RECIPIENT' || targetOverride === 'EMPLOYEE_REQUISITES') && context.bankRecipientChangeAvailable)) {
         this.error.set(context.blockReason || 'Способ оплаты нельзя изменить без ручной сверки.');
         return;
       }

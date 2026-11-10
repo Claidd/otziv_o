@@ -11,16 +11,11 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
-import com.hunt.otziv.payments.dto.TbankCancelCommand;
-import com.hunt.otziv.payments.dto.TbankCancelResponse;
-import com.hunt.otziv.payments.dto.TbankGetStateResponse;
-import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
-import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
@@ -42,7 +37,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 import static com.hunt.otziv.payments.service.PaymentLinkSettlementService.PREPAID_WAITING_ORDER_COMPLETION;
-import static com.hunt.otziv.payments.service.PaymentLinkCancellationWorkflow.CancelReservation;
+import com.hunt.otziv.payments.api.UnpaidBankObservation;
 import static com.hunt.otziv.payments.service.PaymentBankObservationService.BankStateObservation;
 import static com.hunt.otziv.payments.service.PaymentBankObservationService.ProviderStateObservation;
 import static com.hunt.otziv.payments.service.ManualCardRoutePolicy.MANAGER_REPORTED_CARD_PAYMENT_AUDIT_PREFIX;
@@ -53,7 +48,7 @@ import static com.hunt.otziv.payments.service.ManualCardRoutePolicy.MANUAL_CARD_
 import static com.hunt.otziv.payments.service.ManualCardRoutePolicy.MANUAL_CARD_PAYMENT_PENDING_PREFIX;
 
 /**
- * Settles a reported card transfer: freeze recipient intent, verify/cancel any
+ * Settles a reported card transfer: freeze recipient intent, verify any
  * bank session outside the database transaction, then atomically record the
  * manual payment and its accounting evidence. Unknown bank outcomes stay blocked.
  */
@@ -76,8 +71,6 @@ public class ManualCardPaymentWorkflow {
 
     private final BankObservationApplicationService bankObservationApplication;
 
-    private final PaymentLinkCancellationWorkflow cancellationWorkflow;
-
     private final PaymentLinkPresenter paymentPresenter;
 
     private final CommonInvoiceRouteSelector commonInvoiceRouteSelector;
@@ -90,7 +83,7 @@ public class ManualCardPaymentWorkflow {
 
     private final TbankPaymentProperties properties;
 
-    private final TbankClient tbankClient;
+    private final UnpaidBankObservation unpaidBank;
 
     private final ManualPaymentRecipientTelegramNotificationService manualPaymentRecipientTelegramNotificationService;
 
@@ -435,7 +428,7 @@ public class ManualCardPaymentWorkflow {
         }
         ManualCardPaymentPlan plan;
         if (isPendingManualCardPayment(snapshot)) {
-            plan = manualCardPaymentPlan(snapshot, null);
+            plan = manualCardPaymentPlan(snapshot);
             ManualCardPaymentPlan pendingPlan = plan;
             transactionExecutor.requiredNoRollback(() -> {
                 markManualCardPaymentPending(pendingPlan, cleanNote, cleanReceiptUrl, cleanActor, authentication, context, requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId);
@@ -444,43 +437,89 @@ public class ManualCardPaymentWorkflow {
         } else if (isUnstartedCreatedBankRoute(snapshot)) {
             plan = transactionExecutor.requiredNoRollback(() -> prepareUnstartedManualCardPayment(linkId, orderId, cleanNote, cleanReceiptUrl, cleanActor, authentication, context, requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId));
         } else if (isSafeHistoricalBankRoute(snapshot)) {
-            plan = manualCardPaymentPlan(snapshot, null);
+            plan = manualCardPaymentPlan(snapshot);
             ManualCardPaymentPlan verifiedPlan = plan;
             transactionExecutor.requiredNoRollback(() -> {
                 markManualCardPaymentPending(verifiedPlan, cleanNote, cleanReceiptUrl, cleanActor, authentication, context, requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId);
                 return null;
             });
         } else {
-            BankStateObservation observation = observeTbankStateForManualCardPayment(snapshot);
-            if (observation == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Не удалось получить свежий статус платежа в T-Bank. Ручная оплата не зачислена.");
-            }
-            plan = transactionExecutor.requiredNoRollback(() -> prepareManualCardPayment(linkId, orderId, observation, cleanNote, cleanReceiptUrl, cleanActor, authentication, context, requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId));
-        }
-        CancelReservation reservation = plan.cancelReservation();
-        if (reservation != null) {
-            PaymentLinkStatus incoming;
-            try {
-                TbankCancelResponse response = tbankClient.cancel(reservation.runtimeProfile(), new TbankCancelCommand(reservation.paymentId(), reservation.amountKopecks()));
-                validateCancelResponse(reservation, response);
-                incoming = statusAfterCancel(response.status());
-            } catch (RuntimeException failure) {
-                recordAmbiguousCancelFailure(reservation, failure);
-                throw failure;
-            }
-            PaymentLinkStatus observedStatus = incoming;
-            transactionExecutor.requiredNoRollback(() -> {
-                applyCancelObservation(reservation, observedStatus);
-                if (observedStatus == PaymentLinkStatus.CANCELED) {
-                    markManualCardPaymentPending(plan, cleanNote, cleanReceiptUrl, cleanActor, authentication, context, requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId);
-                }
-                return null;
+            var source = transactionExecutor.required(() -> {
+                var current = paymentLinkRepository.findByIdWithOrder(linkId).orElseThrow();
+                if (current.getStatus() != PaymentLinkStatus.INITIATED || !hasOrderBinding(current, orderId))
+                    throw ambiguousManualCardPaymentRoute();
+                var bound = PaymentRouteReplacementWorkflow.bankSource(current);
+                if (bound == null || bound.operation().isBlank()) throw ambiguousManualCardPaymentRoute();
+                return bound;
             });
-            if (incoming != PaymentLinkStatus.CANCELED) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "T-Bank не подтвердил простое закрытие неоплаченной сессии. " + "Получен статус " + incoming + "; ручная оплата не зачислена, нужна сверка.");
-            }
+            var observation = verifyUnpaidBank(source);
+            return transactionExecutor.required(() -> applyObservedTransfer(linkId, orderId, receivedAmountKopecks,
+                    source, observation, cleanNote, cleanReceiptUrl, cleanActor, authentication, context,
+                    requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId));
         }
         return transactionExecutor.required(() -> applyManualCardPayment(plan, cleanNote, cleanReceiptUrl, cleanActor, authentication, context, requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId));
+    }
+
+    private AdminPaymentLinkResponse applyObservedTransfer(Long linkId, Long orderId, long receivedAmountKopecks,
+            UnpaidBankObservation.Source source, UnpaidBankObservation.Result observation,
+            String cleanNote, String cleanReceiptUrl, String cleanActor, Authentication authentication,
+            ManualCardPaymentContext context, ContractorRecipientType requestedRecipientType,
+            Long requestedRecipientProfileId, String requestedRecipientKey, Long specialistReviewId) {
+        var order = lockOrderForManualPayment(orderId).orElseThrow();
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        var link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow();
+        if (link.getStatus() != PaymentLinkStatus.INITIATED || !source.equals(PaymentRouteReplacementWorkflow.bankSource(link))
+                || hasBankInitReservation(link) || hasBankCancelReservation(link) || link.getBankCancelOriginStatus() != null)
+            throw ambiguousManualCardPaymentRoute();
+        requireSpecialistReviewPermission(orderId, link, receivedAmountKopecks, requestedRecipientType,
+                requestedRecipientProfileId, requestedRecipientKey, context, specialistReviewId);
+        requireManualCardPaymentLocalEligibility(order, link, orderId);
+        freezeActualRecipientIntentIfRequired(order, link, requestedRecipientType, requestedRecipientProfileId,
+                requestedRecipientKey, context.reason(), cleanReceiptUrl, cleanActor);
+        link.setStatus(PaymentLinkStatus.CANCELED);
+        link.setObserveReplacedBank(observation.openUnpaid(source));
+        if (!link.isObserveReplacedBank()) link.setProviderTerminalStatus(observation.status());
+        setManualCardPaymentComment(link, manualCardPaymentEvidence(cleanNote, cleanReceiptUrl, context.mode()));
+        link.setLastError(MANUAL_CARD_PAYMENT_PENDING_PREFIX + " verified_bank_observation");
+        return applyManualCardPayment(manualCardPaymentPlan(link), cleanNote, cleanReceiptUrl,
+                cleanActor, authentication, context, requestedRecipientType, requestedRecipientProfileId,
+                requestedRecipientKey, specialistReviewId);
+    }
+
+    /** All lines of the same transfer share the caller's transaction and order locks. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void postTransferLine(SpecialistManualPaymentReview review, PaymentLink link,
+            UnpaidBankObservation.Source source, UnpaidBankObservation.Result observation, Authentication auth) {
+        Long orderId = review.getOrderId();
+        var type = ContractorRecipientType.valueOf(review.getRecipientType());
+        var context = new ManualCardPaymentContext(ManualCardPaymentMode.MANAGER_REPORTED, review.getReason());
+        String note = "Причина менеджера: " + review.getReason();
+        String actor = auth.getName();
+        String url = review.getReceiptUrl();
+        Long profileId = review.getRecipientProfileId();
+        String key = review.getRecipientKey();
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(link.getId());
+        if (isDirectManualAttributionRoute(link) || isRecoverableExpiredManualRoute(link)) {
+            applyDirectManualPayment(link.getId(), orderId, review.getAmountKopecks(), note, url, actor, auth, context,
+                    type, profileId, key, review.getId());
+            return;
+        }
+        if (source != null && observation != null) {
+            applyObservedTransfer(link.getId(), orderId, review.getAmountKopecks(), source, observation,
+                    note, url, actor, auth, context, type, profileId, key, review.getId());
+            return;
+        }
+        ManualCardPaymentPlan plan;
+        if (isUnstartedCreatedBankRoute(link)) {
+            plan = prepareUnstartedManualCardPayment(link.getId(), orderId, note, url, actor, auth, context,
+                    type, profileId, key, review.getId());
+        } else if (isSafeHistoricalBankRoute(link)) {
+            plan = manualCardPaymentPlan(link);
+            markManualCardPaymentPending(plan, note, url, actor, auth, context, type, profileId, key, review.getId());
+        } else {
+            throw ambiguousManualCardPaymentRoute();
+        }
+        applyManualCardPayment(plan, note, url, actor, auth, context, type, profileId, key, review.getId());
     }
 
     private void requireSpecialistReviewPermission(Long orderId, PaymentLink link,
@@ -556,64 +595,20 @@ public class ManualCardPaymentWorkflow {
         setManualCardPaymentComment(link, manualCardPaymentEvidence(note, receiptUrl, context.mode()));
         link.setLastError(limit(MANUAL_CARD_PAYMENT_PENDING_PREFIX + " local_route_closed; " + actorAuditKey(context.mode()) + "=" + limit(actor.isBlank() ? "admin" : actor, 80), 512));
         paymentLinkRepository.save(link);
-        return manualCardPaymentPlan(link, null);
+        return manualCardPaymentPlan(link);
     }
 
-    private ManualCardPaymentPlan prepareManualCardPayment(Long linkId, Long orderId, BankStateObservation observation, String note, String receiptUrl, String actor, Authentication authentication, ManualCardPaymentContext context, ContractorRecipientType requestedRecipientType, Long requestedRecipientProfileId, String requestedRecipientKey, Long specialistReviewId) {
-        Order order = lockOrderForManualPayment(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
-        managerAccessService.requireOrderAccess(orderId, authentication);
-        ensureOrderNotCoveredByActiveCommonInvoice(orderId);
-        PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
-        requireSpecialistReviewPermission(orderId, link, link.getAmountKopecks(),
-                requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey,
-                context, specialistReviewId);
-        if (!hasOrderBinding(link, orderId) || !sameObservedLink(link, observation) || observation.orderId() == null || !observation.orderId().equals(orderId) || link.getStatus() != observation.status() || link.getAmountKopecks() != observation.amountKopecks() || !normalize(link.getTbankPaymentId()).equals(observation.paymentId()) || !normalize(link.getTbankOrderId()).equals(observation.tbankOrderId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платеж изменился во время сверки. Ручная оплата не зачислена; обновите журнал.");
+    UnpaidBankObservation.Result verifyUnpaidBank(UnpaidBankObservation.Source source) {
+        UnpaidBankObservation.Result result;
+        try {
+            result = unpaidBank.observe(source);
+        } catch (RuntimeException unavailable) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Не удалось проверить банковскую ссылку. Повторите после ответа банка.", unavailable);
         }
-        if (link.getPaymentMethod() != PaymentMethod.BANK_FORM && link.getPaymentMethod() != PaymentMethod.SBP_QR) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Выбрана не банковская платежная ссылка");
+        if (result.outcome() != UnpaidBankObservation.Outcome.CLOSED && !result.openUnpaid(source)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "По банковской ссылке требуется сверка. Статус банка " + result.status());
         }
-        boolean stableOpenSession = link.getStatus() == PaymentLinkStatus.INITIATED;
-        boolean stableSafeTerminalSession = isSafeTerminalBeforeManualCardPayment(link.getStatus());
-        if ((!stableOpenSession && !stableSafeTerminalSession) || normalize(link.getTbankPaymentId()).isBlank() || hasBankInitReservation(link) || hasBankCancelReservation(link) || link.getBankCancelOriginStatus() != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Безопасное зачисление доступно только для стабильной открытой T-Bank сессии");
-        }
-        TbankGetStateResponse state = observation.state();
-        String errorCode = normalize(state == null ? null : state.errorCode());
-        if (state == null || !state.success() || (!errorCode.isBlank() && !"0".equals(errorCode))) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "T-Bank не подтвердил актуальное состояние платежа. Ручная оплата не зачислена.");
-        }
-        PaymentProfile profile = resolvePaymentProfile(link);
-        TbankPaymentProfile runtimeProfile = runtimeProfileForLink(profile, link);
-        if (!normalize(runtimeProfile.terminalKey()).equals(observation.terminalKey()) || !isStateConsistent(link, state, runtimeProfile)) {
-            paymentLinkRepository.save(link);
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Реквизиты ответа T-Bank не совпали со ссылкой. Ручная оплата не зачислена.");
-        }
-        String providerStatus = normalize(state.status()).toUpperCase(Locale.ROOT);
-        applyObservedTbankStateIfCurrent(link, observation, orderId);
-        ManualCardPaymentPlan plan = manualCardPaymentPlan(link, null);
-        if (isCancellableUnpaidProviderStatus(providerStatus) && link.getStatus() == PaymentLinkStatus.INITIATED) {
-            requireManualCardPaymentLocalEligibility(order, link, orderId);
-            // This evidence marker is stored before the remote Cancel call. If
-            // that call times out but later reconciliation observes CANCELED,
-            // a manager retry can safely resume instead of leaving a permanent
-            // NEEDS_RECONCILIATION record.
-            freezeActualRecipientIntentIfRequired(order, link, requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, context.reason(), receiptUrl, actor.isBlank() ? "system" : actor);
-            setManualCardPaymentComment(link, manualCardPaymentEvidence(note, receiptUrl, context.mode()));
-            return manualCardPaymentPlan(link, reserveBankCancel(link, orderId));
-        }
-        if (("CANCELED".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.CANCELED) || ("REJECTED".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.REJECTED) || ("DEADLINE_EXPIRED".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.EXPIRED)) {
-            markManualCardPaymentPending(plan, note, receiptUrl, actor, authentication, context, requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId);
-            return plan;
-        }
-        throw new ResponseStatusException(HttpStatus.CONFLICT, "T-Bank вернул статус " + (providerStatus.isBlank() ? "UNKNOWN" : providerStatus) + ". Банковский платеж может быть активен, оплачен или требовать возврата; " + "ручная оплата не зачислена.");
-    }
-
-    private boolean isCancellableUnpaidProviderStatus(String providerStatus) {
-        // FORM_SHOWED means that the customer reached the payment form, not
-        // that money was authorized. It is still settled only after T-Bank
-        // explicitly accepts Cancel and returns CANCELED.
-        return "NEW".equals(providerStatus) || "FORM_SHOWED".equals(providerStatus);
+        return result;
     }
 
     private AdminPaymentLinkResponse preflightManualCardPaymentRecipientIntent(Long linkId, Long orderId, long amountKopecks, ManualCardPaymentContext context, String receiptUrl, String actor, ContractorRecipientType requestedRecipientType, Long requestedRecipientProfileId, String requestedRecipientKey, Authentication authentication, Long specialistReviewId) {
@@ -859,11 +854,11 @@ public class ManualCardPaymentWorkflow {
         }
     }
 
-    private ManualCardPaymentPlan manualCardPaymentPlan(PaymentLink link, CancelReservation reservation) {
+    private ManualCardPaymentPlan manualCardPaymentPlan(PaymentLink link) {
         if (link == null || link.getOrder() == null || link.getOrder().getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
         }
-        return new ManualCardPaymentPlan(link.getId(), link.getOrder().getId(), normalize(link.getTbankPaymentId()), normalize(link.getTbankOrderId()), link.getAmountKopecks(), reservation);
+        return new ManualCardPaymentPlan(link.getId(), link.getOrder().getId(), normalize(link.getTbankPaymentId()), normalize(link.getTbankOrderId()), link.getAmountKopecks());
     }
 
     private boolean isPendingManualCardPayment(PaymentLink link) {
@@ -927,10 +922,6 @@ public class ManualCardPaymentWorkflow {
                     ManualCardRoutePolicy.ACTIVE_TOCHKA_MANUAL_ERROR_PREFIX + " нельзя автоматически закрыть для ручного перевода. "
                     + "Ручная отметка не зачислена. Используйте исходную банковскую ссылку либо завершите банковскую операцию перед сменой получателя.");
         }
-    }
-
-    private boolean isSafeTerminalBeforeManualCardPayment(PaymentLinkStatus status) {
-        return manualCardRoutePolicy.isSafeTerminalBeforeManualCardPayment(status);
     }
 
     private String manualCardPaymentAudit(String note, String receiptUrl, ManualCardPaymentMode mode) {
@@ -1024,24 +1015,8 @@ public class ManualCardPaymentWorkflow {
         settlementService.cancelBadReviewAutoBanAfterCommit(order, reason);
     }
 
-    private CancelReservation reserveBankCancel(PaymentLink link, Long orderId) {
-        return cancellationWorkflow.reserveBankCancel(link, orderId);
-    }
-
-    private AdminPaymentLinkResponse applyCancelObservation(CancelReservation reservation, PaymentLinkStatus incoming) {
-        return cancellationWorkflow.applyCancelObservation(reservation, incoming);
-    }
-
-    private void recordAmbiguousCancelFailure(CancelReservation reservation, RuntimeException failure) {
-        cancellationWorkflow.recordAmbiguousCancelFailure(reservation, failure);
-    }
-
     private boolean hasBankCancelReservation(PaymentLink link) {
         return paymentPresenter.hasBankCancelReservation(link);
-    }
-
-    private boolean isStateConsistent(PaymentLink link, TbankGetStateResponse state, TbankPaymentProfile runtimeProfile) {
-        return bankObservationApplication.isStateConsistent(link, state, runtimeProfile);
     }
 
     private boolean canApplyOrderPaymentNow(Order order) {
@@ -1068,10 +1043,6 @@ public class ManualCardPaymentWorkflow {
         manualPaymentRecipientTelegramNotificationService.notifyAfterCommit(paymentLinkId);
     }
 
-    private void validateCancelResponse(CancelReservation reservation, TbankCancelResponse response) {
-        cancellationWorkflow.validateCancelResponse(reservation, response);
-    }
-
     private boolean sameLinkId(PaymentLink left, PaymentLink right) {
         Long leftId = left == null ? null : left.getId();
         Long rightId = right == null ? null : right.getId();
@@ -1092,18 +1063,6 @@ public class ManualCardPaymentWorkflow {
 
     private AdminPaymentLinkResponse toAdminResponse(PaymentLink link) {
         return paymentPresenter.toAdminResponse(link);
-    }
-
-    private PaymentProfile resolvePaymentProfile(PaymentLink link) {
-        return bankObservations.resolvePaymentProfile(link);
-    }
-
-    private TbankPaymentProfile runtimeProfileForLink(PaymentProfile profile, PaymentLink link) {
-        return bankObservations.runtimeProfileForLink(profile, link);
-    }
-
-    private PaymentLinkStatus statusAfterCancel(String status) {
-        return cancellationWorkflow.statusAfterCancel(status);
     }
 
     private String description(Order order) {
@@ -1142,7 +1101,7 @@ public class ManualCardPaymentWorkflow {
         return commonInvoiceRouteSelector.limit(value, maxLength);
     }
 
-    record ManualCardPaymentPlan(Long linkId, Long orderId, String paymentId, String tbankOrderId, long amountKopecks, CancelReservation cancelReservation) {
+    record ManualCardPaymentPlan(Long linkId, Long orderId, String paymentId, String tbankOrderId, long amountKopecks) {
     }
 
     record OrderManualCardRoute(Long linkId, long amountKopecks) {

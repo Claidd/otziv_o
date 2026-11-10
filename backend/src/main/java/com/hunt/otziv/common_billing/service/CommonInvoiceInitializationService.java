@@ -188,7 +188,7 @@ public class CommonInvoiceInitializationService {
         }
         TbankInitResponse response;
         try {
-            response = tbankClient.init(prepared.runtimeProfile(), new TbankInitCommand(prepared.tbankOrderId(), prepared.remainingKopecks(), "Репутационные услуги", prepared.email(), properties.notificationUrl(), properties.successUrl(), properties.failUrl(), OffsetDateTime.now(MOSCOW_ZONE).plus(properties.getRedirectDue())));
+            response = tbankClient.init(prepared.runtimeProfile(), new TbankInitCommand(prepared.tbankOrderId(), prepared.remainingKopecks(), "Репутационные услуги", prepared.email(), properties.notificationUrl(), properties.successUrl(), properties.failUrl(), prepared.providerExpiresAt().atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(MOSCOW_ZONE).toOffsetDateTime()));
         } catch (RuntimeException e) {
             boolean tlsCertificateFailureBeforeHttp = CommonPaymentInitFailureClassifier.isCertificateTlsFailureBeforeHttpResponse(e);
             String persistedError = (tlsCertificateFailureBeforeHttp ? CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_ERROR_CODE : "payment_init_exception") + ": " + readableException(e);
@@ -341,6 +341,7 @@ public class CommonInvoiceInitializationService {
         }
         String tbankOrderId = groupTbankOrderId(invoice);
         CommonInvoicePaymentRef preparedRef = createPreparedPaymentInitRef(invoice, tbankOrderId, runtimeProfile, remaining);
+        preparedRef.setProviderExpiresAt(LocalDateTime.now().plus(properties.getRedirectDue()));
         invoice.setPayerEmail(cleanEmail);
         invoice.setTbankOrderId(tbankOrderId);
         invoice.setTbankPaymentId(null);
@@ -350,7 +351,7 @@ public class CommonInvoiceInitializationService {
         invoice.setPaymentUrl(null);
         invoice.setLastError(PAYMENT_INIT_IN_PROGRESS);
         invoiceRepository.save(invoice);
-        return new PreparedCommonPaymentInit(invoice.getId(), preparedRef.getId(), cleanEmail, remaining, runtimeProfile, tbankOrderId, null, null);
+        return new PreparedCommonPaymentInit(invoice.getId(), preparedRef.getId(), cleanEmail, remaining, runtimeProfile, tbankOrderId, null, null, PROVIDER_TBANK, null, null, preparedRef.getProviderExpiresAt());
     }
 
     /**

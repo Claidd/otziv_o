@@ -7,4 +7,6 @@ import org.springframework.security.core.Authentication;
 /** Request a different actual recipient for a single order, waiting for an open bank session. */
 public interface OrderBankRecipientChange {
     PaymentRouteChangeResponse order(long orderId, PaymentRouteChangeRequest request, Authentication actor);
+    PaymentRouteChangeResponse method(long orderId, PaymentRouteChangeRequest request, Authentication actor);
+    boolean paperDocument(long orderId, Long linkId, Authentication actor, String documentRequest);
 }

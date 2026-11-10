@@ -22,7 +22,9 @@ public class RecipientBankObservationService implements UnpaidBankObservation {
 
     @Override
     public Result observe(Source s) {
-        var entity = profiles.findById(s.profileId()).orElseThrow();
+        var entity = (s.profileId() == null && PaymentProfile.PROVIDER_TBANK.equals(s.provider())
+                ? profiles.findByTerminalKey(s.merchant()) : profiles.findById(s.profileId())).orElseThrow();
+        if (!s.provider().equals(entity.normalizedProvider())) throw new IllegalStateException("Провайдер ссылки изменился");
         if (PaymentProfile.PROVIDER_TOCHKA.equals(s.provider()) && profiles.isTochkaProvider(entity)) {
             var profile = tochkaProfiles.resolveForExistingPayment(entity);
             if (!profile.merchantId().equals(s.merchant()) || (s.test() != null && s.test() != profile.testMode()))
@@ -36,7 +38,7 @@ public class RecipientBankObservationService implements UnpaidBankObservation {
             var mapped = mapper.map(payment, new TochkaPaymentOperationMapper.ExpectedPayment(s.operation(), s.order(),
                     profile.customerCode(), s.merchant(), s.amount(), mode), false);
             // Acquiring exposes observation and refund of money already received. CREATED is still payable.
-            if ("EXPIRED".equals(mapped.providerStatus()) && ((payment.paidAt() != null && !payment.paidAt().isBlank())
+            if (Set.of("CREATED","EXPIRED").contains(mapped.providerStatus()) && ((payment.paidAt() != null && !payment.paidAt().isBlank())
                     || (payment.orders() != null && !payment.orders().isEmpty()))) return new Result(Outcome.FINANCIAL,"HISTORY");
             return new Result(classify(mapped.providerStatus()).outcome(),mapped.providerStatus(),
                     mapped.status(), mapped.paymentMethod(), mapped.providerPaymentType());

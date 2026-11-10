@@ -688,12 +688,8 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   }
                 </article>
 
-                @if (!context.canChange) {
-                  @if (context.bankRecipientChangeAvailable) {
-                    <button type="button" (click)="changePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="paymentRouteChanging()">Сменить получателя</button>
-                  } @else {
-                    <p class="sheet-error">{{ context.blockReason || 'Получателя сейчас нельзя изменить.' }}</p>
-                  }
+                @if (!context.canChange && !context.bankRecipientChangeAvailable) {
+                  <p class="sheet-error">{{ context.blockReason || 'Получателя сейчас нельзя изменить.' }}</p>
                   @if (context.configuredMode === 'OWNER_PAPER_INVOICE') {
                     <button type="button" (click)="changePaymentRoute('OWNER_PAPER_INVOICE')">Счёт и акт Точки</button>
                   }
@@ -707,7 +703,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     @if (context.paymentLinkId != null) {
                       <button type="button" (click)="changePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="paymentRouteChanging()">Сменить получателя</button>
                     }
-                    <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('OWNER_TBANK')">
+                    <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="paymentRouteChanging() || !context.canChange || paymentRouteTargetActive('OWNER_TBANK')">
                       <span class="material-icons-sharp">link</span>
                       <strong>{{ context.configuredMode === 'OWNER_TBANK' ? 'Переиздать банковскую ссылку' : 'Банковская ссылка владельца' }}</strong>
                       <small>Банк выбирается по профилю менеджера</small>

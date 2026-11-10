@@ -43,7 +43,7 @@ import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class OrderPaymentCancellationService {
+public class OrderPaymentCancellationService implements com.hunt.otziv.p_products.api.ManualReceiptOrderDebt {
 
     private static final String STATUS_PAYMENT = "Оплачено";
     private static final String STATUS_REMINDER = "Напоминание";
@@ -77,13 +77,47 @@ public class OrderPaymentCancellationService {
 
     @Transactional
     public void cancelPayment(Long orderId, Principal principal) {
+        cancelPayment(orderId,principal,null);
+    }
+
+    private record ManualReceipt(Long linkId, long amount, boolean common, String reason) {}
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void reopen(long orderId, Long evidenceLinkId, long amountKopecks, boolean commonInvoice, Principal actor, String reason) {
+        if (amountKopecks <= 0 || commonInvoice != (evidenceLinkId == null))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Неверный источник ручной оплаты");
+        cancelPayment(orderId,actor,new ManualReceipt(evidenceLinkId,amountKopecks,commonInvoice,reason));
+    }
+
+    private void cancelPayment(Long orderId, Principal principal, ManualReceipt manual) {
         Order order = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
 
-        if (!STATUS_PAYMENT.equals(safeStatusTitle(order))) {
+        boolean prepaid = !STATUS_PAYMENT.equals(safeStatusTitle(order));
+        if (prepaid && (manual == null || manual.common())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Отменить оплату можно только у заказа в статусе \"Оплачено\"");
         }
-        contractorRouteAssignmentGuard.requirePaymentCancellationAllowed(orderId);
+        if (manual == null) contractorRouteAssignmentGuard.requirePaymentCancellationAllowed(orderId);
+        else {
+            var links = paymentLinkRepository.findByOrderIdForUpdate(orderId);
+            if (!manual.common()) {
+                var evidence = links.stream().filter(link -> Objects.equals(link.getId(),manual.linkId())).findFirst().orElseThrow();
+                if (evidence.getStatus() != PaymentLinkStatus.CONFIRMED || evidence.getManualConfirmedAt() == null
+                        || !evidence.isManualReceiptEvidence()
+                        || evidence.getPaperBankDocumentId() != null || evidence.getTbankPaymentId() != null
+                        || !Objects.equals(evidence.getConfirmedAmountKopecks(),manual.amount()))
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Источник не соответствует ручной оплате");
+                if (prepaid && (order.isComplete() || order.getPayDay() != null
+                        || evidence.getLastError() == null || !evidence.getLastError().startsWith("prepaid_waiting_order_completion"))) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "У заказа отсутствует ожидающая ручная предоплата");
+                }
+                evidence.setStatus(PaymentLinkStatus.CANCELED);
+                evidence.setLastError("Ручная оплата отменена администратором. " + manual.reason());
+                evidence.setExpiresAt(java.time.LocalDateTime.now());
+                paymentLinkRepository.saveAndFlush(evidence);
+            }
+        }
         if (paymentLinkRepository.existsByOrder_IdAndStatusIn(orderId, REAL_PAYMENT_STATUSES)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -99,7 +133,18 @@ public class OrderPaymentCancellationService {
         }
 
         List<PaymentCheck> activeChecks = paymentCheckRepository.findByOrderIdAndActiveTrue(orderId);
+        if (prepaid) {
+            if (!activeChecks.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Предоплата уже зачтена в заказе");
+            }
+            businessAuditService.recordRequiredInCurrentTransaction("manual_prepayment_voided", "order", orderId,
+                    orderId, null, safeStatusTitle(order), safeStatusTitle(order), manual.reason());
+            return;
+        }
         PaymentCheck activeCheck = requireSingleActivePaymentCheck(order, activeChecks);
+        if (manual != null && (!Objects.equals(activeCheck.getPaymentLinkId(),manual.linkId())
+                || activeCheck.getSum().movePointRight(2).longValueExact() != manual.amount()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Активный чек не соответствует исправляемому переводу");
         boolean returnedSourceMarked = markExactReturnedSourceProcessed(order, activeCheck);
         List<Zp> paymentDependentZp =
                 contractorRewardLedgerService.lockActiveOrderRewardsAndRequireCancellationRepresentable(orderId);
@@ -108,7 +153,11 @@ public class OrderPaymentCancellationService {
         int canceledAmount = requirePaidAmountSnapshot(activeCheck);
         requireCompanyRollback(order, canceledSum, canceledAmount);
 
-        cancelNextOrderRequest(order, principal);
+        if (manual == null) cancelNextOrderRequest(order, principal);
+        else nextOrderRequestRepository.findBySourceOrderId(orderId).filter(request -> request.getCreatedOrder() == null).ifPresent(request -> {
+            request.setStatus(NextOrderRequestStatus.CANCELED);
+            request.setErrorMessage("Отменена ручная оплата исходного заказа");
+        });
 
         order = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден после отката следующего заказа"));
@@ -135,8 +184,10 @@ public class OrderPaymentCancellationService {
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_REMINDER));
         orderRepository.save(order);
         orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_REMINDER);
-        restorePaymentLink(order);
-        paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
+        if (manual == null || !manual.common()) {
+            restorePaymentLink(order);
+            paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
+        }
 
         businessAuditService.recordRequiredInCurrentTransaction(
                 "order_payment_canceled",
@@ -152,7 +203,7 @@ public class OrderPaymentCancellationService {
                         + ";sum=" + canceledSum
                         + ";amount=" + canceledAmount
                         + ";returnedSourceMarked=" + returnedSourceMarked
-                        + ";paymentLink=restored"
+                        + (manual == null ? ";paymentLink=restored" : ";manualReceiptCorrection=" + manual.reason())
         );
         log.info(
                 "Оплата заказа {} отменена: checks={}, zp={}, sum={}, amount={}",

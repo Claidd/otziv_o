@@ -101,6 +101,13 @@ public class PaperBillingSettlement {
                     amount_kopecks,payer_inn,purpose,state,received_at) VALUES(?,?,?,?,?,?,?,'RECEIVED',NOW(6))
                     """,receipt.customerCode(),receipt.accountId(),receipt.paymentId(),id,receipt.amountKopecks(),receipt.payerInn(),receipt.purpose());
                 if (inserted==0) return;
+                if (Boolean.TRUE.equals(store.jdbc().queryForObject(
+                        "SELECT EXISTS(SELECT 1 FROM paper_invoice_event WHERE document_id=? AND event_key='PAID_BY_PREVIOUS_LINK')",Boolean.class,id))) {
+                    store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='NEEDS_REVIEW' WHERE customer_code=? AND account_id=? AND payment_id=?",
+                            receipt.customerCode(),receipt.accountId(),receipt.paymentId());
+                    store.error(id,"NEEDS_REVIEW","По бумажному документу пришла повторная оплата. Долг уже закрыт по прежней банковской ссылке.");
+                    return;
+                }
                 if(row.get("cancel_requested_at")!=null) {
                     store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='NEEDS_REVIEW' WHERE customer_code=? AND account_id=? AND payment_id=?",
                             receipt.customerCode(),receipt.accountId(),receipt.paymentId());
@@ -129,6 +136,12 @@ public class PaperBillingSettlement {
                     store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='NEEDS_REVIEW' WHERE customer_code=? AND account_id=? AND payment_id=?",
                             receipt.customerCode(),receipt.accountId(),receipt.paymentId());
                     if (row.get("paid_at")==null) store.error(id,"NEEDS_REVIEW","Проверьте плательщика, сумму и состав счёта");
+                    return;
+                }
+                if ("ORDER".equals(row.get("target_kind")) && partial == 0 && receipt.amountKopecks() < total) {
+                    store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='NEEDS_REVIEW' WHERE customer_code=? AND account_id=? AND payment_id=?",
+                            receipt.customerCode(),receipt.accountId(),receipt.paymentId());
+                    store.error(id,"NEEDS_REVIEW","По обычному заказу поступила неполная сумма. Проверьте перевод по выписке.");
                     return;
                 }
                 if (receipt.amountKopecks() < total - partial) {

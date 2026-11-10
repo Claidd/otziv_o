@@ -58,6 +58,9 @@ import { manualTransferDestinationPresentation } from '../shared/manual-transfer
                 <strong>{{ statusLabel() }}</strong>
               </div>
             </section>
+            @if (!isPaymentComplete()) {
+              <p>Если нужны другие реквизиты, напишите менеджеру в чат, куда пришёл счёт.</p>
+            }
 
             @if (isPaymentComplete()) {
               <section class="done-card">

@@ -52,6 +52,7 @@ public class ContractorAdminFinancialReadRepository {
             SELECT a.actual_recipient_profile_id, 'ACTUAL', '', COUNT(a.id), COALESCE(SUM(a.amount_kopecks), 0)
             FROM contractor_actual_payment_attributions a
             WHERE a.actual_recipient_profile_id IN (:ids) AND a.accounting_mode = :mode
+              AND NOT EXISTS(SELECT 1 FROM manual_receipt_corrections c WHERE c.original_id=a.id)
               AND a.effective_at >= :fromTime AND a.effective_at < :toTime
             GROUP BY a.actual_recipient_profile_id
             """;

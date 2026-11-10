@@ -421,7 +421,7 @@ public class BankPaymentReconciliationWorkflow {
     }
 
     private boolean isReconciliationEligible(PaymentLink link, LocalDateTime eligibleBefore) {
-        return link != null && (SYNCABLE_BANK_STATUSES.contains(link.getStatus())
+        return link != null && (link.isObserveReplacedBank() || SYNCABLE_BANK_STATUSES.contains(link.getStatus())
                 || PaymentBankObservationService.SETTLED_BANK_STATUSES.contains(link.getStatus())
                 || link.getBankCancelOriginStatus() != null)
                 && !normalize(link.getTbankPaymentId()).isBlank()

@@ -82,10 +82,15 @@ public class PaperBillingService implements com.hunt.otziv.common_billing.api.Ba
     private record DeferredIssue(long companyId, IssueRequest request, BankSetup setup) {}
 
     public void prepareAfterBankClosure(long invoiceId, String payload, Authentication actor) {
+        prepareAfterBankClosure(new Target("COMMON_INVOICE",invoiceId),payload,actor);
+    }
+    public void prepareOrderAfterBankClosure(long orderId, String payload, Authentication actor) {
+        prepareAfterBankClosure(new Target("ORDER",orderId),payload,actor);
+    }
+    private void prepareAfterBankClosure(Target target, String payload, Authentication actor) {
         DeferredIssue deferred;
         try { deferred = json.readValue(payload, DeferredIssue.class); }
         catch (java.io.IOException invalid) { throw new IllegalStateException("Некорректный запрос выпуска документов", invalid); }
-        var target = new Target("COMMON_INVOICE", invoiceId);
         if (targets.company(target, actor) != deferred.companyId()) throw problem("Компания-плательщик изменилась");
         BankSetup setup = deferred.setup();
         if (!setup.account().split("/")[0].endsWith(settings.getAccountLast4()) || !setup.customer().equals(bank.customer())
@@ -117,7 +122,7 @@ public class PaperBillingService implements com.hunt.otziv.common_billing.api.Ba
         }
         var bankSettings=setup==null?bankSetup():setup;
         if (!modeVerified) {
-            if (rememberSettings && target.kind().equals("COMMON_INVOICE"))
+            if (rememberSettings && (target.kind().equals("COMMON_INVOICE") || target.kind().equals("ORDER")))
                 waitForPaperIssue(target, company, request, auth, bankSettings);
             targets.configureCommon(target,auth);
         }

@@ -49,7 +49,9 @@ public class ManagerPaymentController {
             @Valid @RequestBody PaymentRouteChangeRequest request,
             Authentication authentication
     ) {
-        return paymentRouteChangeService.change(orderId, request, authentication);
+        if (request.target() == com.hunt.otziv.payments.dto.PaymentRouteChangeTarget.OWNER_TBANK)
+            return paymentRouteChangeService.change(orderId, request, authentication);
+        return bankRecipientChanges.method(orderId, request, authentication);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

@@ -89,6 +89,10 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Slf4j
 @RequiredArgsConstructor
 public class CommonInvoiceSettlementService implements com.hunt.otziv.common_billing.api.CommonInvoicePaymentOperations {
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.hunt.otziv.payments.api.AlternatePaperReceipt alternatePaperReceipt;
+
 
     public static final String STATUS_WAITING_COMMON_INVOICE = "Ожидает общего счета";
 
@@ -228,6 +232,10 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     private final ContractorPaymentShadowService contractorPaymentShadowService;
 
     private final CommonManualPaymentAttributionCoordinator commonManualPaymentAttributionCoordinator;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private CommonInvoicePaymentRouteWorkflow paymentRoutes;
 
     private final PaymentProfileService paymentProfileService;
 
@@ -535,7 +543,6 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             throw new TochkaWebhookVerificationException("Tochka common-invoice webhook payload does not match its durable ref", failure);
         }
         ref.setProviderPaymentId(limit(operationId, 64));
-        ref.setProviderStatus(limit(mapped.providerStatus(), 32));
         paymentRefRepository.save(ref);
         entityManager.flush();
         applyTochkaPaymentObservation(invoice, ref, mapped, null, "webhook");
@@ -546,11 +553,90 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         return new PaymentOperation(claims.customerCode(), null, claims.paymentType(), null, claims.transactionId(), null, claims.amount(), claims.status(), claims.operationId(), null, claims.merchantId(), null, claims.paymentLinkId(), List.of());
     }
 
+    private boolean replacedBankAttempt(CommonInvoicePaymentRef ref) {
+        return ref.isObserveReplacedBank() || "route_replaced_observe_only".equals(ref.getReason())
+                || "actual_recipient_received_observe_only".equals(ref.getReason()) || "RECEIPT_REVIEW".equals(paymentRefStatus(ref));
+    }
+
+    void reviewReplacedBankMovement(CommonInvoice invoice, CommonInvoicePaymentRef ref, String bankStatus) {
+        ref.setProviderStatus(bankStatus);
+        ref.setStatus("RECEIPT_REVIEW");
+        ref.setObserveReplacedBank(false);
+        ref.setReason("replaced_bank_payment_requires_review");
+        paymentRefRepository.save(ref);
+        if (invoice.getStatus() != CommonInvoiceStatus.PAID) invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("По прежней банковской ссылке зарегистрировано движение денег. Сверьте поступление по попытке №" + ref.getId());
+        invoice.setNextReminderAt(null);
+        invoiceRepository.save(invoice);
+    }
+
     void applyTochkaPaymentObservation(CommonInvoice invoice, CommonInvoicePaymentRef ref, MappedPayment mapped, String observedPaymentUrl, String source) {
         if (invoice == null || ref == null || mapped == null) {
             return;
         }
         String prior = paymentRefStatus(ref);
+        if ((mapped.status() == PaymentLinkStatus.INITIATED || mapped.status() == PaymentLinkStatus.EXPIRED)
+                && Set.of(PAYMENT_REF_CONFIRMED, PAYMENT_REF_PREPAID, PAYMENT_REF_APPLYING, PAYMENT_REF_APPLIED,
+                        "RECEIPT_REVIEW", "REFUNDED", "PARTIAL_REFUNDED").contains(prior)) return;
+        if (replacedBankAttempt(ref)) {
+            if (!recordTochkaActualPaymentType(invoice, ref, mapped.providerPaymentType())) return;
+            if (mapped.status() == PaymentLinkStatus.INITIATED) return;
+            if (mapped.status() == PaymentLinkStatus.EXPIRED) {
+                ref.setObserveReplacedBank(false);
+                if (PAYMENT_REF_ARCHIVED.equals(prior)) ref.setProviderStatus(mapped.providerStatus());
+                paymentRefRepository.save(ref);
+                return;
+            }
+            if (mapped.status() == PaymentLinkStatus.CONFIRMED) {
+                if ("RECEIPT_REVIEW".equals(prior) || PAYMENT_REF_APPLIED.equals(prior) || PAYMENT_REF_PREPAID.equals(prior)) return;
+                var items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+                if (invoice.getPaidKopecks() != 0 || invoice.getPaidAt() != null || invoice.getClientReportedAt() != null
+                        || invoice.getManualConfirmedAt() != null || invoice.getBadReviewBankRefId() != null
+                        || invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED
+                        || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.BAN
+                        || items.isEmpty() || items.stream().anyMatch(i -> i.isPaid() || isOrderPaid(i.getOrder()))) {
+                    reviewReplacedBankMovement(invoice,ref,mapped.providerStatus());
+                    return;
+                }
+                refreshInvoiceAmounts(invoice,items);
+                if (ref.getAmountKopecks() == null || remainingKopecks(invoice) != ref.getAmountKopecks() || ref.getAmountKopecks() <= 0
+                        || invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION || Boolean.TRUE.equals(ref.getProviderTestMode())) {
+                    reviewReplacedBankMovement(invoice,ref,mapped.providerStatus());
+                    return;
+                }
+                var others = paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId());
+                var pending = others.stream().filter(other -> !Objects.equals(ref.getId(), other.getId())
+                        && !CommonInvoiceManualPaymentWorkflow.MANUAL_COMMON_PAYMENT_SAFE_REF_STATUSES.contains(paymentRefStatus(other))).toList();
+                var replacement = pending.size() == 1 ? paymentRoutes.boundUnpaidBankRef(invoice, others) : null;
+                if (!pending.isEmpty() && (pending.size() != 1 || replacement == null
+                        || !Objects.equals(pending.getFirst().getId(), replacement.getId())
+                        || !PAYMENT_REF_CURRENT.equals(paymentRefStatus(replacement))
+                        || !Set.of("", "NEW", "FORM_SHOWED", "CREATED").contains(normalize(replacement.getProviderStatus())))) {
+                    reviewReplacedBankMovement(invoice,ref,mapped.providerStatus());
+                    return;
+                }
+                if (invoice.getPaperBankDocumentId() != null && !alternatePaperReceipt.closeUnpaidDocument(
+                        "COMMON_INVOICE",invoice.getId(),invoice.getPaperBankDocumentId(),ref.getAmountKopecks())) {
+                    reviewReplacedBankMovement(invoice,ref,mapped.providerStatus());
+                    return;
+                }
+                if (replacement != null) {
+                    replacement.setObserveReplacedBank(true);
+                    replacement.setStatus(PAYMENT_REF_ARCHIVED);
+                    replacement.setReason("route_replaced_observe_only");
+                    paymentRefRepository.save(replacement);
+                    clearCurrentPaymentRef(invoice);
+                }
+                paymentRoutes.restoreBankRecipientForSettlement(invoice,ref);
+                ref.setObserveReplacedBank(false);
+                ref.setProviderStatus(mapped.providerStatus());
+                // Exact first receipt can also close an unpaid invoice whose public route was replaced.
+                applyConfirmedTochkaPayment(invoice,ref,prior,source);
+                return;
+            }
+            reviewReplacedBankMovement(invoice,ref,mapped.providerStatus());
+            return;
+        }
         if (isPaperModeSwitchSafeTerminalStatus(prior) && (invoice.getBadReviewRevision() > 0
                 || "recipient_change_bank_closed".equals(ref.getReason()) || "paper_invoice_mode_switch_provider_closed".equals(ref.getReason()))) {
             if (mapped.status() == PaymentLinkStatus.INITIATED || mapped.status() == PaymentLinkStatus.EXPIRED) {
@@ -719,7 +805,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             paymentRefRepository.save(ref);
             return;
         }
-        if ((invoice.getStatus() == CommonInvoiceStatus.UNPAID && !invoice.isRepricedUnpaid()) || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+        if ((invoice.getStatus() == CommonInvoiceStatus.UNPAID && !invoice.isRepricedUnpaid() && !"route_replaced_observe_only".equals(ref.getReason())) || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
             ref.setStatus(PAYMENT_REF_CONFIRMED);
             ref.setReason(limit("late_tochka_payment_after_terminal_invoice:" + source, 160));
             paymentRefRepository.save(ref);
@@ -777,7 +863,8 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             com.hunt.otziv.payments.api.UnpaidBankObservation.Result observed,
             CommonInvoice invoice, CommonInvoicePaymentRef ref) {
         if ("T_BANK".equals(source.provider()) && "CONFIRMED".equals(observed.status())) {
-            var profile = paymentProfileService.findById(source.profileId()).orElseThrow();
+            var profile = (source.profileId() == null ? paymentProfileService.findByTerminalKey(source.merchant())
+                    : paymentProfileService.findById(source.profileId())).orElseThrow();
             var terminal = paymentProfileService.toRuntimeForTerminal(profile, source.merchant());
             if (!source.merchant().equals(terminal.terminalKey())
                     || (source.test() != null && source.test() != terminal.testMode())) {
@@ -968,6 +1055,21 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         boolean success = "true".equalsIgnoreCase(normalize(payload.get("Success")));
         String errorCode = normalize(payload.get("ErrorCode"));
         String originalStatus = normalize(paymentRef.getStatus()).toUpperCase(Locale.ROOT);
+        if (replacedBankAttempt(paymentRef)) {
+            if (PAYMENT_REF_CONFIRMED.equals(status) && success && "0".equals(errorCode)) {
+                reviewReplacedBankMovement(invoice,paymentRef,status);
+            } else if (Set.of("CANCELED","DEADLINE_EXPIRED","REJECTED").contains(status) && PAYMENT_REF_ARCHIVED.equals(originalStatus)) {
+                paymentRef.setObserveReplacedBank(false);
+                paymentRef.setProviderStatus(status);
+                paymentRefRepository.save(paymentRef);
+            } else if ("AUTHORIZED".equals(status) && PAYMENT_REF_ARCHIVED.equals(originalStatus)) {
+                paymentRef.setProviderStatus(status);
+                paymentRefRepository.save(paymentRef);
+            } else if (isPaperModeSwitchFinancialStatus(status)) {
+                reviewReplacedBankMovement(invoice,paymentRef,status);
+            }
+            return true;
+        }
         if (PAYMENT_REF_CONFIRMED.equals(status) && alreadyPaidByThisTbankRef(invoice, paymentRef)) {
             // A settled invoice can outlive a stale CURRENT ref when a pending
             // callback races with settlement. The exact sole bank payment is
@@ -983,16 +1085,6 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             return true;
         }
         boolean terminalWebhook = isTerminalPaymentWebhook(status, success, errorCode);
-        // A separately evidenced transfer settled this invoice. Keep observing the bank
-        // attempt without starting a cancellation that could race a second payment.
-        if (PAYMENT_REF_ARCHIVED.equals(originalStatus)
-                && "actual_recipient_received_observe_only".equals(paymentRef.getReason())
-                && !PAYMENT_REF_CONFIRMED.equals(status)
-                && (!terminalWebhook || Set.of("CANCELED", "REJECTED").contains(status))) {
-            paymentRef.setProviderStatus(status);
-            paymentRefRepository.save(paymentRef);
-            return true;
-        }
         if (!terminalWebhook && (PAYMENT_REF_CANCEL_PENDING.equals(originalStatus) || PAYMENT_REF_CANCELING.equals(originalStatus) || PAYMENT_REF_CANCEL_FAILED.equals(originalStatus) || PAYMENT_REF_CANCEL_FAILED_FINAL.equals(originalStatus))) {
             paymentRef.setReason(paymentRefReasonPreservingProviderOrderMismatch(paymentRef, "cancel_lifecycle_webhook:" + (status.isBlank() ? "UNKNOWN" : status)));
             paymentRefRepository.save(paymentRef);

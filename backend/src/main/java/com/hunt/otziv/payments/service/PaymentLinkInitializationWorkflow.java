@@ -205,7 +205,7 @@ public class PaymentLinkInitializationWorkflow {
         }
         TbankInitResponse response;
         try {
-            response = tbankClient.init(reservation.runtimeProfile(), new TbankInitCommand(reservation.tbankOrderId(), reservation.amountKopecks(), reservation.description(), reservation.email(), properties.notificationUrl(), properties.successUrl(), properties.failUrl(), OffsetDateTime.now(MOSCOW_ZONE).plus(properties.getRedirectDue())));
+            response = tbankClient.init(reservation.runtimeProfile(), new TbankInitCommand(reservation.tbankOrderId(), reservation.amountKopecks(), reservation.description(), reservation.email(), properties.notificationUrl(), properties.successUrl(), properties.failUrl(), reservation.bankExpiresAt().atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(MOSCOW_ZONE).toOffsetDateTime()));
         } catch (RuntimeException e) {
             recordAmbiguousBankInitFailure(reservation, e);
             log.warn("T-Bank Init failed: linkId={}, orderId={}, profile={}, terminal={}, status={}, reason={}", reservation.linkId(), reservation.orderId(), reservation.runtimeProfile().code(), reservation.terminalKey(), e instanceof ResponseStatusException statusException ? statusException.getStatusCode() : HttpStatus.BAD_GATEWAY, providerFailureReason(e));
@@ -233,7 +233,7 @@ public class PaymentLinkInitializationWorkflow {
         if (paymentId.isBlank()) {
             TbankInitResponse response;
             try {
-                response = tbankClient.init(reservation.runtimeProfile(), new TbankInitCommand(reservation.tbankOrderId(), reservation.amountKopecks(), reservation.description(), reservation.email(), properties.notificationUrl(), properties.successUrl(), properties.failUrl(), OffsetDateTime.now(MOSCOW_ZONE).plus(properties.getRedirectDue())));
+                response = tbankClient.init(reservation.runtimeProfile(), new TbankInitCommand(reservation.tbankOrderId(), reservation.amountKopecks(), reservation.description(), reservation.email(), properties.notificationUrl(), properties.successUrl(), properties.failUrl(), reservation.bankExpiresAt().atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(MOSCOW_ZONE).toOffsetDateTime()));
             } catch (RuntimeException e) {
                 recordAmbiguousBankInitFailure(reservation, e);
                 log.warn("T-Bank Init before SBP payload failed: linkId={}, orderId={}, profile={}, terminal={}, status={}, reason={}", reservation.linkId(), reservation.orderId(), reservation.runtimeProfile().code(), reservation.terminalKey(), e instanceof ResponseStatusException statusException ? statusException.getStatusCode() : HttpStatus.BAD_GATEWAY, providerFailureReason(e));
@@ -387,6 +387,8 @@ public class PaymentLinkInitializationWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Во время сверки доступна только исходная банковская операция; новый платёж не создаётся");
         }
+        if (tochkaProfile == null && normalize(link.getTbankPaymentId()).isBlank())
+            link.setBankExpiresAt(now.plus(properties.getRedirectDue()));
         link.setPayerEmail(email);
         applyConsentTrace(link, clientIp, userAgent);
         if (normalize(link.getTbankOrderId()).isBlank()) {
@@ -473,7 +475,7 @@ public class PaymentLinkInitializationWorkflow {
     }
 
     private BankInitReservation bankInitReservation(PaymentLink link, TbankPaymentProfile runtimeProfile, TochkaPaymentProfile tochkaProfile, String email, String bankId, BankInitMode mode, String nonce, PublicPaymentInitResponse cachedResponse) {
-        return new BankInitReservation(link.getId(), link.getOrder() == null ? null : link.getOrder().getId(), normalize(link.getToken()), nonce, normalize(link.getTbankOrderId()), normalize(link.getTbankPaymentId()), normalize(link.getPaymentUrl()), link.getAmountKopecks(), normalize(link.getDescription()), email, normalize(bankId), normalize(tochkaProfile == null ? runtimeProfile.terminalKey() : tochkaProfile.merchantId()), runtimeProfile, tochkaProfile, mode, cachedResponse);
+        return new BankInitReservation(link.getId(), link.getOrder() == null ? null : link.getOrder().getId(), normalize(link.getToken()), nonce, normalize(link.getTbankOrderId()), normalize(link.getTbankPaymentId()), normalize(link.getPaymentUrl()), link.getAmountKopecks(), normalize(link.getDescription()), email, normalize(bankId), normalize(tochkaProfile == null ? runtimeProfile.terminalKey() : tochkaProfile.merchantId()), runtimeProfile, tochkaProfile, mode, cachedResponse, link.getBankExpiresAt());
     }
 
     private BankInitApplyResult applyBankInitResponse(BankInitReservation reservation, TbankInitResponse response, boolean keepLeaseForQr) {
@@ -1054,7 +1056,7 @@ public class PaymentLinkInitializationWorkflow {
         }
     }
 
-    record BankInitReservation(Long linkId, Long orderId, String token, String nonce, String tbankOrderId, String paymentId, String paymentUrl, long amountKopecks, String description, String email, String bankId, String terminalKey, TbankPaymentProfile runtimeProfile, TochkaPaymentProfile tochkaProfile, BankInitMode mode, PublicPaymentInitResponse cachedResponse) {
+    record BankInitReservation(Long linkId, Long orderId, String token, String nonce, String tbankOrderId, String paymentId, String paymentUrl, long amountKopecks, String description, String email, String bankId, String terminalKey, TbankPaymentProfile runtimeProfile, TochkaPaymentProfile tochkaProfile, BankInitMode mode, PublicPaymentInitResponse cachedResponse, LocalDateTime bankExpiresAt) {
     }
 
     record TochkaInitRecoveryObservation(boolean found, String nonce, LocalDateTime leaseUntil, Long profileId, TochkaPaymentMode expectedMode, TochkaPaymentProfile runtimeProfile, PaymentOperation operation, MappedPayment mapped, String paymentUrl, String failureReason) {

@@ -77,13 +77,13 @@
 
   <div class="meta-row">
     <span>{{ order.status || '-' }}</span>
-    <span>{{ payableOrderSum() | number:'1.0-0' }} руб.</span>
+    <span>{{ payableOrderSum() | number:'1.0-2' }} руб.</span>
   </div>
 
   @if (showBadReviewSummary()) {
     <div class="meta-row">
       <span>Плохие: {{ order.badReviewTasksDone || 0 }}/{{ order.badReviewTasksTotal || 0 }}</span>
-      <span>+{{ order.badReviewTasksSum || 0 | number:'1.0-0' }} руб.</span>
+      <span>+{{ order.badReviewTasksSum || 0 | number:'1.0-2' }} руб.</span>
     </div>
   }
 

@@ -1,0 +1,47 @@
+@if (auth.authenticated() && auth.hasRealmRole('ADMIN')) {
+  <details class="specialist-reviews">
+    <summary>Исправить ручное поступление</summary>
+    <form (ngSubmit)="search()" class="review-form">
+      <label>Найти по <select name="kind" [(ngModel)]="kind" [disabled]="busy()" (change)="entries.set(null); editing.set(null)">
+        <option value="ORDER">Заказу</option><option value="INVOICE">Общему счёту</option>
+      </select></label>
+      <label>Номер <input type="number" min="1" required name="target" [(ngModel)]="target" [disabled]="busy()" (input)="entries.set(null); editing.set(null)" /></label>
+      <button type="submit" [disabled]="busy() || !target">Найти поступления</button>
+    </form>
+    @if (error()) { <p class="review-error" role="alert">{{ error() }}</p> }
+    @if (entries(); as rows) {
+      @for (row of rows; track row.id) {
+        <article class="review-card">
+          <strong>{{ row.amountKopecks / 100 | number:'1.0-2' }} ₽ · {{ row.recipient }}</strong>
+          <p>Записал {{ row.actor }}. {{ row.reason }}</p>
+          @if (row.correction) {
+            <p>{{ row.correction === 'VOID' ? 'Отменил' : 'Сменил получателя' }} {{ row.correctedBy }}. {{ row.correctionReason }}</p>
+          } @else {
+            <button type="button" (click)="edit(row)" [disabled]="busy()">Исправить</button>
+          }
+        </article>
+      } @empty { <p>Ручных поступлений по этому номеру нет.</p> }
+    }
+    @if (editing(); as row) {
+      <form (ngSubmit)="save()" class="review-form">
+        <strong>Поступление №{{ row.id }} · {{ row.recipient }}</strong>
+        <label>Действие <select name="action" [(ngModel)]="action" (change)="confirmed=false">
+          <option value="REASSIGN">Исправить получателя</option><option value="VOID">Отменить ошибочное зачисление</option>
+        </select></label>
+        @if (action === 'REASSIGN') {
+          <label>Фактический получатель <select name="recipient" [(ngModel)]="recipient" required (change)="confirmed=false">
+            <option value="">Выберите получателя</option>
+            @if (row.canAssignOwner) { <option value="OWNER">Владелец</option> }
+            @for (person of recipients(); track person.id) { <option [value]="person.id">{{ person.name }}</option> }
+          </select></label>
+        } @else {
+          <p>Задолженность снова откроется. Система пересчитает чеки и начисления по этому переводу.</p>
+        }
+        <label>Причина исправления <textarea name="reason" [(ngModel)]="reason" required maxlength="500"></textarea></label>
+        <label><input type="checkbox" name="confirmed" [(ngModel)]="confirmed"> Я проверил поступление и подтверждаю исправление</label>
+        <button type="submit" [disabled]="busy() || !confirmed || !reason.trim() || (action === 'REASSIGN' && !recipient)">Провести исправление</button>
+        <button type="button" [disabled]="busy()" (click)="editing.set(null)">Отмена</button>
+      </form>
+    }
+  </details>
+}

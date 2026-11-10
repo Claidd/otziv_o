@@ -37,13 +37,13 @@ public class ManualCardRoutePolicy {
 
     private final PaymentLinkPresenter paymentPresenter;
 
-    static final String MANUAL_CARD_PAYMENT_AUDIT_PREFIX = "Оплачено переводом на карту после отмены T-Bank";
+    static final String MANUAL_CARD_PAYMENT_AUDIT_PREFIX = "Оплачено переводом на карту";
 
-    static final String MANUAL_CARD_PAYMENT_EVIDENCE_PREFIX = "Проверен перевод на карту; ожидается закрытие T-Bank";
+    static final String MANUAL_CARD_PAYMENT_EVIDENCE_PREFIX = "Проверен перевод на карту";
 
-    static final String MANAGER_REPORTED_CARD_PAYMENT_AUDIT_PREFIX = "Заявлено менеджером: оплата переводом после отмены T-Bank";
+    static final String MANAGER_REPORTED_CARD_PAYMENT_AUDIT_PREFIX = "Заявлено менеджером: оплата переводом";
 
-    static final String MANAGER_REPORTED_CARD_PAYMENT_EVIDENCE_PREFIX = "Заявлено менеджером: ожидается закрытие T-Bank";
+    static final String MANAGER_REPORTED_CARD_PAYMENT_EVIDENCE_PREFIX = "Заявлено менеджером: проверяется перевод";
 
     static final String MANUAL_CARD_PAYMENT_PENDING_PREFIX = "manual_card_payment_pending:";
 
@@ -209,7 +209,7 @@ public class ManualCardRoutePolicy {
     }
 
     boolean isPendingManualCardPayment(PaymentLink link) {
-        return isBankPaymentRoute(link) && (isSafeTerminalBeforeManualCardPayment(link.getStatus()) || isProvablyUnissuedFailedBankRoute(link)) && link.getManualConfirmedAt() == null && link.getConfirmedAmountKopecks() == null && (normalize(link.getLastError()).startsWith(MANUAL_CARD_PAYMENT_PENDING_PREFIX) || normalize(link.getManualComment()).startsWith(MANUAL_CARD_PAYMENT_EVIDENCE_PREFIX) || normalize(link.getManualComment()).startsWith(MANAGER_REPORTED_CARD_PAYMENT_EVIDENCE_PREFIX));
+        return isBankPaymentRoute(link) && (isSafeTerminalBeforeManualCardPayment(link.getStatus()) || isProvablyUnissuedFailedBankRoute(link)) && link.getManualConfirmedAt() == null && link.getConfirmedAmountKopecks() == null && (normalize(link.getLastError()).startsWith(MANUAL_CARD_PAYMENT_PENDING_PREFIX) || normalize(link.getManualComment()).startsWith(MANUAL_CARD_PAYMENT_EVIDENCE_PREFIX) || (normalize(link.getManualComment()).startsWith(MANAGER_REPORTED_CARD_PAYMENT_EVIDENCE_PREFIX) || normalize(link.getManualComment()).startsWith("Заявлено менеджером: ожидается закрытие T-Bank")));
     }
 
     boolean isCompletedManualCardPayment(PaymentLink link) {
@@ -302,7 +302,8 @@ public class ManualCardRoutePolicy {
         if (!isBankPaymentRoute(link) || !isSafeTerminalBeforeManualCardPayment(link.getStatus()) || hasBankInitReservation(link) || hasBankCancelReservation(link) || link.getBankCancelOriginStatus() != null) {
             return false;
         }
-        if (isPendingManualCardPayment(link) || isCompletedManualCardPayment(link)) {
+        if (isPendingManualCardPayment(link) || isCompletedManualCardPayment(link)
+                || (link.isObserveReplacedBank() && link.getStatus() == PaymentLinkStatus.CANCELED)) {
             return true;
         }
         if (normalize(link.getTbankPaymentId()).isBlank()) {
@@ -385,6 +386,10 @@ public class ManualCardRoutePolicy {
     }
 
     boolean isActiveOrAmbiguousTochkaRouteForManualCardPayment(PaymentLink link) {
+        if (isTochkaPaymentLink(link) && link.getStatus() == PaymentLinkStatus.INITIATED
+                && !hasBankInitReservation(link) && !hasBankCancelReservation(link) && link.getBankCancelOriginStatus() == null
+                && !normalize(link.getTbankPaymentId()).isBlank() && !normalize(link.getTbankOrderId()).isBlank()
+                && !normalize(link.getTbankTerminalKey()).isBlank()) return false;
         return isTochkaPaymentLink(link) && !isUnstartedCreatedBankRoute(link) && !isSafeHistoricalBankRoute(link) && (hasBankInitReservation(link) || hasBankCancelReservation(link) || link.getBankCancelOriginStatus() != null || !normalize(link.getTbankPaymentId()).isBlank() || link.getStatus() == PaymentLinkStatus.INITIATED || link.getStatus() == PaymentLinkStatus.AUTHORIZED || link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION);
     }
 

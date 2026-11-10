@@ -333,7 +333,7 @@ export class ManagerBoardOrderFacade {
       return;
     }
     const context = this.paymentRouteContext();
-    if (!order || !context || (!context.canChange && !(target === 'DIFFERENT_RECIPIENT' && context.bankRecipientChangeAvailable)) || this.paymentRouteChanging()) {
+    if (!order || !context || (!context.canChange && !(target !== 'OWNER_TBANK' && context.bankRecipientChangeAvailable)) || this.paymentRouteChanging()) {
       return;
     }
     const targetTitle = target === 'EMPLOYEE_REQUISITES'

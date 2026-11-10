@@ -57,6 +57,9 @@ public class PaymentLink {
     @Column(name = "bad_review_bank_check_at")
     private LocalDateTime badReviewBankCheckAt;
 
+    @Column(name = "observe_replaced_bank", nullable = false)
+    private boolean observeReplacedBank;
+
     @Column(nullable = false, length = 96)
     private String token;
 
@@ -434,6 +437,9 @@ public class PaymentLink {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
+    @Column(name = "bank_expires_at")
+    private LocalDateTime bankExpiresAt;
+
     @Column(name = "initiated_at")
     private LocalDateTime initiatedAt;
 
@@ -475,4 +481,9 @@ public class PaymentLink {
     void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+    public boolean isManualReceiptEvidence() {
+        return paymentMethod == PaymentMethod.MANUAL_MOBILE_BANK || paymentMethod == PaymentMethod.MANUAL_EXTERNAL_LINK
+                || paymentMethod == PaymentMethod.OWNER_PAPER_INVOICE;
+    }
+
 }

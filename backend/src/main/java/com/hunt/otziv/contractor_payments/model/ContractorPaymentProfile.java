@@ -121,4 +121,7 @@ public class ContractorPaymentProfile {
     public Long recipientUserId() {
         return user == null ? null : user.getId();
     }
+    public String userDisplayName() {
+        return user.getFio();
+    }
 }

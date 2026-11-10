@@ -41,6 +41,9 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
     @Query(value = "SELECT COUNT(*) FROM bank_recipient_change WHERE target_kind='ORDER' AND source_id=:id AND state='DONE' AND closed_status=:terminal AND replacement_id IS NOT NULL", nativeQuery = true)
     int completedBankRecipientChange(@Param("id") long id, @Param("terminal") String terminal);
 
+    @Query(value = "SELECT COUNT(*) FROM bank_recipient_change WHERE target_kind='ORDER' AND source_id=:id AND state='DONE' AND closed_status IS NULL AND replacement_id IS NOT NULL", nativeQuery = true)
+    int retiredForObservedRouteChange(@Param("id") long id);
+
     // A locking scalar read sees commits made while the caller waited for the order mutex,
     // even when its transaction established an earlier MySQL REPEATABLE READ snapshot.
     @Query(value="SELECT paper_bank_document_id FROM payment_links WHERE order_id=:orderId AND paper_bank_document_id IS NOT NULL FOR UPDATE",nativeQuery=true)
@@ -389,7 +392,7 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
                link.bankReconciliationAttemptedAt AS attemptedAt,
                link.updatedAt AS updatedAt
         FROM PaymentLink link
-        WHERE link.status IN :statuses
+        WHERE (link.status IN :statuses OR link.observeReplacedBank = true)
           AND link.tbankPaymentId IS NOT NULL
           AND link.tbankPaymentId <> ''
           AND link.updatedAt <= :updatedBefore

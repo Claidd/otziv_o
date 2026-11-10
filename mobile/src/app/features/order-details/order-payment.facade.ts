@@ -82,7 +82,7 @@ export class OrderPaymentFacade {
   async changePaymentRoute(target: PaymentRouteChangeTarget): Promise<void> {
     const orderId = this.deps.orderId(); const route = this.deps.capture(); const ticket = this.session.capture();
     const current = this.paymentRouteContext();
-    if (!orderId || !route || !ticket || !current || (!current.canChange && !(target === 'DIFFERENT_RECIPIENT' && current.bankRecipientChangeAvailable)) || this.pendingRoutes.has(orderId) || this.paymentRouteTargetActive(target)) return;
+    if (!orderId || !route || !ticket || !current || (!current.canChange && !(target !== 'OWNER_TBANK' && current.bankRecipientChangeAvailable)) || this.pendingRoutes.has(orderId) || this.paymentRouteTargetActive(target)) return;
     const context = { ...current };
     this.pendingRoutes.add(orderId); this.paymentRouteChanging.set(true);
     try {

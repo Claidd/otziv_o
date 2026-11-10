@@ -138,12 +138,12 @@ public class PaymentBankObservationService {
     }
 
     boolean shouldObserveTbankState(PaymentLink link) {
-        return link != null && runtimeSettingsService.isTbankEnabled() && !isTochkaPaymentLink(link) && (SYNCABLE_BANK_STATUSES.contains(link.getStatus()) || link.getBankCancelOriginStatus() != null) && !normalize(link.getTbankPaymentId()).isBlank();
+        return link != null && runtimeSettingsService.isTbankEnabled() && !isTochkaPaymentLink(link) && (link.isObserveReplacedBank() || SYNCABLE_BANK_STATUSES.contains(link.getStatus()) || link.getBankCancelOriginStatus() != null) && !normalize(link.getTbankPaymentId()).isBlank();
     }
 
     boolean shouldObserveBankState(PaymentLink link) {
         if (isTochkaPaymentLink(link)) {
-            return link != null && (SYNCABLE_BANK_STATUSES.contains(link.getStatus()) || link.getBankCancelOriginStatus() != null) && !normalize(link.getTbankPaymentId()).isBlank();
+            return link != null && (link.isObserveReplacedBank() || SYNCABLE_BANK_STATUSES.contains(link.getStatus()) || link.getBankCancelOriginStatus() != null) && !normalize(link.getTbankPaymentId()).isBlank();
         }
         return shouldObserveTbankState(link);
     }

@@ -2253,6 +2253,186 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/admin/payments/manual-receipts" : {
+      "get" : {
+        "operationId" : "ManualReceiptCorrectionController_find",
+        "x-java-handler" : "com.hunt.otziv.contractor_payments.controller.ManualReceiptCorrectionController#find",
+        "parameters" : [ {
+          "name" : "target",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        }, {
+          "name" : "invoice",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "boolean"
+          }
+        } ],
+        "x-preauthorize" : "hasRole('ADMIN')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ManualReceiptCorrectionsReceiptOutput"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/manual-receipts/recipients" : {
+      "get" : {
+        "operationId" : "ManualReceiptCorrectionController_recipients",
+        "x-java-handler" : "com.hunt.otziv.contractor_payments.controller.ManualReceiptCorrectionController#recipients",
+        "parameters" : [ ],
+        "x-preauthorize" : "hasRole('ADMIN')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ManualReceiptCorrectionsRecipientOutput"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/manual-receipts/{id}/correction" : {
+      "post" : {
+        "operationId" : "ManualReceiptCorrectionController_correct",
+        "x-java-handler" : "com.hunt.otziv.contractor_payments.controller.ManualReceiptCorrectionController#correct",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ManualReceiptCorrectionsRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasRole('ADMIN')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response"
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/admin/payments/manual-recipients/monthly-summary" : {
       "get" : {
         "operationId" : "AdminPaymentController_manualRecipientMonthlySummary",
@@ -23412,6 +23592,137 @@
         "type" : "string",
         "enum" : [ "MOBILE_BANK", "EXTERNAL_LINK" ]
       },
+      "ManualReceiptCorrectionsActionInput" : {
+        "x-java-type" : "com.hunt.otziv.contractor_payments.service.ManualReceiptCorrections$Action",
+        "type" : "string",
+        "enum" : [ "REASSIGN", "VOID" ]
+      },
+      "ManualReceiptCorrectionsReceiptOutput" : {
+        "x-java-type" : "com.hunt.otziv.contractor_payments.service.ManualReceiptCorrections$Receipt",
+        "type" : "object",
+        "properties" : {
+          "actor" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "amountKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          },
+          "canAssignOwner" : {
+            "type" : "boolean"
+          },
+          "correctedBy" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "correction" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "correctionReason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "id" : {
+            "type" : "integer"
+          },
+          "invoiceId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "reason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "recipient" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "actor", "amountKopecks", "canAssignOwner", "correctedBy", "correction", "correctionReason", "id", "invoiceId", "orderId", "reason", "recipient" ],
+        "additionalProperties" : true,
+        "x-server-permission-fields" : [ "canAssignOwner" ]
+      },
+      "ManualReceiptCorrectionsRecipientOutput" : {
+        "x-java-type" : "com.hunt.otziv.contractor_payments.service.ManualReceiptCorrections$Recipient",
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "name" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "id", "name" ],
+        "additionalProperties" : true
+      },
+      "ManualReceiptCorrectionsRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.contractor_payments.service.ManualReceiptCorrections$Request",
+        "type" : "object",
+        "properties" : {
+          "action" : {
+            "$ref" : "#/components/schemas/ManualReceiptCorrectionsActionInput"
+          },
+          "owner" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "type" : "string",
+            "x-not-blank" : true
+          },
+          "recipientProfileId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "requestKey" : {
+            "type" : "string",
+            "x-not-blank" : true
+          }
+        },
+        "required" : [ "action", "reason", "requestKey" ],
+        "additionalProperties" : true
+      },
       "ManualTransferReceiptServiceLineInput" : {
         "x-java-type" : "com.hunt.otziv.payments.service.ManualTransferReceiptService$Line",
         "type" : "object",
@@ -27979,7 +28290,7 @@
     "sha256" : "05942b0d4f2864de138264dc5b85be9dd18c3b85b6b4760bdfa504f0f5089a3c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java",
-    "sha256" : "46c9ab9bf976a8f4965b26b7868eaf7d024e658b84dccca037b51cd7b0cdfec4"
+    "sha256" : "5600fa56255dbe0d869c00702e2cc41139119fb7b50c62b753580957719d5608"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonInvoiceArchiveController.java",
     "sha256" : "c641daee6dbb7b81406e67f3fb245c6e142dbadce839675e1d39711cae48382b"
@@ -28092,6 +28403,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/config/api/ApiExceptionHandler.java",
     "sha256" : "870c1755c16136b4d421b155f73696b5fc9b8a02637567a1460210aaae3968ad"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/contractor_payments/controller/ManualReceiptCorrectionController.java",
+    "sha256" : "902dc53db2a350b8b096aa4f67bf02f160b98636b595de8ee17efb77af5a4948"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/contractor_payments/dto/ContractorActualPaymentAttributionModeResponse.java",
     "sha256" : "8bdf645f5401714fff8cc072675600bde66b2343cf791b40064990f2eb43b1ba"
   }, {
@@ -28112,6 +28426,9 @@
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/contractor_payments/model/ContractorRecipientType.java",
     "sha256" : "2cb398f89578c242a02af142512d9d041c947feeecbd870cffe510b3cff326ed"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/contractor_payments/service/ManualReceiptCorrections.java",
+    "sha256" : "98b1145786dada76e8cf6ddce172100d4fdfc41c4a2b4999c06547f02e12d8d5"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager/controller/ApiManagerBoardController.java",
     "sha256" : "08c3f048041ece94179889dae284e82b6138e179c9f34b73826fe99f2ca97edd"
@@ -28360,7 +28677,7 @@
     "sha256" : "fadbd555a5dd40273ad8ee02957b3161204834558dff96da67b6f4444f852189"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/ManagerPaymentController.java",
-    "sha256" : "254269ce2b70152b2c86678162413177824e24ebffffaf81fb794453d0005be5"
+    "sha256" : "fffef187c25e9ec4fad5af4f66f18d628f99bd218aff768e995be845eab1ffed"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/ManualTransferReceiptController.java",
     "sha256" : "a58982dd4f0e14c8d4fd35e432eac9cd7efe9c793de922557160167c617c8df2"
@@ -28537,7 +28854,7 @@
     "sha256" : "25fca6a4c4d01ad5b94084a8665ce7a146bcad920ed783b2b9034af26b03459b"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/service/ManualTransferReceiptService.java",
-    "sha256" : "bcfda15dc0021526e10c17c1fa74cc5fa789d05d5c7cef87f88ce796d58864a5"
+    "sha256" : "4ab030d5e3ebf6925b5b06b811f42488d878178daf6a915c197f75c3d4895f9b"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/service/OwnerManualCardPaymentApprovalReconciliationService.java",
     "sha256" : "271b9c0a943eefa6b2b0fbed7e51c3f9d7b4e6795f479e52c974d505452394aa"
@@ -28766,6 +29083,10 @@
     "ManualPaymentTaskAccountingTargetOptionOutput" : "com.hunt.otziv.payments.dto.ManualPaymentTaskAccountingTargetOption",
     "ManualPaymentTaskResponseOutput" : "com.hunt.otziv.payments.dto.ManualPaymentTaskResponse",
     "ManualPaymentTypeOutput" : "com.hunt.otziv.payments.model.ManualPaymentType",
+    "ManualReceiptCorrectionsActionInput" : "com.hunt.otziv.contractor_payments.service.ManualReceiptCorrections$Action",
+    "ManualReceiptCorrectionsReceiptOutput" : "com.hunt.otziv.contractor_payments.service.ManualReceiptCorrections$Receipt",
+    "ManualReceiptCorrectionsRecipientOutput" : "com.hunt.otziv.contractor_payments.service.ManualReceiptCorrections$Recipient",
+    "ManualReceiptCorrectionsRequestInput" : "com.hunt.otziv.contractor_payments.service.ManualReceiptCorrections$Request",
     "ManualTransferReceiptServiceLineInput" : "com.hunt.otziv.payments.service.ManualTransferReceiptService$Line",
     "ManualTransferReceiptServiceTransferInput" : "com.hunt.otziv.payments.service.ManualTransferReceiptService$Transfer",
     "OptionResponseOutput" : "com.hunt.otziv.manager.dto.api.OptionResponse",
