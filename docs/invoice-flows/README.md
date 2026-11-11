@@ -87,7 +87,7 @@
 | Учёт поступлений и резервов | `contractor_payments/service/ContractorActualPaymentAttributionService.java`, `ContractorPaymentAccountingService.java` | — | — |
 | Уведомления и спор | `payments/service/ManualPaymentRecipientTelegramNotificationService.java`, `CommonInvoicePaymentDisputeService.java`, `ManualCardPaymentReviewNotificationService.java` | — | — |
 | Автоответчик | `client_messages/service/ScheduledClientMessageService.java`, `common_billing/service/CommonInvoiceOverdueEscalation.java` | `features/admin/dictionaries/*` | — |
-| Инструкция для менеджеров | — | `features/admin/common-billing/common-invoice-guide.component.ts` | — |
+| Инструкции для менеджеров: шаги на снимках экрана | — | `features/admin/common-billing/common-invoice-guide.component.ts` (окно и инструкция общего счёта), `features/manager/order-payment-guide.ts` (заказ), снимки `public/assets/guide/{light,dark}`, размеры `guide-shots.ts`; пересъёмка — `infrastructure/scripts/local/guide-shots/README.md` | — |
 
 ## Как проверять
 

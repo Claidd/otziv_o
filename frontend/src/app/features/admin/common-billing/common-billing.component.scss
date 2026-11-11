@@ -1132,6 +1132,14 @@ button .material-icons-sharp {
   text-align: right;
 }
 
+.paper-invoice-workflow > p {
+  margin: 0;
+  color: var(--billing-action-muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.38;
+}
+
 .paper-invoice-workflow ol {
   display: grid;
   gap: 0.38rem;

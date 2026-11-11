@@ -928,10 +928,6 @@
             </dl>
           </details>
         }
-
-        @if (guideSection(); as section) {
-          <app-common-invoice-guide [section]="section" (closed)="closeGuide()" />
-        }
       </aside>
     }
 
@@ -1207,6 +1203,10 @@
       </details>
     }
   </section>
+
+  @if (guideSection(); as section) {
+    <app-common-invoice-guide [section]="section" (closed)="closeGuide()" />
+  }
 
   @if (recipientPicker(); as picker) {
     <app-payment-recipient-picker

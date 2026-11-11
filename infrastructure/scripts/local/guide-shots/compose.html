@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>compose</title>
+<style>
+  html, body { margin: 0; background: #ffffff; }
+  body { padding: 40px; font-family: "Segoe UI", Arial, sans-serif; }
+  #frame { position: relative; display: inline-block; border-radius: 14px; }
+  #frame.light { background: #eef1f5; }
+  #frame.dark { background: #14181b; }
+  #shot { position: absolute; display: block; box-shadow: 0 6px 22px rgb(15 23 42 / 16%), 0 0 0 1px rgb(15 23 42 / 8%); }
+  #frame.dark #shot { box-shadow: 0 6px 22px rgb(0 0 0 / 45%), 0 0 0 1px rgb(255 255 255 / 10%); }
+  svg { position: absolute; inset: 0; overflow: visible; }
+</style>
+</head>
+<body>
+<div id="frame"><img id="shot" alt=""><svg id="marks" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<script>
+const RED = '#e53220';
+const NS = 'http://www.w3.org/2000/svg';
+function el(name, attrs, parent) {
+  const node = document.createElementNS(NS, name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  parent.appendChild(node);
+  return node;
+}
+/** data: { src, width, height, radius, theme, marks: [{x,y,w,h,n,side,at,len,outline,dx,dy}] } in CSS px of the capture. */
+async function render(data) {
+  const frame = document.getElementById('frame');
+  const shot = document.getElementById('shot');
+  const svg = document.getElementById('marks');
+  svg.replaceChildren();
+  frame.className = data.theme === 'dark' ? 'dark' : 'light';
+  const LEN = 46, R = 13, GAP = 8, BASE = 18;
+  // A mark with inside: true points at its target from free space within the picture and reserves no margin.
+  const outer = side => data.marks.filter(m => (m.side ?? 'left') === side && !m.inside);
+  const need = side => outer(side).length > 0;
+  const reach = side => Math.max(BASE, ...outer(side).map(m => (m.len ?? LEN) + 2 * R + GAP + 10));
+  const margin = {
+    left: need('left') ? reach('left') : BASE, right: need('right') ? reach('right') : BASE,
+    top: need('top') ? reach('top') : BASE, bottom: need('bottom') ? reach('bottom') : BASE
+  };
+  const W = data.width + margin.left + margin.right;
+  const H = data.height + margin.top + margin.bottom;
+  frame.style.width = W + 'px';
+  frame.style.height = H + 'px';
+  shot.style.left = margin.left + 'px';
+  shot.style.top = margin.top + 'px';
+  shot.style.width = data.width + 'px';
+  shot.style.height = data.height + 'px';
+  shot.style.borderRadius = Math.min(18, Math.max(8, data.radius || 10)) + 'px';
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  for (const m of data.marks) {
+    const side = m.side ?? 'left';
+    const x = margin.left + m.x, y = margin.top + m.y;
+    if (m.outline !== false) {
+      el('rect', { x: x - 3, y: y - 3, width: m.w + 6, height: m.h + 6, rx: m.rx ?? 10, fill: 'none', stroke: '#ffffff', 'stroke-width': 5, opacity: 0.9 }, svg);
+      el('rect', { x: x - 3, y: y - 3, width: m.w + 6, height: m.h + 6, rx: m.rx ?? 10, fill: 'none', stroke: RED, 'stroke-width': 2.5 }, svg);
+    }
+    if (side === 'corner') {
+      // A dense row of buttons: the number sits on the corner of the outline, without an arrow.
+      const center = [x - 3, y - 3];
+      el('circle', { cx: center[0], cy: center[1], r: R + 2, fill: '#ffffff' }, svg);
+      el('circle', { cx: center[0], cy: center[1], r: R, fill: RED }, svg);
+      const label = el('text', { x: center[0], y: center[1] + 5.2, 'text-anchor': 'middle', fill: '#ffffff',
+        'font-size': 15, 'font-weight': 800, 'font-family': '"Segoe UI", Arial, sans-serif' }, svg);
+      label.textContent = String(m.n);
+      continue;
+    }
+    const at = m.at ?? 0.5;
+    const len = m.len ?? LEN;
+    let tip, dir;
+    if (side === 'left') { tip = [x - 5, y + m.h * at]; dir = [-1, 0]; }
+    else if (side === 'right') { tip = [x + m.w + 5, y + m.h * at]; dir = [1, 0]; }
+    else if (side === 'top') { tip = [x + m.w * at, y - 5]; dir = [0, -1]; }
+    else { tip = [x + m.w * at, y + m.h + 5]; dir = [0, 1]; }
+    tip = [tip[0] + (m.dx ?? 0), tip[1] + (m.dy ?? 0)];
+    const tail = [tip[0] + dir[0] * len, tip[1] + dir[1] * len];
+    const center = [tail[0] + dir[0] * (R + 1), tail[1] + dir[1] * (R + 1)];
+    const head = 11, half = 6.5;
+    const base = [tip[0] + dir[0] * head, tip[1] + dir[1] * head];
+    const perp = [-dir[1], dir[0]];
+    const points = [tip, [base[0] + perp[0] * half, base[1] + perp[1] * half], [base[0] - perp[0] * half, base[1] - perp[1] * half]]
+      .map(p => p.join(',')).join(' ');
+    for (const [color, extra] of [['#ffffff', 4], [RED, 0]]) {
+      el('line', { x1: tail[0], y1: tail[1], x2: base[0], y2: base[1], stroke: color, 'stroke-width': 3.2 + extra, 'stroke-linecap': 'round' }, svg);
+      el('polygon', { points, fill: color, stroke: color, 'stroke-width': extra, 'stroke-linejoin': 'round' }, svg);
+      el('circle', { cx: center[0], cy: center[1], r: R + extra / 2, fill: color }, svg);
+    }
+    if (m.n != null) {
+      const label = el('text', { x: center[0], y: center[1] + 5.2, 'text-anchor': 'middle', fill: '#ffffff',
+        'font-size': 15, 'font-weight': 800, 'font-family': '"Segoe UI", Arial, sans-serif' }, svg);
+      label.textContent = String(m.n);
+    }
+  }
+  await new Promise((resolve, reject) => {
+    shot.onload = resolve;
+    shot.onerror = () => reject(new Error('image failed: ' + data.src));
+    shot.src = data.src + '?' + Date.now();
+  });
+  await shot.decode();
+  const r = frame.getBoundingClientRect();
+  return { x: r.left + scrollX, y: r.top + scrollY, width: Math.round(r.width), height: Math.round(r.height) };
+}
+</script>
+</body>
+</html>
