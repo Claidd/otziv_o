@@ -80,9 +80,14 @@ describe('Common invoice guide', () => {
         'settings: Как добавить или убрать компанию связи'
       ]);
       expect(tasks(ORDER_PAYMENT_GUIDE)).toEqual([
-        'overview: Как открыть блок и что в нём',
-        'card: Как выбрать получателя',
-        'paid: Как отметить оплату переводом'
+        'overview: Что где на карточке заказа',
+        'invoice: Как отправить счёт самому',
+        'paid: Как отметить оплату переводом',
+        'route: Как открыть блок и что в нём',
+        'route: Как выдать номер карты',
+        'route: Как вернуть клиенту ссылку банка',
+        'paper: Как выставить счёт и акт',
+        'unpaid: Что можно сделать с неоплаченным заказом'
       ]);
     });
 
@@ -179,9 +184,31 @@ describe('Common invoice guide', () => {
     it('renders the order manual with its own pictures', () => {
       const element: HTMLElement = render('overview', ORDER_PAYMENT_GUIDE).nativeElement;
       const sources = [...element.querySelectorAll('.guide-shot img')].map(image => image.getAttribute('src') ?? '');
-      expect(sources.length).toBe(6);
+      expect(sources.length).toBe(12);
       expect(sources.every(source => source.startsWith('/assets/guide/light/op-'))).toBe(true);
-      expect(element.querySelector('.guide-walk-intro')?.textContent).toContain('Сменить способ оплаты');
+      expect(element.querySelector('#common-invoice-guide-route .guide-walk-intro')?.textContent).toContain('Сменить способ оплаты');
+    });
+
+    it('covers the whole payment path of an ordinary order, as the common invoice manual does for its panel', () => {
+      expect(ORDER_PAYMENT_GUIDE.map(section => section.id))
+        .toEqual(['overview', 'invoice', 'paid', 'route', 'remind', 'paper', 'unpaid', 'rules', 'situations']);
+      // «Способ оплаты» opens the manual at its own section.
+      const element: HTMLElement = render('route', ORDER_PAYMENT_GUIDE).nativeElement;
+      expect(element.querySelector('.guide-toc button.active')?.textContent).toContain('Смена получателя и способа оплаты');
+      for (const label of ['«оплатили»', '«Оплата конкретному специалисту»', '«напомнить»', '«не опл.»',
+        'Кнопка «счет» в ряду ссылок', 'Действие «счет»', 'Выдать ссылку банка']) {
+        expect(ORDER_PAYMENT_GUIDE.some(section => section.items.some(item => item.term === label)), label).toBe(true);
+      }
+    });
+
+    it('says what the manual buttons of an order do not do', () => {
+      const item = (id: string, term: string) =>
+        ORDER_PAYMENT_GUIDE.find(section => section.id === id)?.items.find(row => row.term === term)?.text ?? '';
+      // A manual reminder and the «счет» action only change the status: nothing is sent to the client.
+      expect(item('remind', '«напомнить»')).toContain('Сообщение клиенту при этом не уходит');
+      expect(item('invoice', 'Действие «счет»')).toContain('Только меняет статус');
+      expect(item('invoice', 'Кнопка «счет» в ряду ссылок')).toContain('Клиенту ничего не отправляет');
+      expect(item('remind', '«не опл.»')).toContain('только владелец и администратор');
     });
 
     it('tells that a message still being sent is a wait and not an error', () => {

@@ -1,3 +1,5 @@
+@use '../../shared/plain-modal' as plain;
+
 :host {
   position: fixed;
   inset: 0;
@@ -349,5 +351,211 @@ button:focus-visible {
 
   footer button {
     width: 100%;
+  }
+}
+
+/* ---- The shared look of the payment windows (shared/plain-modal.scss) ----
+   The class is repeated so that these rules outweigh the ones above, their dark-theme variants
+   and the button rules of the page. */
+:host {
+  @include plain.tokens;
+}
+
+:host-context(body.otziv-dark-theme) {
+  @include plain.dark-tokens;
+}
+
+.manual-payment-backdrop.manual-payment-backdrop.manual-payment-backdrop {
+  background: rgba(12, 16, 22, 0.62);
+  backdrop-filter: none;
+}
+
+.manual-payment-modal.manual-payment-modal.manual-payment-modal {
+  border: 1px solid var(--plain-border);
+  border-radius: 18px;
+  padding: 1.1rem 1.15rem 1.15rem;
+  color: var(--plain-text);
+  /* The brand stripe of the site on top of the window. */
+  background: var(--otziv-action-fill) top / 100% 3px no-repeat, var(--plain-surface);
+  box-shadow: 0 24px 60px rgba(8, 12, 18, 0.35);
+  font-family: var(--otziv-font-family);
+  scrollbar-width: thin;
+  scrollbar-color: var(--plain-control-border) transparent;
+
+  header {
+    align-items: flex-start;
+  }
+
+  header small {
+    display: block;
+    color: var(--otziv-action);
+    font-size: 0.66rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    line-height: 1.3;
+    text-transform: uppercase;
+  }
+
+  header h2 {
+    margin: 0.1rem 0 0;
+    color: var(--plain-text);
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .icon-button {
+    flex: none;
+    width: 2.1rem;
+    height: 2.1rem;
+    min-height: 0;
+    border: 1px solid var(--plain-control-border);
+    border-radius: 999px;
+    padding: 0;
+    color: var(--plain-text);
+    background: var(--plain-surface);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+
+    &:not(:disabled):hover {
+      border-color: var(--otziv-action-border);
+      color: var(--otziv-action);
+      background: var(--plain-surface);
+    }
+
+    .material-icons-sharp {
+      font-size: 1.25rem;
+    }
+  }
+
+  .manual-payment-state,
+  .manual-payment-summary div {
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 12px;
+    color: var(--plain-text);
+    background: var(--otziv-surface-gradient-neutral);
+  }
+
+  .error-state {
+    border-color: var(--plain-danger-border);
+    color: var(--plain-danger);
+    background: var(--plain-danger-soft);
+  }
+
+  .manual-payment-summary dt,
+  .recipient-capacity dt,
+  label em,
+  label small {
+    color: var(--plain-muted);
+  }
+
+  /* Every field caption reads the same, with or without a wrapping span. */
+  label {
+    color: var(--plain-text);
+    font-size: 0.82rem;
+    font-weight: 800;
+  }
+
+  label > span {
+    color: var(--plain-text);
+    font-size: 0.82rem;
+    font-weight: 800;
+  }
+
+  label small {
+    font-weight: 500;
+  }
+
+  .recipient-capacity div {
+    border: 1px solid var(--plain-success-border);
+    border-radius: 12px;
+    color: var(--plain-text);
+    background: var(--plain-success-soft);
+  }
+
+  select,
+  textarea,
+  input {
+    min-height: 2.5rem;
+    border: 1px solid var(--plain-control-border);
+    border-radius: 10px;
+    color: var(--plain-text);
+    background: var(--plain-surface);
+    font-size: 0.88rem;
+    font-weight: 500;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+
+    &:hover {
+      border-color: var(--otziv-action-border);
+    }
+
+    &::placeholder {
+      color: var(--plain-disabled-text);
+      opacity: 1;
+    }
+  }
+
+  select option,
+  select optgroup {
+    color: var(--plain-text);
+    background: var(--plain-surface);
+  }
+
+  .manual-payment-warning,
+  .manual-payment-impact,
+  .manual-payment-error {
+    border: 1px solid var(--plain-border);
+    border-radius: 10px;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
+  /* What the mark will do: a plain note, like the line above the button of the recipient window. */
+  .recipient-change,
+  .manual-payment-impact {
+    border-color: var(--otziv-surface-border-neutral);
+    color: var(--plain-text);
+    background: var(--otziv-surface-gradient-neutral);
+  }
+
+  .anomaly {
+    border-color: var(--plain-warning-border);
+    color: var(--plain-warning);
+    background: var(--plain-warning-soft);
+  }
+
+  .manual-payment-error {
+    border-color: var(--plain-danger-border);
+    color: var(--plain-danger);
+    background: var(--plain-danger-soft);
+  }
+
+  button:not(.icon-button) {
+    @include plain.button;
+  }
+
+  button[type='submit'] {
+    @include plain.button-primary;
+  }
+
+  select:focus-visible,
+  textarea:focus-visible,
+  input:focus-visible {
+    border-color: var(--otziv-action-border);
+    outline: 0;
+    box-shadow: 0 0 0 3px var(--otziv-action-soft);
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--otziv-action);
+    outline-offset: 2px;
+  }
+}
+
+/* On a phone the window is a sheet at the bottom: its own geometry stays. */
+@media (max-width: 640px) {
+  .manual-payment-modal.manual-payment-modal.manual-payment-modal {
+    border-radius: 18px 18px 0 0;
+    padding: 1rem;
   }
 }

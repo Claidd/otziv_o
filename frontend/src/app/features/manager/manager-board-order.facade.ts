@@ -492,9 +492,48 @@ export class ManagerBoardOrderFacade {
     });
   }
 
+  /**
+   * The one entry to the paper invoice of an order (the «Счёт и акт Точки» block). It opens the bank
+   * documents window; while the owner has not switched bank documents on, it offers the old paper
+   * invoice that the manager sends by hand — the way the removed third button of «Способ оплаты» did.
+   */
   openPaperInvoice(): void {
-    const order=this.editOrder();
-    if(order && !this.orderSaving() && !this.paymentRouteChanging()) this.deps.openPaperInvoice?.({kind:'ORDER',id:order.id},()=>this.deps.toastService.error('Бумажный счёт недоступен','Владелец ещё не включил выпуск документов Точки'),this.deps.loadBoard);
+    const order = this.editOrder();
+    if (!order || this.orderSaving() || this.paymentRouteChanging()) {
+      return;
+    }
+    if (!this.deps.openPaperInvoice) {
+      this.switchToManualPaperInvoice();
+      return;
+    }
+    this.deps.openPaperInvoice({ kind: 'ORDER', id: order.id }, () => this.switchToManualPaperInvoice(), this.deps.loadBoard);
+  }
+
+  private switchToManualPaperInvoice(): void {
+    const order = this.editOrder();
+    if (!order || this.paymentRouteContextLoading() || this.paymentRouteChanging()) {
+      return;
+    }
+    this.paymentRouteContextLoading.set(true);
+    this.orderError.set(null);
+    this.deps.managerApi.getPaymentRouteChangeContext(order.id).subscribe({
+      next: (context) => {
+        this.paymentRouteContext.set(context);
+        this.paymentRouteContextLoading.set(false);
+        if (!context.canChange && !context.bankRecipientChangeAvailable) {
+          this.deps.toastService.error('Бумажный счёт недоступен',
+            context.blockReason || 'Способ оплаты этого заказа сейчас нельзя изменить');
+          return;
+        }
+        this.changePaymentRoute('OWNER_PAPER_INVOICE', true);
+      },
+      error: (err) => {
+        const message = this.deps.errorMessage(err, 'Не удалось проверить текущий способ оплаты');
+        this.paymentRouteContextLoading.set(false);
+        this.orderError.set(message);
+        this.deps.toastService.error('Бумажный счёт недоступен', message);
+      }
+    });
   }
 
   markPaperInvoiceIssued(): void {

@@ -1,3 +1,5 @@
+@use '../../shared/plain-modal' as plain;
+
 :host {
   display: contents;
 }
@@ -5,17 +7,9 @@
 :host .company-edit-modal {
   width: min(58rem, calc(100vw - 2rem));
   max-height: min(92vh, 48rem);
-  border: 1px solid rgba(108, 155, 207, 0.18);
-  border-radius: 0.9rem;
   padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  color: var(--otziv-dark);
-  background:
-    linear-gradient(135deg, rgba(108, 155, 207, 0.08), rgba(255, 255, 255, 0) 32%),
-    var(--otziv-muted-surface, #f6f8fc);
-  box-shadow: 0 1.4rem 4rem rgba(54, 57, 73, 0.24);
-  font-family: var(--otziv-font-family);
   -webkit-overflow-scrolling: touch;
 }
 
@@ -24,10 +18,7 @@
   z-index: 2;
   top: 0;
   margin: 0;
-  border-bottom: 1px solid rgba(103, 116, 131, 0.16);
   padding: 1rem 1.15rem 0.9rem;
-  background: rgba(248, 250, 254, 0.96);
-  backdrop-filter: blur(8px);
 }
 
 :host .company-edit-modal .lead-edit-head > div {
@@ -40,45 +31,10 @@
 
 :host .company-edit-modal .lead-edit-head > div::before {
   content: 'business';
-  display: grid;
-  width: 2.55rem;
-  height: 2.55rem;
-  place-items: center;
-  border-radius: var(--otziv-small-radius, 0.55rem);
-  color: var(--otziv-primary, #6c9bcf);
-  background: rgba(108, 155, 207, 0.13);
-  font-family: 'Material Icons Sharp';
-  font-size: 1.35rem;
-  font-feature-settings: 'liga';
-  line-height: 1;
-}
-
-:host .company-edit-modal .lead-edit-head small {
-  color: var(--otziv-info, #7d8da1);
-  font-size: 0.68rem;
-  font-weight: 900;
-  line-height: 1.2;
-}
-
-:host .company-edit-modal .lead-edit-head h2 {
-  margin: 0.1rem 0 0;
-  overflow: hidden;
-  color: var(--otziv-dark, #363949);
-  font-size: 1.08rem;
-  font-weight: 950;
-  line-height: 1.08;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 :host .company-edit-modal .mobile-company-edit-title {
   display: none;
-}
-
-:host .company-edit-modal .lead-edit-close {
-  border-radius: var(--otziv-small-radius, 0.55rem);
-  color: var(--otziv-primary, #6c9bcf);
-  background: rgba(108, 155, 207, 0.14);
 }
 
 :host .company-edit-modal .error.compact,
@@ -99,27 +55,11 @@
   min-width: 0;
 }
 
-:host .company-edit-modal .lead-edit-field > span {
-  color: var(--otziv-info, #7d8da1);
-  font-size: 0.66rem;
-  font-weight: 900;
-  line-height: 1.25;
-}
-
 :host .company-edit-modal .lead-edit-field input,
 :host .company-edit-modal .lead-edit-field select,
 :host .company-edit-modal .lead-edit-field textarea {
-  min-height: 2.45rem;
-  border: 1px solid rgba(103, 116, 131, 0.2);
-  border-radius: var(--otziv-small-radius, 0.55rem);
   padding: 0 0.72rem;
-  color: var(--otziv-dark, #363949);
-  background: var(--otziv-white, #fff);
-  font-family: var(--otziv-font-family);
-  font-size: 0.76rem;
-  font-weight: 850;
   line-height: 1.25;
-  box-shadow: none;
 }
 
 :host .company-edit-modal .lead-edit-field textarea {
@@ -195,20 +135,13 @@
 :host .company-edit-modal .company-edit-section {
   display: grid;
   gap: 0.74rem;
-  border: 1px solid rgba(103, 116, 131, 0.16);
-  border-radius: 0.9rem;
   padding: 0.92rem;
-  background: var(--otziv-white, #fff);
-  box-shadow: 0 0.8rem 1.8rem rgba(34, 40, 52, 0.05);
 }
 
 :host .company-edit-modal .company-edit-section > span {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  color: var(--otziv-dark, #363949);
-  font-size: 0.86rem;
-  font-weight: 950;
   line-height: 1.1;
 }
 
@@ -220,34 +153,12 @@
   height: 1.45rem;
   place-items: center;
   border-radius: 999px;
-  color: var(--otziv-primary, #6c9bcf);
-  background: rgba(108, 155, 207, 0.13);
   font-size: 0.72rem;
   font-weight: 950;
 }
 
-:host .company-edit-modal .company-edit-section--contacts > span::before {
-  content: '5';
-}
-
-:host .company-edit-modal .company-edit-section--details > span::before {
-  content: '6';
-}
-
-:host .company-edit-modal .company-edit-section--workers > span::before {
-  content: '4';
-}
-
-:host .company-edit-modal .company-edit-section--settings > span::before {
-  content: '2';
-}
-
 :host .company-edit-modal .company-edit-section--billing > span::before {
   content: '3';
-}
-
-:host .company-edit-modal .company-edit-section--filials > span::before {
-  content: '1';
 }
 
 :host .company-edit-modal .company-extra-grid,
@@ -260,27 +171,11 @@
   padding-top: 0.72rem;
 }
 
-:host .company-edit-modal .company-edit-row,
-:host .company-edit-modal .company-filial-edit {
-  border: 1px solid rgba(103, 116, 131, 0.15);
-  border-radius: var(--otziv-small-radius, 0.55rem);
-  background: var(--otziv-field-background, #f7f9fc);
-}
-
 :host .company-edit-modal .lead-edit-actions {
   position: sticky;
   bottom: 0;
   margin: 0 -1.15rem -1.15rem;
-  border-top: 1px solid rgba(103, 116, 131, 0.16);
   padding: 0.85rem 1.15rem;
-  background: rgba(248, 250, 254, 0.96);
-  backdrop-filter: blur(8px);
-}
-
-:host .company-edit-modal button {
-  border-radius: var(--otziv-small-radius, 0.55rem);
-  font-family: var(--otziv-font-family);
-  font-weight: 900;
 }
 
 :host .company-edit-modal button:disabled {
@@ -289,45 +184,16 @@
   box-shadow: none;
 }
 
-:host .company-edit-modal .lead-edit-actions button:not(.secondary),
-:host .company-edit-modal .company-billing-actions button:not(.secondary),
-:host .company-edit-modal .company-filial-edit-actions button:not(.secondary) {
-  color: var(--otziv-white, #fff);
-  background: var(--otziv-primary, #6c9bcf);
-}
-
-:host .company-edit-modal .lead-edit-actions button:not(.secondary):disabled,
-:host .company-edit-modal .company-billing-actions button:not(.secondary):disabled,
-:host .company-edit-modal .company-filial-edit-actions button:not(.secondary):disabled {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-:host .company-edit-modal button.secondary {
-  color: var(--otziv-action);
-  background: var(--otziv-action-soft);
-}
-
 .chat-binding-warning {
   display: inline-flex;
   min-width: 0;
   min-height: 2.1rem;
   align-items: center;
   gap: 0.42rem;
-  border: 1px solid rgba(214, 159, 43, 0.36);
-  border-radius: 0.8rem;
   padding: 0.45rem 0.65rem;
-  color: #8a6416;
-  background: rgba(255, 244, 214, 0.86);
   font-size: 0.78rem;
   font-weight: 900;
   line-height: 1.2;
-}
-
-:host-context(body.otziv-dark-theme) .chat-binding-warning {
-  color: #d1b579;
-  border-color: rgba(215, 189, 120, 0.28);
-  background: linear-gradient(135deg, rgba(91, 73, 35, 0.34), rgba(30, 36, 40, 0.9));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .chat-binding-warning .material-icons-sharp {
@@ -1092,5 +958,364 @@
   .company-switch-grid,
   .company-payment-routing__options {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ---- The company editor in the shared look of the editors (shared/plain-modal.scss) ---- */
+:host {
+  @include plain.tokens;
+}
+
+:host-context(body.otziv-dark-theme) {
+  @include plain.dark-tokens;
+}
+
+:host .lead-edit-backdrop:has(> .lead-edit-modal--plain) {
+  background: rgba(12, 16, 22, 0.62);
+  backdrop-filter: none;
+}
+
+:host .company-edit-modal.lead-edit-modal--plain.lead-edit-modal--plain {
+  @include plain.skin;
+  background: var(--plain-surface);
+
+  /* The icon stands left of both lines. The title used to fall under it, into a column as narrow
+     as the icon, and was cut to «Ре…». */
+  .lead-edit-head > div {
+    column-gap: 0.7rem;
+    row-gap: 0;
+  }
+
+  .lead-edit-head > div::before {
+    @include plain.icon-tile;
+    grid-row: 1 / span 2;
+  }
+
+  .lead-edit-head small,
+  .lead-edit-head h2 {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .lead-edit-head h2 {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .lead-edit-field > span {
+    line-height: 1.25;
+  }
+
+  /* The switches keep their shape and their green «on»; only the idle track follows the palette. */
+  .lead-edit-field input[type='checkbox']:not(:checked) {
+    border-color: var(--plain-control-border);
+    background: var(--plain-disabled-text);
+  }
+
+  .company-edit-section {
+    @include plain.block;
+  }
+
+  .company-edit-section > span {
+    color: var(--plain-text);
+    font-size: 0.88rem;
+    font-weight: 800;
+  }
+
+  .company-billing-title > span::before,
+  .company-edit-section > span::before {
+    @include plain.number-chip;
+  }
+
+  /* The numbers follow the order of the sections on the screen (they used to read 1, 4, 2, 1, 5, 6). */
+  .company-edit-section--filials > span::before { content: '1'; }
+  .company-edit-section--workers > span::before { content: '2'; }
+  .company-edit-section--settings > span::before { content: '3'; }
+  .company-billing-title > span::before { content: '4'; }
+  .company-edit-section--contacts > span::before { content: '5'; }
+  .company-edit-section--details > span::before { content: '6'; }
+
+  .company-billing-title > span {
+    color: var(--plain-text);
+    font-size: 0.88rem;
+    font-weight: 800;
+  }
+
+  .company-filial-create {
+    border-top-color: var(--plain-border);
+  }
+
+  .company-edit-row,
+  .company-filial-edit {
+    border: 1px solid var(--plain-border);
+    border-radius: 10px;
+    color: var(--plain-text);
+    background: var(--plain-surface);
+  }
+
+  .company-edit-row {
+    padding: 0.3rem 0.3rem 0.3rem 0.7rem;
+  }
+
+  .lead-edit-actions {
+    border-top: 1px solid var(--plain-border);
+    background: var(--plain-surface);
+    box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.05);
+    backdrop-filter: none;
+  }
+
+  /* Buttons: neutral unless they are the main action of their block or remove something. */
+  button {
+    border-radius: 12px;
+    font-weight: 700;
+  }
+
+  .company-edit-row button.secondary,
+  .company-filial-edit-actions button {
+    min-height: 2.1rem;
+    padding: 0 0.85rem;
+    font-size: 0.78rem;
+  }
+
+  .company-billing-actions button:not(.secondary),
+  .company-filial-edit-actions button:not(.secondary) {
+    @include plain.button;
+    @include plain.button-primary;
+  }
+
+  button:is(.filial-delete, .worker-delete) {
+    @include plain.button-danger;
+  }
+
+  .chat-binding-warning {
+    border: 1px solid var(--plain-warning-border);
+    border-radius: 10px;
+    color: var(--plain-warning);
+    background: var(--plain-warning-soft);
+    box-shadow: none;
+  }
+
+  .company-switch-field {
+    border: 1px solid var(--plain-border);
+    border-radius: 12px;
+    background: var(--plain-surface);
+    box-shadow: none;
+  }
+
+  .company-switch-field strong {
+    color: var(--plain-text);
+  }
+
+  .company-switch-field small {
+    color: var(--plain-muted);
+  }
+
+  /* The setting that sends a message to the client after every review stands out in the warm tone of the site. */
+  .company-switch-field--publication-alerts,
+  .company-switch-field--publication-alerts.company-switch-field--enabled {
+    border-color: var(--otziv-surface-border-blue);
+    background: var(--otziv-surface-gradient-blue);
+    box-shadow: none;
+  }
+
+  .company-switch-field--publication-alerts em {
+    color: var(--otziv-action);
+    background: var(--plain-surface);
+  }
+
+  .company-switch-field--publication-alerts em.is-disabled {
+    color: var(--plain-success);
+    background: var(--plain-success-soft);
+  }
+
+  .company-switch-field--publication-alerts .company-switch-field__hint {
+    color: var(--plain-text);
+  }
+
+  .company-payment-routing {
+    border: 1px solid var(--plain-border);
+    border-radius: 12px;
+    background: var(--plain-surface);
+  }
+
+  .company-payment-routing__copy strong {
+    color: var(--plain-text);
+  }
+
+  .company-payment-routing__copy small,
+  .company-payment-routing__option small {
+    color: var(--plain-muted);
+  }
+
+  /* The two ways of payment read like the options of the recipient window. */
+  .company-payment-routing__option {
+    border: 1px solid var(--plain-control-border);
+    border-radius: 12px;
+    color: var(--plain-text);
+    background: var(--plain-surface);
+    box-shadow: none;
+
+    strong {
+      color: var(--plain-text);
+    }
+
+    &:not(:disabled):hover {
+      border-color: var(--otziv-action-border);
+      color: var(--plain-text);
+      background: var(--plain-surface);
+    }
+
+    &.active,
+    &.active:not(:disabled):hover {
+      border-color: var(--plain-success-border);
+      background: var(--plain-success-soft);
+      box-shadow: none;
+    }
+
+    &.active strong {
+      color: var(--plain-success);
+    }
+  }
+
+  .company-billing-section {
+    border-color: var(--otziv-surface-border-neutral);
+    background: var(--otziv-surface-gradient-neutral);
+  }
+
+  .company-billing-subtitle strong,
+  .company-billing-list-head strong {
+    color: var(--plain-text);
+  }
+
+  .company-billing-title > strong {
+    color: var(--plain-warning);
+    background: var(--plain-warning-soft);
+  }
+
+  .company-billing-title > strong.enabled {
+    color: var(--plain-success);
+    background: var(--plain-success-soft);
+  }
+
+  .company-billing-list-head {
+    border: 1px solid var(--plain-border);
+    background: var(--plain-surface);
+  }
+
+  .company-billing-list-head small,
+  .company-billing-state {
+    color: var(--plain-muted);
+  }
+
+  .company-billing-state {
+    background: var(--plain-soft);
+  }
+
+  .company-billing-state.error {
+    color: var(--plain-danger);
+    background: var(--plain-danger-soft);
+  }
+
+  .company-billing-results {
+    border: 1px solid var(--plain-border);
+    background: var(--plain-surface);
+    box-shadow: 0 12px 30px rgba(8, 12, 18, 0.18);
+  }
+
+  .company-billing-results button {
+    border: 1px solid var(--plain-border);
+    color: var(--plain-text);
+    background: var(--plain-surface) !important;
+    box-shadow: none;
+  }
+
+  .company-billing-results button:hover:not(:disabled) {
+    border-color: var(--otziv-action-border);
+    color: var(--plain-text);
+    background: var(--plain-surface) !important;
+  }
+
+  .company-billing-results button:disabled {
+    color: var(--plain-disabled-text);
+    background: var(--plain-soft) !important;
+  }
+
+  .company-billing-account.active {
+    border-color: var(--plain-success-border);
+    color: var(--plain-text);
+    background: var(--plain-success-soft) !important;
+    box-shadow: none;
+  }
+
+  .company-billing-empty {
+    border-color: var(--plain-control-border);
+    color: var(--plain-muted);
+    background: var(--plain-surface) !important;
+  }
+
+  .company-billing-empty small {
+    color: var(--plain-text);
+  }
+
+  .company-billing-results .material-icons-sharp,
+  .company-billing-linked .material-icons-sharp,
+  .company-billing-explanation .material-icons-sharp {
+    color: var(--otziv-action);
+    background: var(--otziv-action-soft);
+  }
+
+  .company-billing-explanation {
+    border: 1px solid var(--plain-border);
+    color: var(--plain-muted);
+    background: var(--plain-surface);
+  }
+
+  .company-billing-toggles .company-switch-field {
+    background: var(--plain-surface);
+  }
+
+  .company-billing-actions button .material-icons-sharp,
+  .company-billing-actions button.secondary .material-icons-sharp,
+  .company-billing-actions button:disabled .material-icons-sharp {
+    color: inherit;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+
+  .company-billing-actions button:not(.secondary) small,
+  .company-billing-actions button:not(.secondary):disabled small {
+    color: inherit;
+  }
+
+  .company-billing-linked article {
+    border: 1px solid var(--plain-border);
+    color: var(--plain-text);
+    background: var(--plain-surface);
+  }
+
+  .company-billing-linked article.disabled {
+    background: var(--plain-soft);
+  }
+
+  .company-billing-linked article.disabled small {
+    color: var(--plain-muted);
+  }
+}
+
+/* On a phone the editor fills the screen: its own geometry stays, the look comes from the skin. */
+@media (max-width: 760px) {
+  :host .company-edit-modal.lead-edit-modal--plain.lead-edit-modal--plain {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+
+    .lead-edit-head {
+      min-height: 0;
+      padding: calc(0.9rem + env(safe-area-inset-top)) 1rem 0.8rem;
+    }
+
+    .lead-edit-head > div {
+      display: grid;
+    }
   }
 }

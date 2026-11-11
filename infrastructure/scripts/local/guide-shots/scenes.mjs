@@ -337,7 +337,8 @@ const scenes = {
       clip: block,
       marks: [
         { target: 'app-manager-order-edit-modal .payment-route-change__body > p', n: 3, side: 'left', rx: 6 },
-        { target: { find: ['app-manager-order-edit-modal .payment-route-change button', 'Выдать номер карты'] }, n: 4, side: 'right', len: 30, inside: true },
+        // The two buttons stand side by side: one arrow comes from the left margin, the other from the free space on the right.
+        { target: { find: ['app-manager-order-edit-modal .payment-route-change button', 'Выдать номер карты'] }, n: 4, side: 'left' },
         { target: { find: ['app-manager-order-edit-modal .payment-route-change button', 'Выдать ссылку банка'] }, n: 5, side: 'right', len: 30, inside: true }
       ]
     });
@@ -383,6 +384,132 @@ const scenes = {
     await page.viewport(1440, 3200, 2);
   }
 };
+
+// ---- ordinary order: the whole invoice and payment path ----
+const CARD = 'app-manager-order-card > *';
+const boardWith = (status, order) => `/orders?status=${encodeURIComponent(status)}&keyword=${order}&pageNumber=0&pageSize=10&sortDirection=desc`;
+// Company, branch and specialist of a card are shown by invented names whatever the stand order is.
+const maskCard = () => studio.eval(`(() => {
+  for (const card of document.querySelectorAll('app-manager-order-card')) {
+    const title = card.querySelector('.order-title-button');
+    if (title) title.textContent = 'Кафе «Уют» - Ленина, 10';
+    const worker = card.querySelector('.worker-edit-button');
+    if (worker) worker.textContent = 'Вера Д.';
+    // The categories follow the invented company, not the real one.
+    card.querySelectorAll('.category-chip').forEach((chip, index) => { chip.textContent = ['Питание', 'Кафе'][index] ?? chip.textContent; });
+  }
+  return true;
+})()`);
+const cardStatus = () => studio.eval(`(document.querySelector('app-manager-order-card .meta-row span')?.textContent ?? '').trim()`);
+
+Object.assign(scenes, {
+  // Plain stand only (sandbox off): with immediate messages disabled a published order waits for its invoice.
+  async published() {
+    await page.viewport(1180, 3200, 2);
+    let status = '';
+    // Some published orders still wait for review restoration tasks and refuse the step: take the first that agrees.
+    for (const order of local.publishedOrders) {
+      await studio.open(boardWith('Все', order), `!!document.querySelector('app-manager-order-card')`);
+      await sleep(600);
+      status = await cardStatus();
+      if (status === 'Публикация') {
+        await studio.click({ find: ['app-manager-order-card .order-status-actions button', 'опублик.'] }, 3500);
+        await studio.open(boardWith('Все', order), `!!document.querySelector('app-manager-order-card')`);
+        await sleep(600);
+        status = await cardStatus();
+      }
+      console.log('   order', order, 'status:', status);
+      if (status === 'Опубликовано') break;
+    }
+    if (status !== 'Опубликовано') throw new Error('no order could be moved to «Опубликовано»');
+    await maskCard();
+    await studio.snap('op-invoice-copy', {
+      clip: CARD,
+      marks: [
+        { target: { find: ['app-manager-order-card .order-links button', 'счет'] }, n: 1, side: 'corner' },
+        { target: { find: ['app-manager-order-card .order-status-actions button', 'счет'] }, n: 2, side: 'corner' }
+      ]
+    });
+    await page.viewport(1440, 3200, 2);
+  },
+
+  async unpaid() {
+    await page.viewport(1180, 3200, 2);
+    await studio.open(boardWith('Не оплачено', local.unpaidOrder), `!!document.querySelector('app-manager-order-card')`);
+    await sleep(600);
+    await maskCard();
+    console.log('   actions:', await studio.eval(`[...document.querySelectorAll('app-manager-order-card .order-status-actions button')].map(b => b.textContent.trim()).join(' | ')`));
+    const hasBan = await studio.eval(`!!window.__shots.find('app-manager-order-card .order-status-actions button', 'в бан')`);
+    await studio.snap('op-unpaid-card', {
+      clip: CARD,
+      marks: [
+        { target: { find: ['app-manager-order-card .order-status-actions button', 'оплатили'] }, n: 1, side: 'corner' },
+        ...(hasBan ? [{ target: { find: ['app-manager-order-card .order-status-actions button', 'в бан'] }, n: 2, side: 'corner' }] : [])
+      ]
+    });
+    await page.viewport(1440, 3200, 2);
+  },
+
+  async orderflow() {
+    await page.viewport(1180, 3200, 2);
+    await studio.open(boardUrl(local.order), `!!document.querySelector('app-manager-order-card')`);
+    await sleep(800);
+    await maskCard();
+    await studio.snap('op-card-map', {
+      clip: CARD,
+      marks: [
+        { target: { all: 'app-manager-order-card .meta-row span', nth: 0 }, n: 1, side: 'left', rx: 16 },
+        { target: { all: 'app-manager-order-card .meta-row span', nth: 1 }, n: 2, side: 'right', rx: 16 },
+        { target: 'app-manager-order-card .phone-row a', n: 3, side: 'left', rx: 16 },
+        { target: { find: ['app-manager-order-card .order-links button', 'счет'] }, n: 4, side: 'corner', rx: 16 },
+        { target: 'app-manager-order-card .order-status-actions', n: 5, side: 'left', rx: 16 },
+        { target: 'app-manager-order-card .worker-edit-button', n: 6, side: 'right', rx: 8 }
+      ]
+    });
+    await studio.click('app-manager-order-card .worker-edit-button', 800);
+    await waitFor('app-manager-order-edit-modal .payment-route-change');
+    await sleep(800);
+    const paperBlock = { find: ['app-manager-order-edit-modal .payment-route-change', 'Счёт и акт Точки'] };
+    await studio.snap('op-paper-button', {
+      clip: paperBlock,
+      marks: [{ target: { find: ['app-manager-order-edit-modal .payment-route-change button', 'Выставить или открыть счёт и акт'] }, n: 1, side: 'bottom', len: 22 }]
+    });
+    const block = { find: ['app-manager-order-edit-modal .payment-route-change', 'Способ оплаты'] };
+    await studio.click({ find: ['app-manager-order-edit-modal .payment-route-change button', 'Сменить способ оплаты'] }, 800);
+    await page.waitFor(`!!window.__shots.find('app-manager-order-edit-modal .payment-route-change button', 'Выдать ссылку банка')`, 20000);
+    await sleep(500);
+    await studio.snap('op-bank-button', {
+      clip: block,
+      marks: [{ target: { find: ['app-manager-order-edit-modal .payment-route-change button', 'Выдать ссылку банка'] }, n: 1, side: 'right', len: 30, inside: true }]
+    });
+    await studio.click({ find: ['app-manager-order-edit-modal .payment-route-change button', 'Выставить или открыть счёт и акт'] }, 800);
+    await waitFor('.paper-backdrop');
+    await sleep(2500);
+    console.log('   paper window:', await studio.eval(`document.querySelector('.paper-backdrop').innerText.replace(/\\s+/g, ' ').slice(0, 900)`));
+    await studio.eval(`(() => {
+      const root = document.querySelector('.paper-backdrop');
+      for (const option of root.querySelectorAll('select[name=savedPayer] option')) {
+        if (option.value) option.textContent = 'ООО «Зерно» · ИНН 7700000000';
+      }
+      // The form stays empty: an invented tax number either fails the check or may belong to somebody.
+      const confirmed = root.querySelector('input[name=confirmed]');
+      if (confirmed && !confirmed.checked) confirmed.click();
+      return true;
+    })()`);
+    await sleep(700);
+    await studio.snap('op-paper-window', {
+      clip: '.paper-backdrop > *',
+      marks: [
+        { target: '.paper-backdrop input[name=inn]', n: 2, side: 'left' },
+        { target: { find: ['.paper-backdrop label.check', 'Клиент ещё не оплатил'] }, n: 3, side: 'left', rx: 8 },
+        { target: '.paper-backdrop button.primary[type=submit]', n: 4, side: 'right' }
+      ]
+    });
+    await studio.click({ find: ['.paper-backdrop footer button', 'Закрыть'] }, 600);
+    await studio.click({ find: ['app-manager-order-edit-modal button', 'Отмена'] }, 600).catch(() => {});
+    await page.viewport(1440, 3200, 2);
+  }
+});
 
 const run = wanted.filter(name => scenes[name]);
 try {

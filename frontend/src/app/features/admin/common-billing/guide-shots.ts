@@ -22,15 +22,21 @@ export const GUIDE_SHOTS = {
   'ci-send': [450, 332],
   'ci-settings-companies': [449, 534],
   'ci-term': [450, 534],
-  'op-block': [830, 153],
+  'op-bank-button': [830, 253],
+  'op-block': [830, 151],
+  'op-card-map': [508, 440],
   'op-card': [436, 440],
-  'op-context': [902, 255],
+  'op-context': [902, 253],
+  'op-invoice-copy': [364, 440],
   'op-paid-card': [364, 440],
-  'op-paid-window': [756, 1095],
-  'op-pick-window': [724, 873]
+  'op-paid-window': [756, 1069],
+  'op-paper-button': [830, 151],
+  'op-paper-window': [760, 1035],
+  'op-pick-window': [724, 873],
+  'op-unpaid-card': [364, 440]
 } as const satisfies Record<string, readonly [number, number]>;
 
 export type GuideShot = keyof typeof GUIDE_SHOTS;
 
 /** Changes with every new set of pictures, so browsers do not show a cached old one. */
-export const GUIDE_SHOTS_VERSION = '20261111';
+export const GUIDE_SHOTS_VERSION = '20261111-3';

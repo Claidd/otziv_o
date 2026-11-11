@@ -103,6 +103,8 @@ function orderPayload(overrides: Partial<OrderEditPayload> = {}): OrderEditPaylo
 function createFacade(config: {
   createPayload?: CompanyOrderCreatePayload;
   orderPayload?: OrderEditPayload;
+  openPaperInvoice?: ManagerBoardOrderFacadeDeps['openPaperInvoice'];
+  routeBlockReason?: string;
 } = {}) {
   const calls: string[] = [];
   const toastMessages: string[] = [];
@@ -159,8 +161,8 @@ function createFacade(config: {
           currentRoute: 'Эквайринг Т-Банк',
           currentRecipient: 'Владелец',
           status: 'CREATED',
-          canChange: true,
-          blockReason: '',
+          canChange: !config.routeBlockReason,
+          blockReason: config.routeBlockReason ?? '',
           expectedTargetPaymentProfileId: 81
         });
       },
@@ -208,6 +210,7 @@ function createFacade(config: {
     loadBoard: () => {
       calls.push('load-board');
     },
+    openPaperInvoice: config.openPaperInvoice,
     errorMessage: (_err, fallback) => fallback,
     openCreatedCompanyOrders: (result) => {
       openedCompanies.push(`${result.companyId}:${result.companyTitle}`);
@@ -356,6 +359,58 @@ describe('ManagerBoardOrderFacade', () => {
     state.facade.changePaymentRoute('EMPLOYEE_REQUISITES');
     state.facade.submitRecipientChoice({ profileId: null });
     expect(state.lastPaymentRouteRequest?.recipientProfileId).toBeUndefined();
+  });
+
+  describe('the single «Счёт и акт Точки» button of the order window', () => {
+    it('opens the bank documents window and changes nothing itself', () => {
+      const opened: string[] = [];
+      const state = createFacade({
+        openPaperInvoice: (target) => { opened.push(`${target.kind}:${target.id}`); }
+      });
+
+      state.facade.openOrderEdit(order({ id: 30 }));
+      state.facade.openPaperInvoice();
+
+      expect(opened).toEqual(['ORDER:30']);
+      expect(state.calls.some(call => call.startsWith('change-payment-route'))).toBe(false);
+      expect(state.calls).not.toContain('get-payment-route:30');
+    });
+
+    it('offers the paper invoice sent by hand while bank documents are switched off', () => {
+      // The documents window answers «not enabled» by calling the fallback it was given.
+      const state = createFacade({ openPaperInvoice: (_target, fallback) => fallback() });
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      state.facade.openOrderEdit(order({ id: 30 }));
+      state.facade.openPaperInvoice();
+
+      expect(state.calls).toContain('get-payment-route:30');
+      expect(state.calls).toContain('change-payment-route:30:OWNER_PAPER_INVOICE:71');
+      expect(state.lastPaymentRouteRequest?.confirmedUnpaid).toBe(true);
+    });
+
+    it('changes nothing when the manager refuses the confirmation', () => {
+      const state = createFacade({ openPaperInvoice: (_target, fallback) => fallback() });
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+      state.facade.openOrderEdit(order({ id: 30 }));
+      state.facade.openPaperInvoice();
+
+      expect(state.calls.some(call => call.startsWith('change-payment-route'))).toBe(false);
+    });
+
+    it('says why when the payment method of the order cannot be changed now', () => {
+      const state = createFacade({
+        openPaperInvoice: (_target, fallback) => fallback(),
+        routeBlockReason: 'Клиент уже оплатил заказ'
+      });
+
+      state.facade.openOrderEdit(order({ id: 30 }));
+      state.facade.openPaperInvoice();
+
+      expect(state.calls.some(call => call.startsWith('change-payment-route'))).toBe(false);
+      expect(state.toastMessages).toContain('error:Бумажный счёт недоступен:Клиент уже оплатил заказ');
+    });
   });
 
   it('freezes the selected manager bank when reissuing an owner bank link', () => {
