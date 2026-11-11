@@ -39,7 +39,7 @@ import type { PaperInvoiceListState } from './paper-invoice-workflow';
     .paper-list .paper-list-button{display:inline-flex;align-items:center;justify-content:center;gap:.3rem;min-height:2.1rem;max-width:100%;border:1px solid var(--billing-action-border,#d8dfe7);border-radius:.55rem;padding:.3rem .65rem;background:var(--billing-action-surface,#f5f7fa);color:var(--billing-action-text,inherit);box-shadow:none;font:inherit;font-size:.7rem;font-weight:900;line-height:1.2;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
     .paper-list .paper-list-button:not(:disabled):hover{border-color:var(--billing-action-border,#d8dfe7);color:var(--billing-action-text,inherit);background:var(--billing-action-surface-hover,#e9eef5)}
     .paper-list .paper-list-button:focus-visible{outline:3px solid color-mix(in srgb,var(--otziv-action,#e53220) 30%,transparent);outline-offset:2px}
-    .paper-list .paper-list-refresh{min-height:1.75rem;padding:.15rem .5rem;font-size:.64rem}
+    .paper-list .paper-list-refresh{flex:0 0 auto;min-height:1.75rem;padding:.15rem .5rem;font-size:.64rem;white-space:nowrap}
     .paper-list-refresh .material-icons-sharp{font-size:.9rem}
     article .paper-list-button{width:100%;margin-top:.15rem}
   `]

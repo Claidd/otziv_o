@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 86,
-  "versionName": "1.0.86",
+  "versionCode": 87,
+  "versionName": "1.0.87",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Выбор получателя оплаты и возврат заказа в общий счёт.",
-  "fileSize": 4424404,
-  "sha256": "57DD12D2235D30D6E21DB161C09BFEFA54F1DF77A63CABB7F55F4039DA530882",
-  "publishedAt": "2026-11-11T10:07:08Z",
-  "downloadUrl": "/android-new/otziv-v1.0.86.apk"
+  "notes": "Выбор получателя оплаты, возврат заказа в общий счёт, исправлено окно обновления.",
+  "fileSize": 4424492,
+  "sha256": "AC18DB678C559CB14D6D4A7B9B95EED3868F231B021602C14169C94FD0C068F8",
+  "publishedAt": "2026-11-11T12:57:51Z",
+  "downloadUrl": "/android-new/otziv-v1.0.87.apk"
 }

@@ -11,47 +11,52 @@ import { MobileUpdateService } from '../core/mobile-update.service';
     @if (update.visible() && update.release(); as release) {
       <div class="update-backdrop" role="presentation">
         <section class="update-dialog" role="alertdialog" aria-modal="true" aria-labelledby="update-title">
-          <div class="update-icon"><span class="material-icons-sharp">system_update</span></div>
-          <div class="update-copy">
-            <span class="update-kicker">НОВАЯ ВЕРСИЯ</span>
-            <h2 id="update-title">Обновление {{ release.versionName }}</h2>
-            @if (release.notes) {
-              <p class="update-notes">{{ release.notes }}</p>
-            }
-            <span class="update-meta">{{ size(release.fileSize) }}</span>
+          <!-- Only this part scrolls. The status and the buttons below stay on the screen whatever the length of the notes. -->
+          <div class="update-body">
+            <div class="update-icon"><span class="material-icons-sharp">system_update</span></div>
+            <div class="update-copy">
+              <span class="update-kicker">НОВАЯ ВЕРСИЯ</span>
+              <h2 id="update-title">Обновление {{ release.versionName }}</h2>
+              @if (release.notes) {
+                <p class="update-notes">{{ release.notes }}</p>
+              }
+              <span class="update-meta">{{ size(release.fileSize) }}</span>
+            </div>
           </div>
 
-          @if (update.state() === 'downloading') {
-            <div class="update-progress" role="progressbar" [attr.aria-valuenow]="update.progress()" aria-valuemin="0" aria-valuemax="100">
-              <span [style.width.%]="update.progress()"></span>
-            </div>
-            <strong class="update-status">Загрузка: {{ update.progress() }}%</strong>
-          } @else if (update.state() === 'permission') {
-            <p class="update-message">Разрешите установку для «Компания О!» и вернитесь в приложение.</p>
-          } @else if (update.state() === 'installing') {
-            <p class="update-message">Открываем установщик Android…</p>
-          } @else if (update.state() === 'error') {
-            <p class="update-error">{{ update.error() }}</p>
-          }
-
-          <div class="update-actions">
-            @if (update.state() === 'available') {
-              <button class="update-primary" type="button" (click)="update.start()">
-                <span class="material-icons-sharp">download</span>
-                Обновить
-              </button>
-              @if (!update.required()) {
-                <button class="update-secondary" type="button" (click)="update.defer()">Позже</button>
-              }
+          <div class="update-footer">
+            @if (update.state() === 'downloading') {
+              <div class="update-progress" role="progressbar" [attr.aria-valuenow]="update.progress()" aria-valuemin="0" aria-valuemax="100">
+                <span [style.width.%]="update.progress()"></span>
+              </div>
+              <strong class="update-status">Загрузка: {{ update.progress() }}%</strong>
+            } @else if (update.state() === 'permission') {
+              <p class="update-message">Разрешите установку для «Компания О!» и вернитесь в приложение.</p>
+            } @else if (update.state() === 'installing') {
+              <p class="update-message">Открываем установщик Android…</p>
             } @else if (update.state() === 'error') {
-              <button class="update-primary" type="button" (click)="update.retry()">
-                <span class="material-icons-sharp">refresh</span>
-                Повторить
-              </button>
-              @if (!update.required()) {
-                <button class="update-secondary" type="button" (click)="update.defer()">Закрыть</button>
-              }
+              <p class="update-error">{{ update.error() }}</p>
             }
+
+            <div class="update-actions">
+              @if (update.state() === 'available') {
+                <button class="update-primary" type="button" (click)="update.start()">
+                  <span class="material-icons-sharp">download</span>
+                  Обновить
+                </button>
+                @if (!update.required()) {
+                  <button class="update-secondary" type="button" (click)="update.defer()">Позже</button>
+                }
+              } @else if (update.state() === 'error') {
+                <button class="update-primary" type="button" (click)="update.retry()">
+                  <span class="material-icons-sharp">refresh</span>
+                  Повторить
+                </button>
+                @if (!update.required()) {
+                  <button class="update-secondary" type="button" (click)="update.defer()">Закрыть</button>
+                }
+              }
+            </div>
           </div>
         </section>
       </div>
@@ -63,14 +68,26 @@ import { MobileUpdateService } from '../core/mobile-update.service';
       z-index: 12000;
       inset: 0;
       display: grid;
+      /* One definite track, so the window's max-height is measured against the screen and not its own content. */
+      grid-template: minmax(0, 1fr) / minmax(0, 1fr);
       place-items: center;
       padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
       background: rgba(24, 27, 35, 0.56);
       backdrop-filter: blur(5px);
     }
 
+    /*
+     * The window never grows past the screen: long notes on a small screen or with a large system font
+     * used to push the buttons out of reach and the window blocked the whole app (1.0.86, 2026-11-11).
+     */
     .update-dialog {
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
       width: min(100%, 25rem);
+      max-height: 100%;
+      /* Last resort for a screen shorter than the buttons themselves: the whole window scrolls. */
+      overflow-y: auto;
       border: 1px solid #dce2ea;
       border-radius: 8px;
       padding: 1.25rem;
@@ -78,6 +95,9 @@ import { MobileUpdateService } from '../core/mobile-update.service';
       background: #f8fafc;
       box-shadow: 0 1.5rem 4rem rgba(24, 31, 45, 0.24);
     }
+
+    .update-body { flex: 1 1 auto; min-height: 4.5rem; overflow-y: auto; overscroll-behavior: contain; }
+    .update-footer { flex: none; }
 
     .update-icon {
       display: grid;

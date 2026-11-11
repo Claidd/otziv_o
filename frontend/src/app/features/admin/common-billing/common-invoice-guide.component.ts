@@ -1,4 +1,6 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { AfterViewInit, Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject, signal } from '@angular/core';
+import { GUIDE_SHOTS, GUIDE_SHOTS_VERSION, GuideShot } from './guide-shots';
 
 export type CommonInvoiceGuideSection =
   | 'settings'
@@ -18,13 +20,35 @@ interface GuideItem {
   readonly text: string;
 }
 
+/** One screenshot and the steps marked on it. The numbers on the picture are the numbers of these steps. */
+export interface GuideFigure {
+  /** Picture name: public/assets/guide/<theme>/<shot>.webp, sizes in guide-shots.ts. */
+  readonly shot: GuideShot;
+  readonly alt: string;
+  readonly steps: readonly string[];
+}
+
+/** A task told as numbered steps over screenshots. Steps are numbered through all its figures. */
+export interface GuideWalkthrough {
+  readonly title: string;
+  /** Where the user has to be before step 1, when the first picture does not show it. */
+  readonly intro?: string;
+  readonly figures: readonly GuideFigure[];
+  /** What is true when the steps are done. */
+  readonly result?: string;
+}
+
 export interface GuideSectionContent {
   readonly id: string;
   readonly icon: string;
   readonly title: string;
   readonly lead: string;
+  readonly walkthroughs?: readonly GuideWalkthrough[];
   readonly items: readonly GuideItem[];
 }
+
+/** Pictures wider than this take the full width of the manual; narrower ones stand beside their steps. */
+const GUIDE_WIDE_SHOT = 500;
 
 /** Plain-language manual for the common invoice side panel. Texts follow the panel's own labels. */
 export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
@@ -37,6 +61,33 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
       + 'Сверху панели всегда открыты «Оплата» и «Смена получателя и способа оплаты» — с ними работают чаще всего, там же видно, кто сейчас получает деньги. '
       + 'Ниже свёрнуты «Отправка клиенту», «Счёт и акт Точки», «Дополнительно» (срок оплаты, одобрение заказов, «Не оплачен», бан и архив) и «История счёта». '
       + 'В самом низу — «Связи общих счетов» (если счёт открыт из карточки заказа, там только ссылка на раздел «Общие счета»). Нажмите на заголовок, чтобы открыть блок; его состояние видно прямо в заголовке.',
+    walkthroughs: [
+      {
+        title: 'Что где на панели счёта',
+        figures: [
+          {
+            shot: 'ci-panel-top',
+            alt: 'Верх панели общего счёта: кнопка «Инструкция», суммы, строка состояния, блоки «Оплата» и «Смена получателя и способа оплаты»',
+            steps: [
+              '«Инструкция» открывает это окно.',
+              'Суммы счёта: сколько выставлено, оплачено и осталось, сколько заказов готово.',
+              'Строка состояния: что сейчас происходит со счётом. Здесь же появляется «Сообщение клиенту ещё отправляется» — это не ошибка, а ожидание.',
+              '«Оплата» — отметить, что деньги пришли.',
+              '«Смена получателя и способа оплаты» — кто получает деньги сейчас и кнопки, которыми это меняют.',
+              'Знак «?» у блока открывает инструкцию сразу на нужном разделе.'
+            ]
+          },
+          {
+            shot: 'ci-panel-folded',
+            alt: 'Свёрнутые блоки панели: «Отправка клиенту», «Счёт и акт Точки», «Дополнительно», «История счёта»',
+            steps: [
+              'Блоки, которые нужны реже, свёрнуты. Нажмите на заголовок или стрелку — блок раскроется.',
+              'Главное видно и в свёрнутом блоке: например, когда счёт отправлен клиенту.'
+            ]
+          }
+        ]
+      }
+    ],
     items: [
       { term: 'Собирается', text: 'В счёт попадают готовые заказы компаний. Отправлять его пока рано.' },
       { term: 'Готов к счёту', text: 'Все заказы готовы — счёт можно отправлять клиенту.' },
@@ -70,6 +121,28 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     title: 'Оплата',
     lead: 'Оплату по банковской ссылке система видит сама. Ручные отметки ставьте только после того, как деньги видны в выписке получателя — '
       + 'скриншот или слова клиента не подтверждают оплату.',
+    walkthroughs: [
+      {
+        title: 'Как отметить оплату переводом',
+        figures: [
+          {
+            shot: 'ci-pay-button',
+            alt: 'Блок «Оплата» с кнопкой «Оплачен»',
+            steps: ['Убедитесь, что деньги видны в выписке получателя, и нажмите «Оплачен».']
+          },
+          {
+            shot: 'ci-pay-window',
+            alt: 'Окно «Отметить оплату»: список получателей, «Другой получатель» и кнопка «Оплачен — закрыть счёт»',
+            steps: [
+              'Получатель из счёта уже выбран — у него пометка «в счёте». Если деньги пришли другому человеку из списка, выберите его.',
+              'Нужного человека нет в списке — нажмите «Другой получатель» и найдите его по имени.',
+              'Нажмите «Оплачен — закрыть счёт».'
+            ]
+          }
+        ],
+        result: 'Счёт закрыт, сумма зачтена выбранному получателю, ему пришло уведомление. Если деньги получил владелец, а отмечает менеджер, счёт закроется после подтверждения владельцем или администратором.'
+      }
+    ],
     items: [
       { term: 'Оплачен', text: 'Одна кнопка на все случаи. Открывает окно «Отметить оплату»: получатель из счёта уже выбран, остаётся нажать «Оплачен — закрыть счёт». Счёт закроется, сумма зачтётся получателю, ему придёт уведомление.' },
       { term: 'Деньги получил другой человек', text: 'В том же окне выберите его в списке «Кому пришли деньги?». В списке только свои для этого счёта: владелец, получатель из счёта, специалист и менеджер его заказов.' },
@@ -90,12 +163,60 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     lead: 'Клиент не может сменить способ оплаты сам — только менеджер по его просьбе, и только пока клиент не оплатил. '
       + 'Получателя подбирает система по платёжным заданиям и резерву, либо менеджер выбирает сотрудника сам в окне; клиенту сразу уходит обновлённый счёт. '
       + 'Эти кнопки не отмечают оплату. Если клиент уже открыл форму банка, система сначала проверит в банке, что оплаты нет, и покажет в карточке, что происходит.',
+    walkthroughs: [
+      {
+        title: 'Как выдать номер карты',
+        figures: [
+          {
+            shot: 'ci-route-block',
+            alt: 'Блок «Смена получателя и способа оплаты»: строка «Получатель сейчас» и кнопка «Выдать номер карты»',
+            steps: [
+              'Посмотрите, кто получает деньги сейчас и каким способом.',
+              'Нажмите «Выдать номер карты».'
+            ]
+          },
+          {
+            shot: 'ci-route-window',
+            alt: 'Окно «Выдать номер карты»: «Подобрать автоматически», список сотрудников с пометками о резерве, пояснение и кнопка «Выдать номер карты»',
+            steps: [
+              'Оставьте «Подобрать автоматически» — система сама возьмёт получателя, у которого хватает резерва.',
+              'Или выберите сотрудника сами. Справа пометка: «хватает», «сверх резерва» — выдать тоже можно, «недоступен» — выбрать нельзя, «сейчас в счёте» — нынешний получатель.',
+              'Прочитайте, что произойдёт после нажатия: строка меняется вместе с выбором.',
+              'Нажмите «Выдать номер карты».'
+            ]
+          },
+          {
+            shot: 'ci-route-result',
+            alt: 'Панель после смены: строка ожидания отправки сообщения клиенту, новый получатель и строка «Изменено… было, стало»',
+            steps: [
+              'Пока новый счёт уходит клиенту, вверху панели написано «Сообщение клиенту… ещё отправляется». Это не ошибка: нажимать повторно не нужно.',
+              'В блоке стоит новый получатель.',
+              'Строка «Изменено…» показывает, что было и что стало.'
+            ]
+          }
+        ],
+        result: 'Клиент получил новый счёт с номером карты. Резерв прежнего получателя снят, новому записан.'
+      },
+      {
+        title: 'Как вернуть клиенту ссылку банка',
+        figures: [
+          {
+            shot: 'ci-route-bank',
+            alt: 'Блок «Смена получателя и способа оплаты» с кнопкой «Выдать ссылку банка»',
+            steps: ['Нажмите «Выдать ссылку банка» и подтвердите смену в появившемся вопросе. Продолжайте, только если клиент ещё не платил.']
+          }
+        ],
+        result: 'Клиент получил ссылку банка владельца. Оплату по ней система увидит сама — отмечать её вручную не нужно.'
+      }
+    ],
     items: [
       { term: 'Получатель сейчас', text: 'Под заголовком блока: кто получает деньги (владелец или конкретный человек) и каким способом — ссылка, номер карты или счёт Точки. После смены там же появится строка «было → стало».' },
       { term: 'Выдать номер карты', text: 'Клиент не хочет платить по ссылке или просит счёт на другого человека. Откроется окно выбора получателя. По умолчанию стоит «Подобрать автоматически»: система возьмёт платёжное задание, затем специалиста заказа, затем менеджера — первого, у кого хватает резерва. Ниже список сотрудников: можно выбрать любого самому.' },
       { term: 'Выбор получателя вручную', text: 'В окне у каждого видно, сколько резерва доступно. «Хватает» — можно выдавать спокойно. «Сверх резерва» — выдать тоже можно: превышение сохранится для сверки, и система не будет сама назначать этого человека в новые счета, пока его остаток не восстановится. «Недоступен» — у сотрудника выключен допуск, не заполнены реквизиты или исчерпан суточный предел; причина написана под именем.' },
       { term: 'Автоподбор не нашёл получателя', text: 'Окно останется открытым с пояснением, а счёт и прежняя ссылка не изменятся. Выберите сотрудника из списка сами или оставьте клиенту ссылку банка.' },
       { term: 'Клиент всё равно перевёл не тому', text: 'Это исправляется при отметке оплаты: в окне «Оплачен» выберите того, кому на самом деле пришли деньги. Резерв получателя из счёта снимется, сумма зачтётся фактическому получателю.' },
+      { term: 'Сообщение клиенту ещё отправляется', text: 'Строка вверху панели сразу после смены: новый счёт стоит в очереди на отправку. Это не ошибка, менять способ оплаты повторно не нужно. Если отправка не удастся, на этом месте появится ошибка.' },
+      { term: 'Исход отправки уточняется', text: 'Система не получила подтверждения, дошло ли сообщение, и заблокировала повторную рассылку, чтобы клиент не получил два счёта. Проверьте чат с клиентом и сообщите администратору.' },
       { term: 'Выдать ссылку банка', text: 'Номер карты → ссылка банка владельца. Клиент хочет платить по ссылке — картой или по СБП. Деньги получит владелец, оплату подтвердит банк.' },
       { term: 'Выдать новую ссылку банка', text: 'Появляется вместо «Выдать ссылку банка», когда ссылка уже выдана. Нужна, если старая перестала открываться или сменился банк менеджера.' },
       { term: 'Не выдавайте реквизиты вручную', text: 'Только кнопками: иначе система не узнает о новом получателе и возможна двойная оплата. При смене резерв прежнего получателя снимается, новому записывается.' }
@@ -106,10 +227,29 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     icon: 'send',
     title: 'Отправка клиенту',
     lead: 'Счёт приходит клиенту в чат вместе со ссылкой на страницу оплаты. Блок свёрнут и сам открывается, когда готовый счёт ещё не отправлен.',
+    walkthroughs: [
+      {
+        title: 'Как отправить счёт клиенту',
+        figures: [
+          {
+            shot: 'ci-send',
+            alt: 'Раскрытый блок «Отправка клиенту» с кнопками «Отправить счёт повторно» и «Скопировать ссылку на оплату»',
+            steps: [
+              'Раскройте блок «Отправка клиенту».',
+              'Нажмите «Отправить счёт». После первой отправки кнопка называется «Отправить счёт повторно» — как на снимке.',
+              '«Скопировать ссылку на оплату» — если ссылку нужно переслать клиенту самому.',
+              'Под кнопками написано, дошло ли сообщение до клиента.'
+            ]
+          }
+        ],
+        result: 'Счёт у клиента, статус счёта — «Выставлен». Дальше оплату по ссылке система увидит сама.'
+      }
+    ],
     items: [
       { term: 'Отправить счёт', text: 'Доступна, когда все заказы счёта готовы. Повторная отправка нужна, если клиент потерял сообщение.' },
       { term: 'Сообщить о готовности', text: 'Для режима «Счёт и акт Точки»: клиенту уходит уведомление о готовности работ, а документы Точка присылает отдельно.' },
       { term: 'Скопировать ссылку на оплату', text: 'Если ссылку нужно переслать клиенту вручную. Для счёта и акта Точки ссылка не используется.' },
+      { term: 'Сообщение клиенту ещё отправляется', text: 'Счёт стоит в очереди на отправку — это не ошибка. Отправлять повторно не нужно: если отправка не удастся, вместо этой строки появится ошибка.' },
       { term: 'Уведомление обработано', text: 'Появляется, если бот не смог отправить клиенту сообщение об оплате. Отправьте его вручную, затем нажмите.' }
     ]
   },
@@ -118,6 +258,24 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     icon: 'event',
     title: 'Срок оплаты',
     lead: 'С какого дня считается срок, написано в самом блоке. Если оплаты не будет, автоответчик переведёт счёт в «Не оплачено» — не раньше указанной даты и после уведомления менеджера.',
+    walkthroughs: [
+      {
+        title: 'Как дать клиенту отсрочку',
+        figures: [
+          {
+            shot: 'ci-term',
+            alt: 'Блок «Срок оплаты» внутри «Дополнительно»: дата, поле «Отсрочка, дней» и кнопка «Сохранить»',
+            steps: [
+              'Раскройте «Дополнительно».',
+              'Раскройте «Срок оплаты». Под заголовком — дата, раньше которой счёт не перейдёт в «Не оплачено».',
+              'Укажите, на сколько дней продлить срок.',
+              'Нажмите «Сохранить».'
+            ]
+          }
+        ],
+        result: 'Дата в заголовке блока сдвинулась на указанное число дней. Под описанием видно, кто и когда задал отсрочку.'
+      }
+    ],
     items: [
       { term: 'Отсрочка', text: 'Клиент попросил оплатить позже — добавьте дни (до 60) и нажмите «Сохранить». 0 — без отсрочки.' },
       { term: 'Кто задал', text: 'Под описанием видно, кто и когда задал отсрочку.' }
@@ -129,12 +287,43 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     title: 'Счёт и акт Точки',
     lead: 'Для клиентов, которым нужны документы на организацию. Точка формирует счёт и акт и отправляет их в группу клиента. '
       + 'Оплата по ссылке и реквизитам заменяется оплатой по этому счёту.',
+    walkthroughs: [
+      {
+        title: 'Как выставить счёт и акт и следить за оплатой',
+        figures: [
+          {
+            shot: 'ci-paper-start',
+            alt: 'Раскрытый блок «Счёт и акт Точки» с кнопкой «Выставить счёт и акт»',
+            steps: [
+              'Раскройте блок «Счёт и акт Точки».',
+              'Нажмите «Выставить счёт и акт»: в окне проверьте плательщика и сумму и запустите выпуск.'
+            ]
+          },
+          {
+            shot: 'ci-paper-flow',
+            alt: 'Блок «Счёт и акт Точки» после выпуска: «Порядок работы», кнопка «Открыть счёт и акт» и список выпущенных документов',
+            steps: [
+              '«Порядок работы» показывает, на каком шаге документы: подготовка, доставка, оплата.',
+              '«Открыть счёт и акт» — состояние документов, повторная отправка, отмена и возврат к обычной оплате.',
+              '«Выпущенные документы» — номер счёта, плательщик и состояние оплаты.'
+            ]
+          },
+          {
+            shot: 'ci-paper-pay',
+            alt: 'Блок «Оплата» счёта Точки с кнопкой «Проверить оплату в банке»',
+            steps: ['Оплату по счёту Точки банк подтверждает сам. «Проверить оплату в банке» лишь ускоряет проверку, если клиент уже сообщил об оплате.']
+          }
+        ],
+        result: 'Когда банк подтвердит перевод, счёт закроется сам, а заказы станут оплаченными.'
+      }
+    ],
     items: [
       { term: 'Выставить счёт и акт', text: 'Открывает окно документов: проверьте плательщика и сумму и запустите выпуск.' },
       { term: 'Порядок работы', text: '1 — документы готовятся, 2 — доставляются в группу, 3 — ждём оплату. Напоминания начинаются после подтверждённой доставки.' },
       { term: 'Открыть счёт и акт', text: 'Статус документов, повторная отправка, отмена и возврат к обычной оплате.' },
       { term: 'Счёт отправлен клиенту', text: 'Нужна, если счёт отправили сами. После отметки начнутся автоматические напоминания.' },
-      { term: 'Выпущенные документы', text: 'Список обновляется сам. По каждому счёту — кнопка «Документы и действия».' }
+      { term: 'Выпущенные документы', text: 'Список обновляется сам. По каждому счёту — кнопка «Документы и действия».' },
+      { term: 'Клиент набрал номер счёта русскими буквами', text: 'Ничего исправлять не нужно: система узнаёт номер счёта в назначении платежа, даже если его набрали на русской раскладке («РВ-…» вместо «PB-…»). Плательщик и сумма при этом проверяются как обычно.' }
     ]
   },
   {
@@ -142,6 +331,36 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     icon: 'playlist_add_check',
     title: 'Заказы счёта',
     lead: 'Карточки заказов слева. Панель помогает обработать их разом.',
+    walkthroughs: [
+      {
+        title: 'Как вернуть исключённый заказ в счёт',
+        figures: [
+          {
+            shot: 'ci-orders-return',
+            alt: 'Блок «Заказы счёта» внутри «Дополнительно» с кнопкой «Вернуть заказ в счёт»',
+            steps: [
+              'Раскройте «Дополнительно».',
+              'Раскройте «Заказы счёта».',
+              'Нажмите «Вернуть заказ в счёт». Кнопка есть, пока счёт собирается и не отправлен клиенту.'
+            ]
+          },
+          {
+            shot: 'ci-return-window',
+            alt: 'Окно «Вернуть заказ в счёт» со списком заказов и кнопкой «Вернуть»',
+            steps: ['В окне — заказы компаний этой связи, которые сейчас идут отдельно. Нажмите «Вернуть» у нужного заказа.']
+          },
+          {
+            shot: 'ci-return-confirm',
+            alt: 'Подтверждение возврата заказа: пояснение, на сколько вырастет счёт, и кнопка «Подтвердить возврат»',
+            steps: [
+              'Прочитайте, на сколько вырастет счёт и что будет с отдельным счётом заказа.',
+              'Нажмите «Подтвердить возврат».'
+            ]
+          }
+        ],
+        result: 'Заказ снова в общем счёте, сумма счёта выросла. Клиенту сейчас ничего не отправляется — заказ уйдёт ему в составе общего счёта.'
+      }
+    ],
     items: [
       { term: 'Одобрить все', text: 'Переводит заказы «В проверку» и «На проверке» в публикацию. В скобках — сколько заказов ждут одобрения.' },
       { term: 'Вернуть заказ в счёт', text: 'Возвращает в счёт заказ, который из него исключили. Кнопка видна, пока счёт собирается и не отправлен клиенту. Подробности — в разделе «Связи общих счетов», пункт «Вернуть заказ».' }
@@ -152,6 +371,19 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     icon: 'gpp_maybe',
     title: 'Не оплачен, бан, архив и удаление',
     lead: 'Внутри «Дополнительно». Клиент не платит или счёт больше не нужен. Каждое действие попросит подтверждение.',
+    walkthroughs: [
+      {
+        title: 'Где эти кнопки',
+        intro: 'Раскройте «Дополнительно», затем блок «Не оплачен, бан, архив и удаление». У менеджера блок называется «Бан, архив и удаление».',
+        figures: [
+          {
+            shot: 'ci-danger',
+            alt: 'Раскрытый блок «Не оплачен, бан, архив и удаление» с кнопками «Не оплачен» и «Удалить счёт и заказы»',
+            steps: ['«Не оплачен» видят только владелец и администратор. Обычно счёт переводит в «Не оплачено» автоответчик — кнопка нужна, когда он на паузе или выключен.']
+          }
+        ]
+      }
+    ],
     items: [
       { term: 'Не оплачен', text: 'Обычно счёт переводит в «Не оплачено» автоответчик, когда выйдет срок оплаты. Кнопка есть только у владельца и администратора — на случай, когда автоответчик на паузе или выключен. Дальше с заказами работает автоответчик.' },
       { term: 'В Бан', text: 'Счёт уже «Не оплачен», и клиент отказывается платить — неоплаченные заказы переводятся в Бан.' },
@@ -163,7 +395,24 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     id: 'settings',
     icon: 'tune',
     title: 'Связи общих счетов',
-    lead: 'Связь объединяет компании одного плательщика в один общий счёт. Раздел внизу панели и свёрнут: меняется редко. Внутри — «Новая связь», «Эта связь» и «Перейти к другой связи».',
+    lead: 'Связь объединяет компании одного плательщика в один общий счёт. Раздел внизу панели и свёрнут: меняется редко. Внутри — «Эта связь» и «Перейти к другой связи».',
+    walkthroughs: [
+      {
+        title: 'Как добавить или убрать компанию связи',
+        intro: 'Раскройте «Связи общих счетов» внизу панели, затем «Эта связь». Список компаний — в конце блока, под заголовком «Компании в связи».',
+        figures: [
+          {
+            shot: 'ci-settings-companies',
+            alt: 'Список «Компании в связи»: поле «Добавить компанию» и кнопка «−» у компании',
+            steps: [
+              'Чтобы добавить компанию, начните вводить её название, город или телефон и нажмите на неё в результатах.',
+              '«−» убирает компанию из будущих счетов. Система спросит, убрать ли её неоплаченные заказы и из текущего счёта.'
+            ]
+          }
+        ],
+        result: 'Добавление и исключение срабатывают сразу, без кнопки «Сохранить настройки».'
+      }
+    ],
     items: [
       { term: 'Как заказ попадает в счёт', text: 'Сам, вручную добавлять не нужно: при создании заказа у компании связи; при добавлении компании в связь — все её незавершённые заказы от «Новый» до «Напоминание»; при публикации заказа, если он шёл отдельно. Пока счёт собирается, новые заказы идут в него; после отправки счёта клиенту следующие заказы собираются в новый счёт.' },
       { term: 'Исключить заказ', text: 'Кнопка на карточке заказа в счёте. Заказ дальше идёт отдельно, со своим счётом. Если он ещё не опубликован, при публикации вернётся в общий счёт сам; уже опубликованный сам не вернётся — его возвращают кнопкой «Вернуть заказ в счёт».' },
@@ -187,7 +436,10 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     lead: 'Что нажимать в типичных случаях.',
     items: [
       { term: 'Клиент перевёл деньги исполнителю по старой памяти', text: '«Оплата» → «Оплачен» (или «Оплачен переводом», если в счёте ссылка) → в окне выберите исполнителя вместо получателя из счёта.' },
-      { term: 'Клиент боится платить по ссылке владельца', text: '«Смена получателя и способа оплаты» → «Выдать номер карты». Если нужен именно не владелец, нажмите ещё раз — выберется другой человек.' },
+      { term: 'Клиент боится платить по ссылке владельца', text: '«Смена получателя и способа оплаты» → «Выдать номер карты». В окне оставьте «Подобрать автоматически» или выберите сотрудника сами.' },
+      { term: 'Клиент просит счёт на другого человека', text: 'Тот же путь: «Выдать номер карты» → выберите нужного сотрудника в списке. Можно и сверх резерва — превышение сохранится для сверки.' },
+      { term: 'Клиент просит вернуть заказ, который убрали из счёта', text: '«Дополнительно» → «Заказы счёта» → «Вернуть заказ в счёт». Работает, пока счёт собирается и не отправлен клиенту.' },
+      { term: 'После смены получателя написано «Сообщение клиенту ещё отправляется»', text: 'Это не ошибка: новый счёт стоит в очереди. Менять способ оплаты повторно не нужно; если отправка не удастся, на этом месте появится ошибка.' },
       { term: 'Клиенту нужны документы на организацию', text: '«Счёт и акт Точки» → «Выставить счёт и акт».' },
       { term: 'Клиент просит подождать с оплатой', text: '«Срок оплаты» → укажите отсрочку в днях → «Сохранить».' },
       { term: 'Ссылка на оплату не открывается', text: '«Смена получателя и способа оплаты» → «Выдать номер карты» или «Выдать новую ссылку банка».' },
@@ -202,7 +454,7 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
   template: `
     <div class="guide-backdrop" role="presentation" (click)="closed.emit()">
       <section class="guide" role="dialog" aria-modal="true" aria-labelledby="common-invoice-guide-title"
-        (click)="$event.stopPropagation()" (keydown.escape)="closed.emit()">
+        (click)="$event.stopPropagation()" (keydown.escape)="escape()">
         <header class="guide-head">
           <div>
             <span class="guide-kicker">Инструкция</span>
@@ -228,6 +480,39 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
                 {{ item.title }}
               </h3>
               <p>{{ item.lead }}</p>
+              @for (walk of item.walkthroughs ?? []; track walk.title) {
+                <section class="guide-walk" [attr.aria-label]="walk.title">
+                  <h4>
+                    <span class="material-icons-sharp" aria-hidden="true">ads_click</span>
+                    {{ walk.title }}
+                  </h4>
+                  @if (walk.intro) { <p class="guide-walk-intro">{{ walk.intro }}</p> }
+                  @for (figure of walk.figures; track figure.shot; let figureIndex = $index) {
+                    <div class="guide-figure" [class.guide-figure--wide]="wide(figure.shot)">
+                      <button type="button" class="guide-shot" (click)="zoomed.set(figure)"
+                        [attr.aria-label]="'Увеличить снимок: ' + figure.alt" title="Нажмите, чтобы увеличить">
+                        <img [src]="shotUrl(figure.shot)" [alt]="figure.alt" [width]="shotSize(figure.shot)[0]"
+                          [height]="shotSize(figure.shot)[1]" loading="lazy" decoding="async" />
+                      </button>
+                      <ol class="guide-steps">
+                        @for (step of figure.steps; track step; let stepIndex = $index) {
+                          <li>
+                            <span class="guide-step-number" aria-hidden="true">{{ firstStep(walk, figureIndex) + stepIndex }}</span>
+                            <span><span class="guide-hidden">Шаг {{ firstStep(walk, figureIndex) + stepIndex }}. </span>{{ step }}</span>
+                          </li>
+                        }
+                      </ol>
+                    </div>
+                  }
+                  @if (walk.result) {
+                    <p class="guide-result">
+                      <span class="material-icons-sharp" aria-hidden="true">check_circle</span>
+                      <span>{{ walk.result }}</span>
+                    </p>
+                  }
+                </section>
+              }
+              @if (item.walkthroughs?.length && item.items.length) { <h4 class="guide-terms-title">Кнопки и подсказки</h4> }
               <dl>
                 @for (row of item.items; track row.term) {
                   <div>
@@ -239,6 +524,16 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
             </article>
           }
         </div>
+
+        @if (zoomed(); as figure) {
+          <div class="guide-zoom" role="dialog" aria-modal="true" [attr.aria-label]="figure.alt" (click)="zoomed.set(null)">
+            <button type="button" class="guide-close guide-zoom-close" aria-label="Закрыть снимок" (click)="zoomed.set(null)">
+              <span class="material-icons-sharp" aria-hidden="true">close</span>
+            </button>
+            <img [src]="shotUrl(figure.shot)" [alt]="figure.alt" [width]="shotSize(figure.shot)[0]"
+              [height]="shotSize(figure.shot)[1]" (click)="$event.stopPropagation()" />
+          </div>
+        }
       </section>
     </div>
   `,
@@ -255,6 +550,8 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
       --guide-accent: #a93422;
       --guide-accent-soft: #fff2ed;
       --guide-accent-border: #e4a493;
+      --guide-result-text: #17603f;
+      --guide-result-soft: #e8f6ee;
     }
     :host-context(body.otziv-dark-theme) {
       --guide-surface: #22272b;
@@ -265,6 +562,8 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
       --guide-accent: #ffad95;
       --guide-accent-soft: #3b2a25;
       --guide-accent-border: #765044;
+      --guide-result-text: #9fe0bd;
+      --guide-result-soft: #1f3a2d;
     }
     * { box-sizing: border-box; }
     .guide-backdrop {
@@ -280,7 +579,8 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
       display: grid;
       grid-template-rows: auto auto minmax(0, 1fr);
       gap: 0.75rem;
-      width: min(46rem, 100%);
+      position: relative;
+      width: min(54rem, 100%);
       max-height: calc(100dvh - 2rem);
       border: 1px solid var(--guide-border);
       border-radius: 1.1rem;
@@ -433,7 +733,158 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
       font-weight: 750;
       line-height: 1.4;
     }
+    .guide-walk {
+      display: grid;
+      gap: 0.6rem;
+      border: 1px solid var(--guide-border);
+      border-radius: 0.7rem;
+      padding: 0.7rem;
+      background: var(--guide-soft);
+    }
+    .guide-walk h4,
+    .guide-terms-title {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin: 0;
+      font-size: 0.82rem;
+      font-weight: 950;
+      line-height: 1.25;
+    }
+    .guide-walk h4 .material-icons-sharp {
+      color: var(--guide-accent);
+      font-size: 1.05rem;
+    }
+    .guide-terms-title {
+      margin-top: 0.2rem;
+      color: var(--guide-muted);
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .guide-walk-intro {
+      margin: 0;
+      color: var(--guide-muted);
+      font-size: 0.76rem;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+    .guide-figure {
+      display: grid;
+      grid-template-columns: minmax(0, auto) minmax(13rem, 1fr);
+      align-items: start;
+      gap: 0.9rem;
+    }
+    .guide-figure--wide { grid-template-columns: minmax(0, 1fr); }
+    .guide-figure + .guide-figure {
+      border-top: 1px dashed var(--guide-border);
+      padding-top: 0.7rem;
+    }
+    .guide .guide-shot {
+      display: block;
+      justify-self: start;
+      max-width: 100%;
+      min-height: 0;
+      border: 0;
+      border-radius: 0.6rem;
+      padding: 0;
+      background: none;
+      box-shadow: none;
+      cursor: zoom-in;
+    }
+    .guide-figure:not(.guide-figure--wide) .guide-shot { max-width: min(100%, 24rem); }
+    .guide-shot img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.6rem;
+    }
+    .guide .guide-shot:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--otziv-action, #e53220) 30%, transparent);
+      outline-offset: 2px;
+    }
+    .guide-steps {
+      display: grid;
+      gap: 0.5rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .guide-steps li {
+      display: grid;
+      grid-template-columns: 1.6rem minmax(0, 1fr);
+      align-items: start;
+      gap: 0.5rem;
+      font-size: 0.78rem;
+      font-weight: 750;
+      line-height: 1.42;
+    }
+    /* The same red numbered circle as on the screenshot. */
+    .guide-step-number {
+      display: grid;
+      width: 1.6rem;
+      height: 1.6rem;
+      place-items: center;
+      border-radius: 999px;
+      color: #ffffff;
+      background: #e53220;
+      font-size: 0.8rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .guide-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .guide-result {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 0.45rem;
+      margin: 0;
+      border-radius: 0.55rem;
+      padding: 0.5rem 0.6rem;
+      color: var(--guide-result-text);
+      background: var(--guide-result-soft);
+      font-size: 0.76rem;
+      font-weight: 800;
+      line-height: 1.42;
+    }
+    .guide-result .material-icons-sharp { font-size: 1.05rem; }
+    .guide-zoom {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: grid;
+      align-content: start;
+      justify-items: center;
+      overflow: auto;
+      border-radius: inherit;
+      padding: 0.8rem 1rem 1rem;
+      background: color-mix(in srgb, var(--guide-surface) 95%, transparent);
+      cursor: zoom-out;
+    }
+    .guide-zoom img {
+      display: block;
+      max-width: none;
+      height: auto;
+      border-radius: 0.7rem;
+      cursor: default;
+    }
+    .guide .guide-zoom-close {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      justify-self: end;
+      margin-bottom: 0.4rem;
+    }
     @media (max-width: 640px) {
+      .guide-figure { grid-template-columns: minmax(0, 1fr); }
+      .guide-zoom { justify-items: start; padding-inline: 0.5rem; }
       .guide-backdrop { padding: 0.5rem; align-items: end; }
       .guide { max-height: calc(100dvh - 1rem); padding: 0.85rem; border-radius: 1rem 1rem 0.6rem 0.6rem; }
       .guide-toc { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 0.2rem; }
@@ -452,6 +903,10 @@ export class CommonInvoiceGuideComponent implements AfterViewInit {
   @Output() readonly closed = new EventEmitter<void>();
   @ViewChild('closeButton') private closeButton?: ElementRef<HTMLButtonElement>;
   @ViewChild('body') private body?: ElementRef<HTMLElement>;
+  /** The screenshot opened at full size over the manual. */
+  readonly zoomed = signal<GuideFigure | null>(null);
+  /** Screenshots exist for both themes: the manual shows the screen as the user sees it. */
+  private readonly shotTheme = inject(DOCUMENT).body.classList.contains('otziv-dark-theme') ? 'dark' : 'light';
 
   ngAfterViewInit(): void {
     this.closeButton?.nativeElement.focus({ preventScroll: true });
@@ -462,6 +917,33 @@ export class CommonInvoiceGuideComponent implements AfterViewInit {
 
   anchor(id: string): string {
     return `common-invoice-guide-${id}`;
+  }
+
+  shotUrl(shot: GuideShot): string {
+    return `/assets/guide/${this.shotTheme}/${shot}.webp?v=${GUIDE_SHOTS_VERSION}`;
+  }
+
+  /** Width and height in CSS pixels: the place is kept before the file loads, so a section opens where it should. */
+  shotSize(shot: GuideShot): readonly [number, number] {
+    return GUIDE_SHOTS[shot];
+  }
+
+  wide(shot: GuideShot): boolean {
+    return GUIDE_SHOTS[shot][0] > GUIDE_WIDE_SHOT;
+  }
+
+  /** Number of the first step of a figure: steps are numbered through the walkthrough, as on its pictures. */
+  firstStep(walk: GuideWalkthrough, figureIndex: number): number {
+    return 1 + walk.figures.slice(0, figureIndex).reduce((count, figure) => count + figure.steps.length, 0);
+  }
+
+  /** Escape closes the opened screenshot first and the manual second. */
+  escape(): void {
+    if (this.zoomed()) {
+      this.zoomed.set(null);
+      return;
+    }
+    this.closed.emit();
   }
 
   scrollTo(id: string, smooth = true): void {

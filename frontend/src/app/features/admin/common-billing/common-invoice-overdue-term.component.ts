@@ -35,11 +35,6 @@ export const MAX_OVERDUE_EXTENSION_DAYS = 60;
             <p>Переход в «Не оплачено», если клиент не оплатит вовремя.@if (t.extensionDays > 0) { Отсрочка {{ t.extensionDays }} дн.}</p>
           </div>
           <div class="overdue-term-tools">
-            @if (t.automaticMoveNotBefore) {
-              <small class="overdue-term-date" title="Раньше этой даты счёт не перейдёт в «Не оплачено»">
-                не раньше {{ date(t.automaticMoveNotBefore) }}
-              </small>
-            }
             @if (help.observed) {
               <button type="button" class="overdue-term-help" (click)="$event.preventDefault(); $event.stopPropagation(); help.emit()"
                 aria-label="Инструкция: срок оплаты" title="Подробнее об этом блоке">
@@ -48,6 +43,12 @@ export const MAX_OVERDUE_EXTENSION_DAYS = 60;
             }
             <span class="material-icons-sharp overdue-term-fold" aria-hidden="true">expand_more</span>
           </div>
+          <!-- Its own row under the text: beside the buttons it left the description a column two letters wide. -->
+          @if (t.automaticMoveNotBefore) {
+            <small class="overdue-term-date" title="Раньше этой даты счёт не перейдёт в «Не оплачено»">
+              не раньше {{ date(t.automaticMoveNotBefore) }}
+            </small>
+          }
         </summary>
         <div class="overdue-term-body">
         <p>{{ t.note }}</p>
@@ -87,7 +88,7 @@ export const MAX_OVERDUE_EXTENSION_DAYS = 60;
     .overdue-term .overdue-term-help{display:grid;width:1.7rem;height:1.7rem;min-height:0;place-items:center;border:1px solid var(--billing-action-border,#cbd0da);border-radius:999px;padding:0;background:var(--billing-action-surface,#f5f7fa);color:var(--billing-action-muted,#596175);box-shadow:none;cursor:pointer}
     .overdue-term .overdue-term-help .material-icons-sharp{font-size:1rem}
     .overdue-term .overdue-term-help:not(:disabled):hover{border-color:var(--billing-action-primary-soft-border,#e4a493);color:var(--billing-action-primary-soft-text,#a93422);background:var(--billing-action-primary-soft,#fff2ed)}
-    .overdue-term-date{border-radius:999px;padding:.2rem .5rem;color:var(--billing-action-warning-text,#805600);background:var(--billing-action-warning-soft,#fff6df);font-size:.64rem;font-weight:900;line-height:1.2;text-align:center;max-width:6.5rem}
+    .overdue-term-date{grid-column:2/-1;justify-self:start;margin-top:-.25rem;border-radius:999px;padding:.2rem .5rem;color:var(--billing-action-warning-text,#805600);background:var(--billing-action-warning-soft,#fff6df);font-size:.64rem;font-weight:900;line-height:1.2}
     p{margin:0;font-size:.68rem;font-weight:750;line-height:1.38;overflow-wrap:anywhere}
     .overdue-term-hint{color:var(--billing-action-muted,#596175)}
     .overdue-term-error{color:var(--billing-alert-title,#c2334d)}
