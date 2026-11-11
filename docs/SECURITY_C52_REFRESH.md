@@ -29,7 +29,10 @@ gate reported `libxslt` only for nginx and the web image.
 `builds/c52-nginx/Dockerfile`. `proofs/c52-nginx/` retains the authenticated
 publication, the independent anonymous pull and the activation candidate, as for
 C49 and C50. The active index and `compose.yaml` point to the checked immutable
-digest. Publication, anonymous digest pull, retained OCI provenance/SBOM and fresh
+digest `sha256:a873be5016237d2c08591bb1582a0535992466ef8744cb73d2c940b6c84abc23`.
+Publication run 42991345815 built the recipe of commit `671e4c3f7`, scanned the exact
+registry digest (PASS, zero HIGH and CRITICAL, `libxslt` 1.1.43-r4 in the package
+inventory) and proved the anonymous digest pull. Publication, anonymous digest pull, retained OCI provenance/SBOM and fresh
 scans remain mandatory; nothing in the release gate is relaxed.
 
 Relevant contracts: `reviewed-image-sets-c52.test.mjs` and the existing publication,
