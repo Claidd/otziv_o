@@ -100,6 +100,7 @@ import {
 import { ManagerBoardOrderFacade } from './manager-board-order.facade';
 import { ManagerOrderCardComponent } from './manager-order-card.component';
 import type { ManagerOrderEditDraftChange } from './manager-order-edit-modal.component';
+import { OrderPaymentRouteWindowsComponent } from './order-payment-route-windows.component';
 import { ManagerOrderEditModalComponent } from './manager-order-edit-modal.component';
 import type { ManagerCreateOrderDraftChange } from './manager-order-create-modal.component';
 import { ManagerOrderCreateModalComponent } from './manager-order-create-modal.component';
@@ -140,6 +141,7 @@ type ChatLinkEditor = {
     ManagerCompanyEditModalComponent,
     ManagerOrderCardComponent,
     ManagerOrderEditModalComponent,
+    OrderPaymentRouteWindowsComponent,
     ManagerOrderCreateModalComponent,
     ManagerManualCardPaymentModalComponent,
     CommonManualPaymentAttributionModalComponent,
@@ -270,6 +272,9 @@ export class ManagerBoardComponent implements OnDestroy {
   readonly orderDeleting = this.orderFacade.orderDeleting;
   readonly orderCancelingPayment = this.orderFacade.orderCancelingPayment;
   readonly paymentRouteContext = this.orderFacade.paymentRouteContext;
+  /** The order editor's own windows: recipient choice for «Выдать номер карты» and the manual. */
+  readonly orderPaymentFacade = this.orderFacade;
+  readonly orderPaymentGuideOpen = signal(false);
   readonly paymentRouteContextLoading = this.orderFacade.paymentRouteContextLoading;
   readonly paymentRouteChanging = this.orderFacade.paymentRouteChanging;
   readonly createOrderPayload = this.orderFacade.createOrderPayload;

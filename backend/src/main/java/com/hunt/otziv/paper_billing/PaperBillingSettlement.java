@@ -26,13 +26,53 @@ public class PaperBillingSettlement {
     private final com.hunt.otziv.client_messages.api.PaperInvoiceAutomation automation;
     @org.springframework.beans.factory.annotation.Autowired private com.hunt.otziv.common_billing.api.BankPaperInvoiceParts parts;
     private static final Pattern NUMBER=Pattern.compile("(?<![A-Z0-9-])PB-[0-9]+-[A-F0-9]{8}(?![A-Z0-9-])",Pattern.CASE_INSENSITIVE);
+    // A payer who retypes the number by hand often writes it on the Russian layout: «РВ» for PB, look-alike letters in
+    // the suffix, a long dash, spaces around the hyphens. On the text with those read as Latin the number must stand
+    // apart from any letter or digit, so that it cannot be cut out of a longer word.
+    private static final Pattern RETYPED_NUMBER=Pattern.compile(
+            "(?<![\\p{L}\\p{N}-])PB\\s*-\\s*[0-9]+\\s*-\\s*[A-F0-9]{8}(?![\\p{L}\\p{N}-])",Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Invoice numbers named in a transfer purpose, in their canonical upper-case form. The number as issued is
+     * recognised first; then the purpose is read with Cyrillic look-alikes (Р, В, А, С, Е) and dash variants taken
+     * as the Latin characters they stand for. The payer, the amount and the document checks that follow are unchanged.
+     */
+    static LinkedHashSet<String> invoiceNumbers(String purpose) {
+        var numbers=new LinkedHashSet<String>();
+        if (purpose==null || purpose.isBlank()) return numbers;
+        var issued=NUMBER.matcher(purpose);
+        while(issued.find()) numbers.add(issued.group().toUpperCase(Locale.ROOT));
+        var retyped=RETYPED_NUMBER.matcher(latinLookalikes(purpose));
+        while(retyped.find()) numbers.add(retyped.group().replaceAll("\\s","").toUpperCase(Locale.ROOT));
+        return numbers;
+    }
+
+    static String latinLookalikes(String text) {
+        var latin=new StringBuilder(text.length());
+        for(int i=0;i<text.length();i++) {
+            char symbol=text.charAt(i);
+            latin.append(switch(symbol) {
+                case 'Р','р' -> 'P';
+                case 'В','в' -> 'B';
+                case 'А','а' -> 'A';
+                case 'С','с' -> 'C';
+                case 'Е','е' -> 'E';
+                // hyphen, non-breaking hyphen, figure dash, en dash, em dash, horizontal bar, minus
+                case '\u2010','\u2011','\u2012','\u2013','\u2014','\u2015','\u2212' -> '-';
+                // no-break and narrow no-break spaces
+                case '\u00A0','\u202F' -> ' ';
+                default -> symbol;
+            });
+        }
+        return latin.toString();
+    }
     private static final Pattern LEGACY_ORDER=Pattern.compile("(?iu)(?<![\\p{L}\\p{N}])заказ\\s*(?:№|#)?\\s*([1-9][0-9]{0,17})(?![0-9])");
     public void webhook(String raw) {
         var claims=verifier.verifyIncomingPayment(raw);
         // The subscription receives all incoming transfers, including bank test events.
         // Verify every signature, then ignore traffic unrelated to our invoice numbers.
         String purpose=claims.path("purpose").asText();
-        if (!NUMBER.matcher(purpose).find() && !LEGACY_ORDER.matcher(purpose).find()) return;
+        if (invoiceNumbers(purpose).isEmpty() && !LEGACY_ORDER.matcher(purpose).find()) return;
         accept(parse(claims));
     }
     public BankReceipt parse(JsonNode data) {
@@ -56,9 +96,7 @@ public class PaperBillingSettlement {
     }
     public void accept(BankReceipt receipt) {
         if (!settings.isEnabled() || !settings.isBankOperationsEnabled()) throw problem("Сверка банковских счетов выключена");
-        var numbers=new LinkedHashSet<String>();
-        var matcher=NUMBER.matcher(receipt.purpose());
-        while(matcher.find()) numbers.add(matcher.group().toUpperCase(Locale.ROOT));
+        var numbers=invoiceNumbers(receipt.purpose());
         List<Map<String,Object>> rows;
         if(numbers.size()==1) rows=store.jdbc().queryForList("SELECT * FROM paper_invoice_document WHERE number=?",numbers.iterator().next());
         else if(numbers.isEmpty() && !receipt.purpose().toUpperCase(Locale.ROOT).contains("PB-")) {

@@ -111,8 +111,52 @@ public class PaymentRouteReplacementWorkflow {
 
     @Transactional
     public PaymentRouteReplacement replacePaymentRouteAuthorized(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target, boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication, boolean paperInvoiceWithdrawn, boolean differentRecipient) {
+        return replacePaymentRouteAuthorized(orderId, expectedPaymentLinkId, target, confirmedUnpaid, expectedTargetPaymentProfileId,
+                authentication, paperInvoiceWithdrawn, differentRecipient, null);
+    }
+
+    /** @param chosenProfileId the person a manager named for the card number, or null for the automatic choice */
+    @Transactional
+    public PaymentRouteReplacement replacePaymentRouteAuthorized(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target, boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication, boolean paperInvoiceWithdrawn, boolean differentRecipient, Long chosenProfileId) {
         return replace(orderId, expectedPaymentLinkId, target, confirmedUnpaid, expectedTargetPaymentProfileId,
-                authentication, paperInvoiceWithdrawn, differentRecipient, false);
+                authentication, paperInvoiceWithdrawn, differentRecipient, false, chosenProfileId);
+    }
+
+    /**
+     * People the manager may name in the «Выдать номер карты» window of an order. The current
+     * recipient is marked, so the window does not offer to issue the same requisites again.
+     */
+    @Transactional
+    public com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse paymentRouteRecipientsAuthorized(Long orderId, Authentication authentication) {
+        orderRepository.findById(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        PaymentLink current = currentRouteChangeLink(paymentLinkRepository.findByOrderIdInForRead(Set.of(orderId))).orElse(null);
+        if (current == null) {
+            return new com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse(orderId, null, 0L, List.of());
+        }
+        Long currentUserId = currentContractorRecipientUserId(current);
+        var recipients = contractorPaymentLiveRoutingService.recipientOptionsForPaymentLink(current).stream()
+                .map(option -> new com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse.Recipient(
+                        option.profileId(), option.userId(), option.role(), option.name(),
+                        option.orderSpecialist(), option.manager(), option.teamMember(), option.workedWithClient(),
+                        option.availableKopecks(), option.overrunKopecks(),
+                        currentUserId != null && currentUserId.equals(option.userId()), option.blockReason()))
+                .toList();
+        return new com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse(orderId, current.getId(), current.getAmountKopecks(), recipients);
+    }
+
+    /** The person whose card number the client holds now; null for a bank link, a paper invoice or a damaged reserve. */
+    private Long currentContractorRecipientUserId(PaymentLink current) {
+        if (!isManualPayment(current)) {
+            return null;
+        }
+        try {
+            var task = taskReceiptIntegrationService.candidate(current).orElse(null);
+            return contractorPaymentLiveRoutingService.issuedRecipientUserId(current.getContractorAllocationId(),
+                    task == null ? null : task.accountingTargetProfileId());
+        } catch (ResponseStatusException unavailable) {
+            return null;
+        }
     }
 
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
@@ -129,7 +173,13 @@ public class PaymentRouteReplacementWorkflow {
     /** Only the bank-change coordinator may complete this path after verifying the exact provider operation. */
     @Transactional
     public PaymentRouteReplacement replaceBankRoute(Long orderId, Long linkId, PaymentRouteChangeTarget target, boolean differentRecipient, Authentication actor) {
-        return replace(orderId, linkId, target, true, null, actor, false, differentRecipient, true);
+        return replaceBankRoute(orderId, linkId, target, differentRecipient, actor, null);
+    }
+
+    /** @param chosenProfileId the person a manager named while the bank link was still open, or null */
+    @Transactional
+    public PaymentRouteReplacement replaceBankRoute(Long orderId, Long linkId, PaymentRouteChangeTarget target, boolean differentRecipient, Authentication actor, Long chosenProfileId) {
+        return replace(orderId, linkId, target, true, null, actor, false, differentRecipient, true, chosenProfileId);
     }
 
     boolean releaseRoutesAfterObservedReceipt(PaymentLink paidLink) {
@@ -169,12 +219,15 @@ public class PaymentRouteReplacementWorkflow {
 
     private PaymentRouteReplacement replace(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target,
             boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication,
-            boolean paperInvoiceWithdrawn, boolean differentRecipient, boolean bankChange) {
+            boolean paperInvoiceWithdrawn, boolean differentRecipient, boolean bankChange, Long chosenProfileId) {
         if (!confirmedUnpaid) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите, что клиент еще не оплатил по прежним реквизитам");
         }
         if (target == null || (differentRecipient && target != PaymentRouteChangeTarget.EMPLOYEE_REQUISITES)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный запрос смены способа оплаты");
+        }
+        if (chosenProfileId != null && target != PaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Получателя выбирают только при выдаче номера карты");
         }
         // The manager endpoint already requires an authenticated manager and the
         // exact order assignment below. Paper documents use a fixed owner account.
@@ -205,7 +258,7 @@ public class PaymentRouteReplacementWorkflow {
             current = source;
         }
         if (current == null) {
-            if (differentRecipient) {
+            if (differentRecipient || chosenProfileId != null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала выставьте счёт, чтобы сменить получателя");
             }
             if (expectedPaymentLinkId != null) {
@@ -271,13 +324,17 @@ public class PaymentRouteReplacementWorkflow {
         } else if (target == PaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
             Objects.requireNonNull(manager, "manager");
             Objects.requireNonNull(profile, "profile");
-            Optional<ManualPaymentTaskRouteSnapshot> taskRoute = actualPaymentAttributionService.actualRecipientAccountingEnabled() ? taskReceiptIntegrationService.reserveForPaymentLink(replacement, manager.getId(), profile.getId(), filter) : Optional.empty();
+            // A person named by the manager bypasses both the payment task and the automatic choice. The
+            // balance may be exceeded; the overrun keeps this person out of automatic routing until it recovers.
+            Optional<ManualPaymentTaskRouteSnapshot> taskRoute = chosenProfileId == null && actualPaymentAttributionService.actualRecipientAccountingEnabled() ? taskReceiptIntegrationService.reserveForPaymentLink(replacement, manager.getId(), profile.getId(), filter) : Optional.empty();
             if (taskRoute.isPresent()) {
                 applyManualTaskPayment(replacement, taskRoute.get());
             } else {
                 requireLiveRouteChangeEnabled();
                 prepareLivePaymentLinkSourceOrFail(replacement, now);
-                ContractorPaymentAllocation allocation = requireLiveRoutingAllocation(replacement, contractorPaymentLiveRoutingService.reserveContractorForPaymentLink(replacement, filter.excludedUserId()), "route_change_contractor_returned_null");
+                ContractorPaymentAllocation allocation = requireLiveRoutingAllocation(replacement, chosenProfileId != null
+                        ? contractorPaymentLiveRoutingService.reserveChosenContractorForPaymentLink(replacement, chosenProfileId)
+                        : contractorPaymentLiveRoutingService.reserveContractorForPaymentLink(replacement, filter.excludedUserId()), "route_change_contractor_returned_null");
                 if (!isContractorRecipient(allocation)) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось выбрать специалиста или менеджера для оплаты");
                 }

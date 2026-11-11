@@ -326,6 +326,31 @@ export interface PaymentRouteChangeRequest {
   confirmedUnpaid: boolean;
   paperInvoiceWithdrawn?: boolean;
   expectedTargetPaymentProfileId?: number | null;
+  /** Contractor payment profile the manager named for the card number; omitted for the automatic choice. */
+  recipientProfileId?: number | null;
+}
+
+/** A person a manager may name when a card number is issued for an order invoice. */
+export interface PaymentRouteRecipient {
+  profileId: number;
+  userId?: number | null;
+  role: string;
+  name: string;
+  orderSpecialist: boolean;
+  manager: boolean;
+  teamMember: boolean;
+  workedWithClient: boolean;
+  availableKopecks: number;
+  overrunKopecks: number;
+  current: boolean;
+  blockReason?: string | null;
+}
+
+export interface PaymentRouteRecipientsResponse {
+  orderId: number;
+  paymentLinkId: number | null;
+  amountKopecks: number;
+  recipients: PaymentRouteRecipient[];
 }
 
 export interface PaymentRouteChangeResponse {
@@ -797,6 +822,47 @@ export interface CommonInvoicePaymentRouteChangeContextResponse {
   ownerBankTargetProvider?: string | null;
   canReissueOwnerBank: boolean;
   ownerBankReissueBlockReason: string;
+}
+
+/** A person a manager may name when a card number is issued for a common invoice. */
+export interface CommonInvoiceRouteRecipient {
+  profileId: number;
+  userId?: number | null;
+  role: string;
+  name: string;
+  orderSpecialist: boolean;
+  manager: boolean;
+  teamMember: boolean;
+  workedWithClient: boolean;
+  availableKopecks: number;
+  overrunKopecks: number;
+  current: boolean;
+  blockReason?: string | null;
+}
+
+export interface CommonInvoiceRouteRecipientsResponse {
+  invoiceId: number;
+  amountKopecks: number;
+  recipients: CommonInvoiceRouteRecipient[];
+}
+
+/** An order of the invoice's own link that goes apart from the common invoice and may be returned to it. */
+export interface CommonInvoiceReturnableOrder {
+  orderId: number;
+  companyId: number;
+  companyTitle: string;
+  orderTitle: string;
+  status: string;
+  /** What the order would add to the invoice; 0 when the amount cannot be calculated. */
+  amountKopecks: number;
+}
+
+export interface CommonInvoiceReturnableOrdersResponse {
+  invoiceId: number;
+  canReturn: boolean;
+  /** Why the composition is fixed and what to do instead; empty while orders can be returned. */
+  blockReason?: string | null;
+  orders: CommonInvoiceReturnableOrder[];
 }
 
 export interface ContractorCommonSourceConfirmationRequest {

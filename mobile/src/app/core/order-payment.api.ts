@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import type { TbankPaymentStatus, ManagerPaymentLinkResponse, PaymentRouteChangeContext, PaymentRouteChangeRequest, PaymentRouteChangeResponse } from './api.service';
+import type { TbankPaymentStatus, ManagerPaymentLinkResponse, PaymentRouteChangeContext, PaymentRouteChangeRequest, PaymentRouteChangeResponse, PaymentRouteRecipientsResponse } from './api.service';
 import { mobileEnvironment } from './mobile-environment';
 @Injectable({ providedIn: 'root' })
 export class OrderPaymentApi {
@@ -24,14 +24,22 @@ export class OrderPaymentApi {
     );
   }
 
+  /** People a manager may name in the «Выдать номер карты» window of an order. */
+  getManagerOrderPaymentRouteRecipients(orderId: number): Observable<PaymentRouteRecipientsResponse> {
+    return this.http.get<PaymentRouteRecipientsResponse>(
+      this.apiUrl(`/api/manager/orders/${orderId}/payment-route-recipients`)
+    );
+  }
+
   changeManagerOrderPaymentRoute(
     orderId: number,
     request: PaymentRouteChangeRequest
   ): Observable<PaymentRouteChangeResponse> {
-    const different = request.target === 'DIFFERENT_RECIPIENT';
+    // A person named by the manager needs no «other than the current one» rule: the choice is explicit.
+    const different = request.target === 'DIFFERENT_RECIPIENT' && request.recipientProfileId == null;
     return this.http.post<PaymentRouteChangeResponse>(
       this.apiUrl(`/api/manager/orders/${orderId}/payment-route-change${different ? '/recipient' : ''}`),
-      different ? { ...request, target: 'EMPLOYEE_REQUISITES' } : request
+      request.target === 'DIFFERENT_RECIPIENT' ? { ...request, target: 'EMPLOYEE_REQUISITES' } : request
     );
   }
 

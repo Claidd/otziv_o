@@ -105,6 +105,7 @@ on:
           - c36-minio
           - c36-postgres
           - c51-postgres
+          - c52-nginx
           - c43-tempo
           - c43-loki
           - c43-alloy
@@ -1492,6 +1493,7 @@ jobs:
             --memory 128m --pids-limit 64 --entrypoint sh otziv-web-ci -ec '
               nginx -v
               apk --no-network info -v -e pcre2 | grep -Fx pcre2-10.49-r0
+              apk --no-network info -v -e libxslt | grep -Fx libxslt-1.1.42-r3
               test -s /usr/share/nginx/html/index.html
               test -s /etc/nginx/templates/default.conf.template
             '

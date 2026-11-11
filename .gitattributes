@@ -196,6 +196,10 @@ infrastructure/runtime-security/builds/c50-*/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c50-*.json text eol=lf
 infrastructure/runtime-security/adjudications/grafana-tempo-c50/** -text
 
+# C52 nginx libxslt recipe and publication manifest hashes must survive Windows checkouts unchanged.
+infrastructure/runtime-security/builds/c52-*/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c52-*.json text eol=lf
+
 # C51 PostgreSQL zlib overlay binds the exact recipe, manifest, package inventory and executed sources.
 infrastructure/runtime-security/builds/c51-postgres/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c51-postgres.json text eol=lf

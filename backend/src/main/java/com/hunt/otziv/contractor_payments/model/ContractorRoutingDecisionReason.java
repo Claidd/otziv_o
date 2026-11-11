@@ -5,6 +5,8 @@ public enum ContractorRoutingDecisionReason {
     SPECIALIST_SELECTED,
     MANAGER_SELECTED,
     MANUAL_PAYMENT_TASK_SELECTED,
+    /** A manager named this recipient; the available balance was not a condition. */
+    RECIPIENT_CHOSEN_BY_MANAGER,
     CLIENT_REQUEST_OWNER_TBANK,
 
     SPECIALIST_NOT_ASSIGNED,

@@ -3,6 +3,7 @@ import {
   type CommonBillingAccountResponse, type PublicPaymentLinkResponse, type DeliveryOperation
 } from './billing-payments.generated';
 import { ClientContractError, validateWire } from './wire-schema';
+import { deliveryOperationMessage, deliveryOperationPending } from './delivery-operations';
 
 export { ClientContractError } from './wire-schema';
 export { BILLING_PAYMENT_CONTRACT_VERSION } from './billing-payments.generated';
@@ -58,10 +59,38 @@ export function guardPublicCommonInvoice<T extends { status: string; paymentRout
   return value;
 }
 
+/**
+ * What a common invoice says while its client message is still being sent (queued, in a retry, or with an outcome
+ * the server is still finding out). For that time the server keeps a marker in `lastError`; it is a wait, not an
+ * error, so the pages show this text instead of the marker. The text promises nothing: a send that fails or gets
+ * stuck replaces the marker with a real error (`delivery_failed`, `message_send_stale`), shown as before.
+ */
+export function commonInvoiceDeliveryWait(
+  lastError: string | null | undefined,
+  delivery?: DeliveryOperation | null
+): string | null {
+  const marker = (lastError ?? '').trim().toLowerCase();
+  const routeChanged = marker === 'payment_route_changed_message_in_progress';
+  if (!routeChanged && marker !== 'message_send_in_progress') {
+    return null;
+  }
+  // The operation knows more than the marker. An outcome the server could not confirm, or a stopped send, is
+  // said as it is: the marker can stay for as long as that operation is unresolved.
+  if (delivery && delivery.status !== 'SENT' && !deliveryOperationPending(delivery)) {
+    return deliveryOperationMessage(delivery);
+  }
+  return routeChanged
+    ? 'Сообщение клиенту с новым способом оплаты ещё отправляется — это не ошибка. '
+      + 'Менять способ оплаты повторно не нужно: если отправка не удастся, здесь появится ошибка.'
+    : 'Сообщение клиенту ещё отправляется — это не ошибка. Отправлять повторно не нужно: '
+      + 'если отправка не удастся, здесь появится ошибка.';
+}
+
 /** Delivery status is independent of the invoice's legacy business status. */
 export function commonInvoiceDeliveryWarning(lastError: string | null | undefined): string | null {
   const detail = lastError?.trim();
-  return detail ? `Отправка не подтверждена. ${detail}` : null;
+  if (!detail) return null;
+  return commonInvoiceDeliveryWait(detail) ?? `Отправка не подтверждена. ${detail}`;
 }
 
 export { deliveryOperationMessage, deliveryOperationPending, DeliveryStatusWatcher } from './delivery-operations';

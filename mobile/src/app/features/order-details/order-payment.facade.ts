@@ -8,10 +8,21 @@ import { EditorSession, type EditorTicket } from '../../core/editor-session';
 import type { RouteEpochTicket } from '../../core/route-epoch.guard';
 import type { PageWriteTracker } from '../../core/page-write-tracker';
 import type { MobileConfirmService } from '../../shared/mobile-confirm.service';
+import {
+  mobilePaymentRecipientAutoHint,
+  mobilePaymentRecipientOptions,
+  type MobilePaymentRecipientChoice,
+  type MobilePaymentRecipientIssueOutcome,
+  type MobilePaymentRecipientLoad,
+  type MobilePaymentRecipientPickerRequest,
+  type MobilePaymentRecipientPickerResult
+} from '../../shared/payment-recipient-picker';
 
 type Dependencies = {
   writes: Pick<PageWriteTracker, 'track'>;
-  api: Pick<OrderPaymentApi, 'getTbankStatus' | 'createManagerOrderPaymentLink' | 'getManagerOrderPaymentRouteChangeContext' | 'changeManagerOrderPaymentRoute' | 'markManagerOrderPaperInvoiceIssued'>;
+  api: Pick<OrderPaymentApi, 'getTbankStatus' | 'createManagerOrderPaymentLink' | 'getManagerOrderPaymentRouteChangeContext' | 'getManagerOrderPaymentRouteRecipients' | 'changeManagerOrderPaymentRoute' | 'markManagerOrderPaperInvoiceIssued'>;
+  /** Opens the «Выдать номер карты» window; resolves with null when it is closed without a card number. */
+  pickRecipient(request: MobilePaymentRecipientPickerRequest): Promise<MobilePaymentRecipientPickerResult | null>;
   orderId(): number | null;
   hasDetails(): boolean;
   canManage(): boolean;
@@ -36,6 +47,8 @@ export class OrderPaymentFacade {
   private readonly session = new EditorSession();
   private readonly pendingRoutes = new Set<number>();
   private readonly pendingLinks = new Set<number>();
+  /** Closes the «Выдать номер карты» window when the order screen is left. */
+  private recipientPickerLeave?: AbortController;
   private statusRead?: Subscription;
 
   constructor(private readonly deps: Dependencies) {}
@@ -45,8 +58,42 @@ export class OrderPaymentFacade {
   }
   paymentLinkModeLabel(): string { return 'Банковский счёт'; }
   canManagePaymentRoute(): boolean { return this.deps.hasDetails() && this.deps.canManage(); }
+  /**
+   * One «Выдать номер карты» action replaces «реквизиты без ссылки» and «сменить получателя»:
+   * from a bank link any transfer number fits, from a number the client wants another person.
+   */
+  cardNumberTarget(context: PaymentRouteChangeContext): PaymentRouteChangeTarget {
+    if (context.paymentLinkId == null) return 'EMPLOYEE_REQUISITES';
+    const bankLink = context.bankRecipientChangeAvailable === true
+      || context.configuredMode === 'OWNER_TBANK'
+      || (context.currentRoute ?? '').trim().startsWith('Эквайринг');
+    return bankLink ? 'EMPLOYEE_REQUISITES' : 'DIFFERENT_RECIPIENT';
+  }
+  /**
+   * A card number for an issued invoice is given from the window: the system's own choice or a person
+   * the manager names. An order without an issued invoice and a withdrawn paper invoice keep the confirmation.
+   */
+  cardNumberOpensWindow(target: PaymentRouteChangeTarget, context: PaymentRouteChangeContext): boolean {
+    return (target === 'EMPLOYEE_REQUISITES' || target === 'DIFFERENT_RECIPIENT')
+      && context.paymentLinkId != null && !context.paperInvoiceIssued;
+  }
+  /** What «Выдать номер карты» does for this order, said under the button. */
+  cardNumberHint(context: PaymentRouteChangeContext): string {
+    const target = this.cardNumberTarget(context);
+    if (this.cardNumberOpensWindow(target, context)) {
+      return (target === 'EMPLOYEE_REQUISITES' ? 'Ссылка → номер карты. ' : 'Номер карты другого человека. ')
+        + 'Откроется окно: система подберёт получателя сама, или выберите сотрудника — можно и сверх резерва';
+    }
+    if (context.paymentLinkId == null) return 'Счёт ещё не выставлен: получателя выберет система, сменить его можно сразу после выставления';
+    return target === 'EMPLOYEE_REQUISITES' ? 'Ссылка → номер карты, получатель может остаться прежним' : 'Номер карты другого человека, нынешний исключается';
+  }
+  /**
+   * The mode that is already set is not offered again. «Выдать номер карты» for an issued invoice is:
+   * its window is where another person is named, as on the website.
+   */
   paymentRouteTargetActive(target: PaymentRouteChangeTarget): boolean {
-    return target !== 'OWNER_TBANK' && this.paymentRouteContext()?.configuredMode === target;
+    const context = this.paymentRouteContext();
+    return !!context && target !== 'OWNER_TBANK' && context.configuredMode === target && !this.cardNumberOpensWindow(target, context);
   }
   copyCurrentPaymentLink(link: ManagerPaymentLinkResponse): void {
     const ticket = this.deps.capture();
@@ -75,6 +122,7 @@ export class OrderPaymentFacade {
     this.deactivate();
   }
   deactivate(): void {
+    this.recipientPickerLeave?.abort(); this.recipientPickerLeave = undefined;
     this.session.close(); this.paymentRouteVisible.set(false); this.paymentRouteContextLoading.set(false);
     this.paymentRouteContext.set(null); this.paymentRouteChanging.set(false);
   }
@@ -86,6 +134,10 @@ export class OrderPaymentFacade {
     const context = { ...current };
     this.pendingRoutes.add(orderId); this.paymentRouteChanging.set(true);
     try {
+      if (this.cardNumberOpensWindow(target, context)) {
+        await this.issueCardNumber(orderId, target, context, ticket, route);
+        return;
+      }
       const targetLabel = this.paymentRouteTargetLabel(target);
       const confirmed = (target === 'DIFFERENT_RECIPIENT' && !context.paperInvoiceIssued) || await this.deps.confirm({ title: 'Сменить получателя оплаты',
         message: (context.paperInvoiceIssued ? 'Подтвердите, что выписка проверена, денег нет и клиент уведомлён об отзыве бумажного счёта. ' : '') + `Переключить заказ на «${targetLabel}»? Продолжайте только если клиент ещё не оплатил: прежний маршрут будет закрыт, а клиенту запланировано обновлённое сообщение.`, confirmText: 'Сменить', danger: true });
@@ -110,6 +162,54 @@ export class OrderPaymentFacade {
     } finally {
       this.pendingRoutes.delete(orderId);
       if (this.accepts(ticket, route)) this.paymentRouteChanging.set(false);
+    }
+  }
+
+  /** The «Выдать номер карты» window of the order: the people, the choice and what the server answered. */
+  private async issueCardNumber(orderId: number, target: PaymentRouteChangeTarget, context: PaymentRouteChangeContext, ticket: EditorTicket, route: RouteEpochTicket): Promise<void> {
+    const leave = new AbortController(); this.recipientPickerLeave = leave;
+    try {
+      const outcome = await this.deps.pickRecipient({
+        heading: `Заказ №${orderId}`, amountKopecks: null, currentRecipient: context.currentRecipient?.trim() ?? '',
+        autoHint: mobilePaymentRecipientAutoHint(target), signal: leave.signal,
+        loadRecipients: () => this.loadRecipientPickerOptions(orderId),
+        issue: choice => this.submitRecipientChoice(orderId, target, context.paymentLinkId, choice, ticket, route)
+      });
+      if (!outcome || !this.accepts(ticket, route)) return;
+      await this.presentPaymentRouteSuccessToast(outcome.status === 'accepted' ? outcome.message
+        : `Способ оплаты изменён. Клиенту отправляется новый счёт с номером карты по заказу #${orderId}`, route);
+    } finally { if (this.recipientPickerLeave === leave) this.recipientPickerLeave = undefined; }
+  }
+
+  private async loadRecipientPickerOptions(orderId: number): Promise<MobilePaymentRecipientLoad> {
+    const read = this.session.beginRead('recipients');
+    try {
+      const response = read ? await this.session.read(read, this.deps.api.getManagerOrderPaymentRouteRecipients(orderId)) : undefined;
+      return { amountKopecks: response?.amountKopecks ?? null, recipients: mobilePaymentRecipientOptions(response?.recipients) };
+    } catch (error) { throw new Error(this.deps.errorMessage(error, 'Не удалось загрузить сотрудников')); }
+  }
+
+  /** Issues the card number: the system's own choice, or the person the manager named. */
+  private async submitRecipientChoice(orderId: number, target: PaymentRouteChangeTarget, paymentLinkId: number | null, choice: MobilePaymentRecipientChoice, ticket: EditorTicket, route: RouteEpochTicket): Promise<MobilePaymentRecipientIssueOutcome> {
+    if (!this.accepts(ticket, route)) return { status: 'left' };
+    this.deps.error.set(null);
+    try {
+      await firstValueFrom(this.deps.writes.track(this.deps.api.changeManagerOrderPaymentRoute(orderId, {
+        expectedPaymentLinkId: paymentLinkId, target, confirmedUnpaid: true, expectedTargetPaymentProfileId: null,
+        ...(choice.profileId != null ? { recipientProfileId: choice.profileId } : {})
+      })));
+      if (!this.accepts(ticket, route)) return { status: 'left' };
+      this.paymentLink.set(null); this.paymentRouteVisible.set(false); this.paymentRouteContext.set(null); this.deps.reload();
+      return { status: 'issued' };
+    } catch (error) {
+      if (!this.accepts(ticket, route)) return { status: 'left' };
+      if ((error as { status?: number } | null)?.status === 423) {
+        // The bank has to close the old link first; the request is saved and will finish by itself.
+        this.paymentRouteVisible.set(false);
+        return { status: 'accepted', message: this.deps.errorMessage(error, 'Запрос принят. Получатель сменится, когда банк подтвердит закрытие прежней ссылки.') };
+      }
+      // The window stays open with the refusal, so another person can be chosen at once.
+      return { status: 'refused', message: this.deps.errorMessage(error, 'Не удалось выдать номер карты') };
     }
   }
 
@@ -157,9 +257,9 @@ export class OrderPaymentFacade {
 
       case 'EMPLOYEE_REQUISITES':
 
-        return 'Реквизиты без ссылки';
+        return 'Номер карты вместо ссылки';
       case 'DIFFERENT_RECIPIENT':
-        return 'Реквизиты другого получателя';
+        return 'Номер карты другого получателя';
 
       case 'OWNER_PAPER_INVOICE':
 
@@ -167,7 +267,7 @@ export class OrderPaymentFacade {
 
       default:
 
-        return 'Банковская ссылка владельца';
+        return 'Ссылка банка владельца';
 
     }
 

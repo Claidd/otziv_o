@@ -262,4 +262,60 @@ class ManualCardPaymentReviewNotificationServiceTest {
         user.setActive(active);
         return user;
     }
+
+    @Test
+    void commonInvoiceOwnerReportRemindsOwnersAndAdminsOnceAndTellsWhereToDecide() {
+        User owner = user(10L, 100L, true);
+        User admin = user(20L, null, true);
+        User inactiveAdmin = user(30L, 300L, false);
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
+        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of(admin, inactiveAdmin));
+        User manager = user(40L, 400L, true);
+        manager.setFio("Вика Ц.");
+        when(userService.findByUserName("vika")).thenReturn(java.util.Optional.of(manager));
+
+        service.notifyCommonInvoiceOwnerApprovalAfterCommit(
+                new ManualCardPaymentReviewNotificationService.CommonInvoiceOwnerApprovalRequest(
+                        7L, 318L, "Пластек - общий счет", 100_000L, 100_000L, "vika", "Клиент перевёл владельцу", 4_000L));
+
+        for (User recipient : List.of(owner, admin)) {
+            verify(personalReminderService).createSystemReminderDueNow(
+                    eq(recipient),
+                    eq("Подтвердить поступление владельцу по общему счёту №318"),
+                    contains("Менеджер: Вика Ц."),
+                    eq(ManualCardPaymentReviewNotificationService.COMMON_INVOICE_OWNER_APPROVAL_REMINDER_SOURCE),
+                    eq(7L),
+                    eq(4_000L)
+            );
+        }
+        verify(personalReminderService, never()).createSystemReminderDueNow(
+                eq(inactiveAdmin), any(), any(), any(), any(), any());
+        verify(telegramService).sendMessage(eq(100L), contains("Денег нет — отклонить"));
+        verify(telegramService, times(1)).sendMessage(org.mockito.ArgumentMatchers.anyLong(), any());
+        verifyNoInteractions(paymentIssueReminderService);
+    }
+
+    @Test
+    void ownerDecisionClosesItsRemindersAndRejectionReachesOnlyTheReportingManager() {
+        User manager = user(40L, 400L, true);
+        when(userService.findByUserName("vika")).thenReturn(java.util.Optional.of(manager));
+
+        service.closeCommonInvoiceOwnerApprovalReminders(7L);
+        service.notifyCommonInvoiceOwnerRejectionAfterCommit(
+                new ManualCardPaymentReviewNotificationService.CommonInvoiceOwnerRejection(
+                        7L, 318L, "Пластек - общий счет", "vika", "owner", 4_000L));
+
+        verify(personalReminderService).deleteSystemRemindersBySource(
+                ManualCardPaymentReviewNotificationService.COMMON_INVOICE_OWNER_APPROVAL_REMINDER_SOURCE, 7L);
+        verify(personalReminderService).createSystemReminderDueNow(
+                eq(manager),
+                eq("Владелец не подтвердил оплату общего счёта №318"),
+                contains("Счёт остался неоплаченным"),
+                eq(ManualCardPaymentReviewNotificationService.COMMON_INVOICE_OWNER_REJECTION_REMINDER_SOURCE),
+                eq(7L),
+                eq(4_000L)
+        );
+        verify(telegramService).sendMessage(eq(400L), contains("не подтверждено"));
+        verify(userService, never()).getAllOwners(any());
+    }
 }

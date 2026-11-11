@@ -10,6 +10,7 @@ import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceNextCycleResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceOrderResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRefResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoiceReturnableOrdersResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
@@ -30,6 +31,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.HashMap;
@@ -313,6 +315,27 @@ public class CommonInvoiceDetailsAssembler {
 
     boolean hasFrozenCommonPaymentRoute(CommonInvoice invoice) {
         return CommonInvoiceRouteState.hasFrozenCommonPaymentRoute(invoice);
+    }
+
+    /** Rows of the «Вернуть заказ в счёт» window; the amount is what the order would add to the invoice. */
+    List<CommonInvoiceReturnableOrdersResponse.Item> toReturnableOrders(Collection<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return List.of();
+        }
+        return orderRepository.findAllById(orderIds).stream().map(order -> {
+            Company company = order.getCompany();
+            String filial = order.getFilial() == null ? "" : normalize(order.getFilial().getTitle());
+            return new CommonInvoiceReturnableOrdersResponse.Item(order.getId(), company == null ? null : company.getId(), company == null ? "" : normalize(company.getTitle()), "Заказ №" + order.getId() + (filial.isBlank() ? "" : " · " + filial), statusTitle(order), returnableAmountKopecks(order));
+        }).sorted(Comparator.comparing(CommonInvoiceReturnableOrdersResponse.Item::companyTitle, String.CASE_INSENSITIVE_ORDER).thenComparing(CommonInvoiceReturnableOrdersResponse.Item::orderId)).toList();
+    }
+
+    private long returnableAmountKopecks(Order order) {
+        try {
+            return settlementService.amountKopecks(settlementService.payableSum(order));
+        } catch (RuntimeException unknownAmount) {
+            // The order stays listed; the return itself refuses an amount that cannot be calculated.
+            return 0L;
+        }
     }
 
     BigDecimal amountRubles(long kopecks) {

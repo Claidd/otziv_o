@@ -568,6 +568,31 @@ export interface PaymentRouteChangeRequest {
   confirmedUnpaid: boolean;
   paperInvoiceWithdrawn?: boolean;
   expectedTargetPaymentProfileId?: number | null;
+  /** Contractor payment profile the manager named for the card number; omitted for the automatic choice. */
+  recipientProfileId?: number | null;
+}
+
+/** A person a manager may name when a card number is issued for an order invoice. */
+export interface PaymentRouteRecipient {
+  profileId: number;
+  userId?: number | null;
+  role: string;
+  name: string;
+  orderSpecialist: boolean;
+  manager: boolean;
+  teamMember: boolean;
+  workedWithClient: boolean;
+  availableKopecks: number;
+  overrunKopecks: number;
+  current: boolean;
+  blockReason?: string | null;
+}
+
+export interface PaymentRouteRecipientsResponse {
+  orderId: number;
+  paymentLinkId: number | null;
+  amountKopecks: number;
+  recipients: PaymentRouteRecipient[];
 }
 
 export interface PaymentRouteChangeResponse {
@@ -1108,14 +1133,22 @@ export class ManagerApi {
     );
   }
 
+  /** People a manager may name in the «Выдать номер карты» window of an order. */
+  getPaymentRouteRecipients(orderId: number): Observable<PaymentRouteRecipientsResponse> {
+    return this.http.get<PaymentRouteRecipientsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/payment-route-recipients`
+    );
+  }
+
   changePaymentRoute(
     orderId: number,
     request: PaymentRouteChangeRequest
   ): Observable<PaymentRouteChangeResponse> {
-    const different = request.target === 'DIFFERENT_RECIPIENT';
+    // A person named by the manager needs no «other than the current one» rule: the choice is explicit.
+    const different = request.target === 'DIFFERENT_RECIPIENT' && request.recipientProfileId == null;
     return this.http.post<PaymentRouteChangeResponse>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/payment-route-change${different ? '/recipient' : ''}`,
-      different ? { ...request, target: 'EMPLOYEE_REQUISITES' } : request
+      request.target === 'DIFFERENT_RECIPIENT' ? { ...request, target: 'EMPLOYEE_REQUISITES' } : request
     );
   }
 

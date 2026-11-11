@@ -12,6 +12,7 @@ import static com.hunt.otziv.common_billing.service.CommonInvoiceSettlementServi
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeContextResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeRequest;
+import com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse;
 import com.hunt.otziv.common_billing.dto.InvoicePaymentModeChangeRequest;
 import com.hunt.otziv.common_billing.model.CommonBillingAccount;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
@@ -191,6 +192,43 @@ public class CommonInvoicePaymentRouteWorkflow {
         return new CommonInvoicePaymentRouteChangeContextResponse(commonInvoiceRouteLabel(invoice), currentTarget, commonInvoiceRouteRecipient(invoice, routeItems), invoice.getStatus() == null ? "UNKNOWN" : invoice.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, commonInvoiceRouteChangeToken(invoice, paymentRefs), invoice.getPaymentRouteProfileId(), ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getId(), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getName()), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getProvider()), ownerBankReissueBlockReason == null, ownerBankReissueBlockReason == null ? "" : ownerBankReissueBlockReason, ownerManualRoute, pendingRecipient.isEmpty() && bankRecipientRef(invoice, paymentRefs) != null);
     }
 
+    /**
+     * People the manager may name in the «Выдать номер карты» window. The current recipient is marked,
+     * so the window does not offer to issue the same requisites again.
+     */
+    @Transactional
+    public CommonInvoiceRouteRecipientsResponse commonInvoiceRouteRecipients(Long invoiceId) {
+        CommonInvoice invoice = invoiceRepository.findById(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        long amount = remainingKopecks(invoice);
+        List<Order> orders = items.stream().map(CommonInvoiceOrder::getOrder).filter(Objects::nonNull).toList();
+        Long currentUserId = currentContractorRecipientUserId(invoice);
+        List<CommonInvoiceRouteRecipientsResponse.Recipient> recipients = contractorPaymentLiveRoutingService
+                .recipientOptionsForCommonInvoice(orders, managerForNewCommonPaymentAction(invoice, items), amount).stream()
+                .map(option -> new CommonInvoiceRouteRecipientsResponse.Recipient(
+                        option.profileId(), option.userId(), option.role(), option.name(),
+                        option.orderSpecialist(), option.manager(), option.teamMember(), option.workedWithClient(),
+                        option.availableKopecks(), option.overrunKopecks(),
+                        currentUserId != null && currentUserId.equals(option.userId()), option.blockReason()))
+                .toList();
+        return new CommonInvoiceRouteRecipientsResponse(invoiceId, amount, recipients);
+    }
+
+    /** The person whose card number the client holds now; null for a bank link or a damaged reserve. */
+    private Long currentContractorRecipientUserId(CommonInvoice invoice) {
+        if (isTbankCommonRoute(invoice)) {
+            return null;
+        }
+        try {
+            var task = taskReceiptIntegrationService.candidate(invoice).orElse(null);
+            return contractorPaymentLiveRoutingService.issuedRecipientUserId(invoice.getContractorAllocationId(),
+                    task == null ? null : task.accountingTargetProfileId());
+        } catch (ResponseStatusException unavailable) {
+            return null;
+        }
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CommonInvoiceDetailsResponse changeCommonInvoicePaymentRoute(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, Principal principal) {
         return changeCommonInvoicePaymentRoute(invoiceId, request, principal, false);
@@ -203,6 +241,9 @@ public class CommonInvoicePaymentRouteWorkflow {
         }
         if (!request.confirmedUnpaid()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите, что клиент ещё не оплатил по прежнему способу");
+        }
+        if (request.recipientProfileId() != null && request.target() != CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Получателя выбирают только при выдаче номера карты");
         }
         String actor = principal == null ? "system" : normalize(principal.getName());
         boolean changed = writeTransaction(() -> replaceCommonInvoicePaymentRouteLocked(invoiceId, request, actor, differentRecipient));
@@ -289,7 +330,15 @@ public class CommonInvoicePaymentRouteWorkflow {
         invoice.setLastError(null);
         PaymentRouteSelection route;
         ContractorPaymentAllocation allocation = null;
-        if (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
+        if (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES && request.recipientProfileId() != null) {
+            // The manager named the person: no payment task and no automatic choice. The balance may be
+            // exceeded; the overrun keeps this person out of automatic routing until it recovers.
+            allocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveChosenContractorForCommonInvoice(invoice, routeOrders, routeManager, remaining, request.recipientProfileId()));
+            if (!isContractorRecipient(allocation)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось выдать счёт выбранному получателю");
+            }
+            route = contractorCommonPaymentRoute(invoice, allocation);
+        } else if (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
             Optional<PaymentRouteSelection> taskRoute = invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remaining, filter);
             if (taskRoute.isPresent()) {
                 route = taskRoute.get();
@@ -378,11 +427,17 @@ public class CommonInvoicePaymentRouteWorkflow {
 
     boolean replaceClosedBankRecipient(CommonInvoice invoice,List<CommonInvoicePaymentRef> refs,long sourceId,
             String closedStatus,String actor,boolean differentRecipient) {
+        return replaceClosedBankRecipient(invoice, refs, sourceId, closedStatus, actor, differentRecipient, null);
+    }
+
+    /** @param recipientProfileId the person a manager named when the bank link was still open, or null */
+    boolean replaceClosedBankRecipient(CommonInvoice invoice,List<CommonInvoicePaymentRef> refs,long sourceId,
+            String closedStatus,String actor,boolean differentRecipient,Long recipientProfileId) {
         var source = bankRecipientRef(invoice, refs);
         retireBankRef(source, sourceId, closedStatus, "recipient_change_bank_closed");
         clearCurrentPaymentRef(invoice);
         var request = new CommonInvoicePaymentRouteChangeRequest(CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES,
-                true, commonInvoiceRouteChangeToken(invoice, refs));
+                true, commonInvoiceRouteChangeToken(invoice, refs), null, recipientProfileId);
         return replaceCommonInvoicePaymentRouteLocked(invoice.getId(), request, actor, differentRecipient, true);
     }
 

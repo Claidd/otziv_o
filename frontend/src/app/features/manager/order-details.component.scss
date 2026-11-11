@@ -3,11 +3,24 @@
   --review-card-gap-y: 1.25rem;
   --review-card-height: 29.3rem;
 
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* A column, not a fixed row template: blocks may be added above the cards (the manual payment
+     review, an error card) without taking the stretching row from them. */
+  display: flex;
+  flex-direction: column;
   gap: 0.9rem;
   min-height: calc(100vh - 5.9rem);
   font-family: 'laptev_brush', var(--otziv-font-family);
+}
+
+/* The cards (or the loading placeholder) take the free height, so the action bar stays at the bottom. */
+.order-details-workspace > .review-carousel,
+.order-details-workspace > .empty-state {
+  flex: 1 0 auto;
+}
+
+/* Nothing to review: the empty block must not add a gap of its own. */
+.order-details-workspace > app-manual-payment-review:empty {
+  display: none;
 }
 
 .details-topbar,

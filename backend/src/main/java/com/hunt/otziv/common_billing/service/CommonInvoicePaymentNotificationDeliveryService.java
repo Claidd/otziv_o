@@ -112,7 +112,8 @@ public class CommonInvoicePaymentNotificationDeliveryService {
                         delivery.recipientType(),
                         delivery.recipientUserId(),
                         delivery.actor(),
-                        delivery.confirmedAt()
+                        delivery.confirmedAt(),
+                        delivery.deliveryId()
                 )
         );
         if (result != null && result.sent()) {

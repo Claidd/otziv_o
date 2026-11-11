@@ -1,13 +1,16 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, EventEmitter, Input, OnInit, Output, computed, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
+import { AuthService } from '../../../core/auth.service';
 import type { CommonInvoiceDetailsResponse } from '../../../core/common-billing.api';
 import {
   CommonManualPaymentAttributionApi,
   type CommonManualPaymentAttributionRequest,
   type CommonManualPaymentMode,
   type CommonManualPaymentOptions,
+  type CommonManualPaymentOtherRecipient,
   type CommonManualPaymentRecipientCandidate
 } from '../../../core/common-manual-payment-attribution.api';
 import {
@@ -16,7 +19,11 @@ import {
   manualPaymentRecipientEffect,
   manualPaymentRouteErrorMessage
 } from '../../../shared/manual-payment-routing';
-import { commonManualPaymentDraftAfterRouteRefresh } from '../../../shared/common-manual-payment-route-refresh';
+import {
+  commonManualPaymentDraftAfterRouteRefresh,
+  commonManualPaymentInitialRecipientKey
+} from '../../../shared/common-manual-payment-route-refresh';
+import { businessDateTimeStamp } from '../../../shared/business-date';
 
 export interface CommonManualPaymentDraftRow {
   rowKey: string;
@@ -49,14 +56,42 @@ export function commonManualPaymentTotalKopecks(rows: readonly CommonManualPayme
   return total;
 }
 
+/**
+ * The audit trail always needs a reason. When the manager leaves the comment empty,
+ * the reason states exactly what the chosen recipients mean.
+ */
+export function commonManualPaymentDefaultReason(
+  selected: readonly Pick<CommonManualPaymentRecipientCandidate, 'originalRecipient'>[]
+): string {
+  if (selected.length > 1) {
+    return 'Оплата распределена между несколькими получателями';
+  }
+  return selected[0]?.originalRecipient
+    ? 'Оплата поступила получателю из счёта'
+    : 'Клиент перевёл деньги не получателю из счёта';
+}
+
+/**
+ * The invoice's own people: its recipient, the owner and participants of its orders. Everyone else
+ * is chosen through the separate «+» button, for one receipt only.
+ */
+export function isCommonInvoiceOwnRecipient(candidate: CommonManualPaymentRecipientCandidate): boolean {
+  return candidate.originalRecipient
+    || candidate.currentParticipant
+    || candidate.recipientType === 'OWNER'
+    || candidate.key === 'OWNER'
+    || isManualPaymentTaskRecipient(candidate);
+}
+
 @Component({
   selector: 'app-common-manual-payment-attribution-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, NgTemplateOutlet],
   templateUrl: './common-manual-payment-attribution-modal.component.html',
   styleUrl: './common-manual-payment-attribution-modal.component.scss'
 })
 export class CommonManualPaymentAttributionModalComponent implements OnInit {
   private readonly api = inject(CommonManualPaymentAttributionApi);
+  private readonly auth = inject(AuthService);
 
   @Input({ required: true }) invoiceId!: number;
   @Input({ required: true }) mode: CommonManualPaymentMode = 'STANDARD';
@@ -67,24 +102,33 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
 
   readonly options = signal<CommonManualPaymentOptions | null>(null);
   readonly rows = signal<CommonManualPaymentDraftRow[]>([]);
+  /** Several people received parts of one transfer: a rare case behind its own link. */
+  readonly splitMode = signal(false);
   readonly reason = signal('');
   readonly receiptUrl = signal('');
-  readonly finalAcknowledged = signal(false);
-  readonly paymentReceived = signal(false);
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly error = signal('');
+  /** People outside the invoice, loaded when the «+» picker is opened for the first time. */
+  readonly others = signal<CommonManualPaymentOtherRecipient[] | null>(null);
+  readonly othersLoading = signal(false);
+  readonly othersError = signal('');
+  readonly pickerOpen = signal(false);
+  readonly pickerQuery = signal('');
+  /** Recipients added through «+»: they count for this receipt only, the invoice keeps its recipient. */
+  readonly oneOff = signal<CommonManualPaymentOtherRecipient[]>([]);
 
   private idempotencyKey = this.newKey();
-  private readonly effectiveAt = this.localDateTime(new Date());
+  // Business-zone time: the server reads it as its own clock, whatever the device is set to.
+  private readonly effectiveAt = businessDateTimeStamp();
   readonly isTaskRecipient = isManualPaymentTaskRecipient;
   readonly recipientEffect = manualPaymentRecipientEffect;
 
   readonly title = computed(() => this.mode === 'TBANK_FALLBACK'
-    ? 'Фактическое получение оплаты общего счёта'
+    ? 'Клиент уже оплатил'
     : this.mode === 'TBANK_ROUTE_FALLBACK'
-      ? 'Оплата по прежним реквизитам'
-      : 'Ручное подтверждение общего счёта');
+      ? 'Клиент оплатил не по ссылке'
+      : 'Отметить оплату');
   readonly reconcilesCurrentTbank = computed(() => this.mode === 'TBANK_ROUTE_FALLBACK');
   readonly totalKopecks = computed(() => commonManualPaymentTotalKopecks(this.rows()));
   readonly differenceKopecks = computed(() => {
@@ -92,17 +136,66 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
     const total = this.totalKopecks();
     return options && total != null ? total - options.remainingKopecks : null;
   });
+  readonly selectedKey = computed(() => this.rows()[0]?.recipientKey ?? '');
+  /** The list a manager chooses from: the invoice's own people and those added through «+». */
+  readonly listedCandidates = computed(() => {
+    const candidates = this.options()?.candidates ?? [];
+    const own = candidates.filter(isCommonInvoiceOwnRecipient);
+    const listed = own.length ? own : candidates;
+    const keys = new Set(listed.map(candidate => candidate.key));
+    return [...listed, ...this.oneOff().map(item => item.candidate).filter(candidate => !keys.has(candidate.key))];
+  });
+  readonly pickerResults = computed(() => {
+    const query = this.pickerQuery().trim().toLocaleLowerCase('ru');
+    const listed = new Set(this.listedCandidates().map(candidate => candidate.key));
+    return (this.others() ?? [])
+      .filter(item => !listed.has(item.candidate.key))
+      .filter(item => !query || item.candidate.label.toLocaleLowerCase('ru').includes(query));
+  });
+  readonly selectedCandidates = computed(() => this.rows()
+    .map(row => this.candidate(row.recipientKey))
+    .filter((candidate): candidate is CommonManualPaymentRecipientCandidate => candidate != null));
+  readonly everyRowHasRecipient = computed(() => this.rows().length > 0
+    && this.selectedCandidates().length === this.rows().length);
+  /** The server lets only the owner or an administrator credit money to the owner. */
+  readonly ownerNeedsApproval = computed(() => {
+    this.auth.tokenParsed();
+    return !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+      && this.selectedCandidates().some(candidate => candidate.recipientType === 'OWNER' || candidate.key === 'OWNER');
+  });
   readonly canSubmit = computed(() => Boolean(
     this.options()
       && this.options()!.remainingKopecks > 0
-      && this.rows().length
+      && this.everyRowHasRecipient()
       && this.totalKopecks() === this.options()!.remainingKopecks
-      && this.reason().trim()
-      && this.finalAcknowledged()
-      && this.paymentReceived()
       && !this.loading()
       && !this.saving()
   ));
+  readonly submitLabel = computed(() => {
+    if (this.saving()) {
+      return this.reconcilesCurrentTbank() ? 'Сверяем банковскую оплату и сохраняем…' : 'Сохраняем…';
+    }
+    return this.ownerNeedsApproval() ? 'Отправить владельцу на подтверждение' : 'Оплачен — закрыть счёт';
+  });
+  /** What the button will do, in place of the former acknowledgement checkboxes. */
+  readonly consequence = computed(() => {
+    const selected = this.selectedCandidates();
+    if (!this.everyRowHasRecipient()) {
+      return 'Выберите, кому пришли деньги.';
+    }
+    if (this.ownerNeedsApproval()) {
+      return 'Поступление владельцу подтверждает владелец или администратор. Счёт закроется после его подтверждения.';
+    }
+    const effect = (selected.length === 1
+      ? this.recipientEffect(selected[0])
+      : 'Суммы будут учтены у выбранных получателей; их лимиты и резервы обновятся.').trim().replace(/[.!?…]*$/u, '.');
+    // Money went past the invoice recipient: the server cancels that person's reserve and credits the actual one.
+    const release = selected.some(candidate => !candidate.originalRecipient)
+      && (this.options()?.candidates ?? []).some(candidate => candidate.originalRecipient && candidate.recipientType !== 'OWNER')
+      ? ' Резерв получателя из счёта при этом снимется.'
+      : '';
+    return `Счёт закроется сразу, второго подтверждения не будет. ${effect}${release} Если ошиблись получателем, его исправит администратор.`;
+  });
 
   ngOnInit(): void {
     void this.load();
@@ -136,22 +229,34 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
     this.error.set('');
     try {
       const options = await firstValueFrom(this.api.options(this.invoiceId));
+      const candidates = options.candidates ?? [];
       this.options.set({
         ...options,
-        candidates: options.candidates ?? [],
+        candidates,
         history: options.history ?? []
       });
       const refreshedDraft = commonManualPaymentDraftAfterRouteRefresh(
-        { ...options, candidates: options.candidates ?? [] },
+        { ...options, candidates },
         preserveDraft ? draftReason : '',
         preserveDraft ? draftReceiptUrl : '',
         () => this.newKey()
       );
-      this.rows.set(refreshedDraft.rows);
+      // First opening of an invoice with a card number: its recipient is already chosen.
+      // After a route change, and for a bank link, the choice stays explicit.
+      const initialKey = !preserveDraft && this.mode === 'STANDARD'
+        ? commonManualPaymentInitialRecipientKey({ ...options, candidates })
+        : '';
+      this.rows.set(refreshedDraft.rows.map(row => ({ ...row, recipientKey: initialKey })));
+      this.splitMode.set(false);
+      this.oneOff.set([]);
+      this.pickerOpen.set(false);
+      // A report waiting for the owner may name a one-off recipient: load the names to show it.
+      const known = new Set(candidates.map(candidate => candidate.key));
+      if ((options.ownerReport?.request.attributions ?? []).some(line => !known.has(line.recipientKey))) {
+        void this.loadOthers();
+      }
       this.reason.set(refreshedDraft.reason);
       this.receiptUrl.set(refreshedDraft.receiptUrl);
-      this.paymentReceived.set(refreshedDraft.paymentReceived);
-      this.finalAcknowledged.set(refreshedDraft.finalAcknowledged);
     } catch (error) {
       this.options.set(null);
       this.error.set(this.errorMessage(error, 'Не удалось загрузить получателей общего счёта.'));
@@ -160,13 +265,87 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
     }
   }
 
+  selectRecipient(recipientKey: string): void {
+    this.updateRecipient(0, recipientKey);
+    this.error.set('');
+  }
+
+  startSplit(): void {
+    this.splitMode.set(true);
+  }
+
+  /** Back to one recipient for the whole amount. */
+  cancelSplit(): void {
+    const options = this.options();
+    const first = this.rows()[0];
+    if (!options || !first) {
+      return;
+    }
+    this.rows.set([{
+      ...first,
+      amountRubles: (options.remainingKopecks / 100).toFixed(2).replace('.', ',')
+    }]);
+    this.splitMode.set(false);
+  }
+
+  /** Opens the list of people outside the invoice; it is loaded once per window. */
+  async openPicker(): Promise<void> {
+    this.pickerOpen.set(true);
+    this.pickerQuery.set('');
+    if (this.others() == null && !this.othersLoading()) {
+      await this.loadOthers();
+    }
+  }
+
+  async loadOthers(): Promise<void> {
+    this.othersLoading.set(true);
+    this.othersError.set('');
+    try {
+      const response = await firstValueFrom(this.api.otherRecipients(this.invoiceId));
+      this.others.set(response.recipients ?? []);
+    } catch (error) {
+      this.othersError.set(this.errorMessage(error, 'Не удалось загрузить сотрудников.'));
+    } finally {
+      this.othersLoading.set(false);
+    }
+  }
+
+  /**
+   * Adds a person for this receipt only. With one recipient the newcomer replaces an earlier one-off
+   * choice and becomes selected; in a split it joins the list and fills the first empty row.
+   */
+  pickOther(item: CommonManualPaymentOtherRecipient): void {
+    if (this.splitMode()) {
+      this.oneOff.update(list => list.some(other => other.candidate.key === item.candidate.key) ? list : [...list, item]);
+      const emptyIndex = this.rows().findIndex(row => !row.recipientKey);
+      if (emptyIndex >= 0) {
+        this.updateRecipient(emptyIndex, item.candidate.key);
+      }
+    } else {
+      this.oneOff.set([item]);
+      this.selectRecipient(item.candidate.key);
+    }
+    this.pickerOpen.set(false);
+    this.error.set('');
+  }
+
+  isOneOff(candidate: CommonManualPaymentRecipientCandidate): boolean {
+    return this.oneOff().some(item => item.candidate.key === candidate.key);
+  }
+
+  /** Why this person is offered although the invoice was not issued to them. */
+  otherTag(item: CommonManualPaymentOtherRecipient): string {
+    return item.previousPerformer ? 'работал с этим клиентом' : 'сотрудник менеджера';
+  }
+
   addRow(): void {
     const options = this.options();
-    if (!options || this.rows().length >= Math.min(20, options.candidates.length)) {
+    const listed = this.listedCandidates();
+    if (!options || this.rows().length >= Math.min(20, listed.length)) {
       return;
     }
     const used = new Set(this.rows().map(row => row.recipientKey));
-    const candidate = options.candidates.find(item => !used.has(item.key));
+    const candidate = listed.find(item => !used.has(item.key));
     if (!candidate) {
       return;
     }
@@ -195,7 +374,24 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
   }
 
   candidate(recipientKey: string): CommonManualPaymentRecipientCandidate | null {
-    return this.options()?.candidates.find(item => item.key === recipientKey) ?? null;
+    return this.options()?.candidates.find(item => item.key === recipientKey)
+      ?? this.oneOff().find(item => item.candidate.key === recipientKey)?.candidate
+      ?? this.others()?.find(item => item.candidate.key === recipientKey)?.candidate
+      ?? null;
+  }
+
+  /** One short line under a recipient: who it is for the accounting. */
+  recipientHint(candidate: CommonManualPaymentRecipientCandidate): string {
+    if (this.isTaskRecipient(candidate)) {
+      const receiver = candidate.taskRecipientName || candidate.label;
+      return `Платёжное задание №${candidate.manualPaymentTaskId} · получатель в банке: ${receiver}`;
+    }
+    if (candidate.recipientType === 'OWNER') {
+      return 'Деньги получил владелец';
+    }
+    const limit = `Доступный лимит: ${this.money(candidate.availableKopecks)}`;
+    // A switched-off payment profile only stops new invoices from being issued to this person.
+    return candidate.profileEnabled ? limit : `${limit} · новые счета на него сейчас не выставляются, но эту оплату учесть можно`;
   }
 
   projectedOverrun(row: CommonManualPaymentDraftRow): number {
@@ -215,18 +411,9 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
 
   async submit(): Promise<void> {
     const options = this.options();
-    const reason = this.reason().trim();
     const receiptUrl = this.receiptUrl().trim();
     if (!options || !this.canSubmit()) {
       this.error.set(this.validationMessage());
-      return;
-    }
-    if (reason.length > 500) {
-      this.error.set('Основание не должно превышать 500 символов.');
-      return;
-    }
-    if (receiptUrl.length > 1024) {
-      this.error.set('Ссылка на чек не должна превышать 1024 символа.');
       return;
     }
     const selected = this.rows().map(row => ({ row, candidate: this.candidate(row.recipientKey) }));
@@ -238,6 +425,16 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       this.error.set('Один получатель не должен повторяться в нескольких строках.');
       return;
     }
+    const reason = this.reason().trim() || commonManualPaymentDefaultReason(selected.map(item => item.candidate!));
+    if (reason.length > 500) {
+      this.error.set('Комментарий не должен превышать 500 символов.');
+      return;
+    }
+    if (receiptUrl.length > 1024) {
+      this.error.set('Ссылка на чек не должна превышать 1024 символа.');
+      return;
+    }
+    // Pressing the button is the confirmation: the dialog names the recipient and the effect next to it.
     const request: CommonManualPaymentAttributionRequest = {
       idempotencyKey: this.idempotencyKey,
       finalAccountingAcknowledged: true,
@@ -265,13 +462,12 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       this.completed.emit(details);
     } catch (error) {
       if (isRetryablePaymentRouteError(error)) {
+        // The route changed under the dialog: the recipient must be chosen again, nothing is preselected.
         this.idempotencyKey = this.newKey();
         this.rows.set([]);
-        this.paymentReceived.set(false);
-        this.finalAcknowledged.set(false);
         await this.load(true);
         if (this.options()) {
-          this.error.set(manualPaymentRouteErrorMessage(error, 'Маршрут оплаты изменился. Проверьте распределение ещё раз.'));
+          this.error.set(manualPaymentRouteErrorMessage(error, 'Маршрут оплаты изменился. Выберите получателя ещё раз.'));
         }
       } else {
         this.error.set(manualPaymentRouteErrorMessage(error, 'Не удалось подтвердить фактическое поступление.'));
@@ -287,17 +483,14 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
     if (!options) {
       return 'Данные получателей не загружены.';
     }
+    if (!this.everyRowHasRecipient()) {
+      return 'Выберите, кому пришли деньги.';
+    }
     if (total == null) {
       return 'Укажите положительные суммы с точностью не более двух знаков.';
     }
     if (total !== options.remainingKopecks) {
       return 'Сумма по получателям должна точно совпадать с остатком общего счёта.';
-    }
-    if (!this.reason().trim()) {
-      return 'Укажите короткое основание ручного подтверждения.';
-    }
-    if (!this.finalAcknowledged() || !this.paymentReceived()) {
-      return 'Подтвердите фактическое поступление и финальное изменение расчётов.';
     }
     return '';
   }
@@ -312,11 +505,6 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
   historyDate(value: string): string {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString('ru-RU');
-  }
-
-  private localDateTime(date: Date): string {
-    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-    return local.toISOString().slice(0, 23);
   }
 
   private newKey(): string {

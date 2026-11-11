@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { ManagerOption, OrderEditPayload, OrderUpdateRequest, PaymentRouteChangeContext, PaymentRouteChangeTarget } from '../../core/manager.api';
 import { managerOptionLabel, trackManagerOption } from './manager-board.config';
+import { cardNumberRouteTarget } from './card-number-route-target';
 
 export type ManagerOrderEditDraftChange = {
   [K in keyof OrderUpdateRequest]: {
@@ -38,6 +39,8 @@ export class ManagerOrderEditModalComponent {
   @Output() readonly paymentRouteChangeOpened = new EventEmitter<void>();
   @Output() readonly paymentRouteChangeClosed = new EventEmitter<void>();
   @Output() readonly paymentRouteChanged = new EventEmitter<PaymentRouteChangeTarget>();
+  /** Opens the manual of the «Способ оплаты» block. */
+  @Output() readonly paymentGuideOpened = new EventEmitter<void>();
   @Output() readonly paperInvoiceIssued = new EventEmitter<void>();
   @Output() readonly paperInvoiceOpened = new EventEmitter<void>();
 
@@ -51,5 +54,9 @@ export class ManagerOrderEditModalComponent {
 
   trackOption(index: number, option: ManagerOption): number {
     return trackManagerOption(index, option);
+  }
+
+  cardNumberTarget(context: PaymentRouteChangeContext): PaymentRouteChangeTarget {
+    return cardNumberRouteTarget(context);
   }
 }

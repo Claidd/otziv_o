@@ -191,4 +191,27 @@ class ManualPaymentRecipientTelegramNotificationServiceTest {
         link.setManualConfirmedAt(LocalDateTime.of(2026, 8, 21, 16, 35));
         return link;
     }
+
+    @Test
+    void outboxDeliveryOfCommonInvoiceReceiptCarriesDisputeButtonBoundToThatDelivery() {
+        User specialist = new User();
+        specialist.setId(15L);
+        specialist.setFio("Максим Р.");
+        specialist.setWorkerTelegramGroupChatId(-10015L);
+        when(userRepository.findById(15L)).thenReturn(Optional.of(specialist));
+        when(telegramService.sendMessageWithInlineButton(eq(-10015L), org.mockito.ArgumentMatchers.anyString(),
+                eq("⚠️ Оспорить поступление"), eq("common-payment-dispute:55"))).thenReturn(true);
+
+        var result = service.notifyCommonInvoiceRecipient(
+                new ManualPaymentRecipientTelegramNotificationService.CommonInvoiceRecipientNotification(
+                        146L, "Пластек - общий счет", 3, 425_000L, ContractorRecipientType.SPECIALIST,
+                        15L, null, LocalDateTime.of(2026, 8, 28, 21, 1), 55L));
+
+        assertTrue(result.sent());
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessageWithInlineButton(eq(-10015L), message.capture(),
+                eq("⚠️ Оспорить поступление"), eq("common-payment-dispute:55"));
+        assertTrue(message.getValue().contains("Сумма: 4 250 ₽"));
+        assertTrue(message.getValue().contains("нажмите «Оспорить» в течение 24 часов"));
+    }
 }

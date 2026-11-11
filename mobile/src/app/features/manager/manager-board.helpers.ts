@@ -85,10 +85,15 @@ export function managerStatusLabel(status: string): string {
   return normalizedManagerStatus(status).toLowerCase();
 }
 
+/**
+ * «Не оплачено» is set by the autoresponder when the payment term ends. The manual button stays
+ * with the owner and administrators for the days the autoresponder is paused or switched off.
+ */
 export function managerOrderActionsFor(
   order: ManagerOrderActionSource,
   showAllActions = false,
-  canForceBan = false
+  canForceBan = false,
+  canMarkUnpaid = canForceBan
 ): readonly OrderStatusAction[] {
   if (order.commonInvoice) {
     const status = order.status ?? '';
@@ -101,7 +106,9 @@ export function managerOrderActionsFor(
     }
 
     if (status === 'Выставлен счет' || status === 'Напоминание') {
-      return [COMMON_INVOICE_ACTIONS[1], COMMON_INVOICE_ACTIONS[2], COMMON_INVOICE_ACTIONS[4]];
+      return canMarkUnpaid
+        ? [COMMON_INVOICE_ACTIONS[1], COMMON_INVOICE_ACTIONS[2], COMMON_INVOICE_ACTIONS[4]]
+        : [COMMON_INVOICE_ACTIONS[1], COMMON_INVOICE_ACTIONS[4]];
     }
 
     if (status === 'Не оплачено') {
@@ -146,7 +153,7 @@ export function managerOrderActionsFor(
     actions.push(ORDER_ACTIONS[6]);
   }
 
-  if (status === 'Выставлен счет' || status === 'Напоминание') {
+  if (canMarkUnpaid && (status === 'Выставлен счет' || status === 'Напоминание')) {
     actions.push(ORDER_ACTIONS[7]);
   }
 

@@ -1,8 +1,10 @@
 import { openPaperInvoiceDialog } from '../../../shared/paper-invoice-dialog.component';
 import { PaperInvoiceListComponent } from '../../../shared/paper-invoice-list.component';
 import { paperInvoiceWorkflow, type PaperInvoiceListState } from '../../../shared/paper-invoice-workflow';
-import { ClientContractError, commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
-import { DatePipe } from '@angular/common';
+import {
+  ClientContractError, commonInvoiceDeliveryWait, commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher
+} from '@otziv/client-common/billing-payments';
+import { DatePipe, Location } from '@angular/common';
 import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -14,6 +16,8 @@ import {
   CommonInvoiceOrderResponse,
   CommonInvoicePaymentRefResponse,
   CommonInvoicePaymentRouteChangeTarget,
+  CommonInvoiceReturnableOrder,
+  CommonInvoiceReturnableOrdersResponse,
   CommonInvoiceSummaryResponse,
   ManualPaymentConfirmationRequest
 } from '../../../core/common-billing.api';
@@ -42,9 +46,17 @@ import {
 import { ManagerBoardOrderFacade } from '../../manager/manager-board-order.facade';
 import { ManagerOrderCardComponent } from '../../manager/manager-order-card.component';
 import type { ManagerOrderEditDraftChange } from '../../manager/manager-order-edit-modal.component';
+import { OrderPaymentRouteWindowsComponent } from '../../manager/order-payment-route-windows.component';
 import { ManagerOrderEditModalComponent } from '../../manager/manager-order-edit-modal.component';
 import { CommonManualPaymentAttributionModalComponent } from './common-manual-payment-attribution-modal.component';
 import { CommonInvoiceOverdueTermComponent } from './common-invoice-overdue-term.component';
+import { CommonInvoiceReturnOrdersComponent } from './common-invoice-return-orders.component';
+import {
+  PaymentRecipientPickerComponent,
+  type PaymentRecipientChoice,
+  type PaymentRecipientOption
+} from '../../../shared/payment-recipient-picker.component';
+import { CommonInvoiceGuideComponent, type CommonInvoiceGuideSection } from './common-invoice-guide.component';
 import {
   StatusAction,
   managerErrorMessage,
@@ -59,13 +71,6 @@ type AccountDraft = {
   autoRepeatOrders: boolean;
   managerId: string;
   invoiceCompanyId: string;
-};
-
-type DraftCompany = {
-  id: number;
-  title: string;
-  city?: string;
-  status?: string;
 };
 
 const PAYMENT_INIT_MANUAL_CHECK_PREFIXES = [
@@ -110,6 +115,33 @@ export function canMarkCommonInvoicePaid(
   }
   return ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID', 'UNPAID'].includes(invoice.status)
     || (invoice.status === 'COLLECTING' && invoice.totalOrders > 0 && invoice.readyOrders >= invoice.totalOrders);
+}
+
+type CommonInvoiceReturnEligibility = {
+  status: string;
+  sentAt?: string | null;
+  paymentRouteSelectedAt?: string | null;
+  paperInvoiceIssuedAt?: string | null;
+  invoicePaymentMode?: string | null;
+  invoicePurpose?: string | null;
+};
+
+/**
+ * Whether «Вернуть заказ в счёт» is offered: the invoice is still being collected, was not sent,
+ * has no chosen recipient and is not a paper invoice. The server re-checks every return.
+ */
+export function canReturnOrdersToCommonInvoice(
+  invoice: CommonInvoiceReturnEligibility | null | undefined
+): boolean {
+  return Boolean(
+    invoice
+      && (invoice.status === 'COLLECTING' || invoice.status === 'READY')
+      && !invoice.sentAt
+      && !invoice.paymentRouteSelectedAt
+      && !invoice.paperInvoiceIssuedAt
+      && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+      && invoice.invoicePurpose !== 'BAD_REVIEW_SUCCESSOR'
+  );
 }
 
 export function paymentInitNoPaymentInstructions(): string[] {
@@ -250,7 +282,12 @@ export function isIncompletePartiallyPaidInvoice(
   );
 }
 
-export function commonInvoiceStatusProblem(status: string | null | undefined): string {
+export function commonInvoiceStatusProblem(status: string | null | undefined, lastError?: string | null): string {
+  // While a client message is being sent the invoice is «READY» again for that time (after a change of the
+  // payment method too): that is the wait the page already shows, not an invoice stuck without sending.
+  if (status === 'READY' && commonInvoiceDeliveryWait(lastError)) {
+    return '';
+  }
   switch (status) {
     case 'NEEDS_ATTENTION':
       return 'Счет требует ручного разбора.';
@@ -267,6 +304,15 @@ export function commonInvoiceStatusProblem(status: string | null | undefined): s
   }
 }
 
+/**
+ * The invoice's problem code for the «Проблема общего счета» block. The marker of a client message that is still
+ * in the queue is not a problem: the block stays closed and the page shows the wait line instead.
+ */
+export function commonInvoiceProblemCode(lastError: string | null | undefined): string {
+  const code = (lastError ?? '').trim();
+  return commonInvoiceDeliveryWait(code) ? '' : code;
+}
+
 export function isManualTbankReconciliationRetryError(error: string | null | undefined): boolean {
   const normalized = (error ?? '').trim().toLowerCase();
   return normalized.startsWith('manual_payment_tbank_reconciliation_in_progress:')
@@ -280,11 +326,15 @@ export function isManualTbankReconciliationRetryError(error: string | null | und
     AdminLayoutComponent,
     CommonManualPaymentAttributionModalComponent,
     CommonInvoiceOverdueTermComponent,
+    CommonInvoiceReturnOrdersComponent,
+    CommonInvoiceGuideComponent,
+    PaymentRecipientPickerComponent,
     DatePipe,
     FormsModule,
     LoadErrorCardComponent,
     ManagerOrderCardComponent,
     ManagerOrderEditModalComponent,
+    OrderPaymentRouteWindowsComponent,
     MobileBottomPagerComponent,
     RouterLink
   ],
@@ -293,14 +343,19 @@ export function isManualTbankReconciliationRetryError(error: string | null | und
 })
 export class CommonBillingComponent implements OnDestroy {
   readonly deliveryStatusText = deliveryOperationMessage;
+  readonly deliveryWait = commonInvoiceDeliveryWait;
   private readonly deliveryWatcher = new DeliveryStatusWatcher();
 
   readonly paymentInitNoPaymentButtonLabel = PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL;
   @ViewChild('invoiceOrderCardsViewport') private invoiceOrderCardsElement?: ElementRef<HTMLElement>;
+  @ViewChild(PaperInvoiceListComponent) private paperInvoiceList?: PaperInvoiceListComponent;
 
   private readonly commonBillingApi = inject(CommonBillingApi);
   private readonly paymentsApi = inject(PaymentsApi);
   private readonly commonManualPaymentApi = inject(CommonManualPaymentAttributionApi);
+  private readonly location = inject(Location);
+  /** Set when the manager leaves the invoice the page was opened for (?invoiceId=…) by choosing another link. */
+  private requestedInvoiceReleased = false;
   private readonly managerApi = inject(ManagerApi);
   private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
@@ -317,6 +372,16 @@ export class CommonBillingComponent implements OnDestroy {
   private destroyed = false;
 
   readonly accounts = signal<CommonBillingAccountResponse[]>([]);
+  /** Client-side filter of the «Все связи» list; it never changes the selected link. */
+  readonly accountFilter = signal('');
+  readonly visibleAccounts = computed(() => {
+    const query = this.accountFilter().trim().toLocaleLowerCase('ru-RU');
+    const accounts = this.accounts();
+    if (!query) {
+      return accounts;
+    }
+    return accounts.filter((account) => `${account.name ?? ''} #${account.id}`.toLocaleLowerCase('ru-RU').includes(query));
+  });
   readonly selectedAccountId = signal<number | null>(null);
   readonly invoiceDetails = signal<CommonInvoiceDetailsResponse | null>(null);
   readonly loading = signal(false);
@@ -326,11 +391,20 @@ export class CommonBillingComponent implements OnDestroy {
   readonly copied = signal('');
   readonly manualAttributionRequired = signal<boolean | null>(null);
   readonly manualAttributionMode = signal<CommonManualPaymentMode | null>(null);
+  /** Open section of the side-panel manual; null while the manual is closed. */
+  readonly guideSection = signal<CommonInvoiceGuideSection | null>(null);
   readonly companySearch = signal('');
   readonly companySearchResults = signal<CompanyCardItem[]>([]);
   readonly companySearchLoading = signal(false);
   readonly companySearchError = signal('');
-  readonly draftCompanies = signal<DraftCompany[]>([]);
+  /** Shown in the route block right after a manager changes the recipient: «было → стало». */
+  readonly lastRouteChange = signal<{ invoiceId: number; from: string; to: string; at: Date } | null>(null);
+  /** The «Вернуть заказ в счёт» window: the invoice it was opened for, the server's list and the last refusal. */
+  readonly returnOrdersWindow = signal<{ invoiceId: number } | null>(null);
+  readonly returnableOrders = signal<CommonInvoiceReturnableOrdersResponse | null>(null);
+  readonly returnableOrdersLoading = signal(false);
+  readonly returnableOrdersError = signal('');
+  readonly returnOrderRefusal = signal('');
   readonly draft = signal<AccountDraft>({
     name: '',
     enabled: true,
@@ -355,6 +429,9 @@ export class CommonBillingComponent implements OnDestroy {
   readonly orderDeleting = this.orderFacade.orderDeleting;
   readonly orderCancelingPayment = this.orderFacade.orderCancelingPayment;
   readonly paymentRouteContext = this.orderFacade.paymentRouteContext;
+  /** The order editor's own windows: recipient choice for «Выдать номер карты» and the manual. */
+  readonly orderPaymentFacade = this.orderFacade;
+  readonly orderPaymentGuideOpen = signal(false);
   readonly paymentRouteContextLoading = this.orderFacade.paymentRouteContextLoading;
   readonly paymentRouteChanging = this.orderFacade.paymentRouteChanging;
 
@@ -383,6 +460,7 @@ export class CommonBillingComponent implements OnDestroy {
     const invoice = this.currentInvoice();
     return Boolean(invoice && invoice.status !== 'NEEDS_ATTENTION' && this.reviewApprovalCount() > 0);
   });
+  readonly canReturnOrders = computed(() => canReturnOrdersToCommonInvoice(this.currentInvoice()));
   readonly attentionError = computed(() => (this.currentInvoice()?.lastError ?? '').trim().toLowerCase());
   readonly attentionHasLatePayment = computed(() => {
     const error = this.attentionError();
@@ -417,7 +495,10 @@ export class CommonBillingComponent implements OnDestroy {
       || this.attentionIsMigrationPaymentRegistry()
       || this.attentionHasFinalCancelFailure();
   });
-  readonly invoiceProblemRaw = computed(() => (this.currentInvoice()?.lastError ?? '').trim());
+  /** The client message is still in the queue: said as a wait in its own line, never as a problem of the invoice. */
+  readonly invoiceDeliveryWait = computed(() =>
+    commonInvoiceDeliveryWait(this.currentInvoice()?.lastError, this.invoiceDetails()?.delivery) ?? '');
+  readonly invoiceProblemRaw = computed(() => commonInvoiceProblemCode(this.currentInvoice()?.lastError));
   readonly invoicePaymentNotificationError = computed(() => (this.currentInvoice()?.paymentSuccessNotificationError ?? '').trim());
   readonly canResolveTechnicalTail = computed(() => {
     const invoice = this.currentInvoice();
@@ -455,7 +536,7 @@ export class CommonBillingComponent implements OnDestroy {
     if (isIncompletePartiallyPaidInvoice(invoice)) {
       return '';
     }
-    return commonInvoiceStatusProblem(invoice.status);
+    return commonInvoiceStatusProblem(invoice.status, invoice.lastError);
   });
   readonly invoiceProblemSteps = computed(() => this.commonInvoiceProblemSteps());
   readonly invoiceProblemActionLabel = computed(() => {
@@ -479,7 +560,7 @@ export class CommonBillingComponent implements OnDestroy {
       return 'По банковской ссылке есть движение денег. Не подтверждайте перевод повторно: сначала сверьте обе оплаты с администратором.';
     }
     if (this.invoiceNeedsAttention()) {
-      return 'После проверки используйте зеленое действие ниже или повторите обработку.';
+      return 'После проверки выберите подходящее действие в блоке «Решение проблемы» ниже.';
     }
     if (this.canResolveTechnicalTail()) {
       return 'После сверки отключенной связи можно закрыть технический хвост.';
@@ -497,6 +578,105 @@ export class CommonBillingComponent implements OnDestroy {
     return error.startsWith('paper_invoice_mode_switch_retry:')
       || error.startsWith('paper_invoice_mode_switch_in_progress:')
       || error.startsWith('paper_invoice_mode_switch_state_changed:');
+  });
+  /** The side panel may switch the invoice to Tochka documents (or open them in paper mode). */
+  readonly paperModeSwitchAllowed = computed(() => {
+    const invoice = this.currentInvoice();
+    return Boolean(invoice && this.canManagePaperInvoices()
+      && (!this.invoiceNeedsAttention() || this.paperModeSwitchNeedsRetry())
+      && (invoice.status !== 'PAID' || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE'));
+  });
+  /** One entry point to the Tochka document dialog: previously offered both by the list and the panel. */
+  readonly paperDocumentsActionVisible = computed(() => {
+    const invoice = this.currentInvoice();
+    return Boolean(invoice && this.canManagePaperInvoices()
+      && (invoice.status !== 'ARCHIVED' || this.paperModeSwitchAllowed()));
+  });
+  /** How the payment of this invoice is confirmed, so the manager knows when a manual mark is needed. */
+  readonly paymentHint = computed(() => {
+    const invoice = this.currentInvoice();
+    if (!invoice) {
+      return '';
+    }
+    if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      return this.paperWorkflow().bankManaged
+        ? 'Оплату по счёту Точки подтверждает банк — счёт закроется сам.'
+        : 'Когда деньги по счёту придут, отметьте оплату.';
+    }
+    if (isBankPaymentRouteType(invoice.paymentRouteType)) {
+      return 'По ссылке оплату подтверждает банк — счёт закроется сам. Вручную отмечайте, только если клиент заплатил не по ссылке.';
+    }
+    if (invoice.contractorPaymentRoute) {
+      return 'Клиент переводит на номер карты получателя из счёта. Отметьте оплату, когда деньги видны в выписке.';
+    }
+    return 'Отметьте оплату, когда деньги видны в выписке получателя.';
+  });
+  /** Companies the invoice can be sent to: the link's own companies instead of a typed ID. */
+  readonly invoiceCompanyOptions = computed(() => {
+    const account = this.selectedAccount();
+    const options = account
+      ? (account.companies ?? []).filter((company) => company.enabled)
+        .map((company) => ({ id: company.companyId, title: company.companyTitle || `Компания ${company.companyId}` }))
+      : [];
+    const current = Number(this.draft().invoiceCompanyId);
+    if (current && !options.some((option) => option.id === current)) {
+      const title = account?.invoiceCompanyId === current && account.invoiceCompanyTitle
+        ? account.invoiceCompanyTitle
+        : `Компания ${current}`;
+      options.push({ id: current, title: `${title} (не в связи)` });
+    }
+    return options;
+  });
+  /** A manager is the default; only owner and admin reassign the link to another manager. */
+  readonly canChangeAccountManager = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
+  readonly invoicePaidPercent = computed(() => {
+    const invoice = this.currentInvoice();
+    const amount = invoice?.amountKopecks ?? 0;
+    if (!invoice || amount <= 0) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(((invoice.paidKopecks ?? 0) / amount) * 100)));
+  });
+  /** A plain-language line about where the invoice is now; problems have their own block. */
+  readonly invoiceStageHint = computed(() => {
+    const invoice = this.currentInvoice();
+    // While the message is in the queue the wait line speaks instead: a stage hint could contradict it.
+    if (!invoice || this.invoiceProblem() || this.invoiceDeliveryWait()) {
+      return '';
+    }
+    const paper = invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE';
+    switch (invoice.status) {
+      case 'COLLECTING':
+        return 'Счёт собирается: в него попадают готовые заказы компаний. Отправлять его пока рано.';
+      case 'READY':
+        if (invoice.sentAt) {
+          return 'Клиент уведомлён. Ждём оплату.';
+        }
+        return paper
+          ? 'Счёт готов. Сообщите клиенту о готовности работ — счёт и акт Точки придут отдельно.'
+          : 'Счёт готов, но клиенту ещё не отправлен. Проверьте заказы и нажмите «Отправить счёт».';
+      case 'INVOICED':
+        return paper ? 'Клиент уведомлён. Ждём оплату по счёту и акту Точки.' : 'Счёт отправлен клиенту. Ждём оплату.';
+      case 'REMINDER':
+        return 'Клиенту отправлено напоминание. Ждём оплату.';
+      case 'PARTIALLY_PAID':
+        return 'Часть заказов оплачена. Ждём оплату остальных.';
+      case 'PAID':
+        return 'Счёт оплачен. Действий не требуется.';
+      case 'UNPAID':
+        return 'Срок оплаты прошёл: неоплаченные заказы переведены в «Не оплачено».';
+      case 'BAN':
+        return 'Неоплаченные заказы счёта переведены в Бан.';
+      case 'DISABLED':
+        return 'Счёт отключён.';
+      case 'ARCHIVED':
+        return 'Счёт в архиве: сохранён для истории, без требования оплаты.';
+      default:
+        return '';
+    }
   });
   readonly attentionRetryEnabled = computed(() => this.invoiceNeedsAttention()
     && !this.attentionRequiresManualCheck()
@@ -555,10 +735,19 @@ export class CommonBillingComponent implements OnDestroy {
         && ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID', 'UNPAID'].includes(invoice.status)
     );
   });
+  /**
+   * «Не оплачен» is set by the autoresponder when the payment term ends. The manual button stays
+   * with the owner and administrators for the days the autoresponder is paused or switched off.
+   */
+  readonly manualUnpaidAllowed = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
   readonly canMarkUnpaid = computed(() => {
     const invoice = this.currentInvoice();
     return Boolean(
       invoice
+        && this.manualUnpaidAllowed()
         && invoice.totalOrders > 0
         && invoice.paidOrders < invoice.totalOrders
         && ['INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status)
@@ -600,6 +789,7 @@ export class CommonBillingComponent implements OnDestroy {
 
   constructor() {
     this.routeSubscription = this.route.queryParamMap.subscribe(() => {
+      this.requestedInvoiceReleased = false;
       this.invalidateInvoiceView();
       this.load();
     });
@@ -690,6 +880,7 @@ export class CommonBillingComponent implements OnDestroy {
     if (this.selectedAccountId() === account.id) {
       return;
     }
+    this.releaseRequestedInvoice();
     this.invalidateInvoiceView();
     this.selectedAccountId.set(account.id);
     this.invoiceDetails.set(null);
@@ -697,53 +888,21 @@ export class CommonBillingComponent implements OnDestroy {
     this.loadSelectedInvoice();
   }
 
-  createAccount(): void {
-    const draft = this.draft();
-    if (!draft.name.trim() || this.mutating()) {
+  /**
+   * The page can be opened for one invoice (?invoiceId=…). While that pin stays, the read of any
+   * other invoice is discarded as stale, so an explicit choice of another link drops the pin.
+   */
+  private releaseRequestedInvoice(): void {
+    if (this.managerInvoiceDetailMode || this.requestedInvoiceId() === null) {
       return;
     }
-
-    const existingAccount = this.accounts().find((account) =>
-      account.enabled && this.normalizedName(account.name) === this.normalizedName(draft.name)
-    );
-    if (existingAccount) {
-      this.invalidateInvoiceView();
-      this.selectedAccountId.set(existingAccount.id);
-      this.applySelectedDraft();
-      this.loadSelectedInvoice();
-      this.toastService.success('Открыта существующая связь с таким названием');
-      return;
-    }
-
-    const viewGeneration = this.invoiceViewGeneration;
-    const mutationKey = 'create';
-    this.invalidateAccountLoad();
-    this.mutating.set(mutationKey);
-    this.commonBillingApi.createAccount({
-      name: draft.name.trim(),
-      enabled: draft.enabled,
-      autoRepeatOrders: draft.autoRepeatOrders,
-      managerId: this.optionalNumber(draft.managerId),
-      invoiceCompanyId: this.optionalNumber(draft.invoiceCompanyId),
-      companyIds: this.draftCompanies().map((company) => company.id)
-    }).subscribe({
-      next: (account) => {
-        if (!this.isCurrentPageView(viewGeneration)) {
-          return;
-        }
-        this.accounts.update((accounts) => [account, ...accounts.filter((item) => item.id !== account.id)]);
-        this.selectedAccountId.set(account.id);
-        this.applySelectedDraft();
-        this.loadSelectedInvoice();
-        this.mutating.set('');
-        this.toastService.success('Общий плательщик создан');
-      },
-      error: (err) => {
-        if (this.isCurrentPageView(viewGeneration) && this.mutating() === mutationKey) {
-          this.failMutation(err, 'Не удалось создать общего плательщика');
-        }
-      }
-    });
+    this.requestedInvoiceReleased = true;
+    const url = this.router.createUrlTree([], {
+      relativeTo: this.route,
+      queryParams: { invoiceId: null },
+      queryParamsHandling: 'merge'
+    }).toString();
+    this.location.replaceState(url);
   }
 
   saveAccount(): void {
@@ -831,26 +990,10 @@ export class CommonBillingComponent implements OnDestroy {
     if (this.companyAlreadySelected(company.id) || this.mutating()) {
       return;
     }
-    const account = this.selectedAccount();
-    if (account) {
+    // Companies are added only to an existing link; a new link is created in the company editor.
+    if (this.selectedAccount()) {
       this.addCompany(company);
-      return;
     }
-
-    this.draftCompanies.update((companies) => [
-      ...companies,
-      {
-        id: company.id,
-        title: company.title,
-        city: company.city,
-        status: company.status
-      }
-    ]);
-    this.clearCompanySearch();
-  }
-
-  removeDraftCompany(companyId: number): void {
-    this.draftCompanies.update((companies) => companies.filter((company) => company.id !== companyId));
   }
 
   addCompany(company: CompanyCardItem): void {
@@ -1000,10 +1143,132 @@ export class CommonBillingComponent implements OnDestroy {
       paperEnabled ? 'Автоматическое распределение восстановлено' : 'Режим бумажного счёта включён'
     );
   }
+  openPaperDocuments(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || !this.paperDocumentsActionVisible()) {
+      return;
+    }
+    // Same dialog as before; the legacy mode switch stays limited to the states where the panel offered it.
+    const switchAllowed = this.paperModeSwitchAllowed();
+    openPaperInvoiceDialog(
+      { kind: 'COMMON_INVOICE', id: invoice.id },
+      switchAllowed ? () => this.changePaperInvoiceMode(true) : () => {},
+      () => {
+        this.paperInvoiceList?.load();
+        this.refreshPaperInvoiceList();
+      }
+    );
+  }
   refreshPaperInvoiceList(): void {
     const invoiceId = this.managerInvoiceDetailMode ? this.requestedInvoiceId() : null;
     if (invoiceId) this.loadInvoiceByRequestedId(invoiceId);
     else this.loadSelectedInvoice();
+  }
+
+  /** Re-reads the invoice shown on the page, whichever way the page was opened. */
+  private reloadCurrentInvoice(): void {
+    const invoiceId = this.managerInvoiceDetailMode ? this.requestedInvoiceId() : null;
+    if (invoiceId) this.loadInvoiceByRequestedId(invoiceId);
+    else this.loadSelectedInvoice();
+  }
+
+  /** The «Выдать номер карты» window: what it was opened with, the people and the last refusal. */
+  readonly recipientPicker = signal<{
+    invoiceId: number;
+    target: CommonInvoicePaymentRouteChangeTarget;
+    token: string;
+    amountKopecks: number;
+    currentRecipient: string;
+    autoHint: string;
+    before: string;
+  } | null>(null);
+  readonly recipientPickerOptions = signal<PaymentRecipientOption[] | null>(null);
+  readonly recipientPickerLoading = signal(false);
+  readonly recipientPickerError = signal('');
+  readonly recipientPickerSubmitError = signal('');
+
+  loadRecipientPickerOptions(): void {
+    const picker = this.recipientPicker();
+    if (!picker) {
+      return;
+    }
+    this.recipientPickerLoading.set(true);
+    this.recipientPickerError.set('');
+    this.commonBillingApi.commonInvoiceRouteRecipients(picker.invoiceId).subscribe({
+      next: (response) => {
+        if (this.recipientPicker()?.invoiceId !== picker.invoiceId) {
+          return;
+        }
+        this.recipientPickerOptions.set(response.recipients ?? []);
+        this.recipientPickerLoading.set(false);
+      },
+      error: (err) => {
+        if (this.recipientPicker()?.invoiceId !== picker.invoiceId) {
+          return;
+        }
+        this.recipientPickerError.set(apiErrorDetail(err, 'Не удалось загрузить сотрудников'));
+        this.recipientPickerLoading.set(false);
+      }
+    });
+  }
+
+  closeRecipientPicker(): void {
+    this.recipientPicker.set(null);
+    this.recipientPickerOptions.set(null);
+    this.recipientPickerSubmitError.set('');
+  }
+
+  /** Issues the card number: the system's own choice, or the person the manager named. */
+  submitRecipientChoice(choice: PaymentRecipientChoice): void {
+    const picker = this.recipientPicker();
+    if (!picker || this.mutating()) {
+      return;
+    }
+    this.recipientPickerSubmitError.set('');
+    this.invoiceAction(
+      picker.invoiceId,
+      'change-common-payment-route',
+      () => this.commonBillingApi.changeCommonInvoicePaymentRoute(
+        picker.invoiceId,
+        picker.target,
+        picker.token,
+        null,
+        choice.profileId
+      ),
+      '',
+      (details) => {
+        this.closeRecipientPicker();
+        const after = this.routeDescription(details.summary);
+        if (after === picker.before) {
+          this.toastService.success('Запрос принят', 'Получатель сменится, когда банк подтвердит закрытие прежней ссылки.');
+          return;
+        }
+        this.lastRouteChange.set({ invoiceId: picker.invoiceId, from: picker.before, to: after, at: new Date() });
+        this.toastService.success('Получатель изменён', `${picker.before} → ${after}`);
+      },
+      (message, status) => {
+        if (status === 423) {
+          // The bank has to close the old link first; the request is saved and will finish by itself.
+          this.closeRecipientPicker();
+          return false;
+        }
+        // The window stays open with the refusal, so another person can be chosen at once.
+        this.recipientPickerSubmitError.set(message);
+        return true;
+      }
+    );
+  }
+
+  /**
+   * A refused change of the payment method: the toast says first that nothing changed, then the
+   * server's reason with its «Что делать». A bank that still has to answer (423) keeps its own notice.
+   */
+  private routeChangeRefused(message: string, status: number | undefined): boolean {
+    if (status === 423) {
+      return false;
+    }
+    this.toastService.error('Способ оплаты не изменён', message);
+    return true;
   }
 
   changeCommonInvoicePaymentRoute(targetOverride?: CommonInvoicePaymentRouteChangeTarget): void {
@@ -1028,20 +1293,37 @@ export class CommonBillingComponent implements OnDestroy {
           ?? (context.currentTarget === 'OWNER_TBANK' && !context.ownerManualRoute
             ? 'EMPLOYEE_REQUISITES'
             : 'OWNER_TBANK');
-        const destination = target === 'EMPLOYEE_REQUISITES'
-          ? 'реквизиты без ссылки'
-          : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
-          : 'банковскую ссылку владельца';
+        if (target === 'EMPLOYEE_REQUISITES' || target === 'DIFFERENT_RECIPIENT') {
+          // A card number is issued from the window: the system's own choice or a person the manager names.
+          this.recipientPickerSubmitError.set('');
+          this.recipientPickerOptions.set(null);
+          this.recipientPicker.set({
+            invoiceId: invoice.id,
+            target,
+            token: context.paymentEvidenceToken,
+            amountKopecks: Math.max(0, (invoice.amountKopecks ?? 0) - (invoice.paidKopecks ?? 0)),
+            currentRecipient: context.currentRecipient?.trim() ?? '',
+            autoHint: target === 'DIFFERENT_RECIPIENT'
+              ? 'Система выдаст номер другого получателя — платёжного задания или менеджера, если у него хватает резерва. '
+                + 'Нынешний получатель исключается. Если не подойдёт никто, счёт не изменится.'
+              : 'Система возьмёт платёжное задание, затем специалиста заказа, затем менеджера — первого, у кого хватает резерва. '
+                + 'Если не подойдёт никто, счёт не изменится и ссылка останется действующей.',
+            before: this.routeDescription(invoice)
+          });
+          this.loadRecipientPickerOptions();
+          return;
+        }
         const currentRecipient = context.currentRecipient?.trim()
           ? ` Получатель сейчас: ${context.currentRecipient}.`
           : '';
-        if (target !== 'DIFFERENT_RECIPIENT' && !window.confirm(
-          `Сменить способ оплаты на ${destination}?${currentRecipient} `
+        if (!window.confirm(
+          `Сменить способ оплаты на банковскую ссылку владельца?${currentRecipient} `
           + 'Старый безопасный резерв будет освобождён, новый маршрут создан заново, '
           + 'а клиенту сразу уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.'
         )) {
           return;
         }
+        const before = this.routeDescription(invoice);
         this.invoiceAction(
           invoice.id,
           'change-common-payment-route',
@@ -1050,9 +1332,17 @@ export class CommonBillingComponent implements OnDestroy {
             target,
             context.paymentEvidenceToken
           ),
-          target !== 'OWNER_TBANK'
-            ? 'Новые реквизиты для общего счёта подготовлены'
-            : 'Общий счёт переведён на банковскую ссылку владельца'
+          '',
+          (details) => {
+            const after = this.routeDescription(details.summary);
+            if (after === before) {
+              this.toastService.success('Запрос принят', 'Получатель сменится, когда банк подтвердит закрытие прежней ссылки.');
+              return;
+            }
+            this.lastRouteChange.set({ invoiceId: invoice.id, from: before, to: after, at: new Date() });
+            this.toastService.success('Получатель изменён', `${before} → ${after}`);
+          },
+          (message, status) => this.routeChangeRefused(message, status)
         );
       },
       error: (err) => {
@@ -1106,7 +1396,9 @@ export class CommonBillingComponent implements OnDestroy {
             context.paymentEvidenceToken,
             context.ownerBankTargetPaymentProfileId
           ),
-          `Общий счёт переведён на ${target}`
+          `Общий счёт переведён на ${target}`,
+          undefined,
+          (message, status) => this.routeChangeRefused(message, status)
         );
       },
       error: (err) => {
@@ -1340,6 +1632,17 @@ export class CommonBillingComponent implements OnDestroy {
     );
   }
 
+  openGuide(section: CommonInvoiceGuideSection = 'overview', event?: Event): void {
+    // A help button inside a <summary> must not also fold or unfold its group.
+    event?.preventDefault();
+    event?.stopPropagation();
+    this.guideSection.set(section);
+  }
+
+  closeGuide(): void {
+    this.guideSection.set(null);
+  }
+
   closeManualAttribution(): void {
     this.manualAttributionMode.set(null);
   }
@@ -1520,6 +1823,43 @@ export class CommonBillingComponent implements OnDestroy {
     }
   }
 
+  /** Who receives the money now, in plain words: the owner or the transfer recipient. */
+  routeRecipientName(invoice: CommonInvoiceSummaryResponse): string {
+    if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE' || isBankPaymentRouteType(invoice.paymentRouteType)) {
+      return 'Владелец';
+    }
+    const recipient = (invoice.paymentRouteRecipient ?? '').trim();
+    if (recipient) {
+      return recipient.split(' · ')[0];
+    }
+    return invoice.paymentRouteManualTaskId ? `Платёжное задание №${invoice.paymentRouteManualTaskId}` : 'Не выбран';
+  }
+
+  /** How the client pays that recipient: owner's bank link, card number, Tochka documents. */
+  routeMethodLabel(invoice: CommonInvoiceSummaryResponse): string {
+    if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      return 'счёт и акт Точки';
+    }
+    if (isBankPaymentRouteType(invoice.paymentRouteType)) {
+      return `банковская ссылка · ${bankPaymentRouteLabel(invoice.paymentRouteType, invoice.paymentRouteProfileName, invoice.paymentRouteProvider)}`;
+    }
+    const details = (invoice.paymentRouteRecipient ?? '').trim().split(' · ').slice(1).join(' · ');
+    switch (invoice.paymentRouteType) {
+      case 'MANUAL_EXTERNAL_LINK':
+        return details ? `внешняя ссылка · ${details}` : 'внешняя ссылка';
+      case 'MANUAL_MOBILE_BANK':
+        return details ? `номер карты · ${details}` : 'номер карты';
+      case 'MANAGER_TEXT':
+        return 'текст менеджера';
+      default:
+        return 'способ не выбран';
+    }
+  }
+
+  routeDescription(invoice: CommonInvoiceSummaryResponse): string {
+    return `${this.routeRecipientName(invoice)} — ${this.routeMethodLabel(invoice)}`;
+  }
+
   paymentRouteLabel(invoice: CommonInvoiceSummaryResponse): string {
     if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
       return 'Бумажный счёт владельца';
@@ -1648,6 +1988,78 @@ export class CommonBillingComponent implements OnDestroy {
     );
   }
 
+  /** Opens the «Вернуть заказ в счёт» window; the list comes from the server for this invoice's own link. */
+  openReturnOrders(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || !canReturnOrdersToCommonInvoice(invoice) || this.mutating()) {
+      return;
+    }
+    this.returnOrdersWindow.set({ invoiceId: invoice.id });
+    this.returnableOrders.set(null);
+    this.returnOrderRefusal.set('');
+    this.loadReturnableOrders();
+  }
+
+  loadReturnableOrders(): void {
+    const opened = this.returnOrdersWindow();
+    if (!opened) {
+      return;
+    }
+    this.returnableOrdersLoading.set(true);
+    this.returnableOrdersError.set('');
+    this.commonBillingApi.returnableOrders(opened.invoiceId).subscribe({
+      next: (response) => {
+        if (this.returnOrdersWindow()?.invoiceId !== opened.invoiceId) {
+          return;
+        }
+        this.returnableOrders.set(response);
+        this.returnableOrdersLoading.set(false);
+      },
+      error: (err) => {
+        if (this.returnOrdersWindow()?.invoiceId !== opened.invoiceId) {
+          return;
+        }
+        this.returnableOrdersError.set(apiErrorDetail(err, 'Не удалось загрузить заказы для возврата'));
+        this.returnableOrdersLoading.set(false);
+      }
+    });
+  }
+
+  closeReturnOrders(): void {
+    this.returnOrdersWindow.set(null);
+    this.returnableOrders.set(null);
+    this.returnableOrdersLoading.set(false);
+    this.returnableOrdersError.set('');
+    this.returnOrderRefusal.set('');
+  }
+
+  /**
+   * Returns the order the manager confirmed in the window. Success closes the window and shows the
+   * invoice with the order; a refusal stays in the window and in a toast that says nothing changed.
+   */
+  returnOrder(order: CommonInvoiceReturnableOrder): void {
+    const opened = this.returnOrdersWindow();
+    if (!opened || this.mutating()) {
+      return;
+    }
+    this.returnOrderRefusal.set('');
+    this.invoiceAction(
+      opened.invoiceId,
+      `return-order-${order.orderId}`,
+      () => this.commonBillingApi.returnOrder(opened.invoiceId, order.orderId),
+      `Заказ №${order.orderId} возвращён в общий счёт`,
+      () => this.closeReturnOrders(),
+      (message) => {
+        this.toastService.error('Заказ не возвращён', message);
+        this.returnOrderRefusal.set(message);
+        // A refusal often means the page is stale: show the list and the invoice as they are now.
+        this.loadReturnableOrders();
+        this.reloadCurrentInvoice();
+        return true;
+      }
+    );
+  }
+
   async copyPublicUrl(): Promise<void> {
     const url = this.currentInvoice()?.publicUrl?.trim();
     if (!url) {
@@ -1759,20 +2171,13 @@ export class CommonBillingComponent implements OnDestroy {
     return company.companyId;
   }
 
-  trackDraftCompany(_index: number, company: DraftCompany): number {
-    return company.id;
-  }
-
   trackCompanySearch(_index: number, company: CompanyCardItem): number {
     return company.id;
   }
 
   companyAlreadySelected(companyId: number): boolean {
     const account = this.selectedAccount();
-    if (account) {
-      return (account.companies ?? []).some((company) => company.companyId === companyId && company.enabled);
-    }
-    return this.draftCompanies().some((company) => company.id === companyId);
+    return (account?.companies ?? []).some((company) => company.companyId === companyId && company.enabled);
   }
 
   trackOrder(_index: number, order: CommonInvoiceOrderResponse): number {
@@ -1907,6 +2312,16 @@ export class CommonBillingComponent implements OnDestroy {
 
   isOwnerBankRoute(invoice: CommonInvoiceSummaryResponse | null | undefined): boolean {
     return Boolean(invoice && isBankPaymentRouteType(invoice.paymentRouteType));
+  }
+
+  /**
+   * One «Выдать номер карты» action replaces two buttons. From a link any transfer number fits,
+   * the same recipient included; from a number the client wants another person.
+   */
+  cardNumberRouteTarget(invoice: CommonInvoiceSummaryResponse | null | undefined): CommonInvoicePaymentRouteChangeTarget {
+    return invoice && (isBankPaymentRouteType(invoice.paymentRouteType) || invoice.paymentRouteType === 'MANUAL_EXTERNAL_LINK')
+      ? 'EMPLOYEE_REQUISITES'
+      : 'DIFFERENT_RECIPIENT';
   }
 
   isOwnerManualRoute(invoice: CommonInvoiceSummaryResponse | null | undefined): boolean {
@@ -2084,6 +2499,9 @@ export class CommonBillingComponent implements OnDestroy {
   }
 
   private requestedInvoiceId(): number | null {
+    if (this.requestedInvoiceReleased) {
+      return null;
+    }
     const value = Number(this.route.snapshot.queryParamMap.get('invoiceId') ?? 0);
     return Number.isSafeInteger(value) && value > 0 ? value : null;
   }
@@ -2266,7 +2684,10 @@ export class CommonBillingComponent implements OnDestroy {
     invoiceId: number,
     key: string,
     action: () => ReturnType<CommonBillingApi['invoice']>,
-    successTitle: string
+    successTitle: string,
+    onSuccess?: (details: CommonInvoiceDetailsResponse) => void,
+    /** Lets a window show the refusal itself: return true to keep the default toast away. */
+    onError?: (message: string, status: number | undefined) => boolean
   ): void {
     const viewGeneration = this.invoiceViewGeneration;
     this.invalidateAccountLoad();
@@ -2292,12 +2713,17 @@ export class CommonBillingComponent implements OnDestroy {
           this.toastService.success('Отправка подтверждена');
         } else if (deliveryWarning) {
           this.toastService.warning(details.delivery ? 'Состояние отправки' : 'Отправка общего счета не подтверждена', deliveryWarning);
-        } else {
+        } else if (successTitle) {
           this.toastService.success(successTitle);
         }
+        onSuccess?.(details);
       },
       error: (err) => {
         if (this.isCurrentInvoiceView(viewGeneration, invoiceId) && this.mutating() === key) {
+          if (onError?.(apiErrorDetail(err, 'Действие со счетом не выполнено'), (err as { status?: number } | null)?.status)) {
+            this.mutating.set('');
+            return;
+          }
           this.failMutation(err, 'Действие со счетом не выполнено');
         }
       }
@@ -2382,7 +2808,6 @@ export class CommonBillingComponent implements OnDestroy {
       managerId: account.managerId == null ? '' : String(account.managerId),
       invoiceCompanyId: account.invoiceCompanyId == null ? '' : String(account.invoiceCompanyId)
     });
-    this.draftCompanies.set([]);
     this.clearCompanySearch();
   }
 
@@ -2407,10 +2832,6 @@ export class CommonBillingComponent implements OnDestroy {
   private optionalNumber(value: string): number | null {
     const numeric = Number(value);
     return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
-  }
-
-  private normalizedName(value: string | null | undefined): string {
-    return (value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
   }
 
   private clearCompanySearch(): void {

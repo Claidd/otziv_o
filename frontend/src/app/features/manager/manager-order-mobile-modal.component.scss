@@ -94,6 +94,16 @@
   gap: 0.3rem;
 }
 
+/* The title takes the free width; the manual and «Сменить способ оплаты» keep their own size. */
+:host .payment-route-change__head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+:host .payment-route-change__guide {
+  flex: none;
+}
+
 :host .payment-route-change small,
 :host .payment-route-change p {
   margin: 0;

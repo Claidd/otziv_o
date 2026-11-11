@@ -3,6 +3,7 @@ package com.hunt.otziv.common_billing.controller;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRequest;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentOptionsResponse;
+import com.hunt.otziv.common_billing.dto.CommonManualPaymentOtherRecipientsResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorActualPaymentAttributionModeResponse;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
@@ -51,6 +52,15 @@ public class CommonManualPaymentAttributionController {
         flowPolicy.requireAttributionFlowOrFrozenTask(
                 commonBillingService.hasFrozenManualTaskRoute(invoiceId));
         return noStore(commonBillingService.manualPaymentOptions(invoiceId));
+    }
+
+    /** People outside the invoice's own participants; the window offers them behind a separate button. */
+    @GetMapping("/manual-payment-other-recipients")
+    public ResponseEntity<CommonManualPaymentOtherRecipientsResponse> otherRecipients(@PathVariable Long invoiceId) {
+        targetAccessPolicy.requireCanManageCommonInvoice(invoiceId);
+        flowPolicy.requireAttributionFlowOrFrozenTask(
+                commonBillingService.hasFrozenManualTaskRoute(invoiceId));
+        return noStore(commonBillingService.manualPaymentOtherRecipients(invoiceId));
     }
 
     @PostMapping("/paid-with-attributions")

@@ -763,4 +763,142 @@ class CommonManualPaymentAttributionCoordinatorTest {
         assertTrue(options.history().getFirst().actualRecipientLabel().contains("Наталья П."));
         assertFalse(options.history().getFirst().actualRecipientLabel().contains("Специалист"));
     }
+
+    @Test
+    void otherRecipientsOfferWholeTeamAndCompanyPerformersOutsideOrdinaryOptions() {
+        CommonInvoice invoice = invoiceWithOneOrder();
+
+        var ordinary = coordinator.options(invoice, List.of(invoiceItem), 10_000L);
+        var other = coordinator.otherRecipients(invoice, List.of(invoiceItem));
+
+        assertEquals(List.of("OWNER", "PROFILE:700"),
+                ordinary.candidates().stream().map(row -> row.key()).toList());
+        assertEquals(List.of("PROFILE:702", "PROFILE:701"),
+                other.recipients().stream().map(row -> row.candidate().key()).toList());
+        var formerPerformer = other.recipients().getFirst();
+        assertTrue(formerPerformer.previousPerformer());
+        assertFalse(formerPerformer.teamMember());
+        var teamMember = other.recipients().getLast();
+        assertTrue(teamMember.teamMember());
+        assertFalse(teamMember.previousPerformer());
+        // A switched-off profile only stops new requisites; the receipt itself stays attributable.
+        assertFalse(teamMember.candidate().profileEnabled());
+        assertFalse(teamMember.candidate().currentParticipant());
+        assertFalse(teamMember.candidate().originalRecipient());
+    }
+
+    @Test
+    void finalReceiptAcceptsNamedOneOffRecipientWithoutLoadingWholeTeam() {
+        CommonInvoice invoice = invoiceWithOneOrder();
+
+        coordinator.recordFinalReceipt(invoice, List.of(invoiceItem), 10_000L,
+                oneRecipientRequest(702L), () -> "manager");
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<com.hunt.otziv.contractor_payments.dto.ContractorActualPaymentRecipientCommand>>
+                commands = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(attributionService).recordFinalAttributions(any(), commands.capture());
+        assertEquals(1, commands.getValue().size());
+        assertEquals(702L, commands.getValue().getFirst().actualRecipientProfileId());
+        assertEquals(ContractorRecipientType.SPECIALIST, commands.getValue().getFirst().actualRecipientType());
+        assertEquals(10_000L, commands.getValue().getFirst().amountKopecks());
+        verify(profileRepository).findAllById(java.util.Set.of(702L));
+    }
+
+    @Test
+    void finalReceiptRejectsProfileOutsideTeamAndCompanyPerformers() {
+        CommonInvoice invoice = invoiceWithOneOrder();
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
+                coordinator.recordFinalReceipt(invoice, List.of(invoiceItem), 10_000L,
+                        oneRecipientRequest(999L), () -> "manager"));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(attributionService, never()).recordFinalAttributions(any(), anyList());
+    }
+
+    private final com.hunt.otziv.common_billing.model.CommonInvoiceOrder invoiceItem =
+            mock(com.hunt.otziv.common_billing.model.CommonInvoiceOrder.class);
+
+    /**
+     * Invoice 91 of manager 5 with order 4000 performed by specialist profile 700.
+     * Profile 701 is a team member with a switched-off profile, 702 performed the company earlier.
+     */
+    private CommonInvoice invoiceWithOneOrder() {
+        when(attributionService.lockEnabledAccountingMode()).thenReturn(ContractorAllocationMode.SHADOW);
+        when(targetAccessPolicy.canManageUser(any())).thenReturn(true);
+
+        var worker = mock(com.hunt.otziv.u_users.model.Worker.class);
+        when(worker.getId()).thenReturn(7L);
+        User workerUser = user(70L, "Текущий Исполнитель");
+        when(worker.getUser()).thenReturn(workerUser);
+        var order = mock(com.hunt.otziv.p_products.model.Order.class);
+        when(order.getId()).thenReturn(4_000L);
+        when(order.getWorker()).thenReturn(worker);
+        when(invoiceItem.isActiveMembership()).thenReturn(true);
+        when(invoiceItem.getOrder()).thenReturn(order);
+
+        var manager = mock(com.hunt.otziv.u_users.model.Manager.class);
+        when(manager.getId()).thenReturn(5L);
+        when(managerResolver.resolveForRouting(order)).thenReturn(manager);
+
+        ContractorPaymentProfile current = profile(700L, workerUser, true);
+        ContractorPaymentProfile teamMember = profile(701L, user(71L, "Сотрудник Команды"), false);
+        ContractorPaymentProfile formerPerformer = profile(702L, user(72L, "Прошлый Исполнитель"), true);
+        when(profileRepository.findByUserIdAndRole(70L,
+                com.hunt.otziv.contractor_payments.model.ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(current));
+        when(profileRepository.findActiveTeamProfileIds(java.util.Set.of(5L),
+                com.hunt.otziv.contractor_payments.model.ContractorRole.SPECIALIST))
+                .thenReturn(List.of(700L, 701L));
+        when(profileRepository.findCompanyPerformerProfileIds(java.util.Set.of(4_000L),
+                com.hunt.otziv.contractor_payments.model.ContractorRole.SPECIALIST))
+                .thenReturn(List.of(700L, 702L));
+        when(profileRepository.findAllById(org.mockito.ArgumentMatchers.<Iterable<Long>>any()))
+                .thenAnswer(invocation -> {
+                    java.util.List<ContractorPaymentProfile> found = new java.util.ArrayList<>();
+                    for (Long id : invocation.<Iterable<Long>>getArgument(0)) {
+                        if (id == 700L) found.add(current);
+                        if (id == 701L) found.add(teamMember);
+                        if (id == 702L) found.add(formerPerformer);
+                    }
+                    return found;
+                });
+
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(91L);
+        return invoice;
+    }
+
+    private User user(Long id, String fio) {
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(id);
+        when(user.getFio()).thenReturn(fio);
+        return user;
+    }
+
+    private ContractorPaymentProfile profile(Long id, User user, boolean enabled) {
+        ContractorPaymentProfile profile = mock(ContractorPaymentProfile.class);
+        when(profile.getId()).thenReturn(id);
+        when(profile.getUser()).thenReturn(user);
+        when(profile.isEnabled()).thenReturn(enabled);
+        return profile;
+    }
+
+    private CommonManualPaymentAttributionRequest oneRecipientRequest(Long profileId) {
+        return new CommonManualPaymentAttributionRequest(
+                "batch-91",
+                true,
+                true,
+                LocalDateTime.of(2026, 8, 15, 10, 0),
+                "Клиент перевёл прошлому исполнителю",
+                "",
+                List.of(new CommonManualPaymentAttributionRowRequest(
+                        "row-1",
+                        ContractorRecipientType.SPECIALIST,
+                        profileId,
+                        10_000L
+                ))
+        );
+    }
 }

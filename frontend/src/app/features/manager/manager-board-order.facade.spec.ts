@@ -164,6 +164,18 @@ function createFacade(config: {
           expectedTargetPaymentProfileId: 81
         });
       },
+      getPaymentRouteRecipients: (orderId: number) => {
+        calls.push(`get-payment-route-recipients:${orderId}`);
+        return of({
+          orderId,
+          paymentLinkId: 71,
+          amountKopecks: 150_000,
+          recipients: [
+            { profileId: 44, role: 'SPECIALIST', name: 'Лидия З.', orderSpecialist: true, manager: false, teamMember: true,
+              workedWithClient: true, availableKopecks: 50_000, overrunKopecks: 100_000, current: false, blockReason: null }
+          ]
+        });
+      },
       changePaymentRoute: (orderId, request) => {
         lastPaymentRouteRequest = request;
         calls.push(`change-payment-route:${orderId}:${request.target}:${request.expectedPaymentLinkId}`);
@@ -312,21 +324,38 @@ describe('ManagerBoardOrderFacade', () => {
     expect(state.calls).toContain('load-board');
   });
 
-  it('changes only the current unpaid payment route after explicit confirmation', () => {
+  it('issues a card number from the recipient window, automatically or to the person the manager names', () => {
     const state = createFacade();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = vi.spyOn(window, 'confirm');
 
     state.facade.openOrderEdit(order({ id: 30 }));
     state.facade.openPaymentRouteChange();
     state.facade.changePaymentRoute('EMPLOYEE_REQUISITES');
 
-    expect(state.calls).toContain('get-payment-route:30');
+    // No browser confirmation and no request yet: the window names the consequence itself.
+    expect(confirm).not.toHaveBeenCalled();
+    expect(state.calls).toContain('get-payment-route-recipients:30');
+    expect(state.calls.some(call => call.startsWith('change-payment-route'))).toBe(false);
+    expect(state.facade.recipientPicker()).toEqual(expect.objectContaining({ orderId: 30, paymentLinkId: 71, target: 'EMPLOYEE_REQUISITES' }));
+    expect(state.facade.recipientPickerAmount()).toBe(150_000);
+    expect(state.facade.recipientPickerOptions()?.map(option => option.profileId)).toEqual([44]);
+
+    state.facade.submitRecipientChoice({ profileId: 44 });
+
     expect(state.calls).toContain('change-payment-route:30:EMPLOYEE_REQUISITES:71');
+    expect(state.lastPaymentRouteRequest?.recipientProfileId).toBe(44);
     expect(state.calls).toContain('load-board');
+    expect(state.facade.recipientPicker()).toBeNull();
     expect(state.facade.paymentRouteContext()).toBeNull();
     expect(state.toastMessages).toContain(
-      'success:Способ оплаты изменен:Клиенту отправляется новый способ оплаты по заказу #30'
+      'success:Способ оплаты изменен:Клиенту отправляется новый счёт с номером карты по заказу #30'
     );
+
+    // The automatic choice sends no recipient at all.
+    state.facade.openPaymentRouteChange();
+    state.facade.changePaymentRoute('EMPLOYEE_REQUISITES');
+    state.facade.submitRecipientChoice({ profileId: null });
+    expect(state.lastPaymentRouteRequest?.recipientProfileId).toBeUndefined();
   });
 
   it('freezes the selected manager bank when reissuing an owner bank link', () => {

@@ -9,6 +9,7 @@ import static com.hunt.otziv.common_billing.service.CommonInvoicePresenter.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService.*;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRequest;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentOptionsResponse;
+import com.hunt.otziv.common_billing.dto.CommonManualPaymentOtherRecipientsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceManualCardPaymentRequest;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
@@ -21,6 +22,8 @@ import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepositor
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.payments.dto.TbankCancelCommand;
+import com.hunt.otziv.payments.dto.TbankCancelResponse;
 import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.PaymentLink;
@@ -247,7 +250,8 @@ public class CommonInvoiceManualPaymentWorkflow {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public CommonInvoiceDetailsResponse markPaidWithAttributions(Long invoiceId, CommonManualPaymentAttributionRequest request, Principal principal) {
+    public CommonInvoiceDetailsResponse markPaidWithAttributions(Long invoiceId, CommonManualPaymentAttributionRequest submitted, Principal principal) {
+        CommonManualPaymentAttributionRequest request = withServerReceiptTime(invoiceId, submitted);
         validateCommonManualPaymentAttributionRequest(request);
         if (stageOwnerReport(invoiceId, request, false, principal)) return writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
         var source = writeTransaction(() -> currentTochkaReceiptSource(invoiceId, request));
@@ -327,8 +331,10 @@ public class CommonInvoiceManualPaymentWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сумма перевода должна совпадать с выставленным счётом и текущей стоимостью заказов");
     }
 
-    CommonInvoiceDetailsResponse markPaidWithAttributionsLocked(Long invoiceId, CommonManualPaymentAttributionRequest request, Principal principal) {
+    CommonInvoiceDetailsResponse markPaidWithAttributionsLocked(Long invoiceId, CommonManualPaymentAttributionRequest submitted, Principal principal) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        // Under the invoice lock: a repeat that raced with the first request now sees the time it recorded.
+        CommonManualPaymentAttributionRequest request = withServerReceiptTime(invoiceId, submitted);
         CommonInvoice invoice = paymentPrelude.invoice();
         requireNoIntegratedPaperDocument(invoice);
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
@@ -353,7 +359,7 @@ public class CommonInvoiceManualPaymentWorkflow {
         promoteCollectingInvoiceToReadyIfPossible(invoice, items);
         ensureCommonInvoiceCanBeMarkedPaid(invoice);
         requireManualRecipientsAllowed(invoice, request);
-        ownerReceipts.accept(invoice, items, request, principal);
+        acceptOwnerReport(invoice, items, request, principal);
         long manualAmountKopecks = remainingKopecks(invoice);
         ensureNoCurrentCommonTbankPaymentForManualCard(invoice);
         ensureCommonPaymentRefsSafeForManualCard(paymentRefRepository.findByInvoiceIdForUpdate(invoiceId));
@@ -369,10 +375,12 @@ public class CommonInvoiceManualPaymentWorkflow {
         return invoiceAfterOrderPrelude(invoiceId);
     }
 
-    private boolean stageOwnerReport(Long invoiceId, CommonManualPaymentAttributionRequest request, boolean attention, Principal principal) {
-        if (!CommonOwnerReceiptApprovals.includesOwner(request)) return false;
+    private boolean stageOwnerReport(Long invoiceId, CommonManualPaymentAttributionRequest submitted, boolean attention, Principal principal) {
+        if (!CommonOwnerReceiptApprovals.includesOwner(submitted)) return false;
         return writeTransaction(() -> {
             CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+            // Under the invoice lock: the report keeps one receipt time however often the request is repeated.
+            CommonManualPaymentAttributionRequest request = withServerReceiptTime(invoiceId, submitted);
             ensureCommonInvoiceVisibleForCurrentUser(invoice);
             if (invoice.getStatus() == CommonInvoiceStatus.PAID) return false;
             requireNoIntegratedPaperDocument(invoice);
@@ -386,9 +394,76 @@ public class CommonInvoiceManualPaymentWorkflow {
                 promoteCollectingInvoiceToReadyIfPossible(invoice, items);
                 ensureCommonInvoiceCanBeMarkedPaid(invoice);
             }
-            return ownerReceipts.stage(invoice, items, request, attention, principal,
-                    commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice)));
+            boolean alreadyReported = ownerReceipts.pendingReport(invoice.getId()).isPresent();
+            boolean staged = ownerReceipts.stage(invoice, items, request, attention, principal,
+                    commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice), request));
+            if (staged && !alreadyReported) {
+                // A fresh report: the owner and administrators learn about it once, after this transaction commits.
+                ownerReceipts.pendingReport(invoice.getId()).ifPresent(report ->
+                        manualCardPaymentReviewNotificationService.notifyCommonInvoiceOwnerApprovalAfterCommit(
+                                new ManualCardPaymentReviewNotificationService.CommonInvoiceOwnerApprovalRequest(
+                                        report.id(), invoice.getId(), invoiceDisplayTitle(invoice),
+                                        request.attributions().stream()
+                                                .filter(row -> row != null && (row.recipientType() == com.hunt.otziv.contractor_payments.model.ContractorRecipientType.OWNER
+                                                        || "OWNER".equals(row.recipientKey())))
+                                                .mapToLong(row -> row.amountKopecks()).sum(),
+                                        remainingKopecks(invoice), report.reportedBy(), normalize(request.reason()),
+                                        firstOrderId(items))));
+            }
+            return staged;
         });
+    }
+
+    /**
+     * The receipt time is the server's clock, not the clock of the device that marks the payment: a device in
+     * another time zone shifted the receipt by hours, and one ahead of the server was refused as «в будущем».
+     * The first request of an operation gets the current time; its repeat and the owner's decision on the
+     * manager's report keep the time already stored for that operation, so they stay the same request.
+     */
+    CommonManualPaymentAttributionRequest withServerReceiptTime(Long invoiceId, CommonManualPaymentAttributionRequest submitted) {
+        if (submitted == null || invoiceId == null || normalize(submitted.idempotencyKey()).isBlank()) {
+            return submitted;
+        }
+        LocalDateTime receiptTime = commonManualPaymentAttributionCoordinator.recordedReceiptTime(invoiceId, submitted.idempotencyKey())
+                .or(() -> ownerReceipts.reportedReceiptTime(invoiceId, submitted.idempotencyKey()))
+                // Milliseconds, as clients sent before: the value survives the database and the stored report unchanged.
+                .orElseGet(() -> LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
+        return submitted.withEffectiveAt(receiptTime);
+    }
+
+    /** Accepts the waiting owner report, if any, and clears the reminders that asked for the decision. */
+    private void acceptOwnerReport(CommonInvoice invoice, List<CommonInvoiceOrder> items, CommonManualPaymentAttributionRequest request, Principal principal) {
+        var pending = ownerReceipts.pendingReport(invoice.getId());
+        ownerReceipts.accept(invoice, items, request, principal);
+        pending.ifPresent(report -> manualCardPaymentReviewNotificationService.closeCommonInvoiceOwnerApprovalReminders(report.id()));
+    }
+
+    /** The owner did not receive the money: the report is closed and the manager who sent it is told. */
+    public void rejectOwnerReport(long invoiceId, long reportId, Principal principal) {
+        writeTransaction(() -> {
+            var pending = ownerReceipts.pendingReport(invoiceId).filter(report -> report.id() == reportId);
+            ownerReceipts.reject(invoiceId, reportId, principal);
+            manualCardPaymentReviewNotificationService.closeCommonInvoiceOwnerApprovalReminders(reportId);
+            pending.ifPresent(report -> {
+                CommonInvoice invoice = invoiceRepository.findByIdWithAccount(invoiceId).orElse(null);
+                manualCardPaymentReviewNotificationService.notifyCommonInvoiceOwnerRejectionAfterCommit(
+                        new ManualCardPaymentReviewNotificationService.CommonInvoiceOwnerRejection(
+                                reportId, invoiceId, invoice == null ? "" : invoiceDisplayTitle(invoice), report.reportedBy(),
+                                principal == null ? "" : normalize(principal.getName()),
+                                firstOrderId(invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId))));
+            });
+            return null;
+        });
+    }
+
+    private String invoiceDisplayTitle(CommonInvoice invoice) {
+        String title = normalize(invoice.getTitle());
+        return title.isBlank() ? normalize(invoice.getAccount() == null ? null : invoice.getAccount().getName()) : title;
+    }
+
+    private Long firstOrderId(List<CommonInvoiceOrder> items) {
+        return items == null ? null : items.stream().map(CommonInvoiceOrder::getOrder).filter(Objects::nonNull)
+                .map(Order::getId).filter(Objects::nonNull).sorted().findFirst().orElse(null);
     }
 
     PreparedManualPaymentBankReconciliation prepareManualPaymentBankReconciliation(Long invoiceId) {
@@ -433,7 +508,9 @@ public class CommonInvoiceManualPaymentWorkflow {
         }
         String knownStatus = isPaperModeSwitchSafeTerminalStatus(refStatus) || isPaperModeSwitchFinancialStatus(refStatus) ? refStatus : "";
         if (knownStatus.isBlank()) {
-            paymentRef.setStatus("VERIFYING_RECEIPT");
+            // Marked before GetState/Cancel so a concurrent webhook sees the cancellation lifecycle.
+            paymentRef.setStatus(PAYMENT_REF_CANCELING);
+            paymentRef.setCancelAttempts(cancelAttempts(paymentRef) + 1);
             paymentRef.setReason(limit("manual_payment_tbank_reconciliation", 160));
             paymentRefRepository.save(paymentRef);
             invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
@@ -501,7 +578,44 @@ public class CommonInvoiceManualPaymentWorkflow {
         if (!"NEW".equals(providerStatus) && !"FORM_SHOWED".equals(providerStatus)) {
             return manualPaymentBankAmbiguous(HttpStatus.CONFLICT, "T-Bank вернул неоднозначный статус " + readableProviderStatus(providerStatus) + ". Ничего не зачислено; нужна сверка");
         }
-        return new PaperInvoiceBankResolution(true, providerStatus, PAYMENT_REF_ARCHIVED, null, null);
+        // The client must not be able to pay the old form after the transfer is credited.
+        try {
+            TbankCancelResponse response = tbankClient.cancel(runtimeProfile, new TbankCancelCommand(prepared.paymentId(), prepared.amountKopecks()));
+            String cancelMismatch = manualPaymentBankCancelMismatch(prepared, response, runtimeProfile);
+            if (cancelMismatch != null) {
+                return manualPaymentBankAmbiguous(HttpStatus.CONFLICT, cancelMismatch);
+            }
+            String cancelStatus = normalize(response.status()).toUpperCase(Locale.ROOT);
+            if (PAYMENT_REF_CANCELED.equals(cancelStatus)) {
+                return PaperInvoiceBankResolution.safe(cancelStatus);
+            }
+            if (isPaperModeSwitchFinancialStatus(cancelStatus)) {
+                return manualPaymentBankPaymentDetected(cancelStatus);
+            }
+            return manualPaymentBankAmbiguous(HttpStatus.CONFLICT, "T-Bank не подтвердил отмену ссылки: статус " + readableProviderStatus(cancelStatus) + ". Ничего не зачислено");
+        } catch (RuntimeException failure) {
+            log.warn("Исход отмены T-Bank перед ручным подтверждением неоднозначен: invoiceId={}, paymentId={}", prepared.invoiceId(), maskPaymentId(prepared.paymentId()), failure);
+            return manualPaymentBankAmbiguous(HttpStatus.BAD_GATEWAY, "T-Bank не подтвердил отмену ссылки. Счёт оставлен на безопасной сверке; повторите позже");
+        }
+    }
+
+    String manualPaymentBankCancelMismatch(PreparedManualPaymentBankReconciliation prepared, TbankCancelResponse response, TbankPaymentProfile runtimeProfile) {
+        if (response == null || !response.success()) {
+            return "T-Bank не подтвердил отмену ссылки. Ничего не зачислено";
+        }
+        if (!normalize(response.paymentId()).isBlank() && !prepared.paymentId().equals(normalize(response.paymentId()))) {
+            return "PaymentId отмены T-Bank не совпал с общим счётом. Ничего не зачислено";
+        }
+        if (!normalize(response.orderId()).isBlank() && !prepared.tbankOrderId().isBlank() && !prepared.tbankOrderId().equals(normalize(response.orderId()))) {
+            return "OrderId отмены T-Bank не совпал с общим счётом. Ничего не зачислено";
+        }
+        if (!normalize(response.terminalKey()).isBlank() && !normalize(runtimeProfile.terminalKey()).equals(normalize(response.terminalKey()))) {
+            return "TerminalKey отмены T-Bank не совпал с общим счётом. Ничего не зачислено";
+        }
+        if (response.amount() != null && response.amount() != prepared.amountKopecks()) {
+            return "Сумма отмены T-Bank не совпала с общим счётом. Ничего не зачислено";
+        }
+        return null;
     }
 
     PaperInvoiceBankResolution manualPaymentBankPaymentDetected(String providerStatus) {
@@ -510,7 +624,7 @@ public class CommonInvoiceManualPaymentWorkflow {
     }
 
     PaperInvoiceBankResolution manualPaymentBankAmbiguous(HttpStatus status, String message) {
-        return new PaperInvoiceBankResolution(false, "UNKNOWN", "VERIFYING_RECEIPT", status == null ? HttpStatus.CONFLICT : status, message);
+        return new PaperInvoiceBankResolution(false, "UNKNOWN", PAYMENT_REF_CANCEL_FAILED, status == null ? HttpStatus.CONFLICT : status, message);
     }
 
     String manualPaymentBankStateMismatch(PreparedManualPaymentBankReconciliation prepared, TbankGetStateResponse state, TbankPaymentProfile runtimeProfile) {
@@ -613,6 +727,13 @@ public class CommonInvoiceManualPaymentWorkflow {
         return ownerReceipts.attach(commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice)));
     }
 
+    @Transactional
+    public CommonManualPaymentOtherRecipientsResponse manualPaymentOtherRecipients(Long invoiceId) {
+        CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        return commonManualPaymentAttributionCoordinator.otherRecipients(invoice, invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId));
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CommonInvoiceDetailsResponse reportPaidByManualCardTransfer(Long invoiceId, CommonInvoiceManualCardPaymentRequest request, Principal principal) {
         actualPaymentAttributionFlowPolicy.requireLegacyFlow();
@@ -660,7 +781,8 @@ public class CommonInvoiceManualPaymentWorkflow {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public CommonInvoiceDetailsResponse reportPaidByManualCardTransferWithAttributions(Long invoiceId, CommonManualPaymentAttributionRequest request, Principal principal) {
+    public CommonInvoiceDetailsResponse reportPaidByManualCardTransferWithAttributions(Long invoiceId, CommonManualPaymentAttributionRequest submitted, Principal principal) {
+        CommonManualPaymentAttributionRequest request = withServerReceiptTime(invoiceId, submitted);
         String reason = validateCommonManualPaymentAttributionRequest(request);
         if (stageOwnerReport(invoiceId, request, true, principal)) return writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
         CommonInvoice snapshot = invoiceRepository.findByIdWithAccount(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
@@ -678,8 +800,10 @@ public class CommonInvoiceManualPaymentWorkflow {
         return writeTransaction(() -> reportPaidByManualCardTransferWithAttributionsLocked(invoiceId, request, reason, principal));
     }
 
-    CommonInvoiceDetailsResponse replayPaidManualAttributionLocked(Long invoiceId, CommonManualPaymentAttributionRequest request, Principal principal) {
+    CommonInvoiceDetailsResponse replayPaidManualAttributionLocked(Long invoiceId, CommonManualPaymentAttributionRequest submitted, Principal principal) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        // Under the invoice lock: a repeat that raced with the first request now sees the time it recorded.
+        CommonManualPaymentAttributionRequest request = withServerReceiptTime(invoiceId, submitted);
         CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
@@ -689,8 +813,10 @@ public class CommonInvoiceManualPaymentWorkflow {
         return invoiceAfterOrderPrelude(invoiceId);
     }
 
-    CommonInvoiceDetailsResponse reportPaidByManualCardTransferWithAttributionsLocked(Long invoiceId, CommonManualPaymentAttributionRequest request, String reason, Principal principal) {
+    CommonInvoiceDetailsResponse reportPaidByManualCardTransferWithAttributionsLocked(Long invoiceId, CommonManualPaymentAttributionRequest submitted, String reason, Principal principal) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        // Under the invoice lock: a repeat that raced with the first request now sees the time it recorded.
+        CommonManualPaymentAttributionRequest request = withServerReceiptTime(invoiceId, submitted);
         CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNeedsAttention(invoice);
@@ -707,7 +833,7 @@ public class CommonInvoiceManualPaymentWorkflow {
         closeStandaloneRoutesForCommonManualPaymentOrThrow(paymentLinksRequiringCommonInvoiceRouteCheck(paymentPrelude.paymentLinksByOrder(), items, appliedStandalonePayments), invoiceId, reason, principal);
         refreshInvoiceAmounts(invoice, items);
         requireManualRecipientsAllowed(invoice, request);
-        ownerReceipts.accept(invoice, items, request, principal);
+        acceptOwnerReport(invoice, items, request, principal);
         long manualAmountKopecks = remainingKopecks(invoice);
         applyManualPaymentEvidence(invoice, items, new ManualPaymentConfirmationRequest(reason, ""), principal);
         markTypedManualPaymentItems(items, CommonManualPaymentAttributionCoordinator.evidenceReference(invoice.getId(), request.idempotencyKey()));

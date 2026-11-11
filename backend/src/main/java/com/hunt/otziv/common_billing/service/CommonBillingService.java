@@ -25,6 +25,7 @@ import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRequest;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentOptionsResponse;
+import com.hunt.otziv.common_billing.dto.CommonManualPaymentOtherRecipientsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceArchivePreviewResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
@@ -357,6 +358,16 @@ public class CommonBillingService {
         return invoiceMembershipWorkflow.detachOrder(invoiceId, orderId);
     }
 
+    /** Orders of the invoice's own link that the manager may put back while the invoice is collected. */
+    public com.hunt.otziv.common_billing.dto.CommonInvoiceReturnableOrdersResponse returnableOrders(Long invoiceId) {
+        return invoiceMembershipWorkflow.returnableOrders(invoiceId);
+    }
+
+    /** The reverse of {@link #detachOrder}: only into this collecting invoice, only an order of its link. */
+    public CommonInvoiceDetailsResponse returnOrder(Long invoiceId, Long orderId) {
+        return invoiceMembershipWorkflow.returnOrder(invoiceId, orderId);
+    }
+
     /**
      * Narrow compatibility path for deleting an untouched order created by the
      * next-order automation after cancellation of its source payment. This is
@@ -373,6 +384,10 @@ public class CommonBillingService {
 
     public CommonInvoicePaymentRouteChangeContextResponse commonInvoicePaymentRouteChangeContext(Long invoiceId) {
         return invoiceRouteWorkflow.commonInvoicePaymentRouteChangeContext(invoiceId);
+    }
+
+    public com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse commonInvoiceRouteRecipients(Long invoiceId) {
+        return invoiceRouteWorkflow.commonInvoiceRouteRecipients(invoiceId);
     }
 
     public CommonInvoiceDetailsResponse changeCommonInvoiceRecipient(Long invoiceId, CommonInvoicePaymentRouteChangeRequest request, Principal principal) {
@@ -425,6 +440,14 @@ public class CommonBillingService {
 
     public CommonManualPaymentOptionsResponse manualPaymentOptions(Long invoiceId) {
         return manualPaymentWorkflow.manualPaymentOptions(invoiceId);
+    }
+
+    public CommonManualPaymentOtherRecipientsResponse manualPaymentOtherRecipients(Long invoiceId) {
+        return manualPaymentWorkflow.manualPaymentOtherRecipients(invoiceId);
+    }
+
+    public void rejectOwnerReport(long invoiceId, long reportId, Principal principal) {
+        manualPaymentWorkflow.rejectOwnerReport(invoiceId, reportId, principal);
     }
 
     public CommonInvoiceDetailsResponse retryAttention(Long invoiceId) {

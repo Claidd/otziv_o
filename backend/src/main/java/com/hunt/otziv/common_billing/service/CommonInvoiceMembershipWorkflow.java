@@ -1114,4 +1114,152 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
     String limit(String value, int max) {
         return settlementService.limit(value, max);
     }
+
+    static final String ORDER_NOT_RETURNED = "Заказ не возвращён, счёт не изменён. ";
+
+    static final String RETURN_KEEP_SEPARATE = "Что делать: ведите заказ отдельно — он оплачивается своим счётом.";
+
+    /**
+     * The «Вернуть заказ в счёт» window: unattached orders of this link's enabled companies in the
+     * statuses the company backfill takes. Nothing is offered once the composition is fixed.
+     */
+    @Transactional(readOnly = true)
+    public com.hunt.otziv.common_billing.dto.CommonInvoiceReturnableOrdersResponse returnableOrders(Long invoiceId) {
+        CommonInvoice invoice = invoiceRepository.findByIdWithAccount(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        String blocked = returnBlockReason(invoice);
+        return new com.hunt.otziv.common_billing.dto.CommonInvoiceReturnableOrdersResponse(invoice.getId(), blocked == null, blocked,
+                blocked == null ? invoiceDetailsAssembler.toReturnableOrders(returnableOrderIds(invoice.getAccount())) : List.of());
+    }
+
+    /**
+     * Puts an order of this invoice's link back into exactly this collecting invoice through the
+     * canonical attach path. Every refusal rolls the transaction back: the order, its payment
+     * routes and the invoice stay as they were.
+     */
+    @Transactional
+    public CommonInvoiceDetailsResponse returnOrder(Long invoiceId, Long orderId) {
+        CommonInvoice snapshot = invoiceRepository.findByIdWithAccount(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(snapshot);
+        String blocked = returnBlockReason(snapshot);
+        if (blocked != null) {
+            throw returnRefused(blocked);
+        }
+        CommonBillingAccount account = snapshot.getAccount();
+        Long companyId = orderId == null ? null : orderRepository.findCompanyIdByOrderId(orderId).orElse(null);
+        if (companyId == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ORDER_NOT_RETURNED + "Заказ не найден. Что делать: обновите страницу и откройте окно возврата заново.");
+        }
+        if (accountCompanyRepository.findEnabledLinksForCompany(companyId).stream().noneMatch(link -> link.getAccount() != null && Objects.equals(account.getId(), link.getAccount().getId()))) {
+            throw returnRefused("Компания этого заказа не входит в связь общего счёта. Что делать: возвращайте только заказы компаний из блока «Компании в связи»; другую компанию сначала добавьте в связь.");
+        }
+        Optional<CommonInvoiceOrder> membership = invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId);
+        if (membership.isPresent()) {
+            Long memberInvoiceId = membership.get().getInvoice() == null ? null : membership.get().getInvoice().getId();
+            throw returnRefused(Objects.equals(invoiceId, memberInvoiceId)
+                    ? "Заказ уже входит в этот общий счёт. Что делать: обновите страницу — заказ есть в составе счёта."
+                    : "Заказ уже входит в общий счёт" + (memberInvoiceId == null ? "" : " №" + memberInvoiceId) + ". Что делать: откройте тот счёт — заказ оплачивается в его составе.");
+        }
+        if (!orderRepository.findCommonBillingBackfillOrderIds(companyId, CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES).contains(orderId)) {
+            throw returnRefused(returnStatusRefusal(orderRepository.findById(orderId).orElse(null)));
+        }
+        CommonInvoiceOrder item;
+        try {
+            item = attachOrderToCurrentInvoice(account, orderId, companyId);
+        } catch (ResponseStatusException refused) {
+            String reason = normalize(refused.getReason());
+            if (reason.isBlank() || reason.startsWith(INVOICE_MEMBERSHIP_CHANGED)) {
+                reason = "Состав счёта или связь изменились во время операции. Что делать: обновите страницу и повторите возврат.";
+            } else if (!reason.contains("Что делать")) {
+                reason = (reason.endsWith(".") ? reason : reason + ".") + " Что делать: устраните указанную причину и повторите возврат; до этого заказ оплачивается отдельно.";
+            }
+            throw new ResponseStatusException(refused.getStatusCode(), ORDER_NOT_RETURNED + reason, refused);
+        }
+        // Checked under the order, account and invoice locks taken by the attach path.
+        CommonInvoice target = item.getInvoice();
+        if (target == null || !Objects.equals(invoiceId, target.getId())) {
+            throw returnRefused("Заказ попал бы в другой общий счёт" + (target == null || target.getId() == null ? "" : " №" + target.getId()) + ": собираемый счёт связи сменился. Что делать: обновите страницу и откройте текущий собираемый счёт связи.");
+        }
+        if (attentionError(target).startsWith("amount_calc_failed:")) {
+            throw returnRefused("Не удалось посчитать сумму заказа. Что делать: откройте заказ, проверьте его сумму и задачи по плохим отзывам, затем повторите возврат.");
+        }
+        Order lockedOrder = item.getOrder();
+        if (lockedOrder == null || lockedOrder.isComplete() || !CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES.contains(statusTitle(lockedOrder))) {
+            throw returnRefused(returnStatusRefusal(lockedOrder));
+        }
+        String lockedBlock = returnBlockReason(target);
+        if (lockedBlock != null) {
+            throw returnRefused(lockedBlock);
+        }
+        CommonInvoiceDetailsResponse details;
+        try {
+            details = invoiceAfterOrderPrelude(invoiceId);
+        } catch (ResponseStatusException hidden) {
+            if (hidden.getStatusCode().value() != HttpStatus.FORBIDDEN.value()) {
+                throw hidden;
+            }
+            throw returnRefused("Этот заказ ведёт другой менеджер: после возврата счёт перестал бы быть вам доступен. Что делать: попросите вернуть заказ ответственного менеджера связи, владельца или администратора.");
+        }
+        log.info("Order {} returned to common invoice {} for account {}", orderId, invoiceId, account.getId());
+        return details;
+    }
+
+    /** Why this invoice cannot take an order back, with the next step; null while its composition can change. */
+    String returnBlockReason(CommonInvoice invoice) {
+        CommonBillingAccount account = invoice.getAccount();
+        if (invoice.getSentAt() != null || invoice.getLastReminderAt() != null || invoice.isPaymentMessageConfirmed() || invoice.getPaperInvoiceIssuedAt() != null) {
+            return "Общий счёт уже отправлен клиенту, его состав зафиксирован. " + RETURN_KEEP_SEPARATE;
+        }
+        if (hasFrozenCommonPaymentRoute(invoice)) {
+            return "Для общего счёта уже выбран получатель оплаты, его состав зафиксирован. " + RETURN_KEEP_SEPARATE;
+        }
+        if (!ATTACHABLE_INVOICE_STATUSES.contains(invoice.getStatus())) {
+            return "Вернуть заказ можно только в счёт, который ещё собирается («Собирается» или «Готов к счёту»). Что делать: если счёт «Требует внимания», сначала решите проблему из красного блока; иначе ведите заказ отдельно.";
+        }
+        if (account == null || !account.isEnabled()) {
+            return "Связь общего счёта выключена, новые заказы в её счёт не добавляются. Что делать: включите «Связь активна для новых заказов» в настройках связи и повторите возврат.";
+        }
+        if (CommonInvoiceRouteState.isOwnerPaperInvoice(invoice)) {
+            return "Счёт выставляется счётом и актом Точки, вручную его состав не меняется. " + RETURN_KEEP_SEPARATE;
+        }
+        // The attach path takes the oldest open invoice of the payer; only that one can receive the order.
+        Long current = currentInvoiceSnapshots(account.getId()).stream().map(CommonInvoice::getId).filter(Objects::nonNull).min(Long::compare).orElse(null);
+        if (!Objects.equals(invoice.getId(), current)) {
+            return current == null
+                    ? "Этот счёт не является текущим собираемым счётом связи. " + RETURN_KEEP_SEPARATE
+                    : "У связи собирается другой общий счёт №" + current + ". Что делать: откройте счёт №" + current + " и верните заказ в него.";
+        }
+        // The same invoice-level rule that enables the «Исключить заказ» button.
+        String composition = normalize(compositionService.previewBlockReason(invoice));
+        if (composition.isBlank()) {
+            return null;
+        }
+        return (composition.endsWith(".") ? composition : composition + ".") + " Что делать: после сверки откройте окно возврата ещё раз.";
+    }
+
+    /** Unattached orders of the link's enabled companies, by the query and statuses of the company backfill. */
+    List<Long> returnableOrderIds(CommonBillingAccount account) {
+        List<Long> orderIds = new ArrayList<>();
+        if (account == null || account.getId() == null || !account.isEnabled()) {
+            return orderIds;
+        }
+        for (CommonBillingAccountCompany link : accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(account.getId())) {
+            Long companyId = link.getCompany() == null ? null : link.getCompany().getId();
+            if (companyId == null || !link.isEnabled() || link.isReconcilePending()) {
+                continue;
+            }
+            orderIds.addAll(orderRepository.findCommonBillingBackfillOrderIds(companyId, CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES));
+        }
+        return orderIds;
+    }
+
+    private String returnStatusRefusal(Order order) {
+        String status = order == null ? "" : statusTitle(order);
+        return "Заказ" + (status.isBlank() ? "" : " в статусе «" + status + "»") + (order != null && order.isComplete() ? ", уже завершённый," : "")
+                + " вернуть нельзя: в счёт возвращаются незавершённые заказы в статусах от «Новый» до «Напоминание» и «Ожидает общего счета». Что делать: продолжайте вести заказ отдельно в его текущем статусе.";
+    }
+
+    private ResponseStatusException returnRefused(String reason) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, ORDER_NOT_RETURNED + reason);
+    }
 }

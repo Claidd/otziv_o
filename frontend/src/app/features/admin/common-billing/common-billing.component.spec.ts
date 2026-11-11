@@ -1,11 +1,14 @@
+import { signal } from '@angular/core';
 import { describe, expect, it, vi } from 'vitest';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import {
   PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL,
   CommonBillingComponent,
   PAPER_INVOICE_ISSUED_ROLES,
   canMarkCommonInvoicePaid,
+  canReturnOrdersToCommonInvoice,
   commonInvoicePaymentEvidence,
+  commonInvoiceProblemCode,
   commonInvoicePaymentEvidenceSnapshot,
   commonInvoiceStatusProblem,
   isIncompletePartiallyPaidInvoice,
@@ -17,7 +20,12 @@ import {
   paymentInitNoPaymentInstructions,
   paperInvoiceRequiresDeliveryConfirmation
 } from './common-billing.component';
-import type { CommonInvoiceDetailsResponse, CommonInvoiceOrderResponse } from '../../../core/common-billing.api';
+import { commonInvoiceDeliveryWait, commonInvoiceDeliveryWarning } from '@otziv/client-common/billing-payments';
+import type {
+  CommonInvoiceDetailsResponse,
+  CommonInvoiceOrderResponse,
+  CommonInvoiceReturnableOrdersResponse
+} from '../../../core/common-billing.api';
 
 describe('ordinary payment after cancelling only one paper part', () => {
   for (const ordinary of [true,false]) {
@@ -365,5 +373,323 @@ describe('payment-init manual-check copy', () => {
     expect(confirmation).toContain('отдельным действием «Оплачено»');
     expect(confirmation).toContain('комментарий или чек');
     expect(confirmation).toContain('OrderId test');
+  });
+});
+
+describe('recipient shown in the route block', () => {
+  const proto = CommonBillingComponent.prototype;
+  const bank = { invoicePaymentMode: 'AUTO_ROUTING', paymentRouteType: 'TBANK_LINK', paymentRouteProfileName: 'Основной магазин',
+    paymentRouteProvider: 'T_BANK', paymentRouteRecipient: null, paymentRouteManualTaskId: null } as unknown as Parameters<CommonBillingComponent['routeRecipientName']>[0];
+  const card = { invoicePaymentMode: 'AUTO_ROUTING', paymentRouteType: 'MANUAL_MOBILE_BANK',
+    paymentRouteRecipient: 'Мария Олеговна Р. (Сбер) · специалист заказа: Лидия З.', paymentRouteManualTaskId: 12 } as unknown as Parameters<CommonBillingComponent['routeRecipientName']>[0];
+
+  it('names the owner for a bank link and the person for a card number', () => {
+    expect(proto.routeRecipientName.call({}, bank)).toBe('Владелец');
+    expect(proto.routeMethodLabel.call({}, bank)).toContain('банковская ссылка');
+    expect(proto.routeRecipientName.call({}, card)).toBe('Мария Олеговна Р. (Сбер)');
+    expect(proto.routeMethodLabel.call({}, card)).toBe('номер карты · специалист заказа: Лидия З.');
+  });
+
+  it('one card-number button keeps any recipient from a link and asks for another person from a number', () => {
+    expect(proto.cardNumberRouteTarget.call({}, bank)).toBe('EMPLOYEE_REQUISITES');
+    expect(proto.cardNumberRouteTarget.call({}, card)).toBe('DIFFERENT_RECIPIENT');
+  });
+
+  it('opens the recipient window for a card number and shows «было → стало» after the change', () => {
+    const invoiceAction = vi.fn();
+    const success = vi.fn();
+    const lastRouteChange = { set: vi.fn() };
+    const changeRoute = vi.fn();
+    let mutation = '';
+    const context = {
+      currentInvoice: () => ({ ...bank, id: 385, amountKopecks: 560_000, paidKopecks: 0 }),
+      mutating: Object.assign(() => mutation, { set: (value: string) => { mutation = value; } }),
+      invoiceViewGeneration: 1,
+      isCurrentPageView: () => true,
+      commonBillingApi: {
+        commonInvoicePaymentRouteChangeContext: () => of({ canChange: true, currentRecipient: 'Владелец', paymentEvidenceToken: 't' }),
+        commonInvoiceRouteRecipients: () => of({ invoiceId: 385, amountKopecks: 560_000, recipients: [
+          { profileId: 44, role: 'SPECIALIST', name: 'Лидия З.', orderSpecialist: true, manager: false, teamMember: true,
+            workedWithClient: true, availableKopecks: 100_000, overrunKopecks: 460_000, current: false, blockReason: null }
+        ] }),
+        changeCommonInvoicePaymentRoute: changeRoute
+      },
+      toastService: { success, error: vi.fn() },
+      lastRouteChange,
+      invoiceAction,
+      recipientPicker: signal(null),
+      recipientPickerOptions: signal(null),
+      recipientPickerLoading: signal(false),
+      recipientPickerError: signal(''),
+      recipientPickerSubmitError: signal(''),
+      loadRecipientPickerOptions: proto.loadRecipientPickerOptions,
+      closeRecipientPicker: proto.closeRecipientPicker,
+      routeDescription: proto.routeDescription,
+      routeRecipientName: proto.routeRecipientName,
+      routeMethodLabel: proto.routeMethodLabel
+    } as unknown as CommonBillingComponent;
+    const confirm = vi.spyOn(window, 'confirm');
+    try {
+      proto.changeCommonInvoicePaymentRoute.call(context, 'EMPLOYEE_REQUISITES');
+      // No browser confirmation any more: the window itself names the consequence.
+      expect(confirm).not.toHaveBeenCalled();
+      expect(invoiceAction).not.toHaveBeenCalled();
+      expect(context.recipientPicker()).toEqual(expect.objectContaining({
+        invoiceId: 385, target: 'EMPLOYEE_REQUISITES', token: 't', amountKopecks: 560_000
+      }));
+      expect(context.recipientPickerOptions()?.map(option => option.profileId)).toEqual([44]);
+
+      proto.submitRecipientChoice.call(context, { profileId: 44 });
+      expect(invoiceAction).toHaveBeenCalledOnce();
+      (invoiceAction.mock.calls[0][2] as () => unknown)();
+      expect(changeRoute).toHaveBeenCalledWith(385, 'EMPLOYEE_REQUISITES', 't', null, 44);
+
+      // A refusal keeps the window open, so another person can be chosen at once.
+      const onError = invoiceAction.mock.calls[0][5] as (message: string, status?: number) => boolean;
+      expect(onError('Выбранному получателю сейчас нельзя выдать счёт: допуск к приёму оплат выключен', 409)).toBe(true);
+      expect(context.recipientPicker()).not.toBeNull();
+      expect(context.recipientPickerSubmitError()).toContain('допуск');
+
+      const onSuccess = invoiceAction.mock.calls[0][4] as (details: unknown) => void;
+      onSuccess({ summary: { ...card, id: 385 } });
+      expect(context.recipientPicker()).toBeNull();
+      expect(lastRouteChange.set).toHaveBeenCalledWith(expect.objectContaining({
+        invoiceId: 385,
+        from: expect.stringContaining('Владелец'),
+        to: expect.stringContaining('Мария Олеговна Р. (Сбер)')
+      }));
+      expect(success).toHaveBeenCalledWith('Получатель изменён', expect.stringContaining('→'));
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+});
+
+describe('returning an excluded order to the collecting invoice', () => {
+  const proto = CommonBillingComponent.prototype;
+  const collecting = { id: 318, status: 'COLLECTING', sentAt: null, paymentRouteSelectedAt: null,
+    paperInvoiceIssuedAt: null, invoicePaymentMode: 'AUTO_ROUTING', invoicePurpose: 'STANDARD' };
+  const row = { orderId: 27391, companyId: 20, companyTitle: 'Компания', orderTitle: 'Заказ №27391 · Центр',
+    status: 'Опубликовано', amountKopecks: 100_000 };
+  const answer: CommonInvoiceReturnableOrdersResponse = { invoiceId: 318, canReturn: true, blockReason: null, orders: [row] };
+
+  function page(invoice: Record<string, unknown> = collecting) {
+    let mutation = '';
+    const returnableOrders = vi.fn((_invoiceId: number) => of(answer));
+    const returnOrder = vi.fn();
+    const invoiceAction = vi.fn();
+    const reloadCurrentInvoice = vi.fn();
+    const toast = { success: vi.fn(), error: vi.fn() };
+    const context = {
+      currentInvoice: () => invoice,
+      mutating: Object.assign(() => mutation, { set: (value: string) => { mutation = value; } }),
+      commonBillingApi: { returnableOrders, returnOrder },
+      toastService: toast,
+      invoiceAction,
+      reloadCurrentInvoice,
+      returnOrdersWindow: signal<{ invoiceId: number } | null>(null),
+      returnableOrders: signal<CommonInvoiceReturnableOrdersResponse | null>(null),
+      returnableOrdersLoading: signal(false),
+      returnableOrdersError: signal(''),
+      returnOrderRefusal: signal(''),
+      loadReturnableOrders: proto.loadReturnableOrders,
+      closeReturnOrders: proto.closeReturnOrders
+    } as unknown as CommonBillingComponent;
+    return { context, returnableOrders, returnOrder, invoiceAction, reloadCurrentInvoice, toast };
+  }
+
+  it('offers the button only while the composition of the invoice can still change', () => {
+    expect(canReturnOrdersToCommonInvoice(collecting)).toBe(true);
+    expect(canReturnOrdersToCommonInvoice({ ...collecting, status: 'READY' })).toBe(true);
+    expect(canReturnOrdersToCommonInvoice({ ...collecting, status: 'INVOICED', sentAt: '2026-11-10T10:00:00' })).toBe(false);
+    expect(canReturnOrdersToCommonInvoice({ ...collecting, status: 'READY', sentAt: '2026-11-10T10:00:00' })).toBe(false);
+    expect(canReturnOrdersToCommonInvoice({ ...collecting, paymentRouteSelectedAt: '2026-11-10T10:00:00' })).toBe(false);
+    expect(canReturnOrdersToCommonInvoice({ ...collecting, invoicePaymentMode: 'OWNER_PAPER_INVOICE' })).toBe(false);
+    expect(canReturnOrdersToCommonInvoice({ ...collecting, invoicePurpose: 'BAD_REVIEW_SUCCESSOR' })).toBe(false);
+    expect(canReturnOrdersToCommonInvoice({ ...collecting, status: 'NEEDS_ATTENTION' })).toBe(false);
+    expect(canReturnOrdersToCommonInvoice({ ...collecting, status: 'PAID' })).toBe(false);
+    expect(canReturnOrdersToCommonInvoice(null)).toBe(false);
+  });
+
+  it('opens the window with the orders the server offers for this invoice', () => {
+    const { context, returnableOrders, invoiceAction } = page();
+    const confirm = vi.spyOn(window, 'confirm');
+    try {
+      proto.openReturnOrders.call(context);
+      expect(returnableOrders).toHaveBeenCalledExactlyOnceWith(318);
+      expect(context.returnOrdersWindow()).toEqual({ invoiceId: 318 });
+      expect(context.returnableOrders()?.orders).toEqual([row]);
+      expect(context.returnableOrdersLoading()).toBe(false);
+      // Opening the window changes nothing and asks nothing: the confirmation is a step inside it.
+      expect(confirm).not.toHaveBeenCalled();
+      expect(invoiceAction).not.toHaveBeenCalled();
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it('does not open for a sent invoice or while another action is running', () => {
+    const sent = page({ ...collecting, status: 'INVOICED', sentAt: '2026-11-10T10:00:00' });
+    proto.openReturnOrders.call(sent.context);
+    expect(sent.returnableOrders).not.toHaveBeenCalled();
+    expect(sent.context.returnOrdersWindow()).toBeNull();
+
+    const busy = page();
+    busy.context.mutating.set('send-invoice');
+    proto.openReturnOrders.call(busy.context);
+    expect(busy.returnableOrders).not.toHaveBeenCalled();
+    expect(busy.context.returnOrdersWindow()).toBeNull();
+  });
+
+  it('shows a failed load inside the window and loads again on retry', () => {
+    const { context, returnableOrders } = page();
+    returnableOrders.mockReturnValueOnce(throwError(() => ({ status: 500 })));
+    proto.openReturnOrders.call(context);
+    expect(context.returnOrdersWindow()).not.toBeNull();
+    expect(context.returnableOrdersError()).not.toBe('');
+    expect(context.returnableOrders()).toBeNull();
+    expect(context.returnableOrdersLoading()).toBe(false);
+
+    proto.loadReturnableOrders.call(context);
+    expect(context.returnableOrdersError()).toBe('');
+    expect(context.returnableOrders()?.orders).toEqual([row]);
+  });
+
+  it('ignores a list that arrives after the window was closed', () => {
+    const { context, returnableOrders } = page();
+    const pending = new Subject<CommonInvoiceReturnableOrdersResponse>();
+    returnableOrders.mockReturnValueOnce(pending.asObservable());
+    proto.openReturnOrders.call(context);
+    expect(context.returnableOrdersLoading()).toBe(true);
+    proto.closeReturnOrders.call(context);
+    pending.next(answer);
+    expect(context.returnOrdersWindow()).toBeNull();
+    expect(context.returnableOrders()).toBeNull();
+    expect(context.returnableOrdersLoading()).toBe(false);
+  });
+
+  it('returns the confirmed order, names the result and closes the window', () => {
+    const { context, returnOrder, invoiceAction, toast } = page();
+    proto.openReturnOrders.call(context);
+    proto.returnOrder.call(context, row);
+    expect(invoiceAction).toHaveBeenCalledOnce();
+    const [invoiceId, key, operation, successTitle, onSuccess] = invoiceAction.mock.calls[0];
+    expect(invoiceId).toBe(318);
+    expect(key).toBe('return-order-27391');
+    expect(successTitle).toBe('Заказ №27391 возвращён в общий счёт');
+    (operation as () => unknown)();
+    expect(returnOrder).toHaveBeenCalledExactlyOnceWith(318, 27391);
+
+    // invoiceAction puts the returned invoice on the page; the window has nothing left to show.
+    (onSuccess as (details: unknown) => void)({ summary: collecting });
+    expect(context.returnOrdersWindow()).toBeNull();
+    expect(context.returnableOrders()).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('a refusal says the invoice is unchanged, stays in the window and refreshes the list and the invoice', () => {
+    const { context, returnableOrders, invoiceAction, reloadCurrentInvoice, toast } = page();
+    proto.openReturnOrders.call(context);
+    proto.returnOrder.call(context, row);
+    const onError = invoiceAction.mock.calls[0][5] as (message: string, status?: number) => boolean;
+    const refusal = 'Заказ не возвращён, счёт не изменён. Общий счёт уже отправлен клиенту, его состав зафиксирован. '
+      + 'Что делать: ведите заказ отдельно — он оплачивается своим счётом.';
+
+    expect(onError(refusal, 409)).toBe(true);
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith('Заказ не возвращён', refusal);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(context.returnOrdersWindow()).toEqual({ invoiceId: 318 });
+    expect(context.returnOrderRefusal()).toBe(refusal);
+    expect(returnableOrders).toHaveBeenCalledTimes(2);
+    expect(reloadCurrentInvoice).toHaveBeenCalledOnce();
+  });
+
+  it('does not start a second return while one is running or after the window was closed', () => {
+    const running = page();
+    proto.openReturnOrders.call(running.context);
+    running.context.mutating.set('return-order-27391');
+    proto.returnOrder.call(running.context, row);
+    expect(running.invoiceAction).not.toHaveBeenCalled();
+
+    const closed = page();
+    proto.returnOrder.call(closed.context, row);
+    expect(closed.invoiceAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('a client message that is still in the queue', () => {
+  const sending = 'message_send_in_progress';
+  const routeChanged = 'payment_route_changed_message_in_progress';
+
+  it('is said as a wait in plain words, never printed as a code', () => {
+    expect(commonInvoiceDeliveryWait(sending))
+      .toBe('Сообщение клиенту ещё отправляется — это не ошибка. Отправлять повторно не нужно: '
+        + 'если отправка не удастся, здесь появится ошибка.');
+    expect(commonInvoiceDeliveryWait(` ${routeChanged.toUpperCase()} `))
+      .toBe('Сообщение клиенту с новым способом оплаты ещё отправляется — это не ошибка. '
+        + 'Менять способ оплаты повторно не нужно: если отправка не удастся, здесь появится ошибка.');
+    for (const text of [commonInvoiceDeliveryWait(sending), commonInvoiceDeliveryWait(routeChanged)]) {
+      expect(text).not.toMatch(/[a-z_]{6,}/u);
+    }
+  });
+
+  it('is not a problem of the invoice: the problem block gets no code for it', () => {
+    expect(commonInvoiceProblemCode(sending)).toBe('');
+    expect(commonInvoiceProblemCode(routeChanged)).toBe('');
+    expect(commonInvoiceProblemCode(null)).toBe('');
+  });
+
+  it('does not call the invoice stuck: it is «READY» only for the time of the send', () => {
+    const stuck = 'Счет готов к отправке. Проверьте, не завис ли он без выставления клиенту.';
+    expect(commonInvoiceStatusProblem('READY')).toBe(stuck);
+    expect(commonInvoiceStatusProblem('READY', null)).toBe(stuck);
+    expect(commonInvoiceStatusProblem('READY', 'message_send_stale: previous attempt')).toBe(stuck);
+    expect(commonInvoiceStatusProblem('READY', sending)).toBe('');
+    expect(commonInvoiceStatusProblem('READY', routeChanged)).toBe('');
+    // Every other status keeps its text whatever the marker says.
+    expect(commonInvoiceStatusProblem('NEEDS_ATTENTION', routeChanged)).toBe('Счет требует ручного разбора.');
+  });
+
+  it('says an unconfirmed or stopped send as it is while the marker is still there', () => {
+    const operation = (status: string, errorCode: string | null = null) =>
+      ({ operationId: 'invoice-message:312:1', status, attempts: 1, errorCode });
+    const wait = commonInvoiceDeliveryWait(routeChanged);
+    for (const pending of ['QUEUED', 'SENDING', 'RETRYABLE', 'SENT']) {
+      expect(commonInvoiceDeliveryWait(routeChanged, operation(pending))).toBe(wait);
+    }
+    expect(commonInvoiceDeliveryWait(routeChanged, null)).toBe(wait);
+    expect(commonInvoiceDeliveryWait(routeChanged, operation('UNKNOWN', 'operation_unknown')))
+      .toBe('Исход отправки уточняется. Повторная рассылка заблокирована.');
+    expect(commonInvoiceDeliveryWait(sending, operation('FAILED')))
+      .toBe('Сообщение не отправлено. Проверьте результат попыток перед повтором.');
+    expect(commonInvoiceDeliveryWait(sending, operation('UNKNOWN'))).not.toContain('это не ошибка');
+    // Without the marker the operation alone is not a wait of the invoice.
+    expect(commonInvoiceDeliveryWait(null, operation('UNKNOWN'))).toBeNull();
+    expect(commonInvoiceDeliveryWait('whatsapp_group_missing', operation('QUEUED'))).toBeNull();
+  });
+
+  it('promises nothing about the outcome and says where a failure will show', () => {
+    for (const text of [commonInvoiceDeliveryWait(sending)!, commonInvoiceDeliveryWait(routeChanged)!]) {
+      expect(text).toContain('это не ошибка');
+      expect(text).toContain('если отправка не удастся, здесь появится ошибка');
+      expect(text).not.toContain('уйдёт само');
+    }
+  });
+
+  it('leaves every real error as it was, including a send that got stuck', () => {
+    for (const error of ['message_send_stale: previous attempt', 'message_send_unknown', 'whatsapp_group_missing',
+      'payment_init_conflict: duplicate request', 'message_send_in_progress_extra', 'constructor', 'toString']) {
+      expect(commonInvoiceDeliveryWait(error)).toBeNull();
+      expect(commonInvoiceProblemCode(` ${error} `)).toBe(error);
+      expect(commonInvoiceDeliveryWarning(error)).toBe(`Отправка не подтверждена. ${error}`);
+    }
+    expect(commonInvoiceDeliveryWait('')).toBeNull();
+    expect(commonInvoiceDeliveryWait(undefined)).toBeNull();
+  });
+
+  it('the notice after sending says the wait instead of «не подтверждена» with a code', () => {
+    expect(commonInvoiceDeliveryWarning(sending)).toBe(commonInvoiceDeliveryWait(sending));
+    expect(commonInvoiceDeliveryWarning(routeChanged)).toBe(commonInvoiceDeliveryWait(routeChanged));
+    expect(commonInvoiceDeliveryWarning('  ')).toBeNull();
   });
 });

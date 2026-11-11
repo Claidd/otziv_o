@@ -6,6 +6,7 @@ import { WorkerApi } from './worker.api';
 import { DictionariesApi } from './dictionaries.api';
 import { CompaniesApi } from './companies.api';
 import { CommonBillingApi } from './common-billing.api';
+import { OrderPaymentApi } from './order-payment.api';
 
 describe('feature HTTP clients', () => {
   let requests: HttpTestingController;
@@ -34,5 +35,39 @@ describe('feature HTTP clients', () => {
   it('preserves common invoice evidence and explicit unpaid confirmation', async () => {
     const result = firstValueFrom(TestBed.inject(CommonBillingApi).changeCommonInvoicePaymentRoute(301, 'OWNER_BANK_REISSUE', 'evidence-token', 81)); const request = requests.expectOne('/api/common-billing/invoices/301/payment-route-change');
     expect(request.request.method).toBe('POST'); expect(request.request.body).toEqual({ target: 'OWNER_BANK_REISSUE', confirmedUnpaid: true, expectedPaymentEvidenceToken: 'evidence-token', expectedTargetPaymentProfileId: 81 }); request.flush({}); await result;
+  });
+  it('reads the orders that may be returned to a common invoice and returns one through the attach endpoint', async () => {
+    const billing = TestBed.inject(CommonBillingApi);
+    const list = firstValueFrom(billing.getCommonInvoiceReturnableOrders(390));
+    const listRequest = requests.expectOne('/api/common-billing/invoices/390/returnable-orders'); expect(listRequest.request.method).toBe('GET');
+    listRequest.flush({ invoiceId: 390, canReturn: true, blockReason: null, orders: [{ orderId: 28523, companyId: 7, companyTitle: 'Denisenko', orderTitle: 'Denisenko', status: 'Новый', amountKopecks: 25000 }] });
+    expect((await list).orders.map(order => order.orderId)).toEqual([28523]);
+    const returned = firstValueFrom(billing.returnCommonInvoiceOrder(390, 28523));
+    const attach = requests.expectOne('/api/common-billing/invoices/390/orders/28523/attach'); expect(attach.request.method).toBe('POST'); expect(attach.request.body).toEqual({});
+    attach.flush({ summary: { id: 390 }, orders: [] });
+    expect((await returned).summary.id).toBe(390);
+  });
+  it('reads the people of the card number window and names a person only on the plain route change', async () => {
+    const billing = TestBed.inject(CommonBillingApi); const orders = TestBed.inject(OrderPaymentApi);
+    const people = firstValueFrom(billing.getCommonInvoicePaymentRouteRecipients(301));
+    const list = requests.expectOne('/api/common-billing/invoices/301/payment-route-recipients'); expect(list.request.method).toBe('GET'); list.flush({ invoiceId: 301, amountKopecks: 100, recipients: [] }); await people;
+    const orderPeople = firstValueFrom(orders.getManagerOrderPaymentRouteRecipients(202));
+    const orderList = requests.expectOne('/api/manager/orders/202/payment-route-recipients'); expect(orderList.request.method).toBe('GET'); orderList.flush({ orderId: 202, paymentLinkId: 71, amountKopecks: 100, recipients: [] }); await orderPeople;
+
+    // The system's own choice of another person keeps the dedicated endpoint and sends no profile.
+    const automatic = firstValueFrom(billing.changeCommonInvoicePaymentRoute(301, 'DIFFERENT_RECIPIENT', 'evidence-token'));
+    const automaticRequest = requests.expectOne('/api/common-billing/invoices/301/payment-route-change/recipient');
+    expect(automaticRequest.request.body.target).toBe('EMPLOYEE_REQUISITES'); expect(Object.keys(automaticRequest.request.body)).not.toContain('recipientProfileId'); automaticRequest.flush({}); await automatic;
+    // A person named by the manager is explicit: the plain endpoint, whatever the route was issued from.
+    const named = firstValueFrom(billing.changeCommonInvoicePaymentRoute(301, 'DIFFERENT_RECIPIENT', 'evidence-token', undefined, 44));
+    const namedRequest = requests.expectOne('/api/common-billing/invoices/301/payment-route-change');
+    expect(namedRequest.request.body).toEqual({ target: 'EMPLOYEE_REQUISITES', confirmedUnpaid: true, expectedPaymentEvidenceToken: 'evidence-token', recipientProfileId: 44 }); namedRequest.flush({}); await named;
+
+    const orderAutomatic = firstValueFrom(orders.changeManagerOrderPaymentRoute(202, { expectedPaymentLinkId: 71, target: 'DIFFERENT_RECIPIENT', confirmedUnpaid: true }));
+    const orderAutomaticRequest = requests.expectOne('/api/manager/orders/202/payment-route-change/recipient');
+    expect(orderAutomaticRequest.request.body).toEqual({ expectedPaymentLinkId: 71, target: 'EMPLOYEE_REQUISITES', confirmedUnpaid: true }); orderAutomaticRequest.flush({}); await orderAutomatic;
+    const orderNamed = firstValueFrom(orders.changeManagerOrderPaymentRoute(202, { expectedPaymentLinkId: 71, target: 'DIFFERENT_RECIPIENT', confirmedUnpaid: true, recipientProfileId: 44 }));
+    const orderNamedRequest = requests.expectOne('/api/manager/orders/202/payment-route-change');
+    expect(orderNamedRequest.request.body).toEqual({ expectedPaymentLinkId: 71, target: 'EMPLOYEE_REQUISITES', confirmedUnpaid: true, recipientProfileId: 44 }); orderNamedRequest.flush({}); await orderNamed;
   });
 });

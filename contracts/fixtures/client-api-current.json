@@ -697,6 +697,59 @@
       "bankRecipientChangeAvailable" : false
     },
     "CommonInvoicePaymentRouteChangeTargetOutput" : "EMPLOYEE_REQUISITES",
+    "CommonInvoiceReturnableOrdersResponseItemOutput" : {
+      "orderId" : 2,
+      "companyId" : 2,
+      "companyTitle" : "contract-example",
+      "orderTitle" : "contract-example",
+      "status" : "contract-example",
+      "amountKopecks" : 2
+    },
+    "CommonInvoiceReturnableOrdersResponseOutput" : {
+      "invoiceId" : 2,
+      "canReturn" : false,
+      "blockReason" : "contract-example",
+      "orders" : [ {
+        "orderId" : 2,
+        "companyId" : 2,
+        "companyTitle" : "contract-example",
+        "orderTitle" : "contract-example",
+        "status" : "contract-example",
+        "amountKopecks" : 2
+      } ]
+    },
+    "CommonInvoiceRouteRecipientsResponseOutput" : {
+      "invoiceId" : 2,
+      "amountKopecks" : 2,
+      "recipients" : [ {
+        "profileId" : 2,
+        "userId" : 2,
+        "role" : "contract-example",
+        "name" : "contract-example",
+        "orderSpecialist" : false,
+        "manager" : false,
+        "teamMember" : false,
+        "workedWithClient" : false,
+        "availableKopecks" : 2,
+        "overrunKopecks" : 2,
+        "current" : false,
+        "blockReason" : "contract-example"
+      } ]
+    },
+    "CommonInvoiceRouteRecipientsResponseRecipientOutput" : {
+      "profileId" : 2,
+      "userId" : 2,
+      "role" : "contract-example",
+      "name" : "contract-example",
+      "orderSpecialist" : false,
+      "manager" : false,
+      "teamMember" : false,
+      "workedWithClient" : false,
+      "availableKopecks" : 2,
+      "overrunKopecks" : 2,
+      "current" : false,
+      "blockReason" : "contract-example"
+    },
     "CommonInvoiceSummaryResponseOutput" : {
       "id" : 2,
       "accountId" : 2,
@@ -881,6 +934,53 @@
           "amountKopecks" : 2
         } ]
       }
+    },
+    "CommonManualPaymentOtherRecipientsResponseItemOutput" : {
+      "candidate" : {
+        "key" : "contract-example",
+        "recipientType" : "SPECIALIST",
+        "recipientProfileId" : 2,
+        "recipientUserId" : 2,
+        "label" : "contract-example",
+        "originalRecipient" : false,
+        "currentParticipant" : false,
+        "profileEnabled" : false,
+        "availableKopecks" : 2,
+        "cashDestinationKind" : "OWNER",
+        "manualPaymentTaskId" : 2,
+        "manualPaymentTaskGeneration" : 2,
+        "taskTargetKind" : "UNRESOLVED",
+        "taskRecipientName" : "contract-example",
+        "accountingTargetLabel" : "contract-example",
+        "effectText" : "contract-example"
+      },
+      "previousPerformer" : false,
+      "teamMember" : false
+    },
+    "CommonManualPaymentOtherRecipientsResponseOutput" : {
+      "invoiceId" : 2,
+      "recipients" : [ {
+        "candidate" : {
+          "key" : "contract-example",
+          "recipientType" : "SPECIALIST",
+          "recipientProfileId" : 2,
+          "recipientUserId" : 2,
+          "label" : "contract-example",
+          "originalRecipient" : false,
+          "currentParticipant" : false,
+          "profileEnabled" : false,
+          "availableKopecks" : 2,
+          "cashDestinationKind" : "OWNER",
+          "manualPaymentTaskId" : 2,
+          "manualPaymentTaskGeneration" : 2,
+          "taskTargetKind" : "UNRESOLVED",
+          "taskRecipientName" : "contract-example",
+          "accountingTargetLabel" : "contract-example",
+          "effectText" : "contract-example"
+        },
+        "previousPerformer" : false,
+        "teamMember" : false
+      } ]
     },
     "CommonManualPaymentRecipientCandidateResponseOutput" : {
       "key" : "contract-example",
@@ -3961,6 +4061,39 @@
       }
     },
     "PaymentRouteChangeTargetOutput" : "EMPLOYEE_REQUISITES",
+    "PaymentRouteRecipientsResponseOutput" : {
+      "orderId" : 2,
+      "paymentLinkId" : 2,
+      "amountKopecks" : 2,
+      "recipients" : [ {
+        "profileId" : 2,
+        "userId" : 2,
+        "role" : "contract-example",
+        "name" : "contract-example",
+        "orderSpecialist" : false,
+        "manager" : false,
+        "teamMember" : false,
+        "workedWithClient" : false,
+        "availableKopecks" : 2,
+        "overrunKopecks" : 2,
+        "current" : false,
+        "blockReason" : "contract-example"
+      } ]
+    },
+    "PaymentRouteRecipientsResponseRecipientOutput" : {
+      "profileId" : 2,
+      "userId" : 2,
+      "role" : "contract-example",
+      "name" : "contract-example",
+      "orderSpecialist" : false,
+      "manager" : false,
+      "teamMember" : false,
+      "workedWithClient" : false,
+      "availableKopecks" : 2,
+      "overrunKopecks" : 2,
+      "current" : false,
+      "blockReason" : "contract-example"
+    },
     "ProductOptionResponseOutput" : {
       "id" : 2,
       "label" : "contract-example",
@@ -4382,6 +4515,7 @@
       "confirmedUnpaid" : false,
       "expectedPaymentEvidenceToken" : "contract-example",
       "expectedTargetPaymentProfileId" : 2,
+      "recipientProfileId" : 2,
       "target" : "EMPLOYEE_REQUISITES"
     },
     "CommonInvoicePaymentRouteChangeTargetInput" : "EMPLOYEE_REQUISITES",
@@ -4607,6 +4741,7 @@
       "expectedPaymentLinkId" : 2,
       "expectedTargetPaymentProfileId" : 2,
       "paperInvoiceWithdrawn" : false,
+      "recipientProfileId" : 2,
       "target" : "EMPLOYEE_REQUISITES"
     },
     "PaymentRouteChangeTargetInput" : "EMPLOYEE_REQUISITES",

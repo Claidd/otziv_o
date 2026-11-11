@@ -37,6 +37,19 @@ export function businessDateTimeInput(now = new Date()): string {
   return `${value.year}-${value.month}-${value.day}T${value.hour}:${value.minute}`;
 }
 
+/**
+ * The business-zone wall clock with seconds and milliseconds, for a server LocalDateTime that the
+ * server reads in the business zone. The device's own time zone must not shift it: a manager in
+ * another city would record a receipt hours earlier, and one east of Irkutsk would be refused
+ * («Время поступления не может быть в будущем»). Zone offsets are whole minutes, so seconds and
+ * milliseconds are the same in every zone.
+ */
+export function businessDateTimeStamp(now = new Date()): string {
+  const seconds = String(now.getUTCSeconds()).padStart(2, '0');
+  const milliseconds = String(now.getUTCMilliseconds()).padStart(3, '0');
+  return `${businessDateTimeInput(now)}:${seconds}.${milliseconds}`;
+}
+
 export function millisecondsUntilNextBusinessDay(now = new Date()): number {
   const currentDate = businessDateIso(now);
   const start = now.getTime();

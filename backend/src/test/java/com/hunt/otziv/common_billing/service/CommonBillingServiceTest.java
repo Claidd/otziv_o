@@ -265,6 +265,7 @@ class CommonBillingServiceTest {
     private ContractorPaymentShadowService contractorPaymentShadowService;
     @Mock
     private CommonManualPaymentAttributionCoordinator commonManualPaymentAttributionCoordinator;
+    private CommonOwnerReceiptApprovals ownerReceipts;
     @Mock
     private ContractorActualPaymentAttributionFlowPolicy actualPaymentAttributionFlowPolicy;
     @Mock
@@ -438,7 +439,7 @@ class CommonBillingServiceTest {
                 cancellation, settlement, entityManager, invoiceRepository, paymentRefRepository,
                 paymentProfileService, tochkaPaymentProfileResolver, tochkaClient, tochkaPaymentOperationMapper);
         ReflectionTestUtils.setField(service, "invoiceReconciliation", reconciliation);
-        var ownerReceipts = org.mockito.Mockito.mock(CommonOwnerReceiptApprovals.class);
+        ownerReceipts = org.mockito.Mockito.mock(CommonOwnerReceiptApprovals.class);
         org.mockito.Mockito.lenient().when(ownerReceipts.attach(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
         CommonInvoiceManualPaymentWorkflow manualPayments = new CommonInvoiceManualPaymentWorkflow(
                 paymentLinkService, cancellation, delivery, detailsAssembler, settlement,
@@ -915,6 +916,64 @@ class CommonBillingServiceTest {
                 eq("LIVE_COMMON:ROUTE_REPLACED"));
         verify(contractorPaymentLiveRoutingService).reserveContractorForCommonInvoice(
                 eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L), org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    void commonInvoiceRouteIssuesCardNumberOfRecipientNamedByManager() {
+        CommonBillingAccount account = account();
+        Manager routeManager = eligibleManager(501L);
+        account.setManager(routeManager);
+        account.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        CommonInvoice invoice = invoice(account);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaymentRouteType(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK);
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 27, 14, 0));
+        invoice.setContractorAllocationId(501L);
+        invoice.setSentAt(LocalDateTime.of(2026, 8, 27, 14, 1));
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        stubPaymentModeChangeInvoice(invoice, invoiceItem, order);
+        when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of());
+        when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(invoice.getId(), 501L))
+                .thenReturn(FrozenCommonRouteAction.KEEP);
+        ContractorPaymentAllocation named = new ContractorPaymentAllocation();
+        named.setId(503L);
+        named.setRecipientType(ContractorRecipientType.SPECIALIST);
+        named.setRecipientNameSnapshot("Юлия Ф.");
+        named.setPaymentPhoneSnapshot("89149528807");
+        named.setBankNameSnapshot("Сбер");
+        when(contractorPaymentLiveRoutingService.reserveChosenContractorForCommonInvoice(
+                invoice, List.of(order), routeManager, 100_000L, 77L)).thenReturn(named);
+        String token = ReflectionTestUtils.invokeMethod(
+                service, "commonInvoiceRouteChangeToken", invoice, List.of());
+
+        Boolean changed = ReflectionTestUtils.invokeMethod(
+                service,
+                "replaceCommonInvoicePaymentRouteLocked",
+                invoice.getId(),
+                new CommonInvoicePaymentRouteChangeRequest(
+                        CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, token, null, 77L),
+                "manager"
+        );
+
+        assertEquals(Boolean.TRUE, changed);
+        assertEquals(PaymentMethod.MANUAL_MOBILE_BANK.name(), invoice.getPaymentRouteType());
+        assertEquals(503L, invoice.getContractorAllocationId());
+        // The client must receive the new requisites as a fresh invoice.
+        assertNull(invoice.getSentAt());
+        // The reserve of the previous recipient is released before the named person is reserved.
+        var order_ = org.mockito.Mockito.inOrder(contractorPaymentLiveRoutingService);
+        order_.verify(contractorPaymentLiveRoutingService).releaseCommonInvoiceRouteForReplacement(
+                eq(invoice), eq("Способ оплаты общего счёта изменён по просьбе клиента"),
+                eq("LIVE_COMMON:ROUTE_REPLACED"));
+        order_.verify(contractorPaymentLiveRoutingService).reserveChosenContractorForCommonInvoice(
+                invoice, List.of(order), routeManager, 100_000L, 77L);
+        // A named person bypasses both the payment task and the automatic specialist/manager choice.
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceTaskRoute(any(), any(), anyLong(), any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveContractorForCommonInvoice(
+                any(), any(), any(), anyLong(), any());
     }
 
     @Test
@@ -1993,7 +2052,7 @@ class CommonBillingServiceTest {
 
 
     @Test
-    void attributedMarkPaidObservesUnpaidTbankSessionBeforeCreditingActualRecipient() throws Exception {
+    void attributedMarkPaidCancelsUnpaidTbankSessionBeforeCreditingActualRecipient() throws Exception {
         CommonInvoice invoice = invoice(account());
         invoice.setStatus(CommonInvoiceStatus.READY);
         invoice.setAmountKopecks(100_000L);
@@ -2023,6 +2082,10 @@ class CommonBillingServiceTest {
                 true, "0", null, null, "terminal", "FORM_SHOWED",
                 "active-payment", "active-order", 100_000L
         ));
+        when(tbankClient.cancel(any(), any())).thenReturn(new TbankCancelResponse(
+                true, "0", null, null, "terminal", "CANCELED",
+                "active-payment", "active-order", 100_000L, 100_000L, 0L
+        ));
         CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
                 "active-tbank",
                 true,
@@ -2047,18 +2110,17 @@ class CommonBillingServiceTest {
         assertNotNull(response);
         assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
         assertTrue(invoiceItem.isPaid());
-        assertEquals("ARCHIVED", ref.getStatus());
-        assertTrue(ref.isObserveReplacedBank());
+        assertEquals("CANCELED", ref.getStatus());
         assertNull(invoice.getTbankPaymentId());
         assertNull(invoice.getPaymentUrl());
         verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
-                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), eq(request), any()
+                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), serverTimed(request), any()
         );
         verify(paymentNotificationOutboxRepository).enqueueRecipients(10L);
         verify(paymentNotificationOutboxRepository).enqueueClient(10L);
         var bankOrder = inOrder(tbankClient);
         bankOrder.verify(tbankClient).getState(any(), eq("active-payment"));
-        verify(tbankClient, never()).cancel(any(), any());
+        bankOrder.verify(tbankClient).cancel(any(), any());
     }
 
     @Test
@@ -2088,7 +2150,11 @@ class CommonBillingServiceTest {
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
         when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
-        when(tbankClient.getState(any(), eq("active-payment"))).thenAnswer(ignored -> {
+        when(tbankClient.getState(any(), eq("active-payment"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "FORM_SHOWED",
+                "active-payment", "active-order", 100_000L
+        ));
+        when(tbankClient.cancel(any(), any())).thenAnswer(ignored -> {
             assertTrue(invoice.getLastError().startsWith("manual_payment_tbank_reconciliation_in_progress:INVOICED"));
             ref.setStatus("CANCELED");
             invoice.setTbankOrderId(null);
@@ -2096,9 +2162,9 @@ class CommonBillingServiceTest {
             invoice.setTbankTerminalKey(null);
             invoice.setTbankPaymentAmountKopecks(null);
             invoice.setPaymentUrl(null);
-            return new TbankGetStateResponse(
-                    true, "0", null, null, "terminal", "FORM_SHOWED",
-                    "active-payment", "active-order", 100_000L
+            return new TbankCancelResponse(
+                    true, "0", null, null, "terminal", "CANCELED",
+                    "active-payment", "active-order", 100_000L, 100_000L, 0L
             );
         });
         CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
@@ -2128,7 +2194,7 @@ class CommonBillingServiceTest {
         assertEquals("CANCELED", ref.getStatus());
         assertNull(invoice.getTbankPaymentId());
         verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
-                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), eq(request), any()
+                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), serverTimed(request), any()
         );
     }
 
@@ -2157,11 +2223,15 @@ class CommonBillingServiceTest {
         stubLockedInvoice(invoice, invoiceItem, order);
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
         when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
-        when(tbankClient.getState(any(), eq("active-payment"))).thenAnswer(ignored -> {
+        when(tbankClient.getState(any(), eq("active-payment"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "FORM_SHOWED",
+                "active-payment", "active-order", 100_000L
+        ));
+        when(tbankClient.cancel(any(), any())).thenAnswer(ignored -> {
             ref.setStatus("CONFIRMED");
-            return new TbankGetStateResponse(
-                    true, "0", null, null, "terminal", "FORM_SHOWED",
-                    "active-payment", "active-order", 100_000L
+            return new TbankCancelResponse(
+                    true, "0", null, null, "terminal", "CANCELED",
+                    "active-payment", "active-order", 100_000L, 100_000L, 0L
             );
         });
         CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
@@ -2308,7 +2378,7 @@ class CommonBillingServiceTest {
         assertNull(invoice.getTbankPaymentId());
         verifyNoInteractions(tbankClient);
         verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
-                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), eq(request), any()
+                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), serverTimed(request), any()
         );
     }
 
@@ -3256,6 +3326,281 @@ class CommonBillingServiceTest {
         membership.restoreDetachedOrderStatus(unfinished, "Новый");
         assertEquals("Новый", unfinished.getStatus().getTitle());
         verify(orderRepository).save(unfinished);
+    }
+
+    @Test
+    void returnOrderPutsExcludedOrderBackIntoTheSameCollectingInvoice() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order member = order(100L);
+        Order excluded = order(101L);
+        excluded.setStatus(status("Опубликовано"));
+        List<CommonInvoiceOrder> positions = new ArrayList<>(List.of(item(invoice, member)));
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setAccount(account); link.setCompany(excluded.getCompany()); link.setEnabled(true);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
+        when(orderRepository.findCommonBillingBackfillOrderIds(20L, CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES))
+                .thenReturn(List.of(101L));
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any())).thenAnswer(ignored ->
+                positions.stream().map(p -> binding(p.getOrder().getId(), 10L, 1L)).toList());
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenAnswer(ignored -> List.copyOf(positions));
+        when(invoiceOrderRepository.save(any(CommonInvoiceOrder.class))).thenAnswer(call -> {
+            CommonInvoiceOrder position = call.getArgument(0);
+            if (!positions.contains(position)) positions.add(position);
+            return position;
+        });
+        when(orderAggregateMutationLockService.lock(100L)).thenReturn(member);
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(excluded);
+        when(orderStatusService.getOrderStatusByTitle(anyString())).thenAnswer(call -> status(call.getArgument(0)));
+        when(badReviewTaskService.getPayableSum(any())).thenReturn(BigDecimal.valueOf(1000));
+
+        CommonInvoiceDetailsResponse response = service.returnOrder(10L, 101L);
+
+        CommonInvoiceOrder returned = positions.stream().filter(p -> p.getOrder() == excluded).findFirst().orElseThrow();
+        assertEquals(10L, returned.getInvoice().getId());
+        assertEquals("Опубликовано", returned.getOriginalOrderStatusTitle());
+        assertTrue(returned.isReady());
+        assertEquals(100_000L, returned.getAmountKopecks());
+        assertEquals(2, positions.size());
+        assertEquals(200_000L, invoice.getAmountKopecks());
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertEquals(10L, response.summary().id());
+        assertTrue(response.orders().stream().anyMatch(position -> position.orderId().equals(101L)));
+        verify(publicationBlockerService).reconcileInvoice(10L);
+        verifyNoInteractions(messageSender);
+    }
+
+    @Test
+    void returnOrderRefusesOrderOfCompanyOutsideTheInvoiceLink() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        CommonBillingAccount foreignAccount = account();
+        foreignAccount.setId(2L);
+        CommonBillingAccountCompany foreignLink = new CommonBillingAccountCompany();
+        foreignLink.setAccount(foreignAccount); foreignLink.setCompany(company(30L, manager(700L))); foreignLink.setEnabled(true);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of(invoice));
+        when(orderRepository.findCompanyIdByOrderId(301L)).thenReturn(Optional.of(30L));
+        when(accountCompanyRepository.findEnabledLinksForCompany(30L)).thenReturn(List.of(foreignLink));
+
+        ResponseStatusException refusal = assertThrows(ResponseStatusException.class, () -> service.returnOrder(10L, 301L));
+
+        assertEquals(HttpStatus.CONFLICT, refusal.getStatusCode());
+        assertTrue(refusal.getReason().startsWith("Заказ не возвращён, счёт не изменён."));
+        assertTrue(refusal.getReason().contains("не входит в связь общего счёта"));
+        assertTrue(refusal.getReason().contains("Что делать"));
+        verify(orderAggregateMutationLockService, never()).lock(any());
+        verify(invoiceOrderRepository, never()).save(any(CommonInvoiceOrder.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void returnOrderRefusesInvoiceWhoseCompositionIsAlreadyFixed(boolean sent) {
+        CommonInvoice invoice = invoice(account());
+        if (sent) {
+            invoice.setStatus(CommonInvoiceStatus.INVOICED);
+            invoice.setSentAt(LocalDateTime.now());
+        } else {
+            invoice.setStatus(CommonInvoiceStatus.READY);
+            invoice.setPaymentRouteType("MANUAL_MOBILE_BANK");
+            invoice.setPaymentRouteSelectedAt(LocalDateTime.now());
+        }
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+
+        ResponseStatusException refusal = assertThrows(ResponseStatusException.class, () -> service.returnOrder(10L, 101L));
+        var window = service.returnableOrders(10L);
+
+        assertEquals(HttpStatus.CONFLICT, refusal.getStatusCode());
+        assertTrue(refusal.getReason().contains(sent ? "уже отправлен клиенту" : "уже выбран получатель оплаты"));
+        assertTrue(refusal.getReason().contains("Что делать"));
+        assertFalse(window.canReturn());
+        assertTrue(window.orders().isEmpty());
+        assertEquals("Заказ не возвращён, счёт не изменён. " + window.blockReason(), refusal.getReason());
+        verify(orderRepository, never()).findCompanyIdByOrderId(any());
+        verify(orderRepository, never()).findCommonBillingBackfillOrderIds(any(), any());
+        verify(orderAggregateMutationLockService, never()).lock(any());
+        verify(invoiceOrderRepository, never()).save(any(CommonInvoiceOrder.class));
+    }
+
+    @Test
+    void returnOrderRefusesOrderWhoseStatusIsOutsideTheBackfillList() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order paid = order(101L);
+        paid.setStatus(status("Оплачено"));
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setAccount(account); link.setCompany(paid.getCompany()); link.setEnabled(true);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of(invoice));
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(orderRepository.findCommonBillingBackfillOrderIds(20L, CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES))
+                .thenReturn(List.of());
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(paid));
+
+        ResponseStatusException refusal = assertThrows(ResponseStatusException.class, () -> service.returnOrder(10L, 101L));
+
+        assertEquals(HttpStatus.CONFLICT, refusal.getStatusCode());
+        assertTrue(refusal.getReason().startsWith("Заказ не возвращён, счёт не изменён."));
+        assertTrue(refusal.getReason().contains("«Оплачено»"));
+        assertTrue(refusal.getReason().contains("Что делать"));
+        assertFalse(CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES.contains("Оплачено"));
+        verify(orderAggregateMutationLockService, never()).lock(any());
+        verify(invoiceOrderRepository, never()).save(any(CommonInvoiceOrder.class));
+    }
+
+    @Test
+    void returnOrderRefusesOrderThatAlreadyBelongsToACommonInvoice() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order member = order(101L);
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setAccount(account); link.setCompany(member.getCompany()); link.setEnabled(true);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of(invoice));
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(101L)).thenReturn(Optional.of(item(invoice, member)));
+
+        ResponseStatusException refusal = assertThrows(ResponseStatusException.class, () -> service.returnOrder(10L, 101L));
+
+        assertEquals(HttpStatus.CONFLICT, refusal.getStatusCode());
+        assertTrue(refusal.getReason().startsWith("Заказ не возвращён, счёт не изменён."));
+        assertTrue(refusal.getReason().contains("уже входит в этот общий счёт"));
+        assertTrue(refusal.getReason().contains("Что делать"));
+        verify(orderRepository, never()).findCommonBillingBackfillOrderIds(any(), any());
+        verify(orderAggregateMutationLockService, never()).lock(any());
+        verify(invoiceOrderRepository, never()).save(any(CommonInvoiceOrder.class));
+    }
+
+    @Test
+    void returnOrderRefusesWhenTheAttachPathWouldUseAnotherInvoice() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        invoice.setAmountKopecks(100_000L);
+        Order excluded = order(101L);
+        excluded.setStatus(status("Опубликовано"));
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setAccount(account); link.setCompany(excluded.getCompany()); link.setEnabled(true);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        // The invoice stops being the payer's open invoice between the window's check and the locks.
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of(invoice)).thenReturn(List.of());
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
+        when(orderRepository.findCommonBillingBackfillOrderIds(20L, CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES))
+                .thenReturn(List.of(101L));
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(excluded);
+        when(badReviewTaskService.getPayableSum(excluded)).thenReturn(BigDecimal.valueOf(1000));
+        when(invoiceRepository.save(any(CommonInvoice.class))).thenAnswer(call -> {
+            CommonInvoice saved = call.getArgument(0);
+            if (saved.getId() == null) saved.setId(11L);
+            return saved;
+        });
+        when(invoiceOrderRepository.save(any(CommonInvoiceOrder.class))).thenAnswer(call -> call.getArgument(0));
+
+        ResponseStatusException refusal = assertThrows(ResponseStatusException.class, () -> service.returnOrder(10L, 101L));
+
+        assertEquals(HttpStatus.CONFLICT, refusal.getStatusCode());
+        assertTrue(refusal.getReason().startsWith("Заказ не возвращён, счёт не изменён."));
+        assertTrue(refusal.getReason().contains("другой общий счёт №11"));
+        assertTrue(refusal.getReason().contains("Что делать"));
+        assertEquals(CommonInvoiceStatus.COLLECTING, invoice.getStatus());
+        assertEquals(100_000L, invoice.getAmountKopecks());
+    }
+
+    @Test
+    void returnableOrdersOffersOnlyUnattachedOrdersOfEnabledCompaniesOfTheInvoiceLink() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order excluded = order(101L);
+        excluded.setStatus(status("На проверке"));
+        CommonBillingAccountCompany enabled = new CommonBillingAccountCompany();
+        enabled.setAccount(account); enabled.setCompany(excluded.getCompany()); enabled.setEnabled(true);
+        CommonBillingAccountCompany removed = new CommonBillingAccountCompany();
+        removed.setAccount(account); removed.setCompany(company(21L, manager(700L))); removed.setEnabled(false);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of(invoice));
+        when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(1L)).thenReturn(List.of(enabled, removed));
+        when(orderRepository.findCommonBillingBackfillOrderIds(20L, CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES))
+                .thenReturn(List.of(101L));
+        when(orderRepository.findAllById(List.of(101L))).thenReturn(List.of(excluded));
+        when(badReviewTaskService.getPayableSum(excluded)).thenReturn(BigDecimal.valueOf(1500));
+
+        var window = service.returnableOrders(10L);
+
+        assertEquals(10L, window.invoiceId());
+        assertTrue(window.canReturn());
+        assertNull(window.blockReason());
+        assertEquals(1, window.orders().size());
+        var row = window.orders().getFirst();
+        assertEquals(101L, row.orderId());
+        assertEquals(20L, row.companyId());
+        assertEquals("Компания", row.companyTitle());
+        assertEquals("Заказ №101", row.orderTitle());
+        assertEquals("На проверке", row.status());
+        assertEquals(150_000L, row.amountKopecks());
+        verify(orderRepository, never()).findCommonBillingBackfillOrderIds(eq(21L), any());
+        verify(orderAggregateMutationLockService, never()).lock(any());
+    }
+
+    @Test
+    void returnOrderRefusesOrderOfAnotherManagerInsteadOfHidingTheInvoiceFromItsManager() {
+        Manager ownManager = manager(700L);
+        authenticateManager(ownManager);
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order member = order(100L);
+        member.setManager(ownManager);
+        Order foreign = order(101L);
+        foreign.setStatus(status("Опубликовано"));
+        foreign.setManager(manager(701L));
+        List<CommonInvoiceOrder> positions = new ArrayList<>(List.of(item(invoice, member)));
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setAccount(account); link.setCompany(foreign.getCompany()); link.setEnabled(true);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
+        when(orderRepository.findCommonBillingBackfillOrderIds(20L, CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES))
+                .thenReturn(List.of(101L));
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any())).thenAnswer(ignored ->
+                positions.stream().map(p -> binding(p.getOrder().getId(), 10L, 1L)).toList());
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenAnswer(ignored -> List.copyOf(positions));
+        when(invoiceOrderRepository.save(any(CommonInvoiceOrder.class))).thenAnswer(call -> {
+            CommonInvoiceOrder position = call.getArgument(0);
+            if (!positions.contains(position)) positions.add(position);
+            return position;
+        });
+        when(orderAggregateMutationLockService.lock(100L)).thenReturn(member);
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(foreign);
+        when(badReviewTaskService.getPayableSum(foreign)).thenReturn(BigDecimal.valueOf(1000));
+
+        ResponseStatusException refusal = assertThrows(ResponseStatusException.class, () -> service.returnOrder(10L, 101L));
+
+        // The invoice would stop being visible to this manager; the transaction rolls back instead.
+        assertEquals(HttpStatus.CONFLICT, refusal.getStatusCode());
+        assertTrue(refusal.getReason().startsWith("Заказ не возвращён, счёт не изменён."));
+        assertTrue(refusal.getReason().contains("ведёт другой менеджер"));
+        assertTrue(refusal.getReason().contains("Что делать"));
+        assertEquals(CommonInvoiceStatus.COLLECTING, invoice.getStatus());
     }
 
     @Test
@@ -12193,5 +12538,69 @@ class CommonBillingServiceTest {
         payload.put("Amount", "100000");
         payload.put("Token", "token");
         return payload;
+    }
+
+    // ---- The receipt time of a manual payment is the server's clock ----
+
+    @Test
+    void manualPaymentTimeIsTheServersClockNotTheDevices() {
+        // 21:44 on the device (another time zone) while the server is already in the next day.
+        CommonManualPaymentAttributionRequest sent = receiptSentAt("device-clock", LocalDateTime.of(2026, 11, 10, 21, 44, 29, 610_000_000));
+
+        CommonManualPaymentAttributionRequest timed = manualPayments().withServerReceiptTime(10L, sent);
+
+        assertEquals(sent, timed.withEffectiveAt(sent.effectiveAt()), "everything but the time is passed on as sent");
+        assertTrue(Duration.between(timed.effectiveAt(), LocalDateTime.now()).abs().toSeconds() < 60);
+        assertEquals(0, timed.effectiveAt().getNano() % 1_000_000, "milliseconds: the value survives the database unchanged");
+    }
+
+    @Test
+    void deviceClockAheadOfTheServerNoLongerPutsTheReceiptIntoTheFuture() {
+        CommonManualPaymentAttributionRequest sent = receiptSentAt("device-ahead", LocalDateTime.now().plusHours(5));
+
+        CommonManualPaymentAttributionRequest timed = manualPayments().withServerReceiptTime(10L, sent);
+
+        assertFalse(timed.effectiveAt().isAfter(LocalDateTime.now()));
+    }
+
+    @Test
+    void repeatedManualPaymentKeepsTheReceiptTimeAlreadyRecorded() {
+        LocalDateTime recorded = LocalDateTime.of(2026, 11, 11, 10, 44, 58, 235_000_000);
+        when(commonManualPaymentAttributionCoordinator.recordedReceiptTime(10L, "repeat")).thenReturn(Optional.of(recorded));
+
+        CommonManualPaymentAttributionRequest timed = manualPayments().withServerReceiptTime(10L,
+                receiptSentAt("repeat", LocalDateTime.of(2026, 11, 10, 21, 50)));
+
+        assertEquals(recorded, timed.effectiveAt());
+        verify(ownerReceipts, never()).reportedReceiptTime(anyLong(), any());
+    }
+
+    @Test
+    void ownerDecisionKeepsTheReceiptTimeOfTheManagersReport() {
+        LocalDateTime reported = LocalDateTime.of(2026, 11, 11, 9, 15, 0, 120_000_000);
+        when(ownerReceipts.reportedReceiptTime(10L, "owner-report")).thenReturn(Optional.of(reported));
+
+        // Whatever the owner's device sends, the staged report stays the same request.
+        CommonManualPaymentAttributionRequest timed = manualPayments().withServerReceiptTime(10L,
+                receiptSentAt("owner-report", LocalDateTime.of(2026, 11, 11, 4, 20)));
+
+        assertEquals(reported, timed.effectiveAt());
+    }
+
+    private CommonInvoiceManualPaymentWorkflow manualPayments() {
+        return (CommonInvoiceManualPaymentWorkflow) ReflectionTestUtils.getField(service, "manualPaymentWorkflow");
+    }
+
+    private static CommonManualPaymentAttributionRequest receiptSentAt(String key, LocalDateTime deviceTime) {
+        return new CommonManualPaymentAttributionRequest(key, true, true, deviceTime, "Клиент перевёл специалисту", "",
+                List.of(new CommonManualPaymentAttributionRowRequest("specialist", ContractorRecipientType.SPECIALIST, 7L, 100_000L)));
+    }
+
+    /** The request as the workflow passes it on: everything the manager sent, with the server's receipt time. */
+    private static CommonManualPaymentAttributionRequest serverTimed(CommonManualPaymentAttributionRequest sent) {
+        return argThat(passed -> passed != null
+                && passed.withEffectiveAt(sent.effectiveAt()).equals(sent)
+                && !passed.effectiveAt().equals(sent.effectiveAt())
+                && Duration.between(passed.effectiveAt(), LocalDateTime.now()).abs().toMinutes() < 2);
     }
 }

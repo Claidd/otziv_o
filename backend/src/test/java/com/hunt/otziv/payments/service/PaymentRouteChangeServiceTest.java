@@ -55,6 +55,26 @@ class PaymentRouteChangeServiceTest {
     }
 
     @Test
+    void namedRecipientIsPassedToRouteReplacementInsteadOfAutomaticChoice() {
+        PaymentLinkService.PaymentRouteReplacement replacement = new PaymentLinkService.PaymentRouteReplacement(
+                21L, 22L, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, null
+        );
+        PaymentRouteChangeRequest request = new PaymentRouteChangeRequest(
+                21L, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, false, 77L
+        );
+        when(paymentLinkService.replacePaymentRouteAuthorized(
+                8L, 21L, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, authentication, false, false, 77L
+        )).thenReturn(replacement);
+        PaymentRouteChangeService service = new PaymentRouteChangeService(paymentLinkService, notificationWorker);
+
+        PaymentRouteChangeResponse result = service.change(8L, request, authentication);
+
+        assertEquals(22L, result.paymentLinkId());
+        verify(paymentLinkService).replacePaymentRouteAuthorized(
+                8L, 21L, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, authentication, false, false, 77L);
+    }
+
+    @Test
     void sendsNewDetailsOnlyAfterTransactionCommit() {
         ManagerPaymentLinkResponse payment = new ManagerPaymentLinkResponse(
                 "token", null, 8L, BigDecimal.valueOf(1_000), 100_000L,

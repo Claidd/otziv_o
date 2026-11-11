@@ -8,6 +8,7 @@ import type {
   PaymentRouteChangeTarget
 } from '../../core/manager.api';
 import { trackWorkerOption } from './worker-board.config';
+import { cardNumberRouteTarget } from '../manager/card-number-route-target';
 
 export type WorkerOrderEditDraftChange = {
   [K in keyof OrderUpdateRequest]: {
@@ -43,6 +44,8 @@ export class WorkerOrderEditModalComponent {
   @Output() readonly paymentRouteChangeOpened = new EventEmitter<void>();
   @Output() readonly paymentRouteChangeClosed = new EventEmitter<void>();
   @Output() readonly paymentRouteChanged = new EventEmitter<PaymentRouteChangeTarget>();
+  /** Opens the manual of the «Способ оплаты» block. */
+  @Output() readonly paymentGuideOpened = new EventEmitter<void>();
   @Output() readonly paperInvoiceIssued = new EventEmitter<void>();
   @Output() readonly paperInvoiceOpened = new EventEmitter<void>();
   @Output() readonly draftChange = new EventEmitter<WorkerOrderEditDraftChange>();
@@ -57,5 +60,10 @@ export class WorkerOrderEditModalComponent {
 
   trackOption(index: number, option: ManagerOption): number {
     return trackWorkerOption(index, option);
+  }
+
+  /** Shared template: the single «Выдать номер карты» button picks its target the same way. */
+  cardNumberTarget(context: PaymentRouteChangeContext): PaymentRouteChangeTarget {
+    return cardNumberRouteTarget(context);
   }
 }

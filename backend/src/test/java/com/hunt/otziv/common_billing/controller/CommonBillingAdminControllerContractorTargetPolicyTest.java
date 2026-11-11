@@ -86,6 +86,7 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
                 () -> controller.markOrderPaid(INVOICE_ID, 7L, null, null),
                 () -> controller.approveReviewOrders(INVOICE_ID),
                 () -> controller.detachOrder(INVOICE_ID, 7L),
+                () -> controller.attachOrder(INVOICE_ID, 7L),
                 () -> controller.archiveDisputedOrder(INVOICE_ID, 7L)
         );
 

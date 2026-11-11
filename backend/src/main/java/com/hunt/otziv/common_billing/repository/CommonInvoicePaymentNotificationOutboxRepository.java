@@ -78,6 +78,55 @@ public class CommonInvoicePaymentNotificationOutboxRepository {
                 """, Map.of("invoiceId", invoiceId));
     }
 
+    /** A delivered recipient notice with one order of its invoice, which anchors staff reminders. */
+    public Optional<com.hunt.otziv.common_billing.api.CommonInvoiceRecipientReceipts.Receipt> findRecipientReceipt(long deliveryId) {
+        return jdbc.query("""
+                SELECT outbox.delivery_id,
+                       outbox.invoice_id,
+                       outbox.invoice_title,
+                       (
+                           SELECT MIN(invoice_order.order_id)
+                           FROM common_invoice_orders invoice_order
+                           WHERE invoice_order.invoice_id = outbox.invoice_id
+                       ) AS anchor_order_id,
+                       outbox.recipient_type,
+                       outbox.recipient_user_id,
+                       outbox.amount_kopecks,
+                       outbox.actor,
+                       outbox.sent_at,
+                       outbox.disputed_at
+                FROM common_invoice_payment_notification_outbox outbox
+                WHERE outbox.delivery_id = :deliveryId
+                  AND outbox.notification_kind = 'RECIPIENT'
+                  AND outbox.recipient_user_id IS NOT NULL
+                  AND outbox.amount_kopecks > 0
+                """, Map.of("deliveryId", deliveryId), (resultSet, rowNum) ->
+                new com.hunt.otziv.common_billing.api.CommonInvoiceRecipientReceipts.Receipt(
+                        resultSet.getLong("delivery_id"),
+                        resultSet.getLong("invoice_id"),
+                        resultSet.getString("invoice_title"),
+                        nullableLong(resultSet, "anchor_order_id"),
+                        resultSet.getString("recipient_type"),
+                        nullableLong(resultSet, "recipient_user_id"),
+                        resultSet.getLong("amount_kopecks"),
+                        resultSet.getString("actor"),
+                        resultSet.getObject("sent_at", LocalDateTime.class),
+                        resultSet.getObject("disputed_at", LocalDateTime.class)
+                )).stream().findFirst();
+    }
+
+    /** True only for the first dispute of a notice. */
+    public boolean markRecipientReceiptDisputed(long deliveryId, long telegramUserId) {
+        return jdbc.update("""
+                UPDATE common_invoice_payment_notification_outbox
+                SET disputed_at = CURRENT_TIMESTAMP(6),
+                    disputed_by_telegram_user_id = :telegramUserId
+                WHERE delivery_id = :deliveryId
+                  AND notification_kind = 'RECIPIENT'
+                  AND disputed_at IS NULL
+                """, Map.of("deliveryId", deliveryId, "telegramUserId", telegramUserId)) == 1;
+    }
+
     public List<Long> findDueDeliveryIds(int limit) {
         return jdbc.query("""
                 SELECT delivery_id

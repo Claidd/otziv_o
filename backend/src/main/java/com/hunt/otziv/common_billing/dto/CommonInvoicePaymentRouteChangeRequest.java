@@ -7,8 +7,19 @@ public record CommonInvoicePaymentRouteChangeRequest(
         @NotNull CommonInvoicePaymentRouteChangeTarget target,
         boolean confirmedUnpaid,
         @NotBlank String expectedPaymentEvidenceToken,
-        Long expectedTargetPaymentProfileId
+        Long expectedTargetPaymentProfileId,
+        /** Contractor payment profile a manager named for the card number; null lets the system choose. */
+        Long recipientProfileId
 ) {
+    public CommonInvoicePaymentRouteChangeRequest(
+            CommonInvoicePaymentRouteChangeTarget target,
+            boolean confirmedUnpaid,
+            String expectedPaymentEvidenceToken,
+            Long expectedTargetPaymentProfileId
+    ) {
+        this(target, confirmedUnpaid, expectedPaymentEvidenceToken, expectedTargetPaymentProfileId, null);
+    }
+
     public CommonInvoicePaymentRouteChangeRequest(
             CommonInvoicePaymentRouteChangeTarget target,
             boolean confirmedUnpaid,

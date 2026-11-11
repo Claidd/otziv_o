@@ -1,6 +1,8 @@
 import { openPaperInvoiceDialog } from '../shared/paper-invoice-dialog.component';
 import { ChangeDetectionStrategy } from '@angular/core';
-import { commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
+import {
+  commonInvoiceDeliveryWait, commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher
+} from '@otziv/client-common/billing-payments';
 import { CommonBillingApi } from '../core/common-billing.api';
 import { OrderPaymentApi } from '../core/order-payment.api';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
@@ -11,6 +13,7 @@ import { Subscription, firstValueFrom } from 'rxjs';
 import {
   CommonInvoiceDetailsResponse,
   CommonInvoiceOrderResponse,
+  CommonInvoicePaymentRouteChangeContextResponse,
   CommonInvoicePaymentRouteChangeTarget,
   CommonInvoiceSummaryResponse,
   CommonManualPaymentMode,
@@ -23,6 +26,23 @@ import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-f
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileCommonManualPaymentFlowService } from '../shared/mobile-common-manual-payment-flow.service';
+import { MobilePaymentRecipientPickerFlowService } from '../shared/mobile-payment-recipient-picker-flow.service';
+import {
+  RETURN_ORDERS_EMPTY,
+  RETURN_ORDERS_FIXED,
+  RETURN_ORDERS_INTRO,
+  canReturnOrdersToCommonInvoice,
+  returnOrderConsequence,
+  returnOrderLabel,
+  returnOrderRefusal
+} from '../shared/common-invoice-return-orders';
+import type { CommonInvoiceReturnableOrder, CommonInvoiceReturnableOrdersResponse } from '../core/api.service';
+import {
+  mobilePaymentRecipientAutoHint,
+  mobilePaymentRecipientOptions,
+  type MobilePaymentRecipientChoice,
+  type MobilePaymentRecipientIssueOutcome
+} from '../shared/payment-recipient-picker';
 import { MobileOrderCardComponent } from '../shared/mobile-order-card.component';
 import {
   COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL,
@@ -134,14 +154,15 @@ type InvoiceAction =
                 && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
                 && invoice.paymentRouteSelectedAt
                 && invoice.status !== 'PAID') {
-                <button type="button" (click)="changePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="!!mutating()">Выдать реквизиты без ссылки</button>
-                <button type="button" (click)="changePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="!!mutating()">Сменить получателя</button>
+                <button type="button" (click)="changePaymentRoute(cardNumberRouteTarget(invoice.paymentRouteType))" [disabled]="!!mutating()"
+                  [title]="cardNumberRouteTarget(invoice.paymentRouteType) === 'EMPLOYEE_REQUISITES' ? 'Ссылка → номер карты: получатель может остаться прежним' : 'Номер карты другого человека: нынешний получатель исключается'">Выдать номер карты</button>
                 @if (!isBankPaymentRoute(invoice.paymentRouteType)) {
-                  <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="!!mutating()">Банковская ссылка владельца</button>
+                  <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="!!mutating()">Выдать ссылку банка</button>
                 }
                 @if (isBankPaymentRoute(invoice.paymentRouteType)) {
-                  <button type="button" (click)="reissueOwnerBankRoute()" [disabled]="!!mutating()">Обновить банк и ссылку</button>
+                  <button type="button" (click)="reissueOwnerBankRoute()" [disabled]="!!mutating()">Выдать новую ссылку банка</button>
                 }
+                <p class="invoice-action-hint">{{ cardNumberRouteHint(invoice.paymentRouteType) }}</p>
               }
               @if (canManagePaperInvoices()
                 && (invoice.status !== 'NEEDS_ATTENTION' || paperModeSwitchNeedsRetry(invoice))
@@ -202,7 +223,9 @@ type InvoiceAction =
                 } @else {
                   <button type="button" class="success" (click)="runInvoiceAction('paid')" [disabled]="!!mutating() || !canMarkInvoicePaid(invoice)">Оплачен</button>
                 }
-                <button type="button" class="danger" (click)="runInvoiceAction('unpaid')" [disabled]="!!mutating() || !canMarkInvoiceUnpaid(invoice)">Не оплачен</button>
+                @if (manualUnpaidAllowed()) {
+                  <button type="button" class="danger" (click)="runInvoiceAction('unpaid')" [disabled]="!!mutating() || !canMarkInvoiceUnpaid(invoice)">Не оплачен</button>
+                }
                 <button type="button" (click)="runInvoiceAction('remind')" [disabled]="!!mutating() || !canRemindInvoice(invoice)">Напомнить</button>
                 <button type="button" class="danger" (click)="runInvoiceAction('ban')" [disabled]="!!mutating() || !canMarkInvoiceBan(invoice)">Бан</button>
                 @if (canArchiveInvoice(invoice)) {
@@ -234,7 +257,9 @@ type InvoiceAction =
                 @if (invoice.nextReminderAt) {
                   <span>Следующее: {{ dateTime(invoice.nextReminderAt) }}</span>
                 }
-                @if (invoice.lastError) {
+                @if (deliveryWait(invoice.lastError, details()?.delivery); as waiting) {
+                  <span>{{ waiting }}</span>
+                } @else if (invoice.lastError) {
                   <span class="error-line">{{ invoice.lastError }}</span>
                 }
                 @if (invoice.paymentSuccessNotificationError) {
@@ -277,6 +302,51 @@ type InvoiceAction =
                 <span>Состав</span>
                 <strong>{{ orders().length }}</strong>
               </header>
+
+              @if (canReturnOrders()) {
+                <div class="return-orders">
+                  <button type="button" class="return-orders-toggle" (click)="toggleReturnOrders()" [disabled]="!!mutating()">
+                    {{ returnOrdersOpen() ? 'Скрыть заказы для возврата' : 'Вернуть заказ в счёт' }}
+                  </button>
+                  @if (!returnOrdersOpen()) {
+                    <p class="invoice-action-hint">Заказ исключили, а клиент просит вернуть его. Работает, пока счёт собирается и не отправлен клиенту.</p>
+                  } @else {
+                    <p class="invoice-action-hint">{{ returnOrdersIntro }}</p>
+                    @if (returnOrdersLoading()) {
+                      <p class="state-card">Загружаем заказы…</p>
+                    } @else if (returnOrdersError(); as loadError) {
+                      <p class="state-card state-card--error" role="alert">{{ loadError }}</p>
+                      <button type="button" class="return-orders-toggle" (click)="loadReturnableOrders()">Повторить</button>
+                    } @else if (returnableOrders(); as answer) {
+                      @if (!answer.canReturn) {
+                        <p class="state-card state-card--error" role="alert">
+                          Вернуть заказ в этот счёт нельзя, счёт не изменён. {{ answer.blockReason || returnOrdersFixed }}
+                        </p>
+                      } @else if (!answer.orders.length) {
+                        <p class="state-card" role="status">{{ returnOrdersEmpty }}</p>
+                      } @else {
+                        <ul class="return-orders-list" aria-label="Заказы, которые можно вернуть в счёт">
+                          @for (candidate of answer.orders; track candidate.orderId) {
+                            <li>
+                              <span>
+                                <strong>{{ candidate.companyTitle || 'Компания №' + candidate.companyId }}</strong>
+                                <small>{{ returnOrderLabel(candidate) }}</small>
+                              </span>
+                              <button type="button" (click)="returnOrder(candidate)" [disabled]="!!mutating()"
+                                [attr.aria-label]="'Вернуть заказ №' + candidate.orderId + ' в счёт'">
+                                {{ mutating() === 'return-order-' + candidate.orderId ? 'Возвращаем…' : 'Вернуть' }}
+                              </button>
+                            </li>
+                          }
+                        </ul>
+                      }
+                    }
+                    @if (returnOrderRefusal(); as refusal) {
+                      <p class="state-card state-card--error" role="alert">{{ refusal }}</p>
+                    }
+                  }
+                </div>
+              }
 
               @if (manualAttributionRequired()) {
                 <p class="invoice-action-hint">В новом режиме частичную ручную оплату не закрывают по одному заказу: распределите весь остаток через кнопку «Оплачен».</p>
@@ -499,6 +569,70 @@ type InvoiceAction =
       opacity: 0.48;
     }
 
+    .return-orders {
+      display: grid;
+      gap: 0.45rem;
+      padding: 0.65rem;
+    }
+
+    .return-orders-toggle,
+    .return-orders-list button {
+      min-height: 2.15rem;
+      padding: 0 0.9rem;
+      border: 1px solid rgba(103, 116, 131, 0.2);
+      border-radius: 999px;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      font: 900 0.72rem/1 var(--otziv-card-title-font);
+    }
+
+    .return-orders-toggle:disabled,
+    .return-orders-list button:disabled {
+      opacity: 0.48;
+    }
+
+    .return-orders-list {
+      display: grid;
+      gap: 0.4rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .return-orders-list li {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid rgba(103, 116, 131, 0.18);
+      border-radius: 0.9rem;
+      background: var(--otziv-white);
+    }
+
+    .return-orders-list li span {
+      display: grid;
+      gap: 0.15rem;
+      min-width: 0;
+    }
+
+    .return-orders-list strong {
+      color: var(--otziv-dark);
+      font: 900 0.78rem/1.2 var(--otziv-card-title-font);
+      overflow-wrap: anywhere;
+    }
+
+    .return-orders-list small {
+      color: var(--otziv-info);
+      font: 800 0.66rem/1.25 var(--otziv-card-title-font);
+      overflow-wrap: anywhere;
+    }
+
+    .return-orders-list button {
+      color: var(--otziv-success);
+      background: var(--otziv-tone-success-surface);
+    }
+
     .invoice-action-hint {
       grid-column: 1 / -1;
       margin: 0.05rem 0 0;
@@ -667,9 +801,14 @@ type InvoiceAction =
 })
 export class CommonBillingPage implements OnInit, OnDestroy {
   readonly deliveryStatusText = deliveryOperationMessage;
+  /** The text shown while the client message is still in the queue: a wait, not an error. */
+  readonly deliveryWait = commonInvoiceDeliveryWait;
   private readonly deliveryWatcher = new DeliveryStatusWatcher();
   private readonly commonBillingApi = inject(CommonBillingApi);
   private readonly orderPaymentApi = inject(OrderPaymentApi);
+  private readonly recipientPickerFlow = inject(MobilePaymentRecipientPickerFlowService);
+  /** Closes the «Выдать номер карты» window when this invoice screen is left. */
+  private recipientPickerLeave?: AbortController;
   private readonly toast = inject(ToastController);
   readonly paymentInitNoPaymentActionLabel = COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL;
   readonly paymentInitNoPaymentActionHint = commonInvoiceNoPaymentActionHint();
@@ -686,6 +825,16 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   readonly summary = computed(() => this.details()?.summary ?? null);
   readonly orders = computed(() => this.details()?.orders ?? []);
   readonly manualAttributionRequired = signal<boolean | null>(null);
+  readonly canReturnOrders = computed(() => canReturnOrdersToCommonInvoice(this.summary()));
+  readonly returnOrdersOpen = signal(false);
+  readonly returnableOrders = signal<CommonInvoiceReturnableOrdersResponse | null>(null);
+  readonly returnOrdersLoading = signal(false);
+  readonly returnOrdersError = signal('');
+  readonly returnOrderRefusal = signal('');
+  readonly returnOrdersIntro = RETURN_ORDERS_INTRO;
+  readonly returnOrdersEmpty = RETURN_ORDERS_EMPTY;
+  readonly returnOrdersFixed = RETURN_ORDERS_FIXED;
+  readonly returnOrderLabel = returnOrderLabel;
   readonly orderCards = computed(() => this.details()?.orderCards ?? []);
   readonly reviewApprovalCount = computed(() => this.orders()
     .filter(order => order.orderStatus === 'В проверку' || order.orderStatus === 'На проверке')
@@ -725,6 +874,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       if (!this.routeGuard.change(invoiceId == null ? null : String(invoiceId))) {
         return;
       }
+      this.closeRecipientPicker();
       this.readRun += 1;
       this.invoiceId.set(invoiceId);
       this.details.set(null);
@@ -737,10 +887,15 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.closeRecipientPicker();
     this.deliveryWatcher.cancel();
     this.readRun += 1;
     this.routeGuard.destroy();
     this.routeSubscription?.unsubscribe();
+  }
+
+  ionViewWillLeave(): void {
+    this.closeRecipientPicker();
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -835,8 +990,10 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       this.details.set(details);
       this.deliveryWatcher.watch(details, () => firstValueFrom(this.commonBillingApi.getCommonInvoice(invoiceId)),
         updated => this.details.set(updated), () => this.routeGuard.accepts(ticket));
-      this.error.set(action === 'send' || action === 'remind'
-        ? (details.delivery ? null : commonInvoiceDeliveryWarning(details.summary.lastError)) : null);
+      // A message still in the queue is a wait the invoice card already shows, not an error of this action.
+      this.error.set((action === 'send' || action === 'remind') && !details.delivery
+        && !commonInvoiceDeliveryWait(details.summary.lastError)
+        ? commonInvoiceDeliveryWarning(details.summary.lastError) : null);
     } catch (error) {
       if (this.routeGuard.accepts(ticket)) {
         this.error.set(this.errorMessage(error, 'Не удалось обновить общий счет.'));
@@ -926,16 +1083,18 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       const target: CommonInvoicePaymentRouteChangeTarget = targetOverride ?? (context.currentTarget === 'OWNER_TBANK'
         ? 'EMPLOYEE_REQUISITES'
         : 'OWNER_TBANK');
-      const destination = target === 'EMPLOYEE_REQUISITES'
-        ? 'реквизиты без ссылки'
-        : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
-        : 'банковскую ссылку владельца';
+      if (target === 'EMPLOYEE_REQUISITES' || target === 'DIFFERENT_RECIPIENT') {
+        // A card number is issued from the window: the system's own choice or a person the manager names.
+        this.mutating.set('change-payment-route');
+        await this.issueCardNumber(ticket, invoiceId, invoice, target, context);
+        return;
+      }
       const recipient = context.currentRecipient?.trim()
         ? ` Получатель сейчас: ${context.currentRecipient}.`
         : '';
-      const confirmed = target === 'DIFFERENT_RECIPIENT' || await this.confirm.confirm({
+      const confirmed = await this.confirm.confirm({
         title: 'Смена способа оплаты',
-        message: `Переключить общий счёт на ${destination}?${recipient} Старый резерв будет освобождён, новый маршрут создан заново, клиенту уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.`,
+        message: `Переключить общий счёт на банковскую ссылку владельца?${recipient} Старый резерв будет освобождён, новый маршрут создан заново, клиенту уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.`,
         danger: true
       });
       if (!confirmed || !this.routeGuard.accepts(ticket)) {
@@ -967,6 +1126,105 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         this.mutating.set(null);
       }
     }
+  }
+
+  /** The «Выдать номер карты» window: the people, the choice and what the server answered. */
+  private async issueCardNumber(
+    ticket: RouteEpochTicket,
+    invoiceId: number,
+    invoice: CommonInvoiceSummaryResponse,
+    target: CommonInvoicePaymentRouteChangeTarget,
+    context: CommonInvoicePaymentRouteChangeContextResponse
+  ): Promise<void> {
+    const before = this.paymentRouteLabel(invoice);
+    let after = before;
+    const leave = new AbortController();
+    this.recipientPickerLeave = leave;
+    try {
+      const outcome = await this.recipientPickerFlow.open({
+        heading: `Общий счёт №${invoiceId}`,
+        amountKopecks: Math.max(0, (invoice.amountKopecks ?? 0) - (invoice.paidKopecks ?? 0)),
+        currentRecipient: context.currentRecipient?.trim() ?? '',
+        autoHint: mobilePaymentRecipientAutoHint(target),
+        signal: leave.signal,
+        loadRecipients: async () => {
+          try {
+            const response = await firstValueFrom(this.commonBillingApi.getCommonInvoicePaymentRouteRecipients(invoiceId));
+            return { recipients: mobilePaymentRecipientOptions(response.recipients) };
+          } catch (error) {
+            throw new Error(this.errorMessage(error, 'Не удалось загрузить сотрудников.'));
+          }
+        },
+        issue: async (choice) => {
+          const answer = await this.submitRecipientChoice(ticket, invoiceId, target, context.paymentEvidenceToken, choice);
+          if (answer.details) {
+            after = this.paymentRouteLabel(answer.details.summary);
+          }
+          return answer.outcome;
+        }
+      });
+      if (!outcome || !this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      const message = outcome.status === 'accepted'
+        ? outcome.message
+        : after === before
+          ? 'Запрос принят. Получатель сменится, когда банк подтвердит закрытие прежней ссылки.'
+          : `Получатель изменён: ${before} → ${after}`;
+      const toast = await this.toast.create({ message, duration: 5000 });
+      if (this.routeGuard.accepts(ticket)) await toast.present();
+    } finally {
+      if (this.recipientPickerLeave === leave) {
+        this.recipientPickerLeave = undefined;
+      }
+    }
+  }
+
+  /** Issues the card number: the system's own choice, or the person the manager named. */
+  private async submitRecipientChoice(
+    ticket: RouteEpochTicket,
+    invoiceId: number,
+    target: CommonInvoicePaymentRouteChangeTarget,
+    paymentEvidenceToken: string,
+    choice: MobilePaymentRecipientChoice
+  ): Promise<{ outcome: MobilePaymentRecipientIssueOutcome; details?: CommonInvoiceDetailsResponse }> {
+    if (!this.routeGuard.accepts(ticket)) {
+      return { outcome: { status: 'left' } };
+    }
+    try {
+      const details = await firstValueFrom(this.commonBillingApi.changeCommonInvoicePaymentRoute(
+        invoiceId,
+        target,
+        paymentEvidenceToken,
+        undefined,
+        choice.profileId
+      ));
+      if (!this.routeGuard.accepts(ticket)) {
+        return { outcome: { status: 'left' } };
+      }
+      this.details.set(details);
+      this.error.set(null);
+      return { outcome: { status: 'issued' }, details };
+    } catch (error) {
+      if (!this.routeGuard.accepts(ticket)) {
+        return { outcome: { status: 'left' } };
+      }
+      if (error instanceof HttpErrorResponse && error.status === 423) {
+        // The bank has to close the old link first; the request is saved and will finish by itself.
+        this.error.set(null);
+        return { outcome: {
+          status: 'accepted',
+          message: this.errorMessage(error, 'Запрос принят. Получатель сменится, когда банк подтвердит закрытие прежней ссылки.')
+        } };
+      }
+      // The window stays open with the refusal, so another person can be chosen at once.
+      return { outcome: { status: 'refused', message: this.errorMessage(error, 'Не удалось выдать номер карты.') } };
+    }
+  }
+
+  private closeRecipientPicker(): void {
+    this.recipientPickerLeave?.abort();
+    this.recipientPickerLeave = undefined;
   }
 
   async reissueOwnerBankRoute(): Promise<void> {
@@ -1155,6 +1413,88 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         this.mutating.set(null);
       }
     }
+  }
+
+  /** Opens or hides the list of orders that may be returned to this collecting invoice. */
+  toggleReturnOrders(): void {
+    if (this.returnOrdersOpen()) {
+      this.closeReturnOrders();
+      return;
+    }
+    this.returnOrdersOpen.set(true);
+    this.returnOrderRefusal.set('');
+    void this.loadReturnableOrders();
+  }
+
+  async loadReturnableOrders(): Promise<void> {
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoiceId || !ticket) {
+      return;
+    }
+    this.returnOrdersLoading.set(true);
+    this.returnOrdersError.set('');
+    try {
+      const answer = await firstValueFrom(this.commonBillingApi.getCommonInvoiceReturnableOrders(invoiceId));
+      if (this.routeGuard.accepts(ticket) && this.invoiceId() === invoiceId) {
+        this.returnableOrders.set(answer);
+      }
+    } catch (error) {
+      if (this.routeGuard.accepts(ticket)) {
+        this.returnableOrders.set(null);
+        this.returnOrdersError.set(this.errorMessage(error, 'Не удалось загрузить заказы для возврата.'));
+      }
+    } finally {
+      if (this.routeGuard.accepts(ticket)) {
+        this.returnOrdersLoading.set(false);
+      }
+    }
+  }
+
+  /**
+   * Returns the order after the manager confirmed what will happen. Success hides the list and shows the
+   * invoice with the order; a refusal stays in the list and says that nothing changed and what to do.
+   */
+  async returnOrder(order: CommonInvoiceReturnableOrder): Promise<void> {
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoiceId || !ticket || this.mutating()) {
+      return;
+    }
+    const confirmed = await this.confirm.confirm({ message: returnOrderConsequence(order, invoiceId) });
+    if (!confirmed || !this.routeGuard.accepts(ticket)) {
+      return;
+    }
+    this.returnOrderRefusal.set('');
+    this.readRun += 1;
+    this.mutating.set(`return-order-${order.orderId}`);
+    try {
+      const details = await firstValueFrom(this.commonBillingApi.returnCommonInvoiceOrder(invoiceId, order.orderId));
+      if (!this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      this.details.set(details);
+      this.error.set(null);
+      this.closeReturnOrders();
+    } catch (error) {
+      if (this.routeGuard.accepts(ticket)) {
+        this.returnOrderRefusal.set(returnOrderRefusal(this.errorMessage(error, '')));
+        // A refusal often means the page is stale: show the list as it is now.
+        void this.loadReturnableOrders();
+      }
+    } finally {
+      if (this.routeGuard.accepts(ticket)) {
+        this.mutating.set(null);
+      }
+    }
+  }
+
+  private closeReturnOrders(): void {
+    this.returnOrdersOpen.set(false);
+    this.returnableOrders.set(null);
+    this.returnOrdersLoading.set(false);
+    this.returnOrdersError.set('');
+    this.returnOrderRefusal.set('');
   }
 
   async detachOrder(order: CommonInvoiceOrderResponse): Promise<void> {
@@ -1421,6 +1761,22 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * One «Выдать номер карты» action replaces «реквизиты без ссылки» and «сменить получателя»:
+   * from a link any transfer number fits, from a number the client wants another person.
+   */
+  cardNumberRouteTarget(routeType?: string | null): 'EMPLOYEE_REQUISITES' | 'DIFFERENT_RECIPIENT' {
+    return this.isBankPaymentRoute(routeType) || routeType === 'MANUAL_EXTERNAL_LINK' ? 'EMPLOYEE_REQUISITES' : 'DIFFERENT_RECIPIENT';
+  }
+
+  /** What «Выдать номер карты» is for and that it opens the window, said under the buttons. */
+  cardNumberRouteHint(routeType?: string | null): string {
+    return (this.cardNumberRouteTarget(routeType) === 'EMPLOYEE_REQUISITES'
+      ? '«Выдать номер карты» — клиент не хочет платить по ссылке. '
+      : '«Выдать номер карты» — клиент просит счёт на другого человека. ')
+      + 'Откроется окно: система подберёт получателя сама, или выберите сотрудника — можно и сверх резерва.';
+  }
+
   isBankPaymentRoute(routeType?: string | null): boolean {
     const route = (routeType ?? '').trim().toUpperCase();
     return route === 'BANK_LINK' || route === 'TBANK_LINK' || route === 'TOCHKA_LINK';
@@ -1464,8 +1820,14 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       || (invoice.status === 'COLLECTING' && this.allOrdersReady(invoice));
   }
 
+  /** The autoresponder sets «Не оплачен»; the manual button stays with the owner and administrators. */
+  manualUnpaidAllowed(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
   canMarkInvoiceUnpaid(invoice: CommonInvoiceSummaryResponse): boolean {
-    return invoice.totalOrders > 0
+    return this.manualUnpaidAllowed()
+      && invoice.totalOrders > 0
       && invoice.paidOrders < invoice.totalOrders
       && ['INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status);
   }

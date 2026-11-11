@@ -4,6 +4,7 @@ import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRequest;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionResponse;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRowRequest;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentOptionsResponse;
+import com.hunt.otziv.common_billing.dto.CommonManualPaymentOtherRecipientsResponse;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentRecipientCandidateResponse;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
@@ -45,6 +46,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -94,9 +96,24 @@ public class CommonManualPaymentAttributionCoordinator {
             List<CommonInvoiceOrder> items,
             long remainingKopecks
     ) {
+        return options(invoice, items, remainingKopecks, null);
+    }
+
+    /**
+     * Options for checking an already filled request: a one-off recipient named in it is resolved
+     * as well, so a report staged for the owner may carry the same people the final receipt accepts.
+     */
+    @Transactional(readOnly = true)
+    public CommonManualPaymentOptionsResponse options(
+            CommonInvoice invoice,
+            List<CommonInvoiceOrder> items,
+            long remainingKopecks,
+            CommonManualPaymentAttributionRequest request
+    ) {
         requireInvoice(invoice);
         ContractorAllocationMode mode = accountingMode(invoice);
-        PreparedContext context = context(invoice, activeItems(items), mode);
+        PreparedContext context = context(invoice, activeItems(items), mode,
+                taskReceiptIntegrationService.candidate(invoice), OtherRecipients.named(request));
         List<CommonManualPaymentRecipientCandidateResponse> candidates = context.candidates().values().stream()
                 .map(CandidateState::response)
                 .filter(candidate -> !CommonOwnerReceiptApprovals.hasBankRoute(invoice)
@@ -114,6 +131,26 @@ public class CommonManualPaymentAttributionCoordinator {
                 "TASK_RECIPIENT_V1",
                 normalize(invoice.getPaymentRouteManualTaskSourceGeneration())
         );
+    }
+
+    /**
+     * People who may have received the money although the invoice was not issued to them: the whole
+     * team of the invoice managers and performers of its companies. Offered behind a separate button.
+     */
+    @Transactional(readOnly = true)
+    public CommonManualPaymentOtherRecipientsResponse otherRecipients(
+            CommonInvoice invoice,
+            List<CommonInvoiceOrder> items
+    ) {
+        requireInvoice(invoice);
+        ContractorAllocationMode mode = accountingMode(invoice);
+        PreparedContext context = context(invoice, activeItems(items), mode,
+                taskReceiptIntegrationService.candidate(invoice), OtherRecipients.EVERYONE);
+        return new CommonManualPaymentOtherRecipientsResponse(invoice.getId(), context.candidates().values().stream()
+                .filter(CandidateState::outsideInvoice)
+                .map(state -> new CommonManualPaymentOtherRecipientsResponse.Item(
+                        state.response(), state.previousPerformer, state.teamMember))
+                .toList());
     }
 
     @Transactional(readOnly = true)
@@ -298,7 +335,7 @@ public class CommonManualPaymentAttributionCoordinator {
     ) {
         requireInvoice(invoice);
         validateRequest(request);
-        PreparedContext context = context(invoice, items, mode, frozenTaskRoute);
+        PreparedContext context = context(invoice, items, mode, frozenTaskRoute, OtherRecipients.named(request));
         Map<String, CommonManualPaymentRecipientCandidateResponse> candidatesByRecipient = new LinkedHashMap<>();
         context.candidates().values().stream()
                 .map(CandidateState::response)
@@ -411,13 +448,9 @@ public class CommonManualPaymentAttributionCoordinator {
         }
     }
 
-    private PreparedContext context(CommonInvoice invoice, List<CommonInvoiceOrder> items, ContractorAllocationMode mode) {
-        return context(invoice, items, mode, taskReceiptIntegrationService.candidate(invoice));
-    }
-
     private PreparedContext context(
             CommonInvoice invoice, List<CommonInvoiceOrder> items, ContractorAllocationMode mode,
-            Optional<ManualPaymentTaskRouteSnapshot> taskRoute
+            Optional<ManualPaymentTaskRouteSnapshot> taskRoute, OtherRecipients otherRecipients
     ) {
         ContractorPaymentAllocation accountingAllocation = currentAccountingAllocation(invoice, mode).orElse(null);
         boolean contractorWasShown = invoice.getPaymentRouteManualSource()
@@ -501,8 +534,12 @@ public class CommonManualPaymentAttributionCoordinator {
 
         Set<Long> workerIds = new HashSet<>();
         Set<Long> managerIds = new HashSet<>();
+        Set<Long> orderIds = new HashSet<>();
         for (CommonInvoiceOrder item : items) {
             Order order = item == null ? null : item.getOrder();
+            if (order != null && order.getId() != null) {
+                orderIds.add(order.getId());
+            }
             Worker worker = order == null ? null : order.getWorker();
             User workerUser = worker == null ? null : worker.getUser();
             if (worker != null && worker.getId() != null) {
@@ -558,6 +595,7 @@ public class CommonManualPaymentAttributionCoordinator {
                 }
             }
         }
+        addOtherRecipients(candidates, otherRecipients, managerIds, orderIds, mode, accountingAllocation);
         taskRoute.ifPresent(snapshot -> {
             ManualPaymentTaskAccountingTargetKind targetKind = snapshot.accountingTargetKind();
             if (targetKind == null) {
@@ -604,6 +642,46 @@ public class CommonManualPaymentAttributionCoordinator {
                 currentWorkerId,
                 currentManagerId
         );
+    }
+
+    /**
+     * Adds people outside the invoice's own participants: the managers' whole team (a switched-off
+     * profile included) and performers of the invoice companies. They never enter the ordinary list;
+     * the caller either asks for all of them or names the ones a request already carries.
+     */
+    private void addOtherRecipients(
+            Map<String, CandidateState> candidates,
+            OtherRecipients otherRecipients,
+            Set<Long> managerIds,
+            Set<Long> orderIds,
+            ContractorAllocationMode mode,
+            ContractorPaymentAllocation accountingAllocation
+    ) {
+        if (otherRecipients.nobody()) {
+            return;
+        }
+        Set<Long> teamIds = managerIds.isEmpty() ? Set.of() : new LinkedHashSet<>(
+                profileRepository.findActiveTeamProfileIds(managerIds, ContractorRole.SPECIALIST));
+        Set<Long> performerIds = orderIds.isEmpty() ? Set.of() : new LinkedHashSet<>(
+                profileRepository.findCompanyPerformerProfileIds(orderIds, ContractorRole.SPECIALIST));
+        Set<Long> wanted = new LinkedHashSet<>(performerIds);
+        wanted.addAll(teamIds);
+        wanted.removeIf(id -> !otherRecipients.includes(id));
+        if (wanted.isEmpty()) {
+            return;
+        }
+        for (ContractorPaymentProfile profile : profileRepository.findAllById(wanted)) {
+            String key = profileKey(profile.getId());
+            if (!candidates.containsKey(key)) {
+                addProfileCandidate(candidates, profile, ContractorRecipientType.SPECIALIST, false, false,
+                        availableFor(profile, mode, accountingAllocation));
+            }
+            CandidateState state = candidates.get(key);
+            if (state != null) {
+                state.previousPerformer = performerIds.contains(profile.getId());
+                state.teamMember = teamIds.contains(profile.getId());
+            }
+        }
     }
 
     private void addUserProfileCandidate(
@@ -930,6 +1008,17 @@ public class CommonManualPaymentAttributionCoordinator {
         return KEY_PREFIX + invoiceId + ":" + cleanKey(operationKey, "ключ операции") + ":" + rowKey;
     }
 
+    /** The receipt time already written for this operation of the invoice, when its receipt was recorded. */
+    Optional<LocalDateTime> recordedReceiptTime(Long invoiceId, String operationKey) {
+        String evidenceReference = evidenceReference(invoiceId, operationKey);
+        return attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+                        ContractorActualPaymentSourceKind.COMMON_INVOICE, invoiceId).stream()
+                .filter(value -> Objects.equals(value.getEvidenceReference(), evidenceReference))
+                .map(ContractorActualPaymentAttribution::getEffectiveAt)
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
     static String evidenceReference(Long invoiceId, String operationKey) {
         return KEY_PREFIX + invoiceId + ":" + cleanKey(operationKey, "ключ операции");
     }
@@ -984,6 +1073,34 @@ public class CommonManualPaymentAttributionCoordinator {
     ) {
     }
 
+    /** Which people outside the invoice's own participants the caller needs resolved. */
+    private record OtherRecipients(boolean everyone, Set<Long> profileIds) {
+        private static final OtherRecipients NOBODY = new OtherRecipients(false, Set.of());
+        private static final OtherRecipients EVERYONE = new OtherRecipients(true, Set.of());
+
+        /** Only the profiles a request names: confirming one receipt must not load the whole team. */
+        private static OtherRecipients named(CommonManualPaymentAttributionRequest request) {
+            if (request == null || request.attributions() == null) {
+                return NOBODY;
+            }
+            Set<Long> ids = new HashSet<>();
+            for (CommonManualPaymentAttributionRowRequest row : request.attributions()) {
+                if (row != null && row.recipientProfileId() != null) {
+                    ids.add(row.recipientProfileId());
+                }
+            }
+            return ids.isEmpty() ? NOBODY : new OtherRecipients(false, Set.copyOf(ids));
+        }
+
+        private boolean nobody() {
+            return !everyone && profileIds.isEmpty();
+        }
+
+        private boolean includes(Long profileId) {
+            return everyone || profileIds.contains(profileId);
+        }
+    }
+
     private record PreparedContext(
             Map<String, CandidateState> candidates,
             String defaultRecipientKey,
@@ -1008,6 +1125,8 @@ public class CommonManualPaymentAttributionCoordinator {
         private final String label;
         private boolean originalRecipient;
         private boolean currentParticipant;
+        private boolean previousPerformer;
+        private boolean teamMember;
         private final boolean profileEnabled;
         private final Long availableKopecks;
         private final ContractorCashDestinationKind cashDestinationKind;
@@ -1062,6 +1181,13 @@ public class CommonManualPaymentAttributionCoordinator {
             this.taskRecipientName = taskRecipientName;
             this.accountingTargetLabel = accountingTargetLabel;
             this.effectText = effectText;
+        }
+
+        /** Neither the invoice recipient nor a participant of its orders: offered behind «+» only. */
+        private boolean outsideInvoice() {
+            return !originalRecipient && !currentParticipant
+                    && recipientType != ContractorRecipientType.OWNER
+                    && cashDestinationKind != ContractorCashDestinationKind.MANUAL_PAYMENT_TASK;
         }
 
         private CommonManualPaymentRecipientCandidateResponse response() {

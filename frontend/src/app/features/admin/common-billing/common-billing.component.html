@@ -207,20 +207,26 @@
     @if (currentInvoice()) {
       @let invoice = currentInvoice();
       <aside class="invoice-side" aria-label="Действия общего счета">
-        <div class="panel-head">
+        <header class="side-head">
           <div>
-            <h3>Общий счет #{{ invoice?.id }}</h3>
+            <h3>Общий счёт #{{ invoice?.id }}</h3>
             <small>{{ invoice?.title || selectedAccountName() }}</small>
             @if (invoice?.invoicePurpose === 'BAD_REVIEW_SUCCESSOR' && invoice?.supersedesInvoiceId) {
               <small>Дополнительный цикл к счету #{{ invoice?.supersedesInvoiceId }}</small>
             }
           </div>
-          <span [class]="statusClass(invoice?.status)">{{ statusLabel(invoice?.status) }}</span>
-        </div>
+          <div class="side-head-tools">
+            <span [class]="statusClass(invoice?.status)">{{ statusLabel(invoice?.status) }}</span>
+            <button type="button" class="side-guide-button" (click)="openGuide()" title="Что означает каждый блок панели и когда нажимать кнопки">
+              <span class="material-icons-sharp" aria-hidden="true">menu_book</span>
+              Инструкция
+            </button>
+          </div>
+        </header>
 
-        <section class="invoice-summary">
+        <section class="invoice-summary" aria-label="Суммы общего счёта">
           <div>
-            <small>Всего</small>
+            <small>Сумма счёта</small>
             <strong>{{ formatKopecks(invoice?.amountKopecks) }}</strong>
           </div>
           <div>
@@ -228,87 +234,31 @@
             <strong>{{ formatKopecks(invoice?.paidKopecks) }}</strong>
           </div>
           <div>
-            <small>{{ invoice?.status === 'ARCHIVED' ? 'Разница по архивному счёту' : 'Осталось' }}</small>
+            <small>{{ invoice?.status === 'ARCHIVED' ? 'Разница по архиву' : 'Осталось оплатить' }}</small>
             <strong>{{ formatKopecks(invoice?.remainingKopecks) }}</strong>
           </div>
           <div>
-            <small>Готово</small>
-            <strong>{{ invoice?.readyOrders }}/{{ invoice?.totalOrders }}</strong>
+            <small>Заказы готовы</small>
+            <strong>{{ invoice?.readyOrders }} из {{ invoice?.totalOrders }}</strong>
+          </div>
+          <div class="invoice-summary-progress" role="progressbar" aria-label="Доля оплаты"
+            aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="invoicePaidPercent()">
+            <span [style.width.%]="invoicePaidPercent()"></span>
           </div>
         </section>
 
-        @if(invoice && canManagePaperInvoices() && invoice.status !== 'ARCHIVED') {
-          <app-paper-invoice-list [invoiceId]="invoice.id" (updated)="refreshPaperInvoiceList()" (stateChanged)="paperInvoiceState.set($event)" />
-        }
-        @if (invoice?.status === 'ARCHIVED') {
-          <p class="invoice-action-sequence-hint">Сохранено для истории, без требования оплаты.</p>
-        }
-
-        @if (invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
-          <section class="invoice-problem" aria-label="Режим бумажного счёта">
-            <span class="material-icons-sharp" aria-hidden="true">description</span>
-            <div>
-              <strong>{{invoice?.status === 'PAID' ? 'Оплата завершена' : paperWorkflow().ordinaryOnly ? 'Оплата по обычным реквизитам' : paperWorkflow().ordinaryCount ? 'Разные способы оплаты' : 'Бумажный счёт владельца'}}</strong>
-              @if(invoice?.status === 'PAID') {
-                <p>Все заказы оплачены. Документы и использованные способы оплаты сохранены в истории.</p>
-              } @else if(paperWorkflow().ordinaryOnly) {
-                <p>Оставшиеся заказы оплачиваются отдельно по обычным реквизитам. Общий счёт закроется после оплаты всех заказов.</p>
-              } @else {
-                <p>Счёт и акт Точки отправляются в группу. Напоминания начнутся после подтверждённой доставки документов.</p>
-              }
-            </div>
-          </section>
-
-          @if(!paperWorkflow().ordinaryOnly && invoice?.status !== 'PAID') {
-          <section class="paper-invoice-workflow" aria-label="Последовательность работы с бумажным счётом">
-            <header>
-              <strong>Порядок работы</strong>
-              <small>Выполняйте действия последовательно</small>
-            </header>
-            @if (invoice?.sentAt) {
-              <p>Клиент уведомлён о готовности работ. Это уведомление не подтверждает создание или доставку счёта и акта.</p>
-            }
-            <ol>
-              <li [class.is-done]="paperWorkflow().prepared" [class.is-current]="paperWorkflow().contextAvailable && !paperWorkflow().prepared">
-                <span class="paper-invoice-workflow-marker" aria-hidden="true">
-                  {{ paperWorkflow().prepared ? '✓' : '1' }}
-                </span>
-                <div>
-                  <strong>Подготовить счёт и акт</strong>
-                  <small>{{ paperWorkflow().preparationText }}</small>
-                </div>
-              </li>
-              <li
-                [class.is-done]="paperWorkflow().delivered"
-                [class.is-current]="paperWorkflow().prepared && !paperWorkflow().delivered">
-                <span class="paper-invoice-workflow-marker" aria-hidden="true">
-                  {{ paperWorkflow().delivered ? '✓' : '2' }}
-                </span>
-                <div>
-                  <strong>Доставка документов</strong>
-                  <small>{{ paperWorkflow().deliveryText }}</small>
-                </div>
-              </li>
-              <li
-                [class.is-done]="invoice?.status === 'PAID'"
-                [class.is-current]="paperWorkflow().anyDelivered && invoice?.status !== 'PAID'">
-                <span class="paper-invoice-workflow-marker" aria-hidden="true">
-                  {{ invoice?.status === 'PAID' ? '✓' : '3' }}
-                </span>
-                <div>
-                  <strong>Поступление оплаты</strong>
-                  <small>{{ invoice?.status === 'PAID' ? 'Оплата подтверждена' : 'Проверяется автоматически по данным банка' }}</small>
-                </div>
-              </li>
-            </ol>
-          </section>
-          }
+        @if (invoiceDeliveryWait()) {
+          <p class="side-stage" role="status">
+            <span class="material-icons-sharp" aria-hidden="true">schedule</span>
+            <span>{{ invoiceDeliveryWait() }}</span>
+          </p>
         }
 
-        @if (invoice && ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status)) {
-          <app-common-invoice-overdue-term
-            [invoiceId]="invoice.id"
-            [revision]="invoice.status + '|' + invoice.sentAt + '|' + invoice.paperInvoiceIssuedAt + '|' + paperWorkflow().delivered" />
+        @if (invoiceStageHint()) {
+          <p class="side-stage" role="status">
+            <span class="material-icons-sharp" aria-hidden="true">info</span>
+            <span>{{ invoiceStageHint() }}</span>
+          </p>
         }
 
         @if (invoiceProblem()) {
@@ -373,261 +323,685 @@
           </section>
         }
 
-        <div class="invoice-actions">
-          @if (!invoiceNeedsAttention()
-            && invoice?.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
-            && invoice?.paymentRouteSelectedAt
-            && invoice?.status !== 'PAID') {
-            <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="!!mutating()">Выдать реквизиты без ссылки</button>
-            <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="!!mutating()">Сменить получателя</button>
-            @if (!isOwnerBankRoute(invoice)) {
-              <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute('OWNER_TBANK')" [disabled]="!!mutating()">Банковская ссылка владельца</button>
-            }
-            @if (isOwnerBankRoute(invoice)) {
-              <button type="button" class="secondary" (click)="reissueCommonInvoiceOwnerBankRoute()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">published_with_changes</span>
-                Обновить банк владельца
+        @if (invoiceNeedsAttention()) {
+          <section class="side-group side-group--alert" aria-labelledby="invoice-side-fix">
+            <header class="side-group-head">
+              <span class="material-icons-sharp" aria-hidden="true">build</span>
+              <div>
+                <h4 id="invoice-side-fix">Решение проблемы</h4>
+                <p>Сначала выполните проверку из блока выше, затем нажмите подходящее действие.</p>
+              </div>
+              <button type="button" class="side-help" (click)="openGuide('attention', $event)"
+                aria-label="Инструкция: решение проблемы" title="Подробнее об этом блоке">
+                <span class="material-icons-sharp" aria-hidden="true">help_outline</span>
               </button>
-            }
-          }
-          @if (canManagePaperInvoices()
-            && (!invoiceNeedsAttention() || paperModeSwitchNeedsRetry())
-            && (invoice?.status !== 'PAID' || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE')) {
-            <button type="button" class="secondary" (click)="changePaperInvoiceMode()" [disabled]="!!mutating()">
-              <span class="material-icons-sharp" aria-hidden="true">{{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' ? 'account_tree' : 'description' }}</span>
-              {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
-                ? 'Счёт и акт'
-                : (paperModeSwitchNeedsRetry() ? 'Повторить переход на бумажный счёт' : 'Бумажный счёт') }}
-            </button>
-          }
-          @if (canMarkPaperInvoiceIssued()
-            && invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
-            && invoice?.sentAt
-            && !invoice?.paperInvoiceIssuedAt) {
-            <button type="button" class="success" (click)="markPaperInvoiceIssued()" [disabled]="!!mutating()">
-              <span class="material-icons-sharp" aria-hidden="true">mark_email_read</span>
-              Счёт отправлен клиенту
-            </button>
-          }
-          @if (invoiceNeedsAttention()) {
-            @if (canRecordBadReviewReceipt()) {
-              <button type="button" class="success" (click)="markInvoicePaid()" [disabled]="!!mutating()">Оплата конкретному специалисту</button>
-            }
-            @if (attentionHasManualTbankReconciliationRetry()) {
-              <button type="button" class="success" (click)="retryManualTbankReconciliation()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">sync_lock</span>
-                Повторить сверку оплаты
+            </header>
+            <div class="side-actions">
+              @if (canRecordBadReviewReceipt()) {
+                <button type="button" class="side-action success" (click)="markInvoicePaid()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">person_pin</span>
+                  <span class="side-action-text">
+                    <strong>Оплачен</strong>
+                    <small>Клиент уже перевёл деньги — выберите, кому именно они пришли.</small>
+                  </span>
+                </button>
+              }
+              @if (attentionHasManualTbankReconciliationRetry()) {
+                <button type="button" class="side-action success" (click)="retryManualTbankReconciliation()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">sync_lock</span>
+                  <span class="side-action-text">
+                    <strong>Повторить сверку оплаты</strong>
+                    <small>Система ещё раз запросит банк и закроет счёт, только если это безопасно.</small>
+                  </span>
+                </button>
+              }
+              @if (attentionHasLatePayment()) {
+                <button type="button" class="side-action success" (click)="applyLatePayment()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
+                  <span class="side-action-text">
+                    <strong>Распределить поздний платёж</strong>
+                    <small>Банк прислал оплату позже срока — зачесть её в неоплаченные заказы счёта.</small>
+                  </span>
+                </button>
+              }
+              @if (attentionHasFinalCancelFailure()) {
+                <button type="button" class="side-action success" (click)="confirmFinalPaymentCancelCheck()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">verified</span>
+                  <span class="side-action-text">
+                    <strong>Ссылка проверена</strong>
+                    <small>Старая банковская ссылка проверена вручную и больше не требует действий.</small>
+                  </span>
+                </button>
+              }
+              @if (attentionHasPaymentInitCheck()) {
+                <button type="button" class="side-action success" (click)="confirmPaymentInitCheck()" [disabled]="!!mutating() || !paymentInitCheckReady()">
+                  <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+                  <span class="side-action-text">
+                    <strong>{{ paymentInitNoPaymentButtonLabel }}</strong>
+                    <small>Только после проверки в личном кабинете банка, что оплаты по ссылке нет.</small>
+                  </span>
+                </button>
+              }
+              @if (attentionHasStandaloneRouteConflict()) {
+                <button type="button" class="side-action success" (click)="repairPaymentRoute()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">build_circle</span>
+                  <span class="side-action-text">
+                    <strong>Починить маршрут оплаты</strong>
+                    <small>Клиент ещё не платил — восстановить единый способ оплаты счёта.</small>
+                  </span>
+                </button>
+                <button type="button" class="side-action success" (click)="reportManualCardPayment()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">payments</span>
+                  <span class="side-action-text">
+                    <strong>Клиент уже оплатил</strong>
+                    <small>Деньги пришли переводом — укажите получателя и сумму.</small>
+                  </span>
+                </button>
+              }
+              @if (attentionRetryEnabled()) {
+                <button type="button" class="side-action primary" (click)="retryAttention()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">restart_alt</span>
+                  <span class="side-action-text">
+                    <strong>Повторить обработку</strong>
+                    <small>Причина устранена — запустить обработку счёта ещё раз.</small>
+                  </span>
+                </button>
+              }
+              @if (attentionResolveEnabled()) {
+                <button type="button" class="side-action success" (click)="resolveAttention()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">rule</span>
+                  <span class="side-action-text">
+                    <strong>Закрыть проверку</strong>
+                    <small>Только после сверки оплаты и заказов: снимет отметку «Требует внимания».</small>
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
+        }
+
+        @if (!invoiceNeedsAttention()) {
+          <section class="side-group" aria-labelledby="invoice-side-payment">
+            <header class="side-group-head">
+              <span class="material-icons-sharp" aria-hidden="true">payments</span>
+              <div>
+                <h4 id="invoice-side-payment">Оплата</h4>
+                <p>{{ paymentHint() }}</p>
+              </div>
+              <button type="button" class="side-help" (click)="openGuide('payment', $event)"
+                aria-label="Инструкция: оплата" title="Подробнее об этом блоке">
+                <span class="material-icons-sharp" aria-hidden="true">help_outline</span>
               </button>
-            }
-            @if (attentionHasLatePayment()) {
-              <button type="button" class="success" (click)="applyLatePayment()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
-                Распределить
-              </button>
-            }
-            @if (attentionHasFinalCancelFailure()) {
-              <button type="button" class="success" (click)="confirmFinalPaymentCancelCheck()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">verified</span>
-                Проверено
-              </button>
-            }
-            @if (attentionHasPaymentInitCheck()) {
-              <button type="button" class="success" (click)="confirmPaymentInitCheck()" [disabled]="!!mutating() || !paymentInitCheckReady()">
-                <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
-                {{ paymentInitNoPaymentButtonLabel }}
-              </button>
-            }
-            @if (attentionHasStandaloneRouteConflict()) {
-              <button type="button" class="success" (click)="repairPaymentRoute()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">build_circle</span>
-                Починить
-              </button>
-              <button type="button" class="success" (click)="reportManualCardPayment()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">payments</span>
-                Оплатили
-              </button>
-            }
-            @if (attentionRetryEnabled()) {
-              <button type="button" class="primary" (click)="retryAttention()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">restart_alt</span>
-                Повторить
-              </button>
-            }
-            @if (attentionResolveEnabled()) {
-              <button type="button" class="success" (click)="resolveAttention()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">rule</span>
-                Закрыть проверку
-              </button>
-            }
-          } @else if (canResolveTechnicalTail()) {
-            <button type="button" class="success" (click)="resolveTechnicalTail()" [disabled]="!!mutating()">
-              <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
-              Закрыть хвост
-            </button>
-          } @else if (canResolvePaymentNotification()) {
-            <button type="button" class="success" (click)="resolvePaymentSuccessNotification()" [disabled]="!!mutating()">
-              <span class="material-icons-sharp" aria-hidden="true">mark_chat_read</span>
-              Уведомление обработано
-            </button>
-          } @else {
-            <button type="button" class="primary" (click)="sendInvoice()" [disabled]="!!mutating() || !readyForSending()">
-              <span class="material-icons-sharp" aria-hidden="true">send</span>
-              {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
-                ? (invoice?.sentAt ? 'Повторить уведомление' : 'Сообщить о готовности')
-                : 'Отправить' }}
-            </button>
-          }
-          <button type="button" class="secondary" (click)="copyPublicUrl()" [disabled]="!invoice?.publicUrl || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'">
-            <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'public-url' ? 'check' : 'content_copy' }}</span>
-            Ссылка
-          </button>
-          @if (!invoiceNeedsAttention()) {
-            <button type="button" class="review" (click)="approveReviewOrders()" [disabled]="!!mutating() || !canApproveReviewOrders()">
-              <span class="material-icons-sharp" aria-hidden="true">playlist_add_check</span>
-              Одобрить все
-            </button>
+            </header>
             @if (paperInvoiceAwaitingDeliveryConfirmation()) {
-              <p class="invoice-action-sequence-hint">
-                <span class="material-icons-sharp" aria-hidden="true">info</span>
+              <p class="side-note">
+                <span class="material-icons-sharp" aria-hidden="true">schedule</span>
                 Дождитесь подтверждённой доставки счёта и акта. Поступление оплаты проверяется автоматически.
               </p>
             }
-            @if (invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' && paperWorkflow().bankManaged) {
-              <button type="button" class="success" (click)="reconcilePaperInvoice()" [disabled]="!!mutating() || invoice?.status === 'PAID'">
-                <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
-                Проверить оплату в банке
-              </button>
-            } @else if (invoice?.contractorPaymentRoute) {
-              @if (manualAttributionRequired() && canMarkPaid()) {
-                <button type="button" class="success" (click)="markInvoicePaid()" [disabled]="!!mutating()">Оплата конкретному специалисту</button>
+            <div class="side-actions">
+              @if (invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' && paperWorkflow().bankManaged) {
+                <button type="button" class="side-action success" (click)="reconcilePaperInvoice()" [disabled]="!!mutating() || invoice?.status === 'PAID'">
+                  <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+                  <span class="side-action-text">
+                    <strong>Проверить оплату в банке</strong>
+                    <small>Оплата по счёту Точки проверяется сама. Нажмите, если клиент сообщил об оплате и ждать не хочется.</small>
+                  </span>
+                </button>
+              } @else if (invoice?.contractorPaymentRoute) {
+                @if (manualAttributionRequired() && canMarkPaid()) {
+                  <button type="button" class="side-action success" (click)="markInvoicePaid()" [disabled]="!!mutating()">
+                    <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
+                    <span class="side-action-text">
+                      <strong>Оплачен</strong>
+                      <small>Откроется окно: получатель из счёта уже выбран — останется нажать «Оплачен — закрыть счёт». Если деньги получил другой человек, выберите его в том же окне.</small>
+                    </span>
+                  </button>
+                } @else if (manualAttributionRequired() === false) {
+                  <button type="button" class="side-action success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource()">
+                    <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+                    <span class="side-action-text">
+                      <strong>Подтвердить по выписке получателя</strong>
+                      <small>Только для владельца и администратора: вы сами увидели деньги в выписке получателя из счёта. Укажите пришедшую сумму — она зачтётся в счёт.</small>
+                    </span>
+                  </button>
+                }
+              } @else {
+                @if (manualAttributionRequired() && invoice?.invoicePaymentMode !== 'OWNER_PAPER_INVOICE' && !isOwnerBankRoute(invoice)) {
+                  <button type="button" class="side-action success" (click)="markInvoicePaid()" [disabled]="!!mutating() || !canMarkPaid()">
+                    <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
+                    <span class="side-action-text">
+                      <strong>Оплачен</strong>
+                      <small>Откроется окно: получатель из счёта уже выбран — останется нажать «Оплачен — закрыть счёт». Если деньги получил другой человек, выберите его в том же окне.</small>
+                    </span>
+                  </button>
+                } @else {
+                  <button type="button" class="side-action success" (click)="markInvoicePaid()"
+                    [disabled]="!!mutating() || !canMarkPaid()"
+                    [attr.title]="paperInvoiceAwaitingDeliveryConfirmation() ? 'Сначала отметьте отправку счёта клиенту' : null">
+                    <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
+                    <span class="side-action-text">
+                      <strong>{{ manualAttributionRequired() && isOwnerBankRoute(invoice) ? 'Оплачен переводом' : 'Оплачен' }}</strong>
+                      <small>
+                        {{ manualAttributionRequired() && isOwnerBankRoute(invoice)
+                          ? 'Клиент заплатил не по ссылке, а переводом — например, исполнителю по старой памяти. В окне выберите, кому пришли деньги. Оплату по самой ссылке банк отметит сам.'
+                          : 'Деньги пришли, но система не увидела оплату сама, — закрыть весь счёт оплатой.' }}
+                      </small>
+                    </span>
+                  </button>
+                }
               }
-              <button type="button" class="success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource()">
-                <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
-                Сверить поступление
-              </button>
-            } @else {
-              <button type="button" class="success" (click)="markInvoicePaid()"
-                [disabled]="!!mutating() || !canMarkPaid()"
-                [attr.title]="paperInvoiceAwaitingDeliveryConfirmation() ? 'Сначала отметьте отправку счёта клиенту' : null">
-                <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
-                Оплачен
-              </button>
-            }
-            <button type="button" class="warning" (click)="markInvoiceUnpaid()" [disabled]="!!mutating() || !canMarkUnpaid()">
-              <span class="material-icons-sharp" aria-hidden="true">money_off</span>
-              Не оплачен
-            </button>
-            @if (canMarkBan()) {
-              <button type="button" class="danger" (click)="markInvoiceBan()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">block</span>
-                В Бан
-              </button>
-            }
-            @if (canArchiveInvoice()) {
-              <button type="button" class="danger" (click)="archiveInvoice()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">archive</span>
-                В архив
-              </button>
-            }
-            @if (canDeleteInvoiceWithOrders()) {
-              <button type="button" class="danger" (click)="deleteInvoiceWithOrders()" [disabled]="!!mutating()">
-                <span class="material-icons-sharp" aria-hidden="true">delete_forever</span>
-                Удалить
-              </button>
-            }
-          }
-        </div>
-
-        @if (invoiceDetails()?.delivery; as delivery) {
-          <p role="status">{{ deliveryStatusText(delivery) }}</p>
+            </div>
+          </section>
         }
-        @if (invoice?.paymentRouteSelectedAt || invoice?.sentAt || invoice?.paperInvoiceIssuedAt || invoice?.lastReminderAt || invoice?.nextReminderAt || invoice?.lastError || invoice?.paymentSuccessNotificationError) {
-          <div class="invoice-timeline">
-            @if (invoice?.paymentRouteSelectedAt && invoice) {
-              <span>Маршрут: {{ paymentRouteLabel(invoice) }} · {{ invoice.paymentRouteSelectedAt | date:'dd.MM HH:mm' }}</span>
+
+        @if (invoice
+          && !invoiceNeedsAttention()
+          && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+          && invoice.paymentRouteSelectedAt
+          && invoice.status !== 'PAID') {
+          <section class="side-group" aria-labelledby="invoice-side-route">
+            <header class="side-group-head">
+              <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
+              <div>
+                <h4 id="invoice-side-route">Смена получателя и способа оплаты</h4>
+                <p>Только пока клиент не оплатил. Получателя подберёт система, или выберите сотрудника сами в окне; клиенту сразу уйдёт обновлённый счёт.</p>
+              </div>
+              <button type="button" class="side-help" (click)="openGuide('route', $event)"
+                aria-label="Инструкция: смена способа оплаты" title="Подробнее об этом блоке">
+                <span class="material-icons-sharp" aria-hidden="true">help_outline</span>
+              </button>
+            </header>
+            <div class="route-current">
+              <span class="route-current-label">Получатель сейчас</span>
+              <strong>{{ routeRecipientName(invoice) }}</strong>
+              <small>{{ routeMethodLabel(invoice) }}</small>
+            </div>
+            @if (lastRouteChange(); as change) {
+              @if (change.invoiceId === invoice.id) {
+                <p class="route-change-result" role="status">
+                  <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
+                  <span>Изменено в {{ change.at | date:'HH:mm' }}: было «{{ change.from }}», стало «{{ change.to }}».</span>
+                </p>
+              }
             }
-            @if (invoice?.sentAt) {
-              <span>Отправлен {{ invoice?.sentAt | date:'dd.MM HH:mm' }}</span>
+            <div class="side-actions">
+              <button type="button" class="side-action" (click)="changeCommonInvoicePaymentRoute(cardNumberRouteTarget(invoice))" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">dialpad</span>
+                <span class="side-action-text">
+                  <strong>Выдать номер карты</strong>
+                  @if (cardNumberRouteTarget(invoice) === 'EMPLOYEE_REQUISITES') {
+                    <small><b class="side-action-route">ссылка → номер карты</b>
+                      Клиент не хочет платить по ссылке. Откроется окно: система подберёт получателя сама, или выберите сотрудника — можно и сверх резерва.</small>
+                  } @else {
+                    <small><b class="side-action-route">номер карты другого человека</b>
+                      Клиент просит счёт на другого человека. Откроется окно: система подберёт получателя сама, или выберите сотрудника — можно и сверх резерва.</small>
+                  }
+                </span>
+              </button>
+              @if (!isOwnerBankRoute(invoice)) {
+                <button type="button" class="side-action" (click)="changeCommonInvoicePaymentRoute('OWNER_TBANK')" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">account_balance</span>
+                  <span class="side-action-text">
+                    <strong>Выдать ссылку банка</strong>
+                    <small><b class="side-action-route">номер карты → ссылка банка владельца</b>
+                      Клиент хочет платить по ссылке — картой или по СБП. Деньги получит владелец, оплату подтвердит банк.</small>
+                  </span>
+                </button>
+              } @else {
+                <button type="button" class="side-action" (click)="reissueCommonInvoiceOwnerBankRoute()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">published_with_changes</span>
+                  <span class="side-action-text">
+                    <strong>Выдать новую ссылку банка</strong>
+                    <small><b class="side-action-route">ссылка → новая ссылка</b>
+                      Старая ссылка перестала открываться или сменился банк менеджера — клиенту уйдёт новая ссылка вместо текущей.</small>
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
+        }
+
+        <details class="side-group side-group--fold" [open]="readyForSending() && !invoice?.sentAt">
+          <summary class="side-group-head">
+            <span class="material-icons-sharp" aria-hidden="true">send</span>
+            <div>
+              <h4 id="invoice-side-send">Отправка клиенту</h4>
+              <p>
+                {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                  ? 'Клиент получает уведомление о готовности работ. Счёт и акт Точки уходят отдельно.'
+                  : 'Счёт приходит клиенту в чат вместе со ссылкой на страницу оплаты.' }}
+              </p>
+              <p class="side-fold-state">{{ invoice?.sentAt ? 'Отправлен ' + (invoice?.sentAt | date:'dd.MM HH:mm') : 'Ещё не отправлен' }}</p>
+            </div>
+            <button type="button" class="side-help" (click)="openGuide('send', $event)"
+              aria-label="Инструкция: отправка клиенту" title="Подробнее об этом блоке">
+              <span class="material-icons-sharp" aria-hidden="true">help_outline</span>
+            </button>
+            <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+          </summary>
+          <div class="side-fold-body">
+          <div class="side-actions">
+            @if (!invoiceNeedsAttention()) {
+              @if (canResolveTechnicalTail()) {
+                <button type="button" class="side-action success" (click)="resolveTechnicalTail()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
+                  <span class="side-action-text">
+                    <strong>Закрыть технический хвост</strong>
+                    <small>Связь или перенос заказов уже проверены — убрать служебную отметку отключённого счёта.</small>
+                  </span>
+                </button>
+              } @else if (canResolvePaymentNotification()) {
+                <button type="button" class="side-action success" (click)="resolvePaymentSuccessNotification()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">mark_chat_read</span>
+                  <span class="side-action-text">
+                    <strong>Уведомление обработано</strong>
+                    <small>Сообщение об оплате не ушло автоматически. Отправьте его клиенту вручную, затем нажмите.</small>
+                  </span>
+                </button>
+              } @else {
+                <button type="button" class="side-action primary" (click)="sendInvoice()" [disabled]="!!mutating() || !readyForSending()">
+                  <span class="material-icons-sharp" aria-hidden="true">send</span>
+                  <span class="side-action-text">
+                    <strong>
+                      {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                        ? (invoice?.sentAt ? 'Повторить уведомление' : 'Сообщить о готовности')
+                        : (invoice?.sentAt ? 'Отправить счёт повторно' : 'Отправить счёт') }}
+                    </strong>
+                    <small>
+                      {{ readyForSending()
+                        ? (invoice?.sentAt ? 'Клиент уже получил счёт — повторите, если он его потерял.' : 'Когда все заказы готовы и проверены.')
+                        : 'Станет доступно, когда все заказы счёта будут готовы.' }}
+                    </small>
+                  </span>
+                </button>
+              }
             }
-            @if (invoice?.paperInvoiceIssuedAt) {
-              <span>Бумажный счёт отправлен {{ invoice?.paperInvoiceIssuedAt | date:'dd.MM HH:mm' }}</span>
-            }
-            @if (invoice?.lastReminderAt) {
-              <span>Напоминание {{ invoice?.lastReminderAt | date:'dd.MM HH:mm' }}</span>
-            }
-            @if (invoice?.nextReminderAt) {
-              <span>Следующее {{ invoice?.nextReminderAt | date:'dd.MM HH:mm' }}</span>
-            }
-            @if (invoice?.lastError) {
-              <span class="error-line">{{ invoice?.lastError }}</span>
-            }
-            @if (invoice?.paymentSuccessNotificationError) {
-              <span class="error-line">Уведомление: {{ invoice?.paymentSuccessNotificationError }}</span>
-            }
+            <button type="button" class="side-action" (click)="copyPublicUrl()" [disabled]="!invoice?.publicUrl || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'">
+              <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'public-url' ? 'check' : 'content_copy' }}</span>
+              <span class="side-action-text">
+                <strong>{{ copied() === 'public-url' ? 'Ссылка скопирована' : 'Скопировать ссылку на оплату' }}</strong>
+                <small>
+                  {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                    ? 'Для счёта и акта Точки страница оплаты не используется.'
+                    : 'Если клиенту нужно переслать ссылку вручную.' }}
+                </small>
+              </span>
+            </button>
           </div>
+          @if (invoiceDetails()?.delivery; as delivery) {
+            <p class="side-note" role="status">{{ deliveryStatusText(delivery) }}</p>
+          }
+          </div>
+        </details>
+
+        @if (paperDocumentsActionVisible() || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+          <details class="side-group side-group--fold" [open]="invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'">
+            <summary class="side-group-head">
+              <span class="material-icons-sharp" aria-hidden="true">description</span>
+              <div>
+                <h4 id="invoice-side-paper">Счёт и акт Точки</h4>
+                <p>Для клиентов, которым нужны документы на организацию. Точка формирует счёт и акт и отправляет их в группу клиента.</p>
+                <p class="side-fold-state">{{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' ? 'Включены для этого счёта' : 'Не используются' }}</p>
+              </div>
+              <button type="button" class="side-help" (click)="openGuide('paper', $event)"
+                aria-label="Инструкция: счёт и акт Точки" title="Подробнее об этом блоке">
+                <span class="material-icons-sharp" aria-hidden="true">help_outline</span>
+              </button>
+              <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+            </summary>
+            <div class="side-fold-body">
+
+            @if (invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+              <div class="side-callout">
+                <strong>{{invoice?.status === 'PAID' ? 'Оплата завершена' : paperWorkflow().ordinaryOnly ? 'Оплата по обычным реквизитам' : paperWorkflow().ordinaryCount ? 'Разные способы оплаты' : 'Включён бумажный счёт владельца'}}</strong>
+                @if(invoice?.status === 'PAID') {
+                  <p>Все заказы оплачены. Документы и использованные способы оплаты сохранены в истории.</p>
+                } @else if(paperWorkflow().ordinaryOnly) {
+                  <p>Оставшиеся заказы оплачиваются отдельно по обычным реквизитам. Общий счёт закроется после оплаты всех заказов.</p>
+                } @else {
+                  <p>Счёт и акт Точки отправляются в группу. Напоминания начнутся после подтверждённой доставки документов.</p>
+                }
+              </div>
+
+              @if(!paperWorkflow().ordinaryOnly && invoice?.status !== 'PAID') {
+                <section class="paper-invoice-workflow" aria-label="Последовательность работы с бумажным счётом">
+                  <header>
+                    <strong>Порядок работы</strong>
+                    <small>Шаги идут по очереди</small>
+                  </header>
+                  @if (invoice?.sentAt) {
+                    <p>Клиент уведомлён о готовности работ. Это уведомление не подтверждает создание или доставку счёта и акта.</p>
+                  }
+                  <ol>
+                    <li [class.is-done]="paperWorkflow().prepared" [class.is-current]="paperWorkflow().contextAvailable && !paperWorkflow().prepared">
+                      <span class="paper-invoice-workflow-marker" aria-hidden="true">
+                        {{ paperWorkflow().prepared ? '✓' : '1' }}
+                      </span>
+                      <div>
+                        <strong>Подготовить счёт и акт</strong>
+                        <small>{{ paperWorkflow().preparationText }}</small>
+                      </div>
+                    </li>
+                    <li
+                      [class.is-done]="paperWorkflow().delivered"
+                      [class.is-current]="paperWorkflow().prepared && !paperWorkflow().delivered">
+                      <span class="paper-invoice-workflow-marker" aria-hidden="true">
+                        {{ paperWorkflow().delivered ? '✓' : '2' }}
+                      </span>
+                      <div>
+                        <strong>Доставка документов</strong>
+                        <small>{{ paperWorkflow().deliveryText }}</small>
+                      </div>
+                    </li>
+                    <li
+                      [class.is-done]="invoice?.status === 'PAID'"
+                      [class.is-current]="paperWorkflow().anyDelivered && invoice?.status !== 'PAID'">
+                      <span class="paper-invoice-workflow-marker" aria-hidden="true">
+                        {{ invoice?.status === 'PAID' ? '✓' : '3' }}
+                      </span>
+                      <div>
+                        <strong>Поступление оплаты</strong>
+                        <small>{{ invoice?.status === 'PAID' ? 'Оплата подтверждена' : 'Проверяется автоматически по данным банка' }}</small>
+                      </div>
+                    </li>
+                  </ol>
+                </section>
+              }
+            }
+
+            <div class="side-actions">
+              @if (paperDocumentsActionVisible()) {
+                <button type="button" class="side-action" (click)="openPaperDocuments()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">{{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' ? 'folder_open' : 'note_add' }}</span>
+                  <span class="side-action-text">
+                    <strong>
+                      {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                        ? 'Открыть счёт и акт'
+                        : (paperModeSwitchNeedsRetry() ? 'Повторить переход на счёт и акт' : 'Выставить счёт и акт') }}
+                    </strong>
+                    <small>
+                      {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                        ? 'Статус документов, повторная отправка, отмена и возврат к обычной оплате.'
+                        : (paperModeSwitchNeedsRetry()
+                          ? 'Прошлый переход не завершился. Повторите его.'
+                          : 'Клиент просит документы: оплата по ссылке и реквизитам заменится счётом Точки.') }}
+                    </small>
+                  </span>
+                </button>
+              }
+              @if (canMarkPaperInvoiceIssued()
+                && invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                && invoice?.sentAt
+                && !invoice?.paperInvoiceIssuedAt) {
+                <button type="button" class="side-action success" (click)="markPaperInvoiceIssued()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">mark_email_read</span>
+                  <span class="side-action-text">
+                    <strong>Счёт отправлен клиенту</strong>
+                    <small>Вы отправили счёт сами — после отметки начнутся автоматические напоминания.</small>
+                  </span>
+                </button>
+              }
+            </div>
+
+            @if (invoice && canManagePaperInvoices() && invoice.status !== 'ARCHIVED') {
+              <app-paper-invoice-list [invoiceId]="invoice.id" [issueAction]="false"
+                (updated)="refreshPaperInvoiceList()" (stateChanged)="paperInvoiceState.set($event)" />
+            }
+            </div>
+          </details>
+        }
+
+        @if (invoice && (['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status) || !invoiceNeedsAttention())) {
+          <details class="side-group side-group--fold side-more">
+            <summary class="side-group-head">
+              <span class="material-icons-sharp" aria-hidden="true">more_horiz</span>
+              <div>
+                <h4>Дополнительно</h4>
+                <p>Срок оплаты и отсрочка, одобрение и возврат заказов, бан, архив и удаление.</p>
+                <p class="side-fold-state">{{ reviewApprovalCount() ? reviewApprovalCount() + ' заказ(ов) ждут одобрения' : 'Ничего не ждёт действий' }}</p>
+              </div>
+              <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+            </summary>
+            <div class="side-fold-body">
+              @if (invoice && ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status)) {
+                <app-common-invoice-overdue-term
+                  (help)="openGuide('term')"
+                  [invoiceId]="invoice.id"
+                  [revision]="invoice.status + '|' + invoice.sentAt + '|' + invoice.paperInvoiceIssuedAt + '|' + paperWorkflow().delivered" />
+              }
+
+              @if (!invoiceNeedsAttention()) {
+                <details class="side-group side-group--fold">
+                  <summary class="side-group-head">
+                    <span class="material-icons-sharp" aria-hidden="true">playlist_add_check</span>
+                    <div>
+                      <h4 id="invoice-side-orders">Заказы счёта</h4>
+                      <p>Заказы в проверке можно одобрить разом, не открывая каждую карточку. Исключённый заказ можно вернуть, пока счёт собирается.</p>
+                      <p class="side-fold-state">{{ reviewApprovalCount() ? reviewApprovalCount() + ' ждут одобрения' : 'Нет заказов на одобрении' }}</p>
+                    </div>
+                    <button type="button" class="side-help" (click)="openGuide('orders', $event)"
+                      aria-label="Инструкция: заказы счёта" title="Подробнее об этом блоке">
+                      <span class="material-icons-sharp" aria-hidden="true">help_outline</span>
+                    </button>
+                    <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+                  </summary>
+                  <div class="side-fold-body">
+                  <div class="side-actions">
+                    <button type="button" class="side-action success" (click)="approveReviewOrders()" [disabled]="!!mutating() || !canApproveReviewOrders()">
+                      <span class="material-icons-sharp" aria-hidden="true">playlist_add_check</span>
+                      <span class="side-action-text">
+                        <strong>Одобрить все{{ reviewApprovalCount() ? ' (' + reviewApprovalCount() + ')' : '' }}</strong>
+                        <small>
+                          {{ reviewApprovalCount()
+                            ? 'Заказы «В проверку» и «На проверке» перейдут в публикацию.'
+                            : 'Сейчас нет заказов, которые ждут одобрения.' }}
+                        </small>
+                      </span>
+                    </button>
+                    @if (canReturnOrders()) {
+                      <button type="button" class="side-action" (click)="openReturnOrders()" [disabled]="!!mutating()">
+                        <span class="material-icons-sharp" aria-hidden="true">playlist_add</span>
+                        <span class="side-action-text">
+                          <strong>Вернуть заказ в счёт</strong>
+                          <small>Заказ исключили, а клиент просит вернуть его — выберите заказ из компаний этой связи. Работает, пока счёт собирается и не отправлен клиенту.</small>
+                        </span>
+                      </button>
+                    }
+                  </div>
+                  </div>
+                </details>
+
+                @if (canMarkUnpaid() || canMarkBan() || canArchiveInvoice() || canDeleteInvoiceWithOrders()) {
+                  <details class="side-group side-group--fold side-group--danger">
+                    <summary class="side-group-head">
+                      <span class="material-icons-sharp" aria-hidden="true">gpp_maybe</span>
+                      <div>
+                        <h4>{{ manualUnpaidAllowed() ? 'Не оплачен, бан, архив и удаление' : 'Бан, архив и удаление' }}</h4>
+                        <p>Клиент не платит или счёт больше не нужен. Каждое действие попросит подтверждение.</p>
+                      </div>
+                      <button type="button" class="side-help" (click)="openGuide('danger', $event)"
+                        aria-label="Инструкция: бан, архив и удаление" title="Подробнее об этом блоке">
+                        <span class="material-icons-sharp" aria-hidden="true">help_outline</span>
+                      </button>
+                      <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+                    </summary>
+                    <div class="side-actions">
+                      @if (canMarkUnpaid()) {
+                        <button type="button" class="side-action warning" (click)="markInvoiceUnpaid()" [disabled]="!!mutating()">
+                          <span class="material-icons-sharp" aria-hidden="true">money_off</span>
+                          <span class="side-action-text">
+                            <strong>Не оплачен</strong>
+                            <small>Обычно это делает автоответчик, когда выйдет срок оплаты. Кнопка нужна, если он на паузе или выключен: неоплаченные заказы перейдут в «Не оплачено» сейчас.</small>
+                          </span>
+                        </button>
+                      }
+                      @if (canMarkBan()) {
+                        <button type="button" class="side-action danger" (click)="markInvoiceBan()" [disabled]="!!mutating()">
+                          <span class="material-icons-sharp" aria-hidden="true">block</span>
+                          <span class="side-action-text">
+                            <strong>В Бан</strong>
+                            <small>Клиент отказывается платить — перевести неоплаченные заказы в Бан.</small>
+                          </span>
+                        </button>
+                      }
+                      @if (canArchiveInvoice()) {
+                        <button type="button" class="side-action danger" (click)="archiveInvoice()" [disabled]="!!mutating()">
+                          <span class="material-icons-sharp" aria-hidden="true">archive</span>
+                          <span class="side-action-text">
+                            <strong>В архив</strong>
+                            <small>Убрать счёт и его заказы в архив без требования оплаты.</small>
+                          </span>
+                        </button>
+                      }
+                      @if (canDeleteInvoiceWithOrders()) {
+                        <button type="button" class="side-action danger" (click)="deleteInvoiceWithOrders()" [disabled]="!!mutating()">
+                          <span class="material-icons-sharp" aria-hidden="true">delete_forever</span>
+                          <span class="side-action-text">
+                            <strong>Удалить счёт и заказы</strong>
+                            <small>Счёт и все его заказы удалятся без возможности восстановления.</small>
+                          </span>
+                        </button>
+                      }
+                    </div>
+                  </details>
+                }
+              }
+            </div>
+          </details>
+        }
+
+        @if (invoice?.paymentRouteSelectedAt || invoice?.sentAt || invoice?.paperInvoiceIssuedAt || invoice?.lastReminderAt || invoice?.nextReminderAt || invoice?.lastError || invoice?.paymentSuccessNotificationError) {
+          <details class="side-history">
+            <summary>
+              <h4>История счёта</h4>
+              <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+            </summary>
+            <dl>
+              @if (invoice?.paymentRouteSelectedAt && invoice) {
+                <div>
+                  <dt>Получатель и способ оплаты · {{ invoice.paymentRouteSelectedAt | date:'dd.MM HH:mm' }}</dt>
+                  <dd>{{ routeDescription(invoice) }}</dd>
+                </div>
+              }
+              @if (invoice?.sentAt) {
+                <div>
+                  <dt>Отправлен клиенту</dt>
+                  <dd>{{ invoice?.sentAt | date:'dd.MM HH:mm' }}</dd>
+                </div>
+              }
+              @if (invoice?.paperInvoiceIssuedAt) {
+                <div>
+                  <dt>Бумажный счёт отправлен</dt>
+                  <dd>{{ invoice?.paperInvoiceIssuedAt | date:'dd.MM HH:mm' }}</dd>
+                </div>
+              }
+              @if (invoice?.lastReminderAt) {
+                <div>
+                  <dt>Последнее напоминание</dt>
+                  <dd>{{ invoice?.lastReminderAt | date:'dd.MM HH:mm' }}</dd>
+                </div>
+              }
+              @if (invoice?.nextReminderAt) {
+                <div>
+                  <dt>Следующее напоминание</dt>
+                  <dd>{{ invoice?.nextReminderAt | date:'dd.MM HH:mm' }}</dd>
+                </div>
+              }
+              @if (deliveryWait(invoice?.lastError, invoiceDetails()?.delivery); as waiting) {
+                <div>
+                  <dt>Сообщение клиенту</dt>
+                  <dd>{{ waiting }}</dd>
+                </div>
+              } @else if (invoice?.lastError) {
+                <div class="error-line">
+                  <dt>Последняя ошибка</dt>
+                  <dd>{{ invoice?.lastError }}</dd>
+                </div>
+              }
+              @if (invoice?.paymentSuccessNotificationError) {
+                <div class="error-line">
+                  <dt>Уведомление об оплате</dt>
+                  <dd>{{ invoice?.paymentSuccessNotificationError }}</dd>
+                </div>
+              }
+            </dl>
+          </details>
+        }
+
+        @if (guideSection(); as section) {
+          <app-common-invoice-guide [section]="section" (closed)="closeGuide()" />
         }
       </aside>
     }
 
-    @if (!managerInvoiceDetailMode) {
-      <aside class="accounts-panel" aria-label="Список общих связей">
-        <div class="panel-head">
-          <div>
-            <h3>Все связи</h3>
-            <small>{{ accountsCountLabel() }} · выберите нужную</small>
-          </div>
-          <button type="button" class="icon-action" (click)="load()" [disabled]="loading()" title="Обновить">
-            <span class="material-icons-sharp" aria-hidden="true">{{ loading() ? 'hourglass_top' : 'refresh' }}</span>
-          </button>
+    @if (managerInvoiceDetailMode && canChangeAccountManager()) {
+      <section class="settings-panel links-shortcut" aria-label="Связи общих счетов">
+        <span class="material-icons-sharp fold-card-icon" aria-hidden="true">account_tree</span>
+        <div>
+          <h3>Связи общих счетов</h3>
+          <small>Этот счёт открыт из карточки заказа, поэтому здесь только он сам. Создать связь, изменить её или перейти к другой можно в разделе «Общие счета».</small>
+          <a class="links-shortcut-link" routerLink="/admin/common-billing" [queryParams]="{ invoiceId: currentInvoice()?.id }">
+            Открыть связи этого счёта
+          </a>
         </div>
+      </section>
+    }
 
-        <div class="account-list">
-          @for (account of accounts(); track trackAccount($index, account)) {
-            <button
-              type="button"
-              class="account-row"
-              [class.active]="selectedAccountId() === account.id"
-              (click)="selectAccount(account)"
-            >
-              <span class="material-icons-sharp" aria-hidden="true">{{ account.enabled ? 'account_tree' : 'pause_circle' }}</span>
-              <div>
-                <strong>{{ account.name }}</strong>
-                <small>
-                  {{ accountCompaniesLabel(account) }} · {{ statusLabel(account.currentInvoice?.status) }}
-                  @if (account.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
-                    · бумажный счёт
-                  }
-                </small>
-              </div>
-            </button>
-          } @empty {
-            <p class="empty-text">Пока нет общих плательщиков.</p>
+    @if (!managerInvoiceDetailMode) {
+      <details class="settings-panel settings-fold" aria-label="Связи общих счетов" [open]="!selectedAccount()">
+      <summary class="fold-card-head">
+        <span class="material-icons-sharp fold-card-icon" aria-hidden="true">account_tree</span>
+        <div>
+          <h3>Связи общих счетов</h3>
+          <small>Связь объединяет компании одного плательщика в один общий счёт. Здесь: изменить эту связь, добавить или убрать её компании, перейти к другой. Новую связь создают в редакторе компании.</small>
+          @if (selectedAccount()) {
+            <span [class]="selectedAccount()?.enabled ? 'state enabled' : 'state disabled'">
+              {{ selectedAccount()?.enabled ? 'связь включена' : 'связь выключена' }}
+            </span>
           }
         </div>
-      </aside>
+        <button type="button" class="side-help settings-help" (click)="openGuide('settings', $event)"
+          aria-label="Инструкция: настройки и компании связи" title="Подробнее об этом блоке">
+          <span class="material-icons-sharp" aria-hidden="true">help_outline</span>
+        </button>
+        <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+      </summary>
 
-      <section class="settings-panel" aria-label="Настройки общего плательщика">
-      <div class="panel-head">
-        <div>
-          <h3>{{ selectedAccount() ? 'Настройки связи' : 'Новый плательщик' }}</h3>
-          <small>Одна компания или несколько компаний в одном счете</small>
-        </div>
-        @if (selectedAccount()) {
-          <span [class]="selectedAccount()?.enabled ? 'state enabled' : 'state disabled'">
-            {{ selectedAccount()?.enabled ? 'связь включена' : 'связь выключена' }}
-          </span>
-        }
+      <div class="links-body">
+      <div class="settings-howto">
+        <strong>Как работать со связями</strong>
+        <ul>
+          <li><b>Создать.</b> В редакторе компании: блок «Общий счет» → включите его и добавьте другие компании. Общий счёт появится сам, когда у компании связи будет заказ.</li>
+          <li><b>Добавить или убрать компанию.</b> В блоке «Эта связь» ниже: поле «Добавить компанию» или «−» у компании. Срабатывает сразу.</li>
+          <li><b>Изменить.</b> Поправьте поля в «Эта связь» и нажмите «Сохранить настройки».</li>
+          <li><b>Удалить.</b> Связи не удаляются: снимите «Связь активна для новых заказов» и сохраните. Компании выйдут из связи, неоплаченные заказы текущего счёта вернутся к оплате по отдельности.</li>
+          <li><b>Открыть другую связь.</b> Блок «Перейти к другой связи» в конце раздела.</li>
+        </ul>
       </div>
 
-      <form class="settings-form" (ngSubmit)="selectedAccount() ? saveAccount() : createAccount()">
-        <label>
-          <span>Название</span>
+      @if (!selectedAccount()) {
+        <p class="settings-note">Связь не выбрана. Откройте нужную в блоке «Перейти к другой связи» ниже.</p>
+      } @else {
+      <details class="links-sub" open>
+        <summary>
+          <span class="material-icons-sharp" aria-hidden="true">tune</span>
+          <span class="links-sub-text">
+            <strong>Эта связь: {{ selectedAccount()?.name }}</strong>
+            <small>Название, ответственный, куда уходит счёт, состав компаний.</small>
+          </span>
+          <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+        </summary>
+      <form class="settings-form" (ngSubmit)="saveAccount()">
+        <label class="settings-field">
+          <span>Название связи</span>
           <input
             name="name"
             [ngModel]="draft().name"
             (ngModelChange)="draft.update(value => ({ ...value, name: $event }))"
             placeholder="Холдинг / Июнь / сеть филиалов"
           >
+          <small>Так связь называется в списке «Перейти к другой связи» и в заголовке общего счёта.</small>
         </label>
 
         <div class="toggle-grid">
@@ -638,7 +1012,10 @@
               [ngModel]="draft().enabled"
               (ngModelChange)="draft.update(value => ({ ...value, enabled: $event }))"
             >
-            <span>Связь активна для новых заказов</span>
+            <span>
+              <strong>Связь активна для новых заказов</strong>
+              <small>Готовые заказы компаний собираются в общий счёт. Если выключить и сохранить, компании выйдут из связи, а неоплаченные заказы текущего счёта вернутся к оплате по отдельности.</small>
+            </span>
           </label>
           <label class="toggle-line">
             <input
@@ -647,54 +1024,73 @@
               [ngModel]="draft().autoRepeatOrders"
               (ngModelChange)="draft.update(value => ({ ...value, autoRepeatOrders: $event }))"
             >
-            <span>Создавать следующие заказы после полной оплаты счета</span>
+            <span>
+              <strong>Создавать следующие заказы после полной оплаты счёта</strong>
+              <small>Когда счёт оплачен целиком, для каждой компании сам открывается следующий заказ. Снимите, если повтор не нужен.</small>
+            </span>
           </label>
         </div>
 
         <div class="field-grid">
-          <label>
-            <span>ID менеджера</span>
-            <input
-              name="managerId"
-              inputmode="numeric"
-              [ngModel]="draft().managerId"
-              (ngModelChange)="draft.update(value => ({ ...value, managerId: $event }))"
-              placeholder="необязательно"
-            >
-          </label>
-          <label>
-            <span>ID компании для счета</span>
-            <input
+          <div class="settings-field">
+            <span>Ответственный менеджер</span>
+            <p class="settings-value">{{ selectedAccount()?.managerName || (draft().managerId ? 'Менеджер №' + draft().managerId : 'Менеджер компании для счёта') }}</p>
+            <small>По его профилю подбираются ссылка и реквизиты для оплаты, он видит связь и счёт. Обычно менять не нужно: по умолчанию это менеджер компании, выбранной ниже.</small>
+            @if (canChangeAccountManager()) {
+              <details class="settings-advanced">
+                <summary>Сменить ответственного — для владельца и администратора</summary>
+                <label class="settings-field">
+                  <span>Номер (ID) менеджера</span>
+                  <input
+                    name="managerId"
+                    inputmode="numeric"
+                    [ngModel]="draft().managerId"
+                    (ngModelChange)="draft.update(value => ({ ...value, managerId: $event }))"
+                    placeholder="пусто — менеджер компании для счёта"
+                  >
+                </label>
+              </details>
+            }
+          </div>
+          <label class="settings-field">
+            <span>Компания для счёта</span>
+            <select
               name="invoiceCompanyId"
-              inputmode="numeric"
               [ngModel]="draft().invoiceCompanyId"
               (ngModelChange)="draft.update(value => ({ ...value, invoiceCompanyId: $event }))"
-              placeholder="необязательно"
             >
+              <option value="">Первая компания счёта (по умолчанию)</option>
+              @for (company of invoiceCompanyOptions(); track company.id) {
+                <option [value]="'' + company.id">{{ company.title }}</option>
+              }
+            </select>
+            <small>В чат этой компании бот отправляет общий счёт и напоминания.</small>
           </label>
         </div>
 
         <button class="primary-action" type="submit" [disabled]="!!mutating() || !draft().name.trim()">
           <span class="material-icons-sharp" aria-hidden="true">{{ mutating() ? 'hourglass_top' : 'save' }}</span>
-          {{ selectedAccount() ? 'Сохранить настройки' : 'Создать плательщика' }}
+          Сохранить настройки
         </button>
+        <small class="settings-note">Поля выше применяются только после нажатия «Сохранить настройки».</small>
       </form>
 
       <section class="company-links" aria-label="Компании в общем счете">
         <div class="section-title">
-          <h3>{{ selectedAccount() ? 'Компании в связи' : 'Компании для связи' }}</h3>
-          <small>{{ selectedAccount() ? 'При добавлении подтянутся текущие незавершенные заказы' : 'Найдите компании: текущие незавершенные заказы подтянутся после создания' }}</small>
+          <h3>Компании в связи</h3>
+          <small>Заказы этих компаний собираются в общий счёт. Добавление и исключение срабатывают сразу, без кнопки «Сохранить».</small>
         </div>
 
         <div class="company-search">
-          <label>
-            <span>Поиск компании</span>
+          <label class="settings-field">
+            <span>Добавить компанию</span>
             <input
               [ngModel]="companySearch()"
               (ngModelChange)="onCompanySearchChange($event)"
               placeholder="Название, город, телефон"
               aria-label="Поиск компании"
             >
+            <small>Найдите компанию и нажмите на неё в результатах. Её текущие незавершённые заказы подтянутся в счёт. Компания может состоять только в одной активной связи.</small>
           </label>
 
           @if (companySearchLoading()) {
@@ -708,42 +1104,21 @@
                   type="button"
                   [disabled]="!!mutating() || companyAlreadySelected(company.id)"
                   (click)="selectCompany(company)"
+                  [attr.title]="companyAlreadySelected(company.id) ? 'Компания уже в связи' : 'Добавить компанию в связь'"
                 >
                   <span class="material-icons-sharp" aria-hidden="true">
                     {{ companyAlreadySelected(company.id) ? 'check_circle' : 'add_business' }}
                   </span>
-                  <div>
+                  <span class="company-search-text">
                     <strong>{{ company.title }}</strong>
                     <small>ID {{ company.id }} · {{ company.city || 'город не указан' }} · {{ company.status }}</small>
-                  </div>
+                  </span>
                 </button>
               }
             </div>
           }
         </div>
 
-        @if (!selectedAccount()) {
-          <div class="linked-company-list draft-company-list">
-            @for (company of draftCompanies(); track trackDraftCompany($index, company)) {
-              <article>
-                <div>
-                  <strong>{{ company.title }}</strong>
-                  <small>ID {{ company.id }} · {{ company.city || 'город не указан' }} · {{ company.status || 'статус не указан' }}</small>
-                </div>
-                <button
-                  type="button"
-                  title="Убрать из создаваемой связи"
-                  (click)="removeDraftCompany(company.id)"
-                  [disabled]="!!mutating()"
-                >
-                  <span class="material-icons-sharp" aria-hidden="true">remove</span>
-                </button>
-              </article>
-            } @empty {
-              <p class="empty-text">Можно создать плательщика без компаний и добавить их позже.</p>
-            }
-          </div>
-        } @else {
           <div class="linked-company-list">
             @for (company of selectedAccount()?.companies ?? []; track trackCompany($index, company)) {
               <article [class.disabled]="!company.enabled">
@@ -754,7 +1129,9 @@
                 @if (company.enabled) {
                   <button
                     type="button"
+                    class="company-remove"
                     title="Исключить из будущих счетов"
+                    aria-label="Исключить компанию из будущих счетов"
                     (click)="removeCompany(company.companyId)"
                     [disabled]="!!mutating()"
                   >
@@ -764,12 +1141,103 @@
               </article>
             }
           </div>
-        }
+          @if ((selectedAccount()?.companies ?? []).length) {
+            <p class="settings-note">
+              «−» исключает компанию из будущих счетов. Система спросит, убрать ли её неоплаченные заказы и из текущего счёта.
+            </p>
+          }
       </section>
-      </section>
+      </details>
+      }
+
+      <details class="links-sub" [open]="accounts().length === 0">
+        <summary>
+          <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
+          <span class="links-sub-text">
+            <strong>Перейти к другой связи</strong>
+            <small>Все общие плательщики сайта: {{ accountsCountLabel() }}. Здесь не только компании текущего счёта — выберите связь, и слева откроется её счёт.</small>
+          </span>
+          <span class="material-icons-sharp side-fold-icon" aria-hidden="true">expand_more</span>
+        </summary>
+        <div class="links-sub-body">
+          <div class="accounts-tools">
+            <label class="account-search">
+              <span class="material-icons-sharp" aria-hidden="true">search</span>
+              <input type="search" placeholder="Найти связь по названию или номеру" aria-label="Найти связь по названию или номеру"
+                [ngModel]="accountFilter()" (ngModelChange)="accountFilter.set($event)">
+            </label>
+            <button type="button" class="icon-action accounts-refresh" (click)="load()" [disabled]="loading()"
+              title="Обновить список связей" aria-label="Обновить список связей">
+              <span class="material-icons-sharp" aria-hidden="true">{{ loading() ? 'hourglass_top' : 'refresh' }}</span>
+            </button>
+          </div>
+
+        <div class="account-list">
+          @for (account of visibleAccounts(); track trackAccount($index, account)) {
+            <button
+              type="button"
+              class="account-row"
+              [class.active]="selectedAccountId() === account.id"
+              [class.paused]="!account.enabled"
+              [attr.aria-current]="selectedAccountId() === account.id ? 'true' : null"
+              (click)="selectAccount(account)"
+            >
+              <span class="material-icons-sharp account-row-icon" aria-hidden="true">{{ account.enabled ? 'account_tree' : 'pause_circle' }}</span>
+              <span class="account-row-text">
+                <strong [title]="account.name">{{ account.name }}</strong>
+                <span class="account-row-meta">
+                  <small>{{ accountCompaniesLabel(account) }}</small>
+                  <span [class]="statusClass(account.currentInvoice?.status)">{{ statusLabel(account.currentInvoice?.status) }}</span>
+                  @if (account.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+                    <span class="status-pill neutral">счёт и акт</span>
+                  }
+                  @if (!account.enabled) {
+                    <span class="status-pill neutral">связь выключена</span>
+                  }
+                </span>
+              </span>
+            </button>
+          } @empty {
+            <p class="empty-text">{{ accountFilter().trim() ? 'Ничего не найдено. Измените запрос.' : 'Пока нет общих плательщиков.' }}</p>
+          }
+        </div>
+        </div>
+      </details>
+      </div>
+      </details>
     }
   </section>
 
+  @if (recipientPicker(); as picker) {
+    <app-payment-recipient-picker
+      [heading]="'Общий счёт №' + picker.invoiceId"
+      [amountKopecks]="picker.amountKopecks"
+      [currentRecipient]="picker.currentRecipient"
+      [autoHint]="picker.autoHint"
+      [recipients]="recipientPickerOptions()"
+      [loading]="recipientPickerLoading()"
+      [error]="recipientPickerError()"
+      [saving]="mutating() === 'change-common-payment-route'"
+      [submitError]="recipientPickerSubmitError()"
+      (chosen)="submitRecipientChoice($event)"
+      (closed)="closeRecipientPicker()"
+      (retry)="loadRecipientPickerOptions()"
+    />
+  }
+  @if (returnOrdersWindow(); as opened) {
+    <app-common-invoice-return-orders
+      [invoiceId]="opened.invoiceId"
+      [heading]="'Общий счёт №' + opened.invoiceId"
+      [orders]="returnableOrders()"
+      [loading]="returnableOrdersLoading()"
+      [error]="returnableOrdersError()"
+      [saving]="mutating().startsWith('return-order-')"
+      [refusal]="returnOrderRefusal()"
+      (returned)="returnOrder($event)"
+      (closed)="closeReturnOrders()"
+      (retry)="loadReturnableOrders()"
+    />
+  }
   @if (manualAttributionMode(); as mode) {
     @if (currentInvoice(); as invoice) {
       <app-common-manual-payment-attribution-modal
@@ -804,8 +1272,14 @@
       (paymentRouteChangeOpened)="openPaymentRouteChange()"
       (paymentRouteChangeClosed)="closePaymentRouteChange()"
       (paymentRouteChanged)="changePaymentRoute($event)"
+      (paymentGuideOpened)="orderPaymentGuideOpen.set(true)"
       (paperInvoiceIssued)="markOrderPaperInvoiceIssued()"
       (paperInvoiceOpened)="openOrderPaperInvoice()"
     />
   }
+  <app-order-payment-route-windows
+    [facade]="orderPaymentFacade"
+    [guideOpen]="orderPaymentGuideOpen()"
+    (guideClosed)="orderPaymentGuideOpen.set(false)"
+  />
 </app-admin-layout>

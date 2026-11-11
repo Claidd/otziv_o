@@ -452,7 +452,24 @@ public class ManualCardPaymentWorkflow {
                 if (bound == null || bound.operation().isBlank()) throw ambiguousManualCardPaymentRoute();
                 return bound;
             });
-            var observation = verifyUnpaidBank(source);
+            var observed = observeUnpaidBank(source);
+            if (requiresTbankCancel(source, observed)) {
+                // Cancel closes the client's form irreversibly. Recheck under the order lock what
+                // could have changed since GetState, so a competing payment is never cancelled away.
+                transactionExecutor.required(() -> {
+                    Order order = lockOrderForManualPayment(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+                    managerAccessService.requireOrderAccess(orderId, authentication);
+                    var current = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow();
+                    if (current.getStatus() != PaymentLinkStatus.INITIATED || !source.equals(PaymentRouteReplacementWorkflow.bankSource(current))
+                            || hasBankInitReservation(current) || hasBankCancelReservation(current) || current.getBankCancelOriginStatus() != null)
+                        throw ambiguousManualCardPaymentRoute();
+                    requireSpecialistReviewPermission(orderId, current, receivedAmountKopecks, requestedRecipientType,
+                            requestedRecipientProfileId, requestedRecipientKey, context, specialistReviewId);
+                    requireManualCardPaymentLocalEligibility(order, current, orderId);
+                    return null;
+                });
+            }
+            var observation = requiresTbankCancel(source, observed) ? cancelUnpaidBank(source) : observed;
             return transactionExecutor.required(() -> applyObservedTransfer(linkId, orderId, receivedAmountKopecks,
                     source, observation, cleanNote, cleanReceiptUrl, cleanActor, authentication, context,
                     requestedRecipientType, requestedRecipientProfileId, requestedRecipientKey, specialistReviewId));
@@ -468,7 +485,8 @@ public class ManualCardPaymentWorkflow {
         var order = lockOrderForManualPayment(orderId).orElseThrow();
         managerAccessService.requireOrderAccess(orderId, authentication);
         var link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow();
-        if (link.getStatus() != PaymentLinkStatus.INITIATED || !source.equals(PaymentRouteReplacementWorkflow.bankSource(link))
+        if ((link.getStatus() != PaymentLinkStatus.INITIATED && !closedByVerifiedCancel(link, observation))
+                || !source.equals(PaymentRouteReplacementWorkflow.bankSource(link))
                 || hasBankInitReservation(link) || hasBankCancelReservation(link) || link.getBankCancelOriginStatus() != null)
             throw ambiguousManualCardPaymentRoute();
         requireSpecialistReviewPermission(orderId, link, receivedAmountKopecks, requestedRecipientType,
@@ -598,7 +616,8 @@ public class ManualCardPaymentWorkflow {
         return manualCardPaymentPlan(link);
     }
 
-    UnpaidBankObservation.Result verifyUnpaidBank(UnpaidBankObservation.Source source) {
+    /** Reads the bound operation; an unpaid T-Bank form must then be cancelled before the credit. */
+    UnpaidBankObservation.Result observeUnpaidBank(UnpaidBankObservation.Source source) {
         UnpaidBankObservation.Result result;
         try {
             result = unpaidBank.observe(source);
@@ -607,6 +626,49 @@ public class ManualCardPaymentWorkflow {
         }
         if (result.outcome() != UnpaidBankObservation.Outcome.CLOSED && !result.openUnpaid(source)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "По банковской ссылке требуется сверка. Статус банка " + result.status());
+        }
+        return result;
+    }
+
+    /** Local obstacles to crediting one line of a multi-order transfer; the caller holds the order lock. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void requireTransferLineSettleable(Order order, PaymentLink link, Long recipientProfileId) {
+        requireManualCardPaymentLocalEligibility(order, link, order.getId());
+        requireCurrentManualCardRouteAmount(order, link);
+        if (manualCardRoutePolicy.manualCardPaymentContextForRoute(order, link).candidates().stream()
+                .noneMatch(candidate -> Objects.equals(recipientProfileId, candidate.recipientProfileId())
+                        && (candidate.recipientType() == ContractorRecipientType.SPECIALIST
+                            || candidate.recipientType() == ContractorRecipientType.MANAGER)))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Выбранный получатель недоступен по заказу №" + order.getId());
+    }
+
+    /**
+     * T-Bank notifies about the Cancel it has just confirmed. If that webhook lands before the
+     * credit, the link is already CANCELED with the same provider status: the same verified closure.
+     */
+    static boolean closedByVerifiedCancel(PaymentLink link, UnpaidBankObservation.Result observation) {
+        return observation != null && observation.outcome() == UnpaidBankObservation.Outcome.CLOSED
+                && "CANCELED".equals(observation.status()) && link.getStatus() == PaymentLinkStatus.CANCELED
+                && "CANCELED".equals(link.getProviderTerminalStatus()) && !link.isObserveReplacedBank();
+    }
+
+    /** Tochka has no cancellation API: its unpaid link stays observed after the transfer. */
+    static boolean requiresTbankCancel(UnpaidBankObservation.Source source, UnpaidBankObservation.Result observed) {
+        return "T_BANK".equals(source.provider()) && observed.openUnpaid(source);
+    }
+
+    /** Cancels a just-observed unpaid T-Bank form; the caller has rechecked the order under its lock. */
+    UnpaidBankObservation.Result cancelUnpaidBank(UnpaidBankObservation.Source source) {
+        UnpaidBankObservation.Result result;
+        try {
+            result = unpaidBank.cancelUnpaid(source);
+        } catch (RuntimeException ambiguous) {
+            // The link stays as it was locally; a retry observes CANCELED or cancels again.
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Т-Банк не подтвердил отмену ссылки. Ручная оплата не зачислена; повторите позже.", ambiguous);
+        }
+        if (result.outcome() != UnpaidBankObservation.Outcome.CLOSED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Клиент успел оплатить банковскую ссылку (статус " + result.status()
+                    + "). Ручная оплата не зачислена; нужна сверка поступлений.");
         }
         return result;
     }

@@ -137,6 +137,20 @@ public class CommonBillingAdminController {
         return commonBillingService.commonInvoicePaymentRouteChangeContext(invoiceId);
     }
 
+    /** People the manager may name in the «Выдать номер карты» window. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @GetMapping("/api/common-billing/invoices/{invoiceId}/payment-route-recipients")
+    public com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse paymentRouteRecipients(
+            @PathVariable Long invoiceId
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        var response = commonBillingService.commonInvoiceRouteRecipients(invoiceId);
+        return new com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse(
+                response.invoiceId(), response.amountKopecks(), response.recipients().stream()
+                        .filter(recipient -> contractorPaymentTargetAccessPolicy.canManageUser(recipient.userId()))
+                        .toList());
+    }
+
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/payment-route-change")
     public CommonInvoiceDetailsResponse changePaymentRoute(
@@ -365,6 +379,20 @@ public class CommonBillingAdminController {
     public CommonInvoiceDetailsResponse archiveDisputedOrder(@PathVariable Long invoiceId, @PathVariable Long orderId) {
         requireCanMutateInvoice(invoiceId);
         return disputedOrderArchiveWorkflow.archive(invoiceId, orderId);
+    }
+
+    /** The «Вернуть заказ в счёт» window: unattached orders of this invoice's own link. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @GetMapping("/api/common-billing/invoices/{invoiceId}/returnable-orders")
+    public com.hunt.otziv.common_billing.dto.CommonInvoiceReturnableOrdersResponse returnableOrders(@PathVariable Long invoiceId) {
+        return commonBillingService.returnableOrders(invoiceId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/orders/{orderId}/attach")
+    public CommonInvoiceDetailsResponse attachOrder(@PathVariable Long invoiceId, @PathVariable Long orderId) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.returnOrder(invoiceId, orderId);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

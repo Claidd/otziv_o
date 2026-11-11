@@ -147,10 +147,16 @@ public class ManualPaymentRecipientTelegramNotificationService {
                         "У получателя не привязана рабочая Telegram-группа с менеджером"
                 );
             }
-            boolean sent = telegramService.sendMessage(
-                    chatId,
-                    buildCommonInvoiceMessage(request, user)
-            );
+            String message = buildCommonInvoiceMessage(request, user);
+            // The notice carries the dispute button whenever it is a durable delivery the answer can be bound to.
+            boolean sent = request.deliveryId() == null
+                    ? telegramService.sendMessage(chatId, message)
+                    : telegramService.sendMessageWithInlineButton(
+                            chatId,
+                            message + "\n\nЕсли этот перевод вам не приходил, нажмите «Оспорить» в течение 24 часов: "
+                                    + "менеджер, владелец и администратор получат задачу на сверку.",
+                            "⚠️ Оспорить поступление",
+                            CommonInvoicePaymentDisputeService.CALLBACK_PREFIX + request.deliveryId());
             return sent
                     ? ClientMessageSendResult.sent("Telegram")
                     : ClientMessageSendResult.failed(
@@ -338,7 +344,16 @@ public class ManualPaymentRecipientTelegramNotificationService {
             ContractorRecipientType recipientType,
             Long recipientUserId,
             String actor,
-            LocalDateTime confirmedAt
+            LocalDateTime confirmedAt,
+            Long deliveryId
     ) {
+        /** A notice outside the durable outbox: no delivery to bind a dispute to, so no button. */
+        public CommonInvoiceRecipientNotification(
+                Long invoiceId, String invoiceTitle, Integer orderCount, long amountKopecks,
+                ContractorRecipientType recipientType, Long recipientUserId, String actor, LocalDateTime confirmedAt
+        ) {
+            this(invoiceId, invoiceTitle, orderCount, amountKopecks, recipientType, recipientUserId, actor,
+                    confirmedAt, null);
+        }
     }
 }

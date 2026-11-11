@@ -11,9 +11,12 @@ public interface OrderRecipientRoutes {
     UnpaidBankObservation.Source lockedSource(long orderId, Long linkId, Authentication actor);
     PaymentRouteChangeResponse changeNow(long orderId, PaymentRouteChangeRequest request, Authentication actor);
     PaymentRouteChangeResponse changeMethodNow(long orderId, PaymentRouteChangeRequest request, Authentication actor);
-    PaymentRouteChangeResponse replace(UnpaidBankObservation.Source expected, String bankStatus, boolean publish, Authentication actor);
+    /** @param chosenProfileId the person a manager named while the bank link was still open, or null */
+    PaymentRouteChangeResponse replace(UnpaidBankObservation.Source expected, String bankStatus, boolean publish, Authentication actor,
+            Long chosenProfileId);
+    /** @param chosenProfileId the person a manager named while the bank link was still open, or null */
     PaymentRouteChangeResponse replaceMethod(UnpaidBankObservation.Source expected, String bankStatus, boolean publish,
-            com.hunt.otziv.payments.dto.PaymentRouteChangeTarget target, Authentication actor);
+            com.hunt.otziv.payments.dto.PaymentRouteChangeTarget target, Authentication actor, Long chosenProfileId);
     void reconcile(long linkId);
 
     class SourceChanged extends ResponseStatusException {
