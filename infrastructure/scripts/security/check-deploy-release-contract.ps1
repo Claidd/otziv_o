@@ -735,6 +735,15 @@ Assert-Match $deploy 'sudo -n chown -R "`\$deploy_uid:`\$deploy_gid" "`\$target_
 Assert-Match $deploy 'chown -R `\$deploy_uid:`\$deploy_gid /host-data/mobile-releases' 'The no-sudo APK publication fallback must recursively repair existing mobile release ownership.'
 Assert-Match $deploy 'Mobile release metadata is not readable after permission repair' 'APK publication must fail closed if release.json remains unreadable after ownership repair.'
 Assert-Match $deploy 'Mobile release storage must not be a symlink' 'Recursive mobile release ownership repair must reject a symlink target.'
+# Installed apps up to 1.0.86 show the notes in an update window that does not scroll.
+# Long notes push its "update" and "later" buttons off a small screen or a large system
+# font, and the window then blocks the whole app (1.0.86 was first published with 499
+# characters on 2026-11-11).
+$standaloneNotesLimit = 100
+$standaloneNotesLength = ([string]$standaloneAndroidRelease.notes).Length
+if ($standaloneNotesLength -gt $standaloneNotesLimit) {
+    throw "The standalone Android release notes have $standaloneNotesLength characters; keep them within $standaloneNotesLimit so the update window of installed apps fits small screens."
+}
 $standaloneDownloadUrl = [string]$standaloneAndroidRelease.downloadUrl
 if ($standaloneDownloadUrl -cnotmatch '^/android-new/otziv-v1\.0\.[0-9]+\.apk$') {
     throw 'The standalone Android release must name a versioned APK in /android-new/.'
