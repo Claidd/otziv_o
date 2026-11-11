@@ -103,11 +103,20 @@ describe('manager-board config helpers', () => {
       'Архив',
       'Опубликовано'
     ]);
+    // A manager leaves «Не оплачено» to the autoresponder; the owner and administrators keep the button.
     expect(managerOrderActions(order({ status: 'Выставлен счет' }), false).map((action) => action.status)).toEqual([
+      'Напоминание',
+      'Оплачено'
+    ]);
+    expect(managerOrderActions(order({ status: 'Выставлен счет' }), false, true).map((action) => action.status)).toEqual([
       'Напоминание',
       'Не оплачено',
       'Оплачено'
     ]);
+    expect(managerOrderActions(order({ commonInvoice: true, status: 'Напоминание' }), false).map((action) => action.status))
+      .toEqual(['Напоминание', 'Оплачено']);
+    expect(managerOrderActions(order({ commonInvoice: true, status: 'Напоминание' }), false, true).map((action) => action.status))
+      .toEqual(['Напоминание', 'Не оплачено', 'Оплачено']);
     expect(managerOrderActions(order({
       status: 'Не оплачено',
       badReviewTasksTotal: 2,

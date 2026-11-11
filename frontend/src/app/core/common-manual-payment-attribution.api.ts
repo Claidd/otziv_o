@@ -32,6 +32,18 @@ export interface CommonManualPaymentRecipientCandidate {
   effectText?: string | null;
 }
 
+/** A person outside the invoice's own participants, offered behind the «+» button. */
+export interface CommonManualPaymentOtherRecipient {
+  candidate: CommonManualPaymentRecipientCandidate;
+  previousPerformer: boolean;
+  teamMember: boolean;
+}
+
+export interface CommonManualPaymentOtherRecipients {
+  invoiceId: number;
+  recipients: CommonManualPaymentOtherRecipient[];
+}
+
 export interface CommonManualPaymentAttributionHistoryItem {
   id: number;
   attributionKey: string;
@@ -108,6 +120,12 @@ export class CommonManualPaymentAttributionApi {
   options(invoiceId: number): Observable<CommonManualPaymentOptions> {
     return this.http.get<CommonManualPaymentOptions>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/manual-payment-options`
+    );
+  }
+
+  otherRecipients(invoiceId: number): Observable<CommonManualPaymentOtherRecipients> {
+    return this.http.get<CommonManualPaymentOtherRecipients>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/manual-payment-other-recipients`
     );
   }
 

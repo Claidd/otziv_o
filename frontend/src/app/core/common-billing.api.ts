@@ -87,6 +87,46 @@ export interface CommonInvoiceDetailsResponse {
   paymentEvidenceToken?: string | null;
 }
 
+export interface CommonInvoiceRouteRecipient {
+  profileId: number;
+  userId?: number | null;
+  role: string;
+  name: string;
+  orderSpecialist: boolean;
+  manager: boolean;
+  teamMember: boolean;
+  workedWithClient: boolean;
+  availableKopecks: number;
+  overrunKopecks: number;
+  current: boolean;
+  blockReason?: string | null;
+}
+
+export interface CommonInvoiceRouteRecipientsResponse {
+  invoiceId: number;
+  amountKopecks: number;
+  recipients: CommonInvoiceRouteRecipient[];
+}
+
+/** A row of the «Вернуть заказ в счёт» window: an order of the invoice's own link that goes separately now. */
+export interface CommonInvoiceReturnableOrder {
+  orderId: number;
+  companyId: number;
+  companyTitle: string;
+  orderTitle: string;
+  status: string;
+  /** What the order would add to the invoice; 0 when the amount cannot be calculated. */
+  amountKopecks: number;
+}
+
+export interface CommonInvoiceReturnableOrdersResponse {
+  invoiceId: number;
+  canReturn: boolean;
+  /** Why the composition is fixed and what to do instead; empty while orders can be returned. */
+  blockReason?: string | null;
+  orders: CommonInvoiceReturnableOrder[];
+}
+
 export type CommonInvoicePaymentRouteChangeTarget =
   | 'EMPLOYEE_REQUISITES'
   | 'DIFFERENT_RECIPIENT'
@@ -246,6 +286,13 @@ export class CommonBillingApi {
     );
   }
 
+  /** People a manager may name in the «Выдать номер карты» window, with their reserve for this invoice. */
+  commonInvoiceRouteRecipients(invoiceId: number): Observable<CommonInvoiceRouteRecipientsResponse> {
+    return this.http.get<CommonInvoiceRouteRecipientsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-route-recipients`
+    );
+  }
+
   commonInvoicePaymentRouteChangeContext(
     invoiceId: number
   ): Observable<CommonInvoicePaymentRouteChangeContextResponse> {
@@ -258,16 +305,19 @@ export class CommonBillingApi {
     invoiceId: number,
     target: CommonInvoicePaymentRouteChangeTarget,
     expectedPaymentEvidenceToken: string,
-    expectedTargetPaymentProfileId?: number | null
+    expectedTargetPaymentProfileId?: number | null,
+    recipientProfileId?: number | null
   ): Observable<CommonInvoiceDetailsResponse> {
-    const different = target === 'DIFFERENT_RECIPIENT';
+    // A person named by the manager needs no «other than the current one» rule: the choice is explicit.
+    const different = target === 'DIFFERENT_RECIPIENT' && recipientProfileId == null;
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-route-change${different ? '/recipient' : ''}`,
       {
-        target: different ? 'EMPLOYEE_REQUISITES' : target,
+        target: target === 'DIFFERENT_RECIPIENT' ? 'EMPLOYEE_REQUISITES' : target,
         confirmedUnpaid: true,
         expectedPaymentEvidenceToken,
-        expectedTargetPaymentProfileId: expectedTargetPaymentProfileId ?? null
+        expectedTargetPaymentProfileId: expectedTargetPaymentProfileId ?? null,
+        ...(recipientProfileId != null ? { recipientProfileId } : {})
       }
     );
   }
@@ -471,6 +521,21 @@ export class CommonBillingApi {
   archiveDisputedOrder(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/orders/${orderId}/archive-disputed`,
+      {}
+    );
+  }
+
+  /** Orders of the invoice's own link that can still be put back into it. */
+  returnableOrders(invoiceId: number): Observable<CommonInvoiceReturnableOrdersResponse> {
+    return this.http.get<CommonInvoiceReturnableOrdersResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/returnable-orders`
+    );
+  }
+
+  /** The reverse of detachOrder: only into this collecting invoice, only an order of its link. */
+  returnOrder(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/orders/${orderId}/attach`,
       {}
     );
   }

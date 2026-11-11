@@ -2,7 +2,7 @@ import { decodeCommonBillingAccounts } from '@otziv/client-common/billing-paymen
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
-import type { CommonBillingAccountResponse, CommonInvoiceArchivePreviewResponse, CommonInvoiceDetailsResponse, CommonInvoicePaymentRouteChangeContextResponse, CommonInvoicePaymentRouteChangeTarget, CommonManualPaymentAttributionModeResponse, CommonManualPaymentAttributionRequest, CommonManualPaymentMode, CommonManualPaymentOptions, ContractorCommonSourceConfirmationRequest, InvoicePaymentMode, ManualPaymentConfirmationRequest } from './api.service';
+import type { CommonBillingAccountResponse, CommonInvoiceReturnableOrdersResponse, CommonInvoiceArchivePreviewResponse, CommonInvoiceDetailsResponse, CommonInvoicePaymentRouteChangeContextResponse, CommonInvoicePaymentRouteChangeTarget, CommonInvoiceRouteRecipientsResponse, CommonManualPaymentAttributionModeResponse, CommonManualPaymentAttributionRequest, CommonManualPaymentMode, CommonManualPaymentOptions, ContractorCommonSourceConfirmationRequest, InvoicePaymentMode, ManualPaymentConfirmationRequest } from './api.service';
 import { mobileEnvironment } from './mobile-environment';
 
 @Injectable({ providedIn: 'root' })
@@ -50,16 +50,29 @@ export class CommonBillingApi {
     );
   }
 
+  /** People a manager may name in the «Выдать номер карты» window, with their reserve for this invoice. */
+  getCommonInvoicePaymentRouteRecipients(invoiceId: number): Observable<CommonInvoiceRouteRecipientsResponse> {
+    return this.http.get<CommonInvoiceRouteRecipientsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-recipients`)
+    );
+  }
+
   changeCommonInvoicePaymentRoute(
     invoiceId: number,
     target: CommonInvoicePaymentRouteChangeTarget,
     expectedPaymentEvidenceToken: string,
-    expectedTargetPaymentProfileId?: number | null
+    expectedTargetPaymentProfileId?: number | null,
+    recipientProfileId?: number | null
   ): Observable<CommonInvoiceDetailsResponse> {
-    const different = target === 'DIFFERENT_RECIPIENT';
+    // A person named by the manager needs no «other than the current one» rule: the choice is explicit.
+    const different = target === 'DIFFERENT_RECIPIENT' && recipientProfileId == null;
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-change${different ? '/recipient' : ''}`),
-      { target: different ? 'EMPLOYEE_REQUISITES' : target, confirmedUnpaid: true, expectedPaymentEvidenceToken, expectedTargetPaymentProfileId }
+      {
+        target: target === 'DIFFERENT_RECIPIENT' ? 'EMPLOYEE_REQUISITES' : target,
+        confirmedUnpaid: true, expectedPaymentEvidenceToken, expectedTargetPaymentProfileId,
+        ...(recipientProfileId != null ? { recipientProfileId } : {})
+      }
     );
   }
 
@@ -246,6 +259,21 @@ export class CommonBillingApi {
   approveCommonInvoiceReviewOrders(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/approve-review`),
+      {}
+    );
+  }
+
+  /** Orders of this invoice's link that go apart from it and may be returned while it is being collected. */
+  getCommonInvoiceReturnableOrders(invoiceId: number): Observable<CommonInvoiceReturnableOrdersResponse> {
+    return this.http.get<CommonInvoiceReturnableOrdersResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/returnable-orders`)
+    );
+  }
+
+  /** Puts an excluded order back into this collecting invoice. */
+  returnCommonInvoiceOrder(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/${orderId}/attach`),
       {}
     );
   }

@@ -28,6 +28,7 @@ import { Observable, Subscription, finalize, firstValueFrom } from 'rxjs';
 import {
   BadReviewTaskItem,
   ManagerPaymentLinkResponse,
+  PaymentRouteChangeContext,
   PaymentRouteChangeTarget,
   OrderDetailsPayload,
   OrderReviewItem,
@@ -41,10 +42,12 @@ import { AuthService } from '../core/auth.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { PageWriteTracker } from '../core/page-write-tracker';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { paymentLinkStatusLabel } from '../shared/payment-link-status-label';
 import { ManualPaymentReviewComponent } from '../shared/manual-payment-review.component';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileMediaService } from '../shared/mobile-media.service';
+import { MobilePaymentRecipientPickerFlowService } from '../shared/mobile-payment-recipient-picker-flow.service';
 import {
   MobileRecoveryClientNotifiedDetail,
   MobileRemindersComponent,
@@ -684,7 +687,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     <span>{{ context.currentRecipient }}</span>
                   }
                   @if (context.status) {
-                    <em>{{ context.status }}</em>
+                    <em>{{ paymentLinkStatusLabel(context.status) }}</em>
                   }
                 </article>
 
@@ -695,17 +698,14 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   }
                 } @else {
                   <div class="payment-route-options">
-                    <button type="button" (click)="changePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('EMPLOYEE_REQUISITES')">
-                      <span class="material-icons-sharp">badge</span>
-                      <strong>Выдать реквизиты без ссылки</strong>
-                      <small>Перевод на назначенные реквизиты</small>
+                    <button type="button" (click)="changePaymentRoute(cardNumberTarget(context))" [disabled]="paymentRouteChanging() || paymentRouteTargetActive(cardNumberTarget(context))">
+                      <span class="material-icons-sharp">dialpad</span>
+                      <strong>Выдать номер карты</strong>
+                      <small>{{ cardNumberHint(context) }}</small>
                     </button>
-                    @if (context.paymentLinkId != null) {
-                      <button type="button" (click)="changePaymentRoute('DIFFERENT_RECIPIENT')" [disabled]="paymentRouteChanging()">Сменить получателя</button>
-                    }
                     <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="paymentRouteChanging() || !context.canChange || paymentRouteTargetActive('OWNER_TBANK')">
                       <span class="material-icons-sharp">link</span>
-                      <strong>{{ context.configuredMode === 'OWNER_TBANK' ? 'Переиздать банковскую ссылку' : 'Банковская ссылка владельца' }}</strong>
+                      <strong>{{ context.configuredMode === 'OWNER_TBANK' ? 'Выдать новую ссылку банка' : 'Выдать ссылку банка' }}</strong>
                       <small>Банк выбирается по профилю менеджера</small>
                     </button>
                     <button type="button" (click)="changePaymentRoute('OWNER_PAPER_INVOICE')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('OWNER_PAPER_INVOICE')">
@@ -2310,9 +2310,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   readonly companyReportLoading = this.companyReportFacade.companyReportLoading;
   readonly companyReportError = this.companyReportFacade.companyReportError;
   readonly companyReportState = this.companyReportFacade.companyReportState;
+  private readonly recipientPickerFlow = inject(MobilePaymentRecipientPickerFlowService);
   private readonly paymentFacade = new OrderPaymentFacade({
     writes: this.writes,
-    api: inject(OrderPaymentApi), orderId: () => this.orderId(), hasDetails: () => !!this.details(),
+    api: inject(OrderPaymentApi), pickRecipient: request => this.recipientPickerFlow.open(request),
+    orderId: () => this.orderId(), hasDetails: () => !!this.details(),
     capture: () => this.captureOrderRoute(), accepts: ticket => this.isActiveOrderRoute(ticket),
     canManage: () => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']),
     confirm: options => this.confirm.confirm(options), toast: options => this.toastController.create(options),
@@ -3769,6 +3771,9 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   canManagePaymentRoute(): boolean{ return this.paymentFacade.canManagePaymentRoute(); }
 
   paymentRouteTargetActive(target: PaymentRouteChangeTarget): boolean{ return this.paymentFacade.paymentRouteTargetActive(target); }
+  cardNumberTarget(context: PaymentRouteChangeContext): PaymentRouteChangeTarget{ return this.paymentFacade.cardNumberTarget(context); }
+  cardNumberHint(context: PaymentRouteChangeContext): string{ return this.paymentFacade.cardNumberHint(context); }
+  readonly paymentLinkStatusLabel = paymentLinkStatusLabel;
 
   copyCurrentPaymentLink(link: ManagerPaymentLinkResponse): void{ return this.paymentFacade.copyCurrentPaymentLink(link); }
 

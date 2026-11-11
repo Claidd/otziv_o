@@ -40,7 +40,16 @@ test('matches web manager bad-review order action flow', () => {
   );
   assert.equal(
     JSON.stringify(managerOrderActionsFor({ status: 'Выставлен счет' }).map((action) => action.status)),
+    JSON.stringify(['Напоминание', 'Оплачено'])
+  );
+  // The owner and administrators keep the manual button for a paused autoresponder.
+  assert.equal(
+    JSON.stringify(managerOrderActionsFor({ status: 'Выставлен счет' }, false, false, true).map((action) => action.status)),
     JSON.stringify(['Напоминание', 'Не оплачено', 'Оплачено'])
+  );
+  assert.equal(
+    JSON.stringify(managerOrderActionsFor({ commonInvoice: true, status: 'Напоминание' }).map((action) => action.status)),
+    JSON.stringify(['Напоминание', 'Оплачено'])
   );
   assert.equal(
     JSON.stringify(managerOrderActionsFor({ status: 'Не оплачено', badReviewTasksTotal: 2, badReviewTasksPending: 1 }).map((action) => action.status)),

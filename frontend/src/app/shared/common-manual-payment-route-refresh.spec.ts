@@ -1,4 +1,7 @@
-import { commonManualPaymentDraftAfterRouteRefresh } from './common-manual-payment-route-refresh';
+import {
+  commonManualPaymentDraftAfterRouteRefresh,
+  commonManualPaymentInitialRecipientKey
+} from './common-manual-payment-route-refresh';
 
 describe('common manual payment stale route refresh', () => {
   it('preserves only reason and receipt while resetting rows and both acknowledgements', () => {
@@ -23,5 +26,28 @@ describe('common manual payment stale route refresh', () => {
       defaultRecipientKey: 'TASK:missing',
       candidates: [{ key: 'OWNER:' }]
     }, 'reason', '', () => 'row').rows[0].recipientKey).toBe('');
+  });
+});
+
+describe('common manual payment initial recipient', () => {
+  it('preselects the recipient named in the invoice when it can be chosen', () => {
+    expect(commonManualPaymentInitialRecipientKey({
+      defaultRecipientKey: 'PROFILE:7',
+      candidates: [{ key: 'OWNER' }, { key: 'PROFILE:7', originalRecipient: true }, { key: 'PROFILE:9' }]
+    })).toBe('PROFILE:7');
+  });
+
+  it('keeps an explicit choice for a bank-link invoice, where the owner is not offered', () => {
+    expect(commonManualPaymentInitialRecipientKey({
+      defaultRecipientKey: 'OWNER',
+      candidates: [{ key: 'PROFILE:7' }, { key: 'PROFILE:9' }]
+    })).toBe('');
+  });
+
+  it('does not guess between several invoice recipients', () => {
+    expect(commonManualPaymentInitialRecipientKey({
+      defaultRecipientKey: 'missing',
+      candidates: [{ key: 'TASK:1:1', originalRecipient: true }, { key: 'TASK:2:1', originalRecipient: true }]
+    })).toBe('');
   });
 });

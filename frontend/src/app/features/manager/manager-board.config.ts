@@ -561,7 +561,16 @@ function withArchivePolicy(actions: StatusAction[], order: OrderCardItem): Statu
   return actions.filter((action) => action.status !== 'Архив');
 }
 
-export function managerOrderActions(order: OrderCardItem, showAllActions: boolean, canForceBan = false): StatusAction[] {
+/**
+ * «Не оплачено» is set by the autoresponder when the payment term ends. The manual button stays
+ * with the owner and administrators for the days the autoresponder is paused or switched off.
+ */
+export function managerOrderActions(
+  order: OrderCardItem,
+  showAllActions: boolean,
+  canForceBan = false,
+  canMarkUnpaid = canForceBan
+): StatusAction[] {
   if (order.commonInvoice) {
     if (order.status === 'Требует внимания') {
       return [];
@@ -578,7 +587,7 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
     if (order.status === 'Выставлен счет' || order.status === 'Напоминание') {
       return [
         MANAGER_COMMON_INVOICE_ACTIONS[1],
-        MANAGER_COMMON_INVOICE_ACTIONS[2],
+        ...(canMarkUnpaid ? [MANAGER_COMMON_INVOICE_ACTIONS[2]] : []),
         MANAGER_COMMON_INVOICE_ACTIONS[4]
       ];
     }
@@ -638,7 +647,7 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
     actions.push(MANAGER_ORDER_ACTIONS[6]);
   }
 
-  if (order.status === 'Выставлен счет' || order.status === 'Напоминание') {
+  if (canMarkUnpaid && (order.status === 'Выставлен счет' || order.status === 'Напоминание')) {
     actions.push(MANAGER_ORDER_ACTIONS[7]);
   }
 

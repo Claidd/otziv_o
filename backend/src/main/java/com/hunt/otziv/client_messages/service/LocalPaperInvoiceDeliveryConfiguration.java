@@ -8,7 +8,11 @@ import org.springframework.context.annotation.*;
 import org.springframework.core.env.Environment;
 import org.springframework.web.client.RestTemplate;
 
-/** Local Docker only. No real provider is injected, even into inherited legacy methods. */
+/**
+ * Local Docker only. No real provider is injected, even into inherited legacy methods.
+ * With the {@code payment-sandbox} profile every client message of every company is kept by the fixture
+ * (http://localhost:8099 shows them); without it only the isolated "Local Paper" companies are served.
+ */
 @Configuration @Profile("paper-invoice-fixture")
 public class LocalPaperInvoiceDeliveryConfiguration {
     @Bean @Primary
@@ -18,12 +22,19 @@ public class LocalPaperInvoiceDeliveryConfiguration {
                 || (!token.isBlank() && !token.equals("local-fixture-only")))
             throw new IllegalStateException("Local message fixture requires an isolated bank without a real token");
         var rest=new RestTemplate();
+        boolean sandbox=environment.acceptsProfiles(org.springframework.core.env.Profiles.of("payment-sandbox"));
         return new ClientChatMessageSender(null,null,null,null,null,null,null) {
             private ClientMessageSendResult sendLocal(Target target,String group,String message,String operation) {
-                if(target==null || target.title()==null || !target.title().startsWith("Local Paper") || group==null || operation==null)
+                boolean localPaper=target!=null && target.title()!=null && target.title().startsWith("Local Paper") && group!=null;
+                if(target==null || operation==null || (!sandbox && !localPaper))
                     return ClientMessageSendResult.failed("not_ready","Only isolated Local Paper companies are allowed");
-                var response=rest.postForObject("http://paper-invoice-fixture:8099/delivery",
-                        Map.of("operationId",operation,"groupId",group,"caption",message),Map.class);
+                if(message==null || message.isBlank()) return ClientMessageSendResult.failed("message_empty","Текст сообщения пустой");
+                var payload=new java.util.HashMap<String,Object>();
+                payload.put("operationId",operation);
+                payload.put("groupId",group!=null?group:"company-"+target.companyId());
+                payload.put("caption",message);
+                payload.put("title",target.title()==null?"":target.title());
+                var response=rest.postForObject("http://paper-invoice-fixture:8099/delivery",payload,Map.class);
                 return response!=null && response.get("messageId") instanceof String id
                         ?ClientMessageSendResult.sent("Fixture",id):ClientMessageSendResult.failed("operation_unknown","Fixture receipt missing");
             }

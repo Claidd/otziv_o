@@ -8,6 +8,8 @@ import type { OrderDetailsPayload, OrderReviewItem, ReviewRecoveryTaskItem } fro
 import { AuthService } from '../core/auth.service';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileMediaService } from '../shared/mobile-media.service';
+import { MobilePaymentRecipientPickerFlowService } from '../shared/mobile-payment-recipient-picker-flow.service';
+import type { MobilePaymentRecipientPickerRequest } from '../shared/payment-recipient-picker';
 import { OrderDetailsPage } from './order-details.page';
 
 const settle = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
@@ -37,6 +39,11 @@ describe('order details late write reconciliation through actual Angular HTTP fe
       { provide: ActivatedRoute, useValue: route }, { provide: Router, useValue: { navigate: vi.fn().mockResolvedValue(true) } },
       { provide: MobileConfirmService, useValue: { confirm: vi.fn().mockResolvedValue(true) } },
       { provide: MobileMediaService, useValue: { nativePhotoPickerAvailable: false } },
+      // Stands in for the «Выдать номер карты» window: the manager presses the button with the automatic choice.
+      { provide: MobilePaymentRecipientPickerFlowService, useValue: { open: async (request: MobilePaymentRecipientPickerRequest) => {
+        const outcome = await request.issue({ profileId: null });
+        return outcome.status === 'issued' || outcome.status === 'accepted' ? outcome : null;
+      } } },
       { provide: ToastController, useValue: toast }
     ] });
     TestBed.overrideComponent(OrderDetailsPage, { set: { template: '', imports: [] } });

@@ -621,7 +621,7 @@ public class PaymentLinkPreparationWorkflow {
 
     void requirePaymentLinksEnabled() {
         if (!runtimeSettingsService.isPaymentLinksEnabled()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках. Что делать: включить их может владелец или администратор в настройках платежей; счёт пока не изменён");
         }
     }
 

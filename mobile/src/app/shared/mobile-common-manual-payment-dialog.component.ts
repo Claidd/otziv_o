@@ -30,6 +30,7 @@ import {
   mobileTaskAwareRecipientEffect
 } from './manual-payment-routing';
 import { mobileCommonManualPaymentDraftAfterRouteRefresh } from './common-manual-payment-route-refresh';
+import { businessDateTimeStamp } from './business-date';
 
 interface CommonManualPaymentDraftRow {
   rowKey: string;
@@ -84,7 +85,8 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
   readonly error = signal('');
 
   private idempotencyKey = this.newKey();
-  private readonly effectiveAt = this.localDateTime(new Date());
+  // Business-zone time: the server reads it as its own clock, whatever the device is set to.
+  private readonly effectiveAt = businessDateTimeStamp();
   readonly isTaskRecipient = mobileIsTaskRecipient;
   readonly recipientEffect = mobileTaskAwareRecipientEffect;
 
@@ -337,11 +339,6 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
   historyDate(value: string): string {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString('ru-RU');
-  }
-
-  private localDateTime(date: Date): string {
-    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-    return local.toISOString().slice(0, 23);
   }
 
   private newKey(): string {

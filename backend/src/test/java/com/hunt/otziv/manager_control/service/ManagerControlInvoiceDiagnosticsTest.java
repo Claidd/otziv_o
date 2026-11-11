@@ -302,7 +302,9 @@ class ManagerControlInvoiceDiagnosticsTest {
         when(notices.termStart(invoice.getId())).thenReturn(Optional.of(LocalDateTime.now().minusDays(20)));
         assertThat(diagnostics.resolvedForAudit(invoice.getId())).as("delivered 20 days ago: not approaching").isTrue();
 
-        when(notices.termStart(invoice.getId())).thenReturn(Optional.of(LocalDateTime.now().minusDays(28).minusHours(1)));
+        // The start of the day 28 days ago: past the 28 full days at any hour, and 28 calendar days in the text
+        // (an hour before «now minus 28 days» falls on the previous date when the test runs right after midnight).
+        when(notices.termStart(invoice.getId())).thenReturn(Optional.of(java.time.LocalDate.now().minusDays(28).atStartOfDay()));
         invoice.setOverdueExtensionDays(7);
         assertThat(diagnostics.resolvedForAudit(invoice.getId())).as("a week's extension keeps it off the board").isTrue();
 

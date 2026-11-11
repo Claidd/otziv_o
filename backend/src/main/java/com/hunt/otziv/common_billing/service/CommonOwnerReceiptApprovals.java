@@ -58,6 +58,23 @@ public class CommonOwnerReceiptApprovals {
         }, invoiceId).stream().findFirst().orElse(null);
     }
 
+    /** The report that currently waits for the owner, for the notices sent around its decision. */
+    record Pending(long id, String reportedBy) {}
+
+    java.util.Optional<Pending> pendingReport(long invoiceId) {
+        return jdbc.query("SELECT id, reported_by FROM common_owner_receipt_approval WHERE pending_invoice_id=?",
+                (rs, index) -> new Pending(rs.getLong("id"), rs.getString("reported_by")), invoiceId).stream().findFirst();
+    }
+
+    /** The receipt time of the report staged with this request key: its repeat and the owner's decision keep it. */
+    java.util.Optional<java.time.LocalDateTime> reportedReceiptTime(long invoiceId, String requestKey) {
+        return jdbc.query("SELECT request_json FROM common_owner_receipt_approval WHERE invoice_id=? AND request_key=? ORDER BY id DESC LIMIT 1",
+                (rs, index) -> rs.getString("request_json"), invoiceId, requestKey).stream().findFirst().map(body -> {
+            try { return json.readValue(body, CommonManualPaymentAttributionRequest.class).effectiveAt(); }
+            catch (JsonProcessingException e) { throw new IllegalStateException("Не удалось прочитать запрос подтверждения", e); }
+        });
+    }
+
     CommonManualPaymentOptionsResponse attach(CommonManualPaymentOptionsResponse options) {
         Saved saved = pending(options.invoiceId());
         return saved == null ? options : options.withReport(saved.report());

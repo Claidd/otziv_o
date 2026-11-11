@@ -170,6 +170,36 @@ class PaperBillingSettlementMySqlIntegrationTest {
         assertEquals("PAID",store.row(id).get("stage"));
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt",Integer.class));
     }
+    /** The purpose a payer typed by hand: the issued number with its Latin letters replaced. */
+    BankReceipt retyped(String payment,java.util.function.UnaryOperator<String> typing) {
+        return new BankReceipt("customer","40802810000000004287/044525104",payment,"7707083893",250000,
+                "Оплата по счёту № "+typing.apply((String)store.row(id).get("number"))+" от 07.11.2026, без НДС");
+    }
+    @Test void numberTypedWithCyrillicLookalikesIsRecognisedAndAppliedOnce() {
+        // «РВ-…» typed on the Russian layout instead of «PB-…»: the case of 11 November 2026.
+        var receipt=retyped("cyrillic",number -> number.replace('P','Р').replace('B','В').replace('A','А').replace('C','С').replace('E','Е'));
+        assertFalse(receipt.purpose().contains("PB-"));
+        settlement.accept(receipt); settlement.accept(receipt);
+        verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);
+        assertEquals("PAID",store.row(id).get("stage"));
+        assertEquals("APPLIED",jdbc.queryForObject("SELECT state FROM paper_invoice_bank_receipt WHERE payment_id='cyrillic'",String.class));
+    }
+    @Test void numberTypedInLowerCaseWithLongDashesAndSpacesIsRecognised() {
+        settlement.accept(retyped("dashes",number -> number.toLowerCase(java.util.Locale.ROOT).replace('p','р').replace('b','в').replace("-"," \u2014 ")));
+        verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);
+        assertEquals("PAID",store.row(id).get("stage"));
+    }
+    @Test void lookalikeNumberStillRequiresTheRightPayerAndNeverMatchesInsideAWord() {
+        // The wrong payer is kept for review exactly as with the number typed in Latin.
+        var stranger=retyped("stranger",number -> number.replace('P','Р').replace('B','В'));
+        settlement.accept(new BankReceipt(stranger.customerCode(),stranger.accountId(),stranger.paymentId(),"380124742639",250000,stranger.purpose()));
+        verify(finance,never()).applyVerifiedPaperBankPayment(anyLong(),anyLong());
+        assertEquals("NEEDS_REVIEW",jdbc.queryForObject("SELECT state FROM paper_invoice_bank_receipt WHERE payment_id='stranger'",String.class));
+        // A number glued to a longer word is not a number; nothing is recorded for it.
+        settlement.accept(new BankReceipt("customer","40802810000000004287/044525104","glued","7707083893",250000,
+                "резерв"+((String)store.row(id).get("number")).replace('P','Р').replace('B','В')));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt WHERE payment_id='glued'",Integer.class));
+    }
     @Test void simultaneousDuplicateWebhooksApplyThePaymentOnlyOnce() throws Exception {
         concurrently(() -> settlement.accept(receipt("same",250000,"7707083893")),
                 () -> settlement.accept(receipt("same",250000,"7707083893")));

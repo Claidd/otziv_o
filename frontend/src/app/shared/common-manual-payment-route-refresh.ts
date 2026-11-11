@@ -36,3 +36,18 @@ export function commonManualPaymentDraftAfterRouteRefresh(
     finalAcknowledged: false
   };
 }
+
+/**
+ * Recipient chosen when the dialog first opens: the person or task named in the invoice,
+ * when it is still in the safe list. After a route change nothing is preselected
+ * (see commonManualPaymentDraftAfterRouteRefresh), and a bank-link invoice has no such
+ * candidate at all, so those cases keep an explicit choice.
+ */
+export function commonManualPaymentInitialRecipientKey(options: {
+  defaultRecipientKey: string;
+  candidates: readonly { key: string; originalRecipient?: boolean }[];
+}): string {
+  const original = options.candidates.filter(candidate => candidate.originalRecipient);
+  const named = original.find(candidate => candidate.key === options.defaultRecipientKey);
+  return (named ?? (original.length === 1 ? original[0] : undefined))?.key ?? '';
+}

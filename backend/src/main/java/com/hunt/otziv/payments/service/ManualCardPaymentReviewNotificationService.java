@@ -27,6 +27,10 @@ public class ManualCardPaymentReviewNotificationService {
             "MANAGER_REPORTED_COMMON_INVOICE_CARD_PAYMENT";
     public static final String OWNER_APPROVAL_REMINDER_SOURCE =
             "OWNER_MANUAL_CARD_PAYMENT_APPROVAL";
+    public static final String COMMON_INVOICE_OWNER_APPROVAL_REMINDER_SOURCE =
+            "COMMON_INVOICE_OWNER_RECEIPT_APPROVAL";
+    public static final String COMMON_INVOICE_OWNER_REJECTION_REMINDER_SOURCE =
+            "COMMON_INVOICE_OWNER_RECEIPT_REJECTED";
 
     private final UserService userService;
     private final PersonalReminderService personalReminderService;
@@ -53,6 +57,32 @@ public class ManualCardPaymentReviewNotificationService {
             return;
         }
         runAfterCommit(() -> notifyOwnerApprovalNow(request));
+    }
+
+    /** A manager reported that the owner received a common-invoice transfer: owners and administrators decide. */
+    public void notifyCommonInvoiceOwnerApprovalAfterCommit(CommonInvoiceOwnerApprovalRequest request) {
+        if (request == null || request.reportId() == null || request.invoiceId() == null) {
+            return;
+        }
+        runAfterCommit(() -> notifyCommonInvoiceOwnerApprovalNow(request));
+    }
+
+    /** The decision is made: nobody has to be reminded about this report any more. */
+    public void closeCommonInvoiceOwnerApprovalReminders(Long reportId) {
+        if (reportId != null) {
+            personalReminderService.deleteSystemRemindersBySource(
+                    COMMON_INVOICE_OWNER_APPROVAL_REMINDER_SOURCE,
+                    reportId
+            );
+        }
+    }
+
+    /** Tells the manager who sent the report that the owner did not confirm the money. */
+    public void notifyCommonInvoiceOwnerRejectionAfterCommit(CommonInvoiceOwnerRejection request) {
+        if (request == null || request.reportId() == null || request.invoiceId() == null) {
+            return;
+        }
+        runAfterCommit(() -> notifyCommonInvoiceOwnerRejectionNow(request));
     }
 
     public void closeOwnerApprovalReminders(Long approvalId) {
@@ -189,6 +219,80 @@ public class ManualCardPaymentReviewNotificationService {
                     title,
                     limit(text, 1000)
             );
+        }
+    }
+
+    private void notifyCommonInvoiceOwnerApprovalNow(CommonInvoiceOwnerApprovalRequest request) {
+        String text = commonInvoiceOwnerApprovalText(request);
+        String title = "Подтвердить поступление владельцу по общему счёту №" + request.invoiceId();
+        for (User recipient : recipients().values()) {
+            remindAndTell(recipient, title, text, COMMON_INVOICE_OWNER_APPROVAL_REMINDER_SOURCE,
+                    request.reportId(), request.sourceOrderId());
+        }
+    }
+
+    private void notifyCommonInvoiceOwnerRejectionNow(CommonInvoiceOwnerRejection request) {
+        User reporter = userService.findByUserName(clean(request.reportedBy()))
+                .filter(User::isActive).orElse(null);
+        if (reporter == null || reporter.getId() == null) {
+            return;
+        }
+        String title = "Владелец не подтвердил оплату общего счёта №" + request.invoiceId();
+        String text = "Поступление владельцу по общему счёту не подтверждено."
+                + "\nОбщий счёт: №" + request.invoiceId() + " · " + valueOrDefault(request.invoiceTitle(), "общий счёт")
+                + "\nРешение принял: " + displayName(request.decidedBy())
+                + "\nСчёт остался неоплаченным. Уточните у клиента, кому он перевёл деньги, и отметьте оплату заново.";
+        remindAndTell(reporter, title, text, COMMON_INVOICE_OWNER_REJECTION_REMINDER_SOURCE,
+                request.reportId(), request.sourceOrderId());
+    }
+
+    /** One durable reminder per person and source, plus a best-effort personal Telegram message. */
+    private void remindAndTell(User recipient, String title, String text, String source, Long sourceId, Long sourceOrderId) {
+        try {
+            if (!personalReminderService.hasOpenSystemReminder(recipient, source, sourceId)) {
+                personalReminderService.createSystemReminderDueNow(
+                        recipient, title, limit(text, 1000), source, sourceId, sourceOrderId);
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось создать напоминание source={}, sourceId={}, userId={}",
+                    source, sourceId, recipient.getId(), exception);
+        }
+        if (recipient.getTelegramChatId() == null) {
+            return;
+        }
+        try {
+            telegramService.sendMessage(recipient.getTelegramChatId(), text);
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось отправить Telegram source={}, sourceId={}, userId={}",
+                    source, sourceId, recipient.getId(), exception);
+        }
+    }
+
+    private String commonInvoiceOwnerApprovalText(CommonInvoiceOwnerApprovalRequest request) {
+        String amount = rubles(request.ownerAmountKopecks()) + " ₽";
+        if (request.totalKopecks() > 0 && request.totalKopecks() != request.ownerAmountKopecks()) {
+            amount += " из " + rubles(request.totalKopecks()) + " ₽ по счёту";
+        }
+        return "Менеджер сообщил, что деньги по общему счёту получил владелец."
+                + "\nОбщий счёт: №" + request.invoiceId() + " · " + valueOrDefault(request.invoiceTitle(), "общий счёт")
+                + "\nВладельцу: " + amount
+                + "\nМенеджер: " + displayName(request.reportedBy())
+                + "\nКомментарий: " + valueOrDefault(request.reason(), "не указан")
+                + "\n\nСчёт закроется только после решения владельца или администратора. Проверьте выписку, "
+                + "откройте этот счёт в разделе «Общие счета» и нажмите «Оплачен»: "
+                + "«Деньги пришли — закрыть счёт» или «Денег нет — отклонить».";
+    }
+
+    private String displayName(String username) {
+        String login = clean(username);
+        if (login.isBlank()) {
+            return "не указан";
+        }
+        try {
+            return userService.findByUserName(login).map(User::getFio).map(this::clean)
+                    .filter(fio -> !fio.isBlank()).orElse(login);
+        } catch (RuntimeException exception) {
+            return login;
         }
     }
 
@@ -347,6 +451,28 @@ public class ManualCardPaymentReviewNotificationService {
             String reason,
             List<Long> orderIds,
             List<Long> closedRouteIds
+    ) {
+    }
+
+    public record CommonInvoiceOwnerApprovalRequest(
+            Long reportId,
+            Long invoiceId,
+            String invoiceTitle,
+            long ownerAmountKopecks,
+            long totalKopecks,
+            String reportedBy,
+            String reason,
+            Long sourceOrderId
+    ) {
+    }
+
+    public record CommonInvoiceOwnerRejection(
+            Long reportId,
+            Long invoiceId,
+            String invoiceTitle,
+            String reportedBy,
+            String decidedBy,
+            Long sourceOrderId
     ) {
     }
 

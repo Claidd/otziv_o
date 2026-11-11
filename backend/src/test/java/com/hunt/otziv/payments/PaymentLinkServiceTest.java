@@ -815,6 +815,38 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void namedRecipientCannotBeCombinedWithAnotherPaymentMethod() {
+        PaymentLinkService service = service(properties());
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.replacePaymentRouteAuthorized(
+                        24_815L, 7_265L, PaymentRouteChangeTarget.OWNER_TBANK, true, null, authentication, false, false, 77L)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verify(paymentLinkRepository, never()).saveAndFlush(any(PaymentLink.class));
+    }
+
+    @Test
+    void namedRecipientNeedsAnIssuedInvoice() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_816L, "ООО Named", BigDecimal.valueOf(2_000));
+        when(orderRepository.findByIdForCounterUpdate(24_816L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_816L)).thenReturn(List.of());
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.replacePaymentRouteAuthorized(
+                        24_816L, null, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, authentication, false, false, 77L)
+        );
+
+        // Without an issued invoice there is nothing to reserve for the named person.
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(contractorPaymentLiveRoutingService, never()).reserveChosenContractorForPaymentLink(any(), anyLong());
+    }
+
+    @Test
     void shadowReservationFailureDoesNotEscapeAfterCommitCallback() {
         PaymentLinkService service = service(properties());
         PaymentLink link = payableLink(null, "shadow-callback", 10_000L);

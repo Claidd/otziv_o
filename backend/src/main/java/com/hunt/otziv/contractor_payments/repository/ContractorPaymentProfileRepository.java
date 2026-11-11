@@ -23,6 +23,39 @@ public interface ContractorPaymentProfileRepository extends JpaRepository<Contra
             """)
     List<Long> findTeamProfileIds(@Param("managerIds") Collection<Long> managerIds, @Param("role") ContractorRole role);
 
+    /**
+     * The managers' whole active team, whatever the profile switch says. A switched-off profile only
+     * stops new requisites from being issued; money the person already received must stay attributable.
+     */
+    @Query("""
+            SELECT DISTINCT p.id FROM ContractorPaymentProfile p JOIN p.user u JOIN u.managers m
+            WHERE m.id IN :managerIds AND u.active = true AND p.role = :role
+            ORDER BY p.id
+            """)
+    List<Long> findActiveTeamProfileIds(@Param("managerIds") Collection<Long> managerIds,
+                                        @Param("role") ContractorRole role);
+
+    /**
+     * Active people who performed any order of the same companies as the given orders, or are still
+     * attached to those companies: a client may pay a former performer out of habit.
+     */
+    @Query("""
+            SELECT DISTINCT p.id FROM ContractorPaymentProfile p JOIN p.user u
+            WHERE u.active = true AND p.role = :role AND (
+                u.id IN (
+                    SELECT ow.user.id FROM Order o JOIN o.worker ow
+                    WHERE o.company.id IN (SELECT so.company.id FROM Order so WHERE so.id IN :orderIds)
+                )
+                OR u.id IN (
+                    SELECT cw.user.id FROM Company c JOIN c.workers cw
+                    WHERE c.id IN (SELECT so.company.id FROM Order so WHERE so.id IN :orderIds)
+                )
+            )
+            ORDER BY p.id
+            """)
+    List<Long> findCompanyPerformerProfileIds(@Param("orderIds") Collection<Long> orderIds,
+                                              @Param("role") ContractorRole role);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM ContractorPaymentProfile p WHERE p.id = :id")
     Optional<ContractorPaymentProfile> findByIdForUpdate(@Param("id") Long id);
@@ -114,6 +147,16 @@ public interface ContractorPaymentProfileRepository extends JpaRepository<Contra
     """)
     Optional<ContractorPaymentProfile> findByUserIdAndRoleForUpdate(@Param("userId") Long userId,
                                                                     @Param("role") ContractorRole role);
+
+    /** Profile id and employee name of every working employee; local payment sandbox only. */
+    @Query("""
+        SELECT p.id, u.fio
+        FROM ContractorPaymentProfile p
+        JOIN p.user u
+        WHERE u.active = true
+        ORDER BY p.id
+    """)
+    List<Object[]> findWorkingEmployeeProfileNames();
 
     @Query("""
         SELECT p.id

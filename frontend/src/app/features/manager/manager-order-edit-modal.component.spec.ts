@@ -143,13 +143,20 @@ describe('ManagerOrderEditModalComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     const routeSection = element.querySelector('.payment-route-change');
     expect(routeSection?.textContent).toContain('Эквайринг Т-Банк');
-    const employeeButton = Array.from(routeSection?.querySelectorAll<HTMLButtonElement>('button') ?? [])
-      .find((button) => button.textContent?.includes('Выдать реквизиты без ссылки'));
-    employeeButton?.click();
+    const cardButton = () => Array.from(element.querySelectorAll<HTMLButtonElement>('.payment-route-change button'))
+      .find((button) => button.textContent?.includes('Выдать номер карты'));
+    expect(routeSection?.textContent).not.toContain('Сменить получателя');
+    cardButton()?.click();
     const bankButton = Array.from(routeSection?.querySelectorAll<HTMLButtonElement>('button') ?? [])
-      .find((button) => button.textContent?.includes('Банковская ссылка владельца'));
+      .find((button) => button.textContent?.includes('Выдать ссылку банка'));
     bankButton?.click();
     expect(selectedTargets).toEqual(['EMPLOYEE_REQUISITES', 'OWNER_TBANK']);
+
+    // Already a transfer number: the same single button asks for another person.
+    component.paymentRouteContext = { ...component.paymentRouteContext!, currentRoute: 'Оплата по реквизитам', configuredMode: 'AUTO_ROUTING' };
+    fixture.detectChanges();
+    cardButton()?.click();
+    expect(selectedTargets.at(-1)).toBe('DIFFERENT_RECIPIENT');
 
     component.allowPaymentRouteChange = false;
     fixture.detectChanges();

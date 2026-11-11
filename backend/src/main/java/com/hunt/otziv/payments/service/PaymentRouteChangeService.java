@@ -17,6 +17,12 @@ public class PaymentRouteChangeService {
     private final PaymentLinkService paymentLinkService;
     private final PaymentRouteChangeNotificationWorker notificationWorker;
 
+    /** People the manager may name in the «Выдать номер карты» window of this order. */
+    @Transactional
+    public com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse recipients(Long orderId, Authentication authentication) {
+        return paymentLinkService.paymentRouteRecipientsAuthorized(orderId, authentication);
+    }
+
     @Transactional(readOnly = true)
     public PaymentRouteChangeContextResponse context(Long orderId, Authentication authentication) {
         return paymentLinkService.paymentRouteChangeContextAuthorized(orderId, authentication);
@@ -35,8 +41,11 @@ public class PaymentRouteChangeService {
     public PaymentRouteChangeResponse change(Long orderId, PaymentRouteChangeRequest request,
             Authentication authentication, boolean differentRecipient) {
         boolean paperWithdrawn = Boolean.TRUE.equals(request.paperInvoiceWithdrawn());
-        PaymentLinkService.PaymentRouteReplacement replacement =
-                (paperWithdrawn || differentRecipient)
+        PaymentLinkService.PaymentRouteReplacement replacement = request.recipientProfileId() != null
+                ? paymentLinkService.replacePaymentRouteAuthorized(orderId, request.expectedPaymentLinkId(), request.target(),
+                        request.confirmedUnpaid(), request.expectedTargetPaymentProfileId(), authentication, paperWithdrawn,
+                        differentRecipient, request.recipientProfileId())
+                : (paperWithdrawn || differentRecipient)
                         ? paymentLinkService.replacePaymentRouteAuthorized(orderId, request.expectedPaymentLinkId(), request.target(),
                                 request.confirmedUnpaid(), request.expectedTargetPaymentProfileId(), authentication, paperWithdrawn, differentRecipient)
                         : paymentLinkService.replacePaymentRouteAuthorized(

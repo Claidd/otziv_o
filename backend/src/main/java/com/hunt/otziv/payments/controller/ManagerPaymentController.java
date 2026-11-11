@@ -42,6 +42,16 @@ public class ManagerPaymentController {
         return paymentRouteChangeService.context(orderId, authentication);
     }
 
+    /** People the manager may name in the «Выдать номер карты» window of this order. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @GetMapping("/api/manager/orders/{orderId}/payment-route-recipients")
+    public com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse paymentRouteRecipients(
+            @PathVariable Long orderId,
+            Authentication authentication
+    ) {
+        return paymentRouteChangeService.recipients(orderId, authentication);
+    }
+
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/manager/orders/{orderId}/payment-route-change")
     public PaymentRouteChangeResponse changePaymentRoute(

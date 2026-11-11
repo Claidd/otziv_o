@@ -153,7 +153,13 @@ export class WorkerBoardComponent implements OnDestroy {
   private lastMobileNavIntentStamp = 0;
 
   readonly sections = WORKER_SECTIONS;
-  readonly orderStatusActions = WORKER_ORDER_STATUS_ACTIONS;
+  /** «Не оплачено» is set by the autoresponder; only the owner and administrators keep the manual button. */
+  readonly orderStatusActions = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+      ? WORKER_ORDER_STATUS_ACTIONS
+      : WORKER_ORDER_STATUS_ACTIONS.filter((action) => action.status !== 'Не оплачено');
+  });
   readonly pageSizeOptions = WORKER_PAGE_SIZE_OPTIONS;
 
   readonly board = signal<WorkerBoard | null>(null);

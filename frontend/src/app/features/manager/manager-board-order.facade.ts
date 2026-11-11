@@ -13,6 +13,7 @@ import type {
   OrderUpdateRequest
 } from '../../core/manager.api';
 import type { ToastService } from '../../shared/toast.service';
+import type { PaymentRecipientChoice, PaymentRecipientOption } from '../../shared/payment-recipient-picker.component';
 import {
   readSessionDraft,
   removeSessionDraft,
@@ -38,6 +39,7 @@ type ManagerBoardOrderApi = Pick<
   | 'deleteOrder'
   | 'cancelOrderPayment'
   | 'getPaymentRouteChangeContext'
+  | 'getPaymentRouteRecipients'
   | 'changePaymentRoute'
   | 'markPaperInvoiceIssued'
 >;
@@ -75,6 +77,19 @@ export class ManagerBoardOrderFacade {
   readonly paymentRouteContext = signal<PaymentRouteChangeContext | null>(null);
   readonly paymentRouteContextLoading = signal(false);
   readonly paymentRouteChanging = signal(false);
+  /** The «Выдать номер карты» window of the order: what it was opened with, the people and the last refusal. */
+  readonly recipientPicker = signal<{
+    orderId: number;
+    target: PaymentRouteChangeTarget;
+    paymentLinkId: number;
+    currentRecipient: string;
+    autoHint: string;
+  } | null>(null);
+  readonly recipientPickerOptions = signal<PaymentRecipientOption[] | null>(null);
+  readonly recipientPickerAmount = signal(0);
+  readonly recipientPickerLoading = signal(false);
+  readonly recipientPickerError = signal('');
+  readonly recipientPickerSubmitError = signal('');
   readonly orderCancelingPayment = signal(false);
   readonly createOrderPayload = signal<CompanyOrderCreatePayload | null>(null);
   readonly createOrderDraft = signal<CompanyOrderCreateRequest | null>(null);
@@ -336,14 +351,35 @@ export class ManagerBoardOrderFacade {
     if (!order || !context || (!context.canChange && !(target !== 'OWNER_TBANK' && context.bankRecipientChangeAvailable)) || this.paymentRouteChanging()) {
       return;
     }
+    if ((target === 'EMPLOYEE_REQUISITES' || target === 'DIFFERENT_RECIPIENT')
+      && context.paymentLinkId != null && !context.paperInvoiceIssued) {
+      // A card number for an issued invoice is given from the window: the system's own choice
+      // or a person the manager names.
+      this.recipientPickerSubmitError.set('');
+      this.recipientPickerOptions.set(null);
+      this.recipientPickerAmount.set(0);
+      this.recipientPicker.set({
+        orderId: order.id,
+        target,
+        paymentLinkId: context.paymentLinkId,
+        currentRecipient: context.currentRecipient?.trim() ?? '',
+        autoHint: target === 'DIFFERENT_RECIPIENT'
+          ? 'Система выдаст номер другого получателя — платёжного задания или менеджера, если у него хватает резерва. '
+            + 'Нынешний получатель исключается. Если не подойдёт никто, счёт не изменится.'
+          : 'Система возьмёт платёжное задание, затем специалиста заказа, затем менеджера — первого, у кого хватает резерва. '
+            + 'Если не подойдёт никто, счёт не изменится и ссылка останется действующей.'
+      });
+      this.loadRecipientPickerOptions();
+      return;
+    }
     const targetTitle = target === 'EMPLOYEE_REQUISITES'
-      ? 'реквизиты без ссылки'
-      : target === 'DIFFERENT_RECIPIENT' ? 'реквизиты другого получателя'
+      ? 'номер карты вместо ссылки (получатель может остаться прежним)'
+      : target === 'DIFFERENT_RECIPIENT' ? 'номер карты другого получателя'
       : target === 'OWNER_TBANK'
-        ? 'ссылку эквайринга владельца'
-        : 'режим бумажного счёта владельца';
+        ? 'ссылку банка владельца'
+        : 'счёт и акт Точки';
     if ((target !== 'DIFFERENT_RECIPIENT' || context.paperInvoiceIssued) && !window.confirm(
-      (context.paperInvoiceIssued ? 'Подтвердите, что выписка проверена, денег нет и клиент уведомлён об отзыве бумажного счёта. ' : '') + `Клиент еще не оплатил по прежним реквизитам? Старый счет будет закрыт, а клиенту будут отправлены ${targetTitle}.`
+      (context.paperInvoiceIssued ? 'Подтвердите, что выписка проверена, денег нет и клиент уведомлён об отзыве бумажного счёта. ' : '') + `Клиент ещё не оплатил по прежним реквизитам? Старый счёт будет закрыт, клиент сразу получит ${targetTitle}.`
     )) {
       return;
     }
@@ -381,6 +417,81 @@ export class ManagerBoardOrderFacade {
       }
     });
   }
+  loadRecipientPickerOptions(): void {
+    const picker = this.recipientPicker();
+    if (!picker) {
+      return;
+    }
+    this.recipientPickerLoading.set(true);
+    this.recipientPickerError.set('');
+    this.deps.managerApi.getPaymentRouteRecipients(picker.orderId).subscribe({
+      next: (response) => {
+        if (this.recipientPicker()?.orderId !== picker.orderId) {
+          return;
+        }
+        this.recipientPickerOptions.set(response.recipients ?? []);
+        this.recipientPickerAmount.set(response.amountKopecks ?? 0);
+        this.recipientPickerLoading.set(false);
+      },
+      error: (err) => {
+        if (this.recipientPicker()?.orderId !== picker.orderId) {
+          return;
+        }
+        this.recipientPickerError.set(this.deps.errorMessage(err, 'Не удалось загрузить сотрудников'));
+        this.recipientPickerLoading.set(false);
+      }
+    });
+  }
+
+  closeRecipientPicker(): void {
+    if (this.paymentRouteChanging()) {
+      return;
+    }
+    this.recipientPicker.set(null);
+    this.recipientPickerOptions.set(null);
+    this.recipientPickerSubmitError.set('');
+  }
+
+  /** Issues the card number: the system's own choice, or the person the manager named. */
+  submitRecipientChoice(choice: PaymentRecipientChoice): void {
+    const picker = this.recipientPicker();
+    if (!picker || this.paymentRouteChanging()) {
+      return;
+    }
+    this.paymentRouteChanging.set(true);
+    this.recipientPickerSubmitError.set('');
+    this.orderError.set(null);
+    this.deps.managerApi.changePaymentRoute(picker.orderId, {
+      expectedPaymentLinkId: picker.paymentLinkId,
+      target: picker.target,
+      confirmedUnpaid: true,
+      expectedTargetPaymentProfileId: null,
+      ...(choice.profileId != null ? { recipientProfileId: choice.profileId } : {})
+    }).subscribe({
+      next: () => {
+        this.paymentRouteChanging.set(false);
+        this.closeRecipientPicker();
+        this.paymentRouteContext.set(null);
+        this.deps.toastService.success('Способ оплаты изменен',
+          `Клиенту отправляется новый счёт с номером карты по заказу #${picker.orderId}`);
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        const message = this.deps.errorMessage(err, 'Не удалось выдать номер карты');
+        this.paymentRouteChanging.set(false);
+        if (err?.status === 423) {
+          // The bank has to close the old link first; the request is saved and will finish by itself.
+          this.closeRecipientPicker();
+          this.deps.toastService.success('Запрос на смену принят', message);
+          this.openPaymentRouteChange();
+          return;
+        }
+        // The window stays open with the refusal, so another person can be chosen at once.
+        this.recipientPickerSubmitError.set(message);
+      }
+    });
+  }
+
   openPaperInvoice(): void {
     const order=this.editOrder();
     if(order && !this.orderSaving() && !this.paymentRouteChanging()) this.deps.openPaperInvoice?.({kind:'ORDER',id:order.id},()=>this.deps.toastService.error('Бумажный счёт недоступен','Владелец ещё не включил выпуск документов Точки'),this.deps.loadBoard);

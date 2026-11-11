@@ -300,7 +300,7 @@ public class CommonInvoiceInitializationService {
             return prepareTochkaPaymentInit(invoice, profile, cleanEmail, remaining);
         }
         if (!runtimeSettingsService.isPaymentLinksEnabled() || !runtimeSettingsService.isTbankEnabled()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках. Что делать: включить их может владелец или администратор в настройках платежей; счёт пока не изменён");
         }
         String cachedPaymentUrl = PaymentUrlPolicy.safe(invoice.getPaymentUrl(), PaymentUrlPolicy.Purpose.TBANK_PAYMENT);
         boolean hasPersistedProviderRef = !normalize(invoice.getTbankPaymentId()).isBlank() || !normalize(invoice.getTbankOrderId()).isBlank();
@@ -361,7 +361,7 @@ public class CommonInvoiceInitializationService {
      */
     PreparedCommonPaymentInit prepareTochkaPaymentInit(CommonInvoice invoice, PaymentProfile entityProfile, String cleanEmail, long remaining) {
         if (!runtimeSettingsService.isPaymentLinksEnabled()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках. Что делать: включить их может владелец или администратор в настройках платежей; счёт пока не изменён");
         }
         TochkaPaymentProfile runtimeProfile = tochkaPaymentProfileResolver.resolve(entityProfile);
         List<TochkaPaymentMode> paymentModes = preferredCommonTochkaPaymentModes(runtimeProfile);
@@ -1220,7 +1220,10 @@ public class CommonInvoiceInitializationService {
         if (allocation != null && allocation.getId() != null) {
             return allocation;
         }
-        throw new ResponseStatusException(HttpStatus.CONFLICT, "Новая система оплат не зафиксировала получателя общего счета №" + (invoice == null || invoice.getId() == null ? "-" : invoice.getId()) + "; счет не отправлен");
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "Общий счёт №" + (invoice == null || invoice.getId() == null ? "-" : invoice.getId())
+                + " не изменён и не отправлен: выдача счетов через новую систему оплат сейчас выключена или приостановлена, "
+                + "поэтому закрепить получателя нельзя. Что делать: сообщите владельцу или администратору — "
+                + "после включения маршрутизации оплат повторите действие. Клиент пока платит по тому, что у него уже есть");
     }
 
     void notifyCommonInvoiceRoutingFailure(CommonInvoice invoice, List<Order> routeOrders, RuntimeException exception) {

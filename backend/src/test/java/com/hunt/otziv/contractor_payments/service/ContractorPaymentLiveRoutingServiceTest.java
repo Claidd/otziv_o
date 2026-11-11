@@ -1580,6 +1580,185 @@ class ContractorPaymentLiveRoutingServiceTest {
         return invoice;
     }
 
+    @Test
+    void managerNamedRecipientIsReservedAboveBalanceWithItsOwnDecisionReason() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(37L, 137L);
+        Manager manager = manager(47L, 147L);
+        ContractorPaymentProfile specialist = profile(57L, worker.getUser(), ContractorRole.SPECIALIST);
+        ContractorPaymentProfile teamMember = teamMember(59L, 157L, 47L);
+        CommonInvoice invoice = invoice(144L, 100_000L, 0L);
+        when(profileRepository.findByUserIdAndRoleForUpdate(137L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(specialist));
+        when(profileService.available(teamMember, ContractorAllocationMode.LIVE)).thenReturn(40_000L);
+
+        ContractorPaymentAllocation allocation = service.reserveChosenContractorForCommonInvoice(
+                invoice, List.of(order(137L, worker, manager)), manager, 100_000L, 59L);
+
+        // The whole invoice is reserved although only 40 000 kopecks were available: the overrun is
+        // visible from the frozen balance, and automatic routing will skip this person until it recovers.
+        assertEquals(ContractorAllocationStatus.RESERVED, allocation.getStatus());
+        assertEquals(59L, allocation.getRecipientProfile().getId());
+        assertEquals(157L, allocation.getRecipientUserId());
+        assertEquals(100_000L, allocation.getAmountKopecks());
+        assertEquals(40_000L, allocation.getAvailableBeforeKopecks());
+        assertEquals(ContractorRoutingDecisionReason.RECIPIENT_CHOSEN_BY_MANAGER, allocation.getRoutingDecisionReason());
+    }
+
+    @Test
+    void managerNamedRecipientOfOrderInvoiceIsReservedAboveBalance() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(37L, 137L);
+        Manager manager = manager(47L, 147L);
+        ContractorPaymentProfile teamMember = teamMember(59L, 157L, 47L);
+        when(profileService.available(teamMember, ContractorAllocationMode.LIVE)).thenReturn(0L);
+
+        ContractorPaymentAllocation allocation = service.reserveChosenContractorForPaymentLink(
+                paymentLink(701L, order(137L, worker, manager), 100_000L), 59L);
+
+        assertEquals(ContractorAllocationStatus.RESERVED, allocation.getStatus());
+        assertEquals(59L, allocation.getRecipientProfile().getId());
+        assertEquals(0L, allocation.getAvailableBeforeKopecks());
+        assertEquals(ContractorRoutingDecisionReason.RECIPIENT_CHOSEN_BY_MANAGER, allocation.getRoutingDecisionReason());
+    }
+
+    @Test
+    void managerCannotNameSomeoneOutsideInvoicePeople() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(37L, 137L);
+        Manager manager = manager(47L, 147L);
+        CommonInvoice invoice = invoice(144L, 100_000L, 0L);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveChosenContractorForCommonInvoice(
+                        invoice, List.of(order(137L, worker, manager)), manager, 100_000L, 999L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(allocationRepository, never()).save(any());
+    }
+
+    @Test
+    void namedRecipientStillNeedsOwnerAdmissionAndOperationalLimits() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(37L, 137L);
+        Manager manager = manager(47L, 147L);
+        ContractorPaymentProfile teamMember = teamMember(59L, 157L, 47L);
+        teamMember.setLiveEnabled(false);
+        CommonInvoice invoice = invoice(144L, 100_000L, 0L);
+
+        ResponseStatusException admission = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveChosenContractorForCommonInvoice(
+                        invoice, List.of(order(137L, worker, manager)), manager, 100_000L, 59L)
+        );
+        assertEquals(HttpStatus.CONFLICT, admission.getStatusCode());
+        assertTrue(admission.getReason().contains("допуск к приёму оплат выключен"));
+
+        teamMember.setLiveEnabled(true);
+        when(routingLimitService.evaluate(teamMember, ContractorAllocationMode.LIVE, 100_000L))
+                .thenReturn(ContractorPaymentRoutingLimitService.RoutingLimitDecision.rejected(
+                        ContractorRoutingDecisionReason.LIMIT_DAILY_AMOUNT_EXCEEDED));
+        ResponseStatusException limit = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveChosenContractorForCommonInvoice(
+                        invoice, List.of(order(137L, worker, manager)), manager, 100_000L, 59L)
+        );
+        assertTrue(limit.getReason().contains("суточный предел суммы"));
+        verify(allocationRepository, never()).save(any());
+    }
+
+    @Test
+    void namedRecipientIsRefusedWhenCompanyTakesPaymentsOnlyToOwner() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(37L, 137L);
+        Manager manager = manager(47L, 147L);
+        teamMember(59L, 157L, 47L);
+        CommonInvoice invoice = invoice(144L, 100_000L, 0L);
+        invoice.setShadowRouteCompanyRoutingAllowed(false);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveChosenContractorForCommonInvoice(
+                        invoice, List.of(order(137L, worker, manager)), manager, 100_000L, 59L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("только на реквизиты владельца"));
+        verify(allocationRepository, never()).save(any());
+    }
+
+    @Test
+    void namedRecipientIsRefusedWithReasonWhileContractorRoutingIsSwitchedOff() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(false);
+        Worker worker = worker(37L, 137L);
+        Manager manager = manager(47L, 147L);
+        teamMember(59L, 157L, 47L);
+        CommonInvoice invoice = invoice(144L, 100_000L, 0L);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveChosenContractorForCommonInvoice(
+                        invoice, List.of(order(137L, worker, manager)), manager, 100_000L, 59L)
+        );
+
+        // Automatic routing returns «no route» here; a named recipient must be told why nothing changed.
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("сейчас выключена"));
+        verify(allocationRepository, never()).save(any());
+    }
+
+    @Test
+    void recipientOptionsShowBalanceOverrunAndWhyPersonCannotBeNamed() {
+        Worker worker = worker(37L, 137L);
+        Manager manager = manager(47L, 147L);
+        ContractorPaymentProfile specialist = profile(57L, worker.getUser(), ContractorRole.SPECIALIST);
+        ContractorPaymentProfile managerProfile = profile(58L, manager.getUser(), ContractorRole.MANAGER);
+        ContractorPaymentProfile short_ = profile(59L, user(157L), ContractorRole.SPECIALIST);
+        ContractorPaymentProfile blocked = profile(60L, user(158L), ContractorRole.SPECIALIST);
+        blocked.setEnabled(false);
+        when(profileRepository.findByUserIdAndRoleForUpdate(137L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(specialist));
+        when(profileRepository.findByUserIdAndRoleForUpdate(147L, ContractorRole.MANAGER))
+                .thenReturn(Optional.of(managerProfile));
+        when(profileRepository.findCompanyPerformerProfileIds(List.of(137L), ContractorRole.SPECIALIST))
+                .thenReturn(List.of(57L, 59L));
+        when(profileRepository.findActiveTeamProfileIds(List.of(47L), ContractorRole.SPECIALIST))
+                .thenReturn(List.of(59L, 60L));
+        when(profileRepository.findAllById(any())).thenReturn(List.of(blocked, short_, managerProfile, specialist));
+        when(profileService.available(specialist, ContractorAllocationMode.LIVE)).thenReturn(150_000L);
+        when(profileService.available(managerProfile, ContractorAllocationMode.LIVE)).thenReturn(100_000L);
+        when(profileService.available(short_, ContractorAllocationMode.LIVE)).thenReturn(40_000L);
+
+        List<ContractorPaymentLiveRoutingService.RecipientOption> options = service.recipientOptionsForCommonInvoice(
+                List.of(order(137L, worker, manager)), manager, 100_000L);
+
+        // Specialist of the order, the manager, then those who worked with the client and the team.
+        assertEquals(List.of(57L, 58L, 59L, 60L), options.stream().map(option -> option.profileId()).toList());
+        assertTrue(options.get(0).orderSpecialist());
+        assertEquals(0L, options.get(0).overrunKopecks());
+        assertTrue(options.get(1).manager());
+        assertTrue(options.get(2).workedWithClient());
+        assertTrue(options.get(2).teamMember());
+        assertEquals(40_000L, options.get(2).availableKopecks());
+        assertEquals(60_000L, options.get(2).overrunKopecks());
+        // A missing balance never blocks a named recipient; a switched-off admission does.
+        assertEquals(null, options.get(2).blockReason());
+        assertEquals("допуск к приёму оплат выключен", options.get(3).blockReason());
+        verify(allocationRepository, never()).save(any());
+    }
+
+    /** A specialist of the manager's team who takes no part in the invoice orders. */
+    private ContractorPaymentProfile teamMember(Long profileId, Long userId, Long managerId) {
+        ContractorPaymentProfile profile = profile(profileId, user(userId), ContractorRole.SPECIALIST);
+        discoveredProfiles.put(profileId, profile);
+        lenient().when(profileRepository.findActiveTeamProfileIds(List.of(managerId), ContractorRole.SPECIALIST))
+                .thenReturn(List.of(profileId));
+        lenient().when(profileRepository.findById(profileId)).thenReturn(Optional.of(profile));
+        return profile;
+    }
+
     private ContractorPaymentProfile profile(Long id, User user, ContractorRole role) {
         ContractorPaymentProfile profile = new ContractorPaymentProfile();
         profile.setId(id);

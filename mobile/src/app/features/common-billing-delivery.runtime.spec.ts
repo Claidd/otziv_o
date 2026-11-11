@@ -7,6 +7,7 @@ import { ApiService, type CommonInvoiceDetailsResponse } from '../core/api.servi
 import { AuthService } from '../core/auth.service';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileCommonManualPaymentFlowService } from '../shared/mobile-common-manual-payment-flow.service';
+import { MobilePaymentRecipientPickerFlowService } from '../shared/mobile-payment-recipient-picker-flow.service';
 import { CommonBillingPage } from './common-billing.page';
 
 const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
@@ -32,7 +33,8 @@ describe('invoice delivery outcome in the mobile detail page', () => {
       { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ invoiceId: '41' })) } },
       { provide: Router, useValue: {} },
       { provide: MobileConfirmService, useValue: { confirm: async () => true } },
-      { provide: MobileCommonManualPaymentFlowService, useValue: {} }
+      { provide: MobileCommonManualPaymentFlowService, useValue: {} },
+      { provide: MobilePaymentRecipientPickerFlowService, useValue: {} }
     ] });
     TestBed.overrideComponent(CommonBillingPage, { set: { template: '', imports: [] } });
     const fixture = TestBed.createComponent(CommonBillingPage);

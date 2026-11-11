@@ -87,9 +87,11 @@ test('stale common split refresh preserves evidence and resets route-sensitive s
     paymentReceived: false,
     finalAcknowledged: false
   });
-  for (const source of [mobileCommonSource, webCommonSource]) {
-    assert.match(source, /if \([^)]*RetryablePaymentRouteError\(error\)\) \{[\s\S]*?rows\.set\(\[\]\)[\s\S]*?paymentReceived\.set\(false\)[\s\S]*?finalAcknowledged\.set\(false\)[\s\S]*?load\(true\)/i);
-  }
+  assert.match(mobileCommonSource, /if \([^)]*RetryablePaymentRouteError\(error\)\) \{[\s\S]*?rows\.set\(\[\]\)[\s\S]*?paymentReceived\.set\(false\)[\s\S]*?finalAcknowledged\.set\(false\)[\s\S]*?load\(true\)/i);
+  // Web has no acknowledgement checkboxes: the button names the recipient and the effect.
+  // A stale route still clears the chosen recipients, and nothing is preselected on that reload.
+  assert.match(webCommonSource, /if \(isRetryablePaymentRouteError\(error\)\) \{[\s\S]*?rows\.set\(\[\]\)[\s\S]*?load\(true\)/);
+  assert.match(webCommonSource, /!preserveDraft && this\.mode === 'STANDARD'\s*\? commonManualPaymentInitialRecipientKey/);
 });
 
 test('external-link task forms keep the typed accounting target selector visible', () => {

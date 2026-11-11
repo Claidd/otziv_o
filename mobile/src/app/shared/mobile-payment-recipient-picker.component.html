@@ -1,0 +1,107 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Выдать номер карты</ion-title>
+    <ion-buttons slot="end">
+      <ion-button type="button" (click)="close()" [disabled]="saving()">Закрыть</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <main class="recipient-picker">
+    @if (heading || currentRecipient) {
+      <header class="pick-head">
+        @if (heading) { <span class="pick-kicker">{{ heading }}</span> }
+        @if (currentRecipient) { <p>Сейчас в счёте: {{ currentRecipient }}</p> }
+      </header>
+    }
+
+    @if (amount() !== null) {
+      <section class="pick-amount" aria-label="Сумма счёта">
+        <span>Сумма счёта</span>
+        <strong>{{ money(amount()) }}</strong>
+      </section>
+    }
+
+    <fieldset class="pick-list" [disabled]="saving()">
+      <legend>Кому клиент будет переводить?</legend>
+      <label class="pick-option" [class.selected]="selected() === null">
+        <input type="radio" name="route-recipient" [checked]="selected() === null" (change)="select(null)" />
+        <span class="pick-text">
+          <strong>Подобрать автоматически</strong>
+          <small>{{ autoHint }}</small>
+        </span>
+      </label>
+    </fieldset>
+
+    <section class="pick-people" aria-label="Выбрать получателя самостоятельно">
+      <div class="pick-people-head">
+        <strong>Или выберите получателя сами</strong>
+        <small>Можно выбрать любого сотрудника, даже если резерва не хватает.</small>
+      </div>
+      @if (loading()) {
+        <p class="pick-state" role="status"><ion-spinner name="crescent" aria-hidden="true" /> Загружаем сотрудников…</p>
+      } @else if (loadError()) {
+        <p class="pick-error" role="alert">{{ loadError() }}</p>
+        <ion-button type="button" expand="block" fill="outline" (click)="load()" [disabled]="saving()">Повторить</ion-button>
+      } @else if (!recipients().length) {
+        <p class="pick-state">Сотрудников с платёжным профилем для этого счёта нет.</p>
+      } @else {
+        @if (recipients().length > 6) {
+          <input
+            type="search"
+            autocomplete="off"
+            enterkeyhint="search"
+            placeholder="Поиск по имени"
+            aria-label="Поиск сотрудника по имени"
+            [ngModel]="query()"
+            [disabled]="saving()"
+            (ngModelChange)="query.set($event)"
+          >
+        }
+        @if (!visible().length) {
+          <p class="pick-state" role="status">Никого не найдено. Проверьте имя.</p>
+        }
+        <fieldset class="pick-list pick-list--people" [disabled]="saving()">
+          <legend class="pick-hidden">Сотрудники</legend>
+          @for (option of visible(); track option.profileId) {
+            <label class="pick-option" [class.selected]="selected() === option.profileId" [class.disabled]="!selectable(option)">
+              <input
+                type="radio"
+                name="route-recipient"
+                [checked]="selected() === option.profileId"
+                [disabled]="!selectable(option)"
+                (change)="select(option.profileId)"
+              />
+              <span class="pick-text">
+                <strong>{{ option.name || 'Без имени' }}</strong>
+                <small>{{ relation(option) }} · {{ note(option) }}</small>
+              </span>
+              <span class="pick-tag" [class]="'pick-tag--' + tag(option).tone">{{ tag(option).text }}</span>
+            </label>
+          }
+        </fieldset>
+      }
+    </section>
+  </main>
+</ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+    <div class="pick-footer">
+      <p class="pick-consequence" [class.warning]="chosenOverrun() > 0" role="status">
+        <span class="material-icons-sharp" aria-hidden="true">{{ chosenOverrun() > 0 ? 'warning' : 'info' }}</span>
+        <span>{{ consequence() }}</span>
+      </p>
+      @if (submitError()) {
+        <p class="pick-error" role="alert">{{ submitError() }}</p>
+      }
+      <div class="pick-actions">
+        <ion-button type="button" fill="clear" color="medium" (click)="close()" [disabled]="saving()">Отмена</ion-button>
+        <ion-button type="button" (click)="submit()" [disabled]="saving()">
+          @if (saving()) { <ion-spinner name="crescent" aria-hidden="true" /> Выдаём… } @else { Выдать номер карты }
+        </ion-button>
+      </div>
+    </div>
+  </ion-toolbar>
+</ion-footer>

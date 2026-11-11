@@ -14,6 +14,7 @@ import { OrderCompanyReportApi } from '../core/order-company-report.api';
 import { AuthService } from '../core/auth.service';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileMediaService } from '../shared/mobile-media.service';
+import { MobilePaymentRecipientPickerFlowService } from '../shared/mobile-payment-recipient-picker-flow.service';
 
 const details = (id: number) => ({ id, orderId: id, companyTitle: `Company ${id}`, reviews: [] }) as unknown as OrderDetailsPayload;
 
@@ -35,7 +36,8 @@ describe('order details Ionic lifecycle', () => {
       { provide: AuthService, useValue: { hasAnyRealmRole: () => false, hasRealmRole: () => false } },
       { provide: ActivatedRoute, useValue: { paramMap: params, queryParamMap: of(convertToParamMap({})), snapshot: { paramMap: params.value, queryParamMap: convertToParamMap({}) } } },
       { provide: Router, useValue: {} }, { provide: MobileConfirmService, useValue: {} },
-      { provide: MobileMediaService, useValue: {} }, { provide: ToastController, useValue: {} }
+      { provide: MobileMediaService, useValue: {} }, { provide: ToastController, useValue: {} },
+      { provide: MobilePaymentRecipientPickerFlowService, useValue: {} }
     ] });
     TestBed.overrideComponent(OrderDetailsPage, { set: { template: '', imports: [] } });
     const fixture = TestBed.createComponent(OrderDetailsPage); fixture.detectChanges(); const page = fixture.componentInstance;

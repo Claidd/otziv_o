@@ -41,8 +41,8 @@ test('ordinary order payment controls are provider-neutral and expose safe route
   assert.match(orderDetailsSource, /changeManagerOrderPaymentRoute/);
   assert.match(orderDetailsSource, /confirmedUnpaid: true/);
   assert.match(orderDetailsSource, /expectedTargetPaymentProfileId/);
-  assert.match(orderDetailsSource, /Переиздать банковскую ссылку/);
-  assert.match(orderDetailsSource, /Банковская ссылка владельца/);
+  assert.match(orderDetailsSource, /Выдать новую ссылку банка/);
+  assert.match(orderDetailsSource, /Выдать ссылку банка/);
   assert.match(apiSource, /\/payment-route-change-context/);
   assert.match(apiSource, /\/payment-route-change\$\{different \?/);
   assert.match(apiSource, /\/paper-invoice\/issued/);
@@ -53,7 +53,7 @@ test('common invoices can safely reissue a bank link after the manager bank chan
   assert.match(apiSource, /ownerBankTargetPaymentProfileId/);
   assert.match(commonBillingSource, /reissueOwnerBankRoute/);
   assert.match(commonBillingSource, /context\.ownerBankTargetPaymentProfileId/);
-  assert.match(commonBillingSource, /Обновить банк и ссылку/);
+  assert.match(commonBillingSource, /Выдать новую ссылку банка/);
 });
 
 function block(text, startMarker, endMarker) {

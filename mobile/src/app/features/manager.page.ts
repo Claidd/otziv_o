@@ -3560,7 +3560,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   orderActionsFor(order: OrderItem): readonly OrderStatusAction[] {
-    return managerOrderActionsFor(order, false);
+    return managerOrderActionsFor(order, false, false, this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
   }
 
   orderProgress(order: OrderItem): number {

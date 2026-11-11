@@ -132,6 +132,18 @@ public class PaymentLinkService implements com.hunt.otziv.payments.api.Standalon
         return new PaymentRouteReplacement(replacement.previousPaymentLinkId(), replacement.paymentLinkId(), replacement.target(), replacement.response());
     }
 
+    /** Route change to a person the manager named; every other argument as in the ordinary change. */
+    @Transactional
+    public PaymentRouteReplacement replacePaymentRouteAuthorized(Long orderId, Long expectedPaymentLinkId, PaymentRouteChangeTarget target, boolean confirmedUnpaid, Long expectedTargetPaymentProfileId, Authentication authentication, boolean paperInvoiceWithdrawn, boolean differentRecipient, Long chosenProfileId) {
+        var replacement = paymentRouteReplacement.replacePaymentRouteAuthorized(orderId, expectedPaymentLinkId, target, confirmedUnpaid, expectedTargetPaymentProfileId, authentication, paperInvoiceWithdrawn, differentRecipient, chosenProfileId);
+        return new PaymentRouteReplacement(replacement.previousPaymentLinkId(), replacement.paymentLinkId(), replacement.target(), replacement.response());
+    }
+
+    @Transactional
+    public com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse paymentRouteRecipientsAuthorized(Long orderId, Authentication authentication) {
+        return paymentRouteReplacement.paymentRouteRecipientsAuthorized(orderId, authentication);
+    }
+
     public record PaymentRouteReplacement(Long previousPaymentLinkId, Long paymentLinkId, PaymentRouteChangeTarget target, ManagerPaymentLinkResponse response) {
     }
 

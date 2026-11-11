@@ -710,9 +710,40 @@ public class ContractorPaymentLiveRoutingService {
         return reserveForPaymentLink(link, preference, null);
     }
 
+    /**
+     * A manager named the recipient of an order invoice. Every safeguard of automatic routing applies
+     * except the available balance: an overrun is recorded and keeps the person out of automatic
+     * routing until the balance recovers.
+     */
+    @Transactional
+    public ContractorPaymentAllocation reserveChosenContractorForPaymentLink(PaymentLink link, Long profileId) {
+        if (profileId == null) {
+            throw new IllegalArgumentException("Chosen recipient profile is required");
+        }
+        return reserveForPaymentLink(link, PaymentLinkRoutePreference.CONTRACTOR_ONLY, null, profileId);
+    }
+
+    /** People a manager may name for this order invoice, with what their balance says. */
+    @Transactional
+    public List<RecipientOption> recipientOptionsForPaymentLink(PaymentLink link) {
+        if (link == null || link.getOrder() == null) {
+            return List.of();
+        }
+        Order order = link.getOrder();
+        return recipientOptions(recipientPool(List.of(order), effectiveManager(order)), link.getAmountKopecks());
+    }
+
     private ContractorPaymentAllocation reserveForPaymentLink(PaymentLink link, PaymentLinkRoutePreference preference,
                                                                Long excludedUserId) {
+        return reserveForPaymentLink(link, preference, excludedUserId, null);
+    }
+
+    private ContractorPaymentAllocation reserveForPaymentLink(PaymentLink link, PaymentLinkRoutePreference preference,
+                                                               Long excludedUserId, Long chosenProfileId) {
         if (!enabledForNewRoutes()) {
+            if (chosenProfileId != null) {
+                throw contractorRoutingOff();
+            }
             return null;
         }
         if (link == null || link.getId() == null || link.getOrder() == null) {
@@ -731,6 +762,9 @@ public class ContractorPaymentLiveRoutingService {
             return latest.get();
         }
         if (!rolloutStateService.lockAndCheckRoutingRequested()) {
+            if (chosenProfileId != null) {
+                throw contractorRoutingOff();
+            }
             return null;
         }
         accountingPhaseService.lockAndPromoteForLiveRoute();
@@ -753,7 +787,12 @@ public class ContractorPaymentLiveRoutingService {
                     null
             );
         } else if (!link.isShadowRouteCompanyRoutingAllowed()) {
+            if (chosenProfileId != null) {
+                throw companyRequiresOwnerPayment();
+            }
             decision = ownerRequiredByCompany();
+        } else if (chosenProfileId != null) {
+            decision = chosenRecipient(chosenProfileId, recipientPool(List.of(order), effectiveManager(order)), amount);
         } else {
             decision = selectRoutableProfile(
                     order.getWorker(),
@@ -766,7 +805,9 @@ public class ContractorPaymentLiveRoutingService {
         if (preference == PaymentLinkRoutePreference.CONTRACTOR_ONLY && decision.recipient() == null) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Сейчас ни специалист, ни менеджер не могут принять эту сумму: проверьте реквизиты, допуск и лимиты"
+                    "Сейчас ни специалист, ни менеджер не могут принять эту сумму: проверьте реквизиты, допуск и лимиты. "
+                            + "Счёт не изменён. Что делать: в окне «Выдать номер карты» выберите получателя сами "
+                            + "или оставьте клиенту прежний способ оплаты"
             );
         }
 
@@ -846,9 +887,40 @@ public class ContractorPaymentLiveRoutingService {
         return reserveForCommonInvoice(invoice, orders, manager, amount, preference, explicitReplacement, null);
     }
 
+    /**
+     * A manager named the recipient of a common invoice. Every safeguard of automatic routing applies
+     * except the available balance: an overrun is recorded and keeps the person out of automatic
+     * routing until the balance recovers.
+     */
+    @Transactional
+    public ContractorPaymentAllocation reserveChosenContractorForCommonInvoice(CommonInvoice invoice, List<Order> orders,
+            Manager manager, long amount, Long profileId) {
+        if (profileId == null) {
+            throw new IllegalArgumentException("Chosen recipient profile is required");
+        }
+        return reserveForCommonInvoice(invoice, orders, manager, amount,
+                CommonInvoiceRoutePreference.CONTRACTOR_ONLY, true, null, profileId);
+    }
+
+    /** People a manager may name for a common invoice of these orders, with what their balance says. */
+    @Transactional
+    public List<RecipientOption> recipientOptionsForCommonInvoice(List<Order> orders, Manager manager, long amount) {
+        List<Order> safeOrders = orders == null ? List.of() : orders.stream().filter(Objects::nonNull).toList();
+        return recipientOptions(recipientPool(safeOrders, manager), amount);
+    }
+
     private ContractorPaymentAllocation reserveForCommonInvoice(CommonInvoice invoice, List<Order> orders,
             Manager manager, long amount, CommonInvoiceRoutePreference preference, boolean explicitReplacement, Long excludedUserId) {
+        return reserveForCommonInvoice(invoice, orders, manager, amount, preference, explicitReplacement, excludedUserId, null);
+    }
+
+    private ContractorPaymentAllocation reserveForCommonInvoice(CommonInvoice invoice, List<Order> orders,
+            Manager manager, long amount, CommonInvoiceRoutePreference preference, boolean explicitReplacement,
+            Long excludedUserId, Long chosenProfileId) {
         if (!enabledForNewRoutes()) {
+            if (chosenProfileId != null) {
+                throw contractorRoutingOff();
+            }
             return null;
         }
         if (invoice == null || invoice.getId() == null) {
@@ -874,6 +946,9 @@ public class ContractorPaymentLiveRoutingService {
             }
         }
         if (!rolloutStateService.lockAndCheckRoutingRequested()) {
+            if (chosenProfileId != null) {
+                throw contractorRoutingOff();
+            }
             return null;
         }
         accountingPhaseService.lockAndPromoteForLiveRoute();
@@ -918,6 +993,22 @@ public class ContractorPaymentLiveRoutingService {
                     null,
                     null
             );
+        } else if (chosenProfileId != null) {
+            if (!companyAllowsRouting) {
+                throw companyRequiresOwnerPayment();
+            }
+            if (!contractorEligible) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "По счёту уже есть оплата: выдать номер карты другого получателя нельзя. "
+                                + "Что делать: сначала отметьте или сверьте поступившую оплату"
+                );
+            }
+            decision = chosenRecipient(
+                    chosenProfileId,
+                    recipientPool(safeOrders.stream().filter(Objects::nonNull).toList(), manager),
+                    amount
+            );
         } else {
             decision = !companyAllowsRouting
                     ? ownerRequiredByCompany()
@@ -938,7 +1029,8 @@ public class ContractorPaymentLiveRoutingService {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "Сейчас ни специалист, ни менеджер не могут принять сумму общего счёта: "
-                                + "проверьте реквизиты, допуск и лимиты"
+                                + "проверьте реквизиты, допуск и лимиты. Счёт не изменён. Что делать: в окне "
+                                + "«Выдать номер карты» выберите получателя сами или оставьте клиенту прежний способ оплаты"
                 );
             }
         }
@@ -1146,6 +1238,157 @@ public class ContractorPaymentLiveRoutingService {
         );
     }
 
+    /**
+     * People a manager may name for an invoice of these orders: their specialists, the manager, those
+     * who worked with the same companies and the manager's team. Keeps that order for the window.
+     */
+    private Map<Long, PoolEntry> recipientPool(List<Order> orders, Manager manager) {
+        Map<Long, PoolEntry> pool = new LinkedHashMap<>();
+        for (Order order : orders) {
+            User specialist = user(order.getWorker());
+            if (specialist != null && specialist.getId() != null) {
+                profileRepository.findIdByUserIdAndRole(specialist.getId(), ContractorRole.SPECIALIST)
+                        .ifPresent(id -> pool.computeIfAbsent(id, PoolEntry::new).orderSpecialist = true);
+            }
+        }
+        User managerUser = user(manager);
+        if (managerUser != null && managerUser.getId() != null) {
+            profileRepository.findIdByUserIdAndRole(managerUser.getId(), ContractorRole.MANAGER)
+                    .ifPresent(id -> pool.computeIfAbsent(id, PoolEntry::new).manager = true);
+        }
+        List<Long> orderIds = orders.stream().map(Order::getId).filter(Objects::nonNull).distinct().toList();
+        if (!orderIds.isEmpty()) {
+            profileRepository.findCompanyPerformerProfileIds(orderIds, ContractorRole.SPECIALIST)
+                    .forEach(id -> pool.computeIfAbsent(id, PoolEntry::new).workedWithClient = true);
+        }
+        if (manager != null && manager.getId() != null) {
+            profileRepository.findActiveTeamProfileIds(List.of(manager.getId()), ContractorRole.SPECIALIST)
+                    .forEach(id -> pool.computeIfAbsent(id, PoolEntry::new).teamMember = true);
+        }
+        return pool;
+    }
+
+    /** What the window shows for every person of the pool. Reads only; the reservation rechecks under locks. */
+    private List<RecipientOption> recipientOptions(Map<Long, PoolEntry> pool, long amount) {
+        if (pool.isEmpty() || amount <= 0) {
+            return List.of();
+        }
+        Map<Long, ContractorPaymentProfile> profiles = new java.util.HashMap<>();
+        profileRepository.findAllById(pool.keySet()).forEach(profile -> profiles.put(profile.getId(), profile));
+        List<RecipientOption> options = new ArrayList<>(pool.size());
+        for (PoolEntry entry : pool.values()) {
+            ContractorPaymentProfile profile = profiles.get(entry.profileId);
+            User user = profile == null ? null : profile.getUser();
+            if (user == null || user.getId() == null) {
+                continue;
+            }
+            ContractorRoutingDecisionReason rejection = candidateRejection(
+                    new RouteCandidate(user.getId(), profile.getRole(), profile.getId()),
+                    profile, user.isActive(), true, amount, false);
+            long available = taskCapacityService.ordinaryAvailable(profile, ContractorAllocationMode.LIVE);
+            options.add(new RecipientOption(
+                    profile.getId(), user.getId(), profile.getRole().name(), normalize(user.getFio()),
+                    entry.orderSpecialist, entry.manager, entry.teamMember, entry.workedWithClient,
+                    available, Math.max(0L, amount - available),
+                    rejection == null ? null : recipientBlockText(rejection)
+            ));
+        }
+        return List.copyOf(options);
+    }
+
+    /** Validates the person a manager named under the same row locks automatic routing takes. */
+    private ContractorPaymentRouteDecision chosenRecipient(Long profileId, Map<Long, PoolEntry> pool, long amount) {
+        ContractorPaymentProfile unlocked = pool.containsKey(profileId)
+                ? profileRepository.findById(profileId).orElse(null)
+                : null;
+        User user = unlocked == null ? null : unlocked.getUser();
+        if (user == null || user.getId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Выбранный получатель недоступен для этого счёта. Счёт не изменён. "
+                            + "Что делать: закройте окно, откройте его снова и выберите получателя из обновлённого списка"
+            );
+        }
+        ContractorRole role = unlocked.getRole();
+        boolean active = userRepository.lockContractorActiveFlag(user.getId()).orElse(false);
+        boolean roleAssigned = !userRepository.lockContractorRoleIds(user.getId(), requiredRoleName(role)).isEmpty();
+        ContractorPaymentProfile profile = profileRepository.findAllByIdForUpdate(List.of(profileId)).stream()
+                .findFirst().orElse(null);
+        ContractorRoutingDecisionReason rejection = candidateRejection(
+                new RouteCandidate(user.getId(), role, profileId), profile, active, roleAssigned, amount, false);
+        if (rejection != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Выбранному получателю сейчас нельзя выдать счёт: " + recipientBlockText(rejection)
+                            + ". Счёт не изменён. Что делать: " + recipientBlockAdvice(rejection)
+            );
+        }
+        return ContractorPaymentRouteDecision.selected(
+                profile,
+                ContractorRoutingDecisionReason.RECIPIENT_CHOSEN_BY_MANAGER,
+                null
+        );
+    }
+
+    /** A named recipient must never silently become «no route»: the manager is told why nothing changed. */
+    private ResponseStatusException contractorRoutingOff() {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Выдача реквизитов сотрудников сейчас выключена: номер карты выбранного получателя выдать нельзя. "
+                        + "Счёт не изменён. Что делать: сообщите владельцу или администратору, пока оставьте клиенту "
+                        + "прежний способ оплаты"
+        );
+    }
+
+    private ResponseStatusException companyRequiresOwnerPayment() {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Для этой компании оплата принимается только на реквизиты владельца. Счёт не изменён. "
+                        + "Что делать: оставьте клиенту ссылку банка или счёт и акт Точки; разрешить оплату сотрудникам "
+                        + "может владелец или администратор в настройках компании"
+        );
+    }
+
+    /** Why a person cannot be named as a recipient, in words a manager can act on. */
+    public static String recipientBlockText(ContractorRoutingDecisionReason reason) {
+        if (reason == null) {
+            return "";
+        }
+        return switch (reason) {
+            case USER_INACTIVE -> "сотрудник отключён";
+            case REQUIRED_ROLE_MISSING -> "у сотрудника снята роль";
+            case PROFILE_NOT_FOUND -> "нет платёжного профиля";
+            case PROFILE_DISABLED, LIVE_PROFILE_DISABLED -> "допуск к приёму оплат выключен";
+            case PROFILE_IDENTITY_MISMATCH -> "платёжный профиль не соответствует сотруднику";
+            case RECIPIENT_DETAILS_INCOMPLETE -> "не заполнены реквизиты: получатель, номер или банк";
+            case INSUFFICIENT_AVAILABLE_BALANCE -> "не хватает резерва";
+            case LIMIT_SINGLE_INVOICE_EXCEEDED -> "сумма больше предела одного счёта";
+            case LIMIT_DAILY_AMOUNT_EXCEEDED -> "исчерпан суточный предел суммы счетов";
+            case LIMIT_DAILY_COUNT_EXCEEDED -> "исчерпан суточный предел числа счетов";
+            default -> "проверка пределов сейчас недоступна";
+        };
+    }
+
+    /** The next step for a manager whose named recipient was refused. */
+    static String recipientBlockAdvice(ContractorRoutingDecisionReason reason) {
+        if (reason == null) {
+            return "выберите другого получателя";
+        }
+        return switch (reason) {
+            case PROFILE_DISABLED, LIVE_PROFILE_DISABLED ->
+                    "выберите другого получателя; допуск включает владелец или администратор в разделе «Пользователи»";
+            case RECIPIENT_DETAILS_INCOMPLETE, PROFILE_NOT_FOUND ->
+                    "выберите другого получателя; реквизиты сотрудника заполняет владелец или администратор "
+                            + "в разделе «Пользователи»";
+            case LIMIT_DAILY_AMOUNT_EXCEEDED, LIMIT_DAILY_COUNT_EXCEEDED ->
+                    "выберите другого получателя; суточный предел этого сотрудника обновится завтра";
+            case LIMIT_SINGLE_INVOICE_EXCEEDED ->
+                    "оставьте клиенту ссылку банка или счёт и акт Точки: сумма больше предела одного счёта для сотрудника";
+            case USER_INACTIVE, REQUIRED_ROLE_MISSING, PROFILE_IDENTITY_MISMATCH -> "выберите другого получателя";
+            default -> "выберите другого получателя или повторите позже; если не помогает, сообщите администратору";
+        };
+    }
+
     private void addCandidate(List<RouteCandidate> candidates, Object subject, ContractorRole role) {
         User user = user(subject);
         if (user == null || user.getId() == null) {
@@ -1164,6 +1407,21 @@ public class ContractorPaymentLiveRoutingService {
             boolean active,
             boolean roleAssigned,
             long amount
+    ) {
+        return candidateRejection(candidate, profile, active, roleAssigned, amount, true);
+    }
+
+    /**
+     * @param requireBalance false only for a recipient a manager named: the balance may be exceeded,
+     *                       every other safeguard stays.
+     */
+    private ContractorRoutingDecisionReason candidateRejection(
+            RouteCandidate candidate,
+            ContractorPaymentProfile profile,
+            boolean active,
+            boolean roleAssigned,
+            long amount,
+            boolean requireBalance
     ) {
         if (!active) {
             return ContractorRoutingDecisionReason.USER_INACTIVE;
@@ -1190,7 +1448,7 @@ public class ContractorPaymentLiveRoutingService {
                 || normalize(profile.getBankName()).isBlank()) {
             return ContractorRoutingDecisionReason.RECIPIENT_DETAILS_INCOMPLETE;
         }
-        if (taskCapacityService.ordinaryAvailable(
+        if (requireBalance && taskCapacityService.ordinaryAvailable(
                 profile, ContractorAllocationMode.LIVE) < amount) {
             return ContractorRoutingDecisionReason.INSUFFICIENT_AVAILABLE_BALANCE;
         }
@@ -1302,6 +1560,38 @@ public class ContractorPaymentLiveRoutingService {
     }
 
     private record RouteKey(Long userId, ContractorRole role) {
+    }
+
+    /**
+     * A person a manager may name as the recipient. {@code blockReason} is null when the person can be
+     * chosen; {@code overrunKopecks} is how far the invoice would exceed the available balance.
+     */
+    public record RecipientOption(
+            Long profileId,
+            Long userId,
+            /** SPECIALIST or MANAGER; a plain name keeps the role enum inside this module. */
+            String role,
+            String name,
+            boolean orderSpecialist,
+            boolean manager,
+            boolean teamMember,
+            boolean workedWithClient,
+            long availableKopecks,
+            long overrunKopecks,
+            String blockReason
+    ) {
+    }
+
+    private static final class PoolEntry {
+        private final Long profileId;
+        private boolean orderSpecialist;
+        private boolean manager;
+        private boolean teamMember;
+        private boolean workedWithClient;
+
+        private PoolEntry(Long profileId) {
+            this.profileId = profileId;
+        }
     }
 
     private record RouteCandidate(Long userId, ContractorRole role, Long profileId) {

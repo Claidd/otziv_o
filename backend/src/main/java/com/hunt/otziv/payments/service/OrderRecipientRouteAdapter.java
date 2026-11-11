@@ -33,16 +33,16 @@ public class OrderRecipientRouteAdapter implements OrderRecipientRoutes {
     }
 
     @Override
-    public PaymentRouteChangeResponse replace(Source expected, String bankStatus, boolean publish, Authentication actor) {
-        return replace(expected,bankStatus,publish,PaymentRouteChangeTarget.EMPLOYEE_REQUISITES,true,actor);
+    public PaymentRouteChangeResponse replace(Source expected, String bankStatus, boolean publish, Authentication actor, Long chosenProfileId) {
+        return replace(expected,bankStatus,publish,PaymentRouteChangeTarget.EMPLOYEE_REQUISITES,true,actor,chosenProfileId);
     }
 
     @Override
-    public PaymentRouteChangeResponse replaceMethod(Source expected, String bankStatus, boolean publish, PaymentRouteChangeTarget target, Authentication actor) {
-        return replace(expected,bankStatus,publish,target,false,actor);
+    public PaymentRouteChangeResponse replaceMethod(Source expected, String bankStatus, boolean publish, PaymentRouteChangeTarget target, Authentication actor, Long chosenProfileId) {
+        return replace(expected,bankStatus,publish,target,false,actor,chosenProfileId);
     }
 
-    private PaymentRouteChangeResponse replace(Source expected,String bankStatus,boolean publish,PaymentRouteChangeTarget target,boolean different,Authentication actor) {
+    private PaymentRouteChangeResponse replace(Source expected,String bankStatus,boolean publish,PaymentRouteChangeTarget target,boolean different,Authentication actor,Long chosenProfileId) {
         var link = routes.lockRecipientChangeSource(expected.targetId(), expected.sourceId(), actor);
         if (!expected.equals(PaymentRouteReplacementWorkflow.recipientSource(link))) {
             throw new SourceChanged("Ссылка или состояние заказа изменились");
@@ -51,7 +51,7 @@ public class OrderRecipientRouteAdapter implements OrderRecipientRoutes {
             if ("TOCHKA".equals(expected.provider()) && "CREATED".equals(bankStatus)) link.setObserveReplacedBank(true);
             else link.setProviderTerminalStatus(bankStatus);
         }
-        var result = routes.replaceBankRoute(expected.targetId(), expected.sourceId(),target,different,actor);
+        var result = routes.replaceBankRoute(expected.targetId(), expected.sourceId(),target,different,actor,chosenProfileId);
         if (!publish) return null;
         return changes.notifyReplacement(expected.targetId(), new PaymentLinkService.PaymentRouteReplacement(
                 result.previousPaymentLinkId(), result.paymentLinkId(), result.target(), result.response()));

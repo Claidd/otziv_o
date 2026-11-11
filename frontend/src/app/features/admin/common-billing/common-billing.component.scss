@@ -116,6 +116,24 @@
   --billing-toolbar-disabled-text: #6f7a83;
 }
 
+/* Dark theme: status pills were tuned for a light background and lost contrast on dark cards. */
+:host-context(body.otziv-dark-theme) .status-pill.active,
+:host-context(body.otziv-dark-theme) .state.enabled {
+  color: #79d8c2;
+  background: rgba(49, 189, 111, 0.16);
+}
+
+:host-context(body.otziv-dark-theme) .status-pill.partial {
+  color: #f0cf83;
+  background: rgba(240, 207, 131, 0.14);
+}
+
+:host-context(body.otziv-dark-theme) .status-pill.danger,
+:host-context(body.otziv-dark-theme) .state.disabled {
+  color: #ff9ab6;
+  background: rgba(255, 154, 182, 0.14);
+}
+
 /* Dark theme: the account list and settings panels used the light card fallback (white). */
 :host-context(body.otziv-dark-theme) .accounts-panel,
 :host-context(body.otziv-dark-theme) .settings-panel {
@@ -131,21 +149,6 @@
 :host-context(body.otziv-dark-theme) .icon-action {
   border-color: var(--billing-action-border);
   background: var(--billing-action-surface);
-  color: #8ab8f0;
-}
-
-:host-context(body.otziv-dark-theme) .account-row {
-  border-color: var(--billing-panel-border);
-  background: var(--billing-summary-surface);
-  color: var(--otziv-text);
-}
-
-:host-context(body.otziv-dark-theme) .account-row.active {
-  border-color: rgba(138, 184, 240, 0.55);
-  background: #263342;
-}
-
-:host-context(body.otziv-dark-theme) .account-row .material-icons-sharp {
   color: #8ab8f0;
 }
 
@@ -229,7 +232,6 @@
 .empty-text,
 .settings-form label span,
 .invoice-summary small,
-.invoice-timeline,
 .linked-company-list small,
 .invoice-orders small,
 .account-row small {
@@ -391,30 +393,199 @@ button .material-icons-sharp {
 }
 
 .common-billing-right-panel .account-list {
-  max-height: 12.8rem;
-  overflow: auto;
+  /* Rows keep their own height: in a height-limited grid, auto rows would shrink to min-height
+     and two-line names would spill onto the next row. */
+  grid-auto-rows: max-content;
+  max-height: 19rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.1rem 0.35rem 0.1rem 0;
+  overscroll-behavior: contain;
+  /* Same thin scrollbar as the site sidebar instead of the white system one. */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(121, 151, 191, 0.75) transparent;
 }
 
-.account-row {
+.common-billing-right-panel .company-search-results,
+.common-billing-right-panel .linked-company-list {
+  grid-auto-rows: max-content;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(121, 151, 191, 0.75) transparent;
+}
+
+.common-billing-right-panel :is(.account-list, .company-search-results, .linked-company-list)::-webkit-scrollbar {
+  width: 0.45rem;
+}
+
+.common-billing-right-panel :is(.account-list, .company-search-results, .linked-company-list)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.common-billing-right-panel :is(.account-list, .company-search-results, .linked-company-list)::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(121, 151, 191, 0.75);
+}
+
+.common-billing-right-panel :is(.account-list, .company-search-results, .linked-company-list)::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+}
+
+.accounts-panel .accounts-refresh {
+  flex: 0 0 auto;
+  width: 2.1rem;
+  min-height: 2.1rem;
+  border: 1px solid var(--billing-action-border);
+  border-radius: 0.55rem;
+  padding: 0;
+  color: var(--otziv-theme-control, #6c9bcf);
+  background: var(--billing-action-surface);
+}
+
+.accounts-panel .accounts-refresh:not(:disabled):hover {
+  border-color: var(--billing-action-border);
+  color: var(--otziv-theme-control, #6c9bcf);
+  background: var(--billing-action-surface-hover);
+}
+
+.account-search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  border: 1px solid var(--billing-toolbar-control-border);
+  border-radius: 0.6rem;
+  padding: 0 0.55rem;
+  background: var(--billing-toolbar-control-surface);
+}
+
+.account-search:focus-within {
+  border-color: var(--billing-action-primary-soft-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-action, #e53220) 18%, transparent);
+}
+
+.account-search .material-icons-sharp {
+  flex: 0 0 auto;
+  color: var(--billing-action-muted);
+  font-size: 1.05rem;
+}
+
+.account-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2.2rem;
+  border: 0;
+  padding: 0;
+  outline: 0;
+  color: var(--otziv-text, #1f2430);
+  background: transparent;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.account-search input::placeholder {
+  color: var(--billing-action-muted);
+  font-weight: 750;
+}
+
+/* The admin-wide button baseline centres content and adds wide padding; a list row needs neither. */
+.account-list .account-row {
   display: grid;
   grid-template-columns: 2rem minmax(0, 1fr);
-  justify-content: start;
-  min-height: 3.4rem;
+  align-items: center;
+  justify-content: stretch;
+  gap: 0.55rem;
   width: 100%;
-  border: 1px solid #e8ecf1;
+  min-width: 0;
+  min-height: 3.3rem;
+  border: 1px solid var(--billing-panel-border);
+  border-radius: 0.6rem;
   padding: 0.45rem 0.55rem;
   color: var(--otziv-text, #1f2430);
-  background: #fbfcfd;
+  background: var(--billing-summary-surface);
+  box-shadow: none;
+  font-weight: inherit;
   text-align: left;
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
-.account-row.active {
-  border-color: rgba(47, 127, 223, 0.38);
-  background: #f1f7ff;
+.account-list .account-row:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--billing-action-text) 24%, var(--billing-panel-border));
+  color: var(--otziv-text, #1f2430);
+  background: var(--billing-action-surface-hover);
 }
 
-.account-row .material-icons-sharp {
-  color: #2f7fdf;
+.account-list .account-row.active,
+.account-list .account-row.active:not(:disabled):hover {
+  border-color: var(--billing-action-primary-soft-border);
+  background: var(--billing-action-primary-soft);
+  box-shadow: inset 3px 0 0 var(--otziv-action, #e53220);
+}
+
+.account-list .account-row:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-action, #e53220) 24%, transparent);
+}
+
+.account-row-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.5rem;
+  color: var(--otziv-theme-control, #6c9bcf);
+  background: color-mix(in srgb, var(--otziv-theme-control, #6c9bcf) 14%, transparent);
+  font-size: 1.1rem;
+}
+
+.account-row.active .account-row-icon {
+  color: var(--billing-action-primary-soft-text);
+  background: color-mix(in srgb, var(--billing-action-primary-soft-text) 12%, transparent);
+}
+
+.account-row.paused .account-row-icon {
+  color: var(--billing-action-muted);
+  background: var(--billing-chip-surface);
+}
+
+.account-row-text {
+  display: grid;
+  gap: 0.26rem;
+  min-width: 0;
+}
+
+.account-list .account-row-text strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.76rem;
+  line-height: 1.22;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.account-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.account-list .account-row-meta small {
+  margin: 0;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.account-row-meta .status-pill {
+  min-height: 1.2rem;
+  padding: 0 0.45rem;
+  font-size: 0.6rem;
 }
 
 .account-row strong,
@@ -1110,127 +1281,1088 @@ button .material-icons-sharp {
   overflow-wrap: anywhere;
 }
 
-.invoice-actions {
+.side-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.side-head > div {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.18rem;
+  min-width: 0;
 }
 
-.invoice-actions button {
-  width: 100%;
-  min-height: 2.55rem;
+.side-head h3 {
+  margin: 0;
+  color: var(--otziv-text, #1f2430);
+  font-family: var(--otziv-card-title-font, inherit);
+  font-size: 1.02rem;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.side-head small {
+  color: var(--otziv-muted, #77808d);
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.side-head-tools {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.side-head-tools .side-guide-button {
+  min-height: 1.85rem;
+  border: 1px solid var(--billing-action-primary-soft-border);
+  border-radius: 999px;
+  padding: 0 0.6rem;
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft);
+  font-size: 0.68rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.side-head-tools .side-guide-button:not(:disabled):hover {
+  border-color: var(--billing-action-primary-soft-border);
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft-hover);
+}
+
+.side-head-tools .side-guide-button .material-icons-sharp {
+  font-size: 0.95rem;
+}
+
+.side-group-head .side-help {
+  display: grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  min-height: 0;
+  place-items: center;
   border: 1px solid var(--billing-action-border);
-  border-radius: 0.65rem;
-  padding: 0.45rem 0.62rem;
-  color: var(--billing-action-text);
+  border-radius: 999px;
+  padding: 0;
+  color: var(--billing-action-muted);
   background: var(--billing-action-surface);
-  box-shadow: 0 0.18rem 0.45rem rgba(30, 39, 52, 0.05);
-  line-height: 1.12;
-  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
-.invoice-actions button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--billing-action-text) 28%, var(--billing-action-border));
-  background: var(--billing-action-surface-hover);
-  box-shadow: 0 0.32rem 0.75rem rgba(30, 39, 52, 0.11);
-  transform: translateY(-1px);
-}
-
-.invoice-actions button:focus-visible {
-  outline: 0;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-action, #e53220) 24%, transparent);
-}
-
-.invoice-actions button:disabled {
-  border-color: transparent;
-  color: var(--billing-action-disabled-text);
-  background: var(--billing-action-disabled-bg);
-  box-shadow: none;
-  opacity: 0.78;
-}
-
-.invoice-actions .primary {
+.side-group-head .side-help:not(:disabled):hover {
   border-color: var(--billing-action-primary-soft-border);
   color: var(--billing-action-primary-soft-text);
   background: var(--billing-action-primary-soft);
 }
 
-.invoice-actions .primary:hover:not(:disabled) {
+.side-head-tools .side-guide-button:focus-visible,
+.side-group-head .side-help:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-action, #e53220) 24%, transparent);
+}
+
+.invoice-summary .invoice-summary-progress {
+  grid-column: 1 / -1;
+  height: 0.42rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: var(--otziv-progress-track, #e9edf6);
+}
+
+.invoice-summary-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--otziv-progress-fill-complete, linear-gradient(90deg, #1b9c85 0%, #55cda6 100%));
+  transition: width 240ms ease;
+}
+
+.side-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  border: 1px solid var(--otziv-surface-border-neutral, rgba(108, 155, 207, 0.2));
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  color: var(--billing-action-text);
+  background: var(--billing-cycle-surface);
+  font-size: 0.7rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.side-stage .material-icons-sharp {
+  flex: 0 0 auto;
+  color: var(--otziv-theme-control, #6c9bcf);
+  font-size: 1rem;
+}
+
+.side-group {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  border: 1px solid var(--billing-panel-border);
+  border-radius: 0.7rem;
+  padding: 0.65rem;
+  background: var(--billing-summary-surface);
+}
+
+.side-group-head {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.side-group-head > .material-icons-sharp:first-child {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft);
+  font-size: 1.05rem;
+}
+
+.side-group-head h4 {
+  margin: 0;
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.8rem;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.side-group-head p {
+  margin: 0.12rem 0 0;
+  color: var(--billing-action-muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.side-group--alert {
+  border-color: var(--billing-alert-border);
+  background: var(--billing-alert-surface);
+}
+
+.side-group--alert .side-group-head > .material-icons-sharp:first-child {
+  color: var(--billing-alert-title);
+  background: rgba(239, 49, 100, 0.12);
+}
+
+.side-group--danger .side-group-head > .material-icons-sharp:first-child {
+  color: var(--billing-action-danger-text);
+  background: var(--billing-action-danger-soft);
+}
+
+.side-group--fold {
+  padding: 0;
+}
+
+.side-group--fold > summary {
+  grid-template-columns: 2rem minmax(0, 1fr) auto 1.4rem;
+  padding: 0.65rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.side-group--fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.side-group--fold > summary:focus-visible {
+  outline: 0;
+  border-radius: 0.7rem;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-action, #e53220) 24%, transparent);
+}
+
+.side-fold-icon {
+  align-self: center;
+  color: var(--billing-action-muted);
+  font-size: 1.3rem;
+  transition: transform 160ms ease;
+}
+
+.side-group--fold[open] > summary .side-fold-icon {
+  transform: rotate(180deg);
+}
+
+.side-group--fold > .side-actions,
+.side-group--fold > .side-fold-body {
+  border-top: 1px solid var(--billing-panel-border);
+  padding: 0.55rem 0.65rem 0.65rem;
+}
+
+.side-group--fold > .side-fold-body {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.side-group-head .side-fold-state {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 0.3rem;
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  color: var(--billing-chip-text);
+  background: var(--billing-chip-surface);
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.side-group--fold:not([open]) > summary:hover {
+  border-radius: 0.7rem;
+  background: var(--billing-action-surface-hover);
+}
+
+.side-history > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.side-history > summary::-webkit-details-marker,
+.settings-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.side-history[open] > summary .side-fold-icon,
+.settings-fold[open] > summary .side-fold-icon {
+  transform: rotate(180deg);
+}
+
+.side-history[open] > summary {
+  margin-bottom: 0.4rem;
+}
+
+.settings-fold {
+  display: block;
+}
+
+.settings-fold > summary {
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-fold > summary > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.settings-fold[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+.settings-fold > .company-links {
+  margin-top: 0.85rem;
+}
+
+/* Folded cards below the invoice: a horizontal header (icon, text, actions), never squeezed text. */
+.accounts-fold {
+  display: block;
+}
+
+.accounts-fold > summary.fold-card-head,
+.settings-fold > summary.fold-card-head {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 0.55rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.accounts-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.accounts-fold[open] > summary {
+  margin-bottom: 0.7rem;
+}
+
+.accounts-fold[open] > summary .side-fold-icon {
+  transform: rotate(180deg);
+}
+
+.fold-card-head > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.fold-card-head h3 {
+  margin: 0;
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.9rem;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.fold-card-head small {
+  color: var(--billing-action-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.fold-card-head .state {
+  justify-self: start;
+  margin-top: 0.15rem;
+}
+
+.fold-card-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--otziv-theme-control, #6c9bcf);
+  background: color-mix(in srgb, var(--otziv-theme-control, #6c9bcf) 14%, transparent);
+  font-size: 1.05rem;
+}
+
+.accounts-fold-body {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.accounts-note {
+  margin: 0;
+  color: var(--billing-action-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.accounts-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.accounts-tools .account-search {
+  flex: 1 1 auto;
+}
+
+.accounts-fold .accounts-new,
+.settings-fold .settings-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 2.3rem;
+  border: 1px dashed var(--billing-action-primary-soft-border);
+  border-radius: 0.6rem;
+  padding: 0 0.8rem;
+  color: var(--billing-action-primary-soft-text);
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.accounts-fold .accounts-new:not(:disabled):hover,
+.settings-fold .settings-cancel:not(:disabled):hover {
+  border-color: var(--billing-action-primary-soft-border);
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft);
+}
+
+.settings-fold .settings-cancel {
+  border-style: solid;
+  border-color: var(--billing-action-border);
+  color: var(--billing-action-text);
+}
+
+.settings-howto {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  border-left: 3px solid var(--otziv-theme-control, #6c9bcf);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--billing-cycle-surface);
+}
+
+.settings-howto strong {
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.settings-howto ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--billing-action-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.38;
+}
+
+.settings-howto b {
+  color: var(--otziv-text, #1f2430);
+  font-weight: 950;
+}
+
+/* «Связи общих счетов»: one section with «Новая связь», «Эта связь» and «Перейти к другой связи». */
+.links-body {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.links-body .settings-howto {
+  margin-bottom: 0;
+}
+
+.links-sub {
+  min-width: 0;
+  border: 1px solid var(--billing-panel-border);
+  border-radius: 0.65rem;
+  background: var(--billing-summary-surface);
+}
+
+.links-sub > summary {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr) 1.4rem;
+  align-items: start;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.links-sub > summary::-webkit-details-marker {
+  display: none;
+}
+
+.links-sub > summary > .material-icons-sharp:first-child {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 0.5rem;
+  color: var(--otziv-theme-control, #6c9bcf);
+  background: color-mix(in srgb, var(--otziv-theme-control, #6c9bcf) 14%, transparent);
+  font-size: 1rem;
+}
+
+.links-sub[open] > summary .side-fold-icon {
+  transform: rotate(180deg);
+}
+
+.links-sub-text {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.links-sub-text strong {
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.links-sub-text small {
+  color: var(--billing-action-muted);
+  font-size: 0.64rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.links-sub > .settings-form,
+.links-sub > .company-links,
+.links-sub > .links-sub-body {
+  border-top: 1px solid var(--billing-panel-border);
+  padding: 0.6rem;
+}
+
+.links-sub > .company-links {
+  margin-top: 0;
+  border-top-style: dashed;
+}
+
+.links-sub-body {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.settings-fold .settings-value {
+  margin: 0;
+  border: 1px solid var(--billing-panel-border);
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  color: var(--otziv-text, #1f2430);
+  background: var(--billing-panel-surface);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.settings-advanced {
+  margin-top: 0.15rem;
+}
+
+.settings-advanced > summary {
+  color: var(--otziv-theme-control, #6c9bcf);
+  font-size: 0.66rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.settings-advanced[open] > summary {
+  margin-bottom: 0.35rem;
+}
+
+.settings-fold .settings-form select {
+  width: 100%;
+  min-height: 2.45rem;
+  border: 1px solid var(--billing-toolbar-control-border);
+  border-radius: 0.55rem;
+  padding: 0 0.6rem;
+  color: var(--otziv-text, #1f2430);
+  background: var(--billing-toolbar-control-surface);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.settings-fold .settings-form select:focus-visible {
+  outline: 0;
+  border-color: var(--billing-action-primary-soft-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-action, #e53220) 18%, transparent);
+}
+
+/* Opened from an order card: only a pointer to the links section of the «Общие счета» page. */
+.links-shortcut {
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.55rem;
+}
+
+.links-shortcut > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.links-shortcut h3 {
+  margin: 0;
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.links-shortcut small {
+  color: var(--billing-action-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.links-shortcut-link {
+  justify-self: start;
+  margin-top: 0.15rem;
+  color: var(--otziv-theme-control, #6c9bcf);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-underline-offset: 0.18em;
+}
+
+/* Who receives the money now and what the last change did. */
+.route-current {
+  display: grid;
+  gap: 0.12rem;
+  border: 1px solid var(--billing-action-primary-soft-border);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--billing-action-primary-soft);
+}
+
+.route-current-label {
+  color: var(--billing-action-primary-soft-text);
+  font-size: 0.6rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.route-current strong {
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.86rem;
+  font-weight: 950;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.route-current small {
+  color: var(--billing-action-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.route-change-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+  border: 1px solid var(--billing-action-success-soft-border);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.55rem;
+  color: var(--billing-action-success-soft-text);
+  background: var(--billing-action-success-soft);
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.route-change-result .material-icons-sharp {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+
+/* Link settings: every control explains itself. Selectors outweigh the admin-wide button baseline. */
+.settings-fold .settings-help {
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.7rem;
+  height: 1.7rem;
+  min-height: 0;
+  place-items: center;
+  border: 1px solid var(--billing-action-border);
+  border-radius: 999px;
+  padding: 0;
+  color: var(--billing-action-muted);
+  background: var(--billing-action-surface);
+}
+
+.settings-fold .settings-help:not(:disabled):hover {
+  border-color: var(--billing-action-primary-soft-border);
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft);
+}
+
+.settings-fold .settings-form,
+.settings-fold .company-links {
+  gap: 0.6rem;
+}
+
+.settings-fold .settings-field > span {
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.settings-fold .settings-field > small,
+.settings-fold .settings-note {
+  display: block;
+  margin: 0;
+  color: var(--billing-action-muted);
+  font-size: 0.64rem;
+  font-weight: 750;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.settings-fold .settings-form input:not([type='checkbox']),
+.settings-fold .company-search input {
+  border-color: var(--billing-toolbar-control-border);
+  border-radius: 0.55rem;
+  color: var(--otziv-text, #1f2430);
+  background: var(--billing-toolbar-control-surface);
+}
+
+.settings-fold .toggle-line {
+  border-color: var(--billing-panel-border);
+  border-radius: 0.6rem;
+  background: var(--billing-summary-surface);
+}
+
+.settings-fold .toggle-line > span {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.settings-fold .toggle-line strong {
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.settings-fold .toggle-line small {
+  color: var(--billing-action-muted);
+  font-size: 0.64rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.settings-fold .settings-form .primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--billing-action-primary-soft-border);
+  border-radius: 0.6rem;
+  padding: 0 0.8rem;
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.settings-fold .settings-form .primary-action:not(:disabled):hover {
+  border-color: var(--billing-action-primary-soft-border);
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft-hover);
+}
+
+.settings-fold .settings-form .primary-action:disabled {
+  border-style: dashed;
+  border-color: var(--billing-action-border);
+  color: var(--billing-action-disabled-text);
+  background: var(--billing-action-disabled-bg);
+}
+
+.settings-fold .company-links .section-title {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+.settings-fold .company-links .section-title small {
+  color: var(--billing-action-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.settings-fold .company-search-results button {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  justify-content: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid var(--billing-panel-border);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.55rem;
+  color: var(--otziv-text, #1f2430);
+  background: var(--billing-summary-surface);
+  font-weight: inherit;
+  text-align: left;
+}
+
+.settings-fold .company-search-results button:not(:disabled):hover {
+  border-color: var(--billing-action-primary-soft-border);
+  color: var(--otziv-text, #1f2430);
+  background: var(--billing-action-primary-soft);
+}
+
+.settings-fold .company-search-results button:disabled {
+  color: var(--billing-action-disabled-text);
+  background: var(--billing-action-disabled-bg);
+}
+
+.company-search-text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.settings-fold .linked-company-list article {
+  border-color: var(--billing-panel-border);
+  border-radius: 0.6rem;
+  background: var(--billing-summary-surface);
+}
+
+.settings-fold .linked-company-list .company-remove {
+  width: 2rem;
+  min-height: 2rem;
+  border: 1px solid var(--billing-action-danger-border);
+  border-radius: 0.5rem;
+  padding: 0;
+  color: var(--billing-action-danger-text);
+  background: var(--billing-action-danger-soft);
+}
+
+.settings-fold .linked-company-list .company-remove:not(:disabled):hover {
+  border-color: var(--billing-action-danger-border);
+  color: var(--billing-action-danger-text);
+  background: var(--billing-action-danger-soft-hover);
+}
+
+.side-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.42rem;
+  min-width: 0;
+}
+
+.side-actions:empty {
+  display: none;
+}
+
+.side-actions .side-action {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  align-items: center;
+  justify-content: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid var(--billing-action-border);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  color: var(--billing-action-text);
+  background: var(--billing-action-surface);
+  box-shadow: none;
+  text-align: left;
+  line-height: 1.2;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.side-actions .side-action > .material-icons-sharp {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 1.05rem;
+}
+
+.side-action-text {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.side-action-text strong {
+  font-size: 0.74rem;
+  font-weight: 950;
+  line-height: 1.18;
+}
+
+.side-action-text small {
+  color: var(--billing-action-muted);
+  font-size: 0.64rem;
+  font-weight: 750;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.side-action-text .side-action-route {
+  display: block;
+  margin-bottom: 0.12rem;
+  color: var(--otziv-theme-control, #6c9bcf);
+  font-weight: 950;
+}
+
+.side-actions .side-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--billing-action-text) 28%, var(--billing-action-border));
+  background: var(--billing-action-surface-hover);
+  box-shadow: 0 0.32rem 0.75rem rgba(30, 39, 52, 0.1);
+  transform: translateY(-1px);
+}
+
+.side-actions .side-action:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-action, #e53220) 24%, transparent);
+}
+
+.side-actions .side-action.primary {
+  border-color: var(--billing-action-primary-soft-border);
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft);
+}
+
+.side-actions .side-action.primary:hover:not(:disabled) {
   border-color: var(--billing-action-primary-soft-border);
   background: var(--billing-action-primary-soft-hover);
 }
 
-.invoice-actions .success {
+.side-actions .side-action.success {
   border-color: var(--billing-action-success-soft-border);
   color: var(--billing-action-success-soft-text);
   background: var(--billing-action-success-soft);
 }
 
-.invoice-actions .success:hover:not(:disabled) {
+.side-actions .side-action.success:hover:not(:disabled) {
   border-color: var(--billing-action-success-soft-border);
   background: var(--billing-action-success-soft-hover);
 }
 
-.invoice-actions .review {
-  border-color: var(--billing-action-success-soft-border);
-  color: var(--billing-action-success-soft-text);
-  background: var(--billing-action-success-soft);
-}
-
-.invoice-actions .review:hover:not(:disabled) {
-  border-color: var(--billing-action-success-soft-border);
-  background: var(--billing-action-success-soft-hover);
-}
-
-.invoice-actions .warning {
+.side-actions .side-action.warning {
   border-color: var(--billing-action-warning-border);
   color: var(--billing-action-warning-text);
   background: var(--billing-action-warning-soft);
 }
 
-.invoice-actions .warning:hover:not(:disabled) {
+.side-actions .side-action.warning:hover:not(:disabled) {
   border-color: var(--billing-action-warning-border);
   background: var(--billing-action-warning-soft-hover);
 }
 
-.invoice-actions .danger {
+.side-actions .side-action.danger {
   border-color: var(--billing-action-danger-border);
   color: var(--billing-action-danger-text);
   background: var(--billing-action-danger-soft);
 }
 
-.invoice-actions .danger:hover:not(:disabled) {
+.side-actions .side-action.danger:hover:not(:disabled) {
   border-color: var(--billing-action-danger-border);
   background: var(--billing-action-danger-soft-hover);
 }
 
-.invoice-action-sequence-hint {
+.side-actions .side-action.primary .side-action-text small,
+.side-actions .side-action.success .side-action-text small,
+.side-actions .side-action.warning .side-action-text small,
+.side-actions .side-action.danger .side-action-text small {
+  color: inherit;
+  opacity: 0.82;
+}
+
+.side-actions .side-action:disabled {
+  border-style: dashed;
+  border-color: var(--billing-action-border);
+  color: var(--billing-action-disabled-text);
+  background: var(--billing-action-disabled-bg);
+  box-shadow: none;
+  opacity: 0.86;
+}
+
+.side-actions .side-action:disabled .side-action-text small {
+  color: inherit;
+}
+
+.side-note {
   display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: 0.42rem;
+  align-items: flex-start;
+  gap: 0.4rem;
   margin: 0;
   border: 1px dashed var(--billing-action-border);
-  border-radius: 0.58rem;
-  padding: 0.52rem 0.62rem;
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.55rem;
   color: var(--billing-action-muted);
-  background: color-mix(in srgb, var(--billing-action-surface) 72%, transparent);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 850;
-  line-height: 1.28;
+  line-height: 1.32;
 }
 
-.invoice-action-sequence-hint .material-icons-sharp {
+.side-note .material-icons-sharp {
   flex: 0 0 auto;
   color: var(--billing-action-primary-soft-text);
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
-.invoice-timeline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.38rem;
-  grid-column: 1 / -1;
+.side-callout {
+  display: grid;
+  gap: 0.2rem;
+  border-left: 3px solid var(--otziv-theme-control, #6c9bcf);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.55rem;
+  background: var(--billing-cycle-surface);
+}
+
+.side-callout strong {
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.side-callout p {
+  margin: 0;
+  color: var(--billing-action-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.side-history {
+  display: block;
+  gap: 0.4rem;
+  min-width: 0;
+  border-top: 1px dashed var(--billing-panel-border);
+  padding-top: 0.6rem;
+}
+
+.side-history h4 {
+  margin: 0;
+  color: var(--billing-action-muted);
+  font-size: 0.66rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.side-history dl {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.side-history dl > div {
+  display: grid;
+  gap: 0.06rem;
+  min-width: 0;
+  border-radius: 0.45rem;
+  padding: 0.32rem 0.45rem;
+  background: var(--billing-chip-surface);
+}
+
+.side-history dt {
+  color: var(--billing-chip-text);
+  font-size: 0.62rem;
+  font-weight: 850;
+}
+
+.side-history dd {
+  margin: 0;
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.7rem;
+  font-weight: 900;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.side-history .error-line {
+  background: var(--billing-alert-surface);
+}
+
+.side-history .error-line dt,
+.side-history .error-line dd {
+  color: var(--billing-alert-title);
 }
 
 .common-billing-right-panel {
@@ -1261,8 +2393,7 @@ button .material-icons-sharp {
   overflow: auto;
 }
 
-.common-billing-right-panel .primary-action,
-.common-billing-right-panel .invoice-actions button {
+.common-billing-right-panel .primary-action {
   min-height: 2.55rem;
   font-size: 0.72rem;
 }
@@ -1313,7 +2444,6 @@ button .material-icons-sharp {
   font-size: 1.12rem;
 }
 
-.invoice-timeline span,
 .status-pill,
 .state {
   display: inline-flex;
@@ -1327,7 +2457,6 @@ button .material-icons-sharp {
   white-space: nowrap;
 }
 
-.invoice-timeline span,
 .status-pill.neutral {
   color: var(--billing-chip-text);
   background: var(--billing-chip-surface);
@@ -1350,8 +2479,7 @@ button .material-icons-sharp {
 }
 
 .status-pill.danger,
-.state.disabled,
-.invoice-timeline .error-line {
+.state.disabled {
   color: #a23243;
   background: #fff1f3;
 }
@@ -1381,8 +2509,7 @@ button .material-icons-sharp {
     display: none;
   }
 
-  .invoice-summary,
-  .invoice-actions {
+  .invoice-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1425,10 +2552,12 @@ button .material-icons-sharp {
   .metric-grid,
   .billing-grid,
   .toggle-grid,
-  .field-grid,
-  .invoice-summary,
-  .invoice-actions {
+  .field-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .invoice-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .invoice-panel {

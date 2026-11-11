@@ -1,0 +1,48 @@
+# Local payment sandbox. Never used on its own: infrastructure/scripts/local/payment-sandbox.ps1 applies it
+# on top of compose.prod-local.yaml and infrastructure/scripts/local/paper-invoice-fixture/compose.yaml.
+#
+# The stand's env file holds real bank and messenger credentials. Every one of them is replaced here by a
+# local marker, and the application refuses to start in the payment-sandbox profile if any is left
+# (contractor_payments/service/LocalPaymentSandbox.java). Details: docs/invoice-flows/06-local-payment-sandbox.md
+services:
+  # The stand's other services come back after a Docker restart. The fixture must too: while it is down every
+  # sandbox payment and client message fails with an unknown outcome, and it forgets what it had received.
+  paper-invoice-fixture:
+    restart: unless-stopped
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,paper-invoice-fixture,payment-sandbox
+      # The new payment system: recipients, reserves and card numbers, as on production.
+      OTZIV_CONTRACTOR_PAYMENTS_LIVE_ROUTING_MASTER_ENABLED: "true"
+      OTZIV_CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_MASTER_ENABLED: "true"
+      # T-Bank: both shops answer from the fixture. The terminal names and the value that stands in for every
+      # terminal password are public markers, not secrets. They are written as defaults of unset variables, the
+      # way the fixture's own compose writes its bank token; payment-sandbox.ps1 checks the resolved values and
+      # the application refuses to start with any other.
+      OTZIV_PAYMENTS_TBANK_ENABLED: "true"
+      OTZIV_PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED: "true"
+      OTZIV_PAYMENTS_TBANK_MANAGER_UI_ENABLED: "true"
+      OTZIV_PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS: "true"
+      OTZIV_PAYMENTS_TBANK_BASE_URL: http://paper-invoice-fixture:8099/tbank
+      OTZIV_PAYMENTS_TBANK_PRIMARY_TERMINAL_KEY: ${PAYMENT_SANDBOX_PRIMARY_TERMINAL:-LocalSandboxPrimary}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_PASSWORD: ${PAYMENT_SANDBOX_TERMINAL_MARKER:-local-sandbox-only}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_TEST_TERMINAL_KEY: ${PAYMENT_SANDBOX_PRIMARY_TERMINAL:-LocalSandboxPrimary}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_TEST_PASSWORD: ${PAYMENT_SANDBOX_TERMINAL_MARKER:-local-sandbox-only}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_LIVE_TERMINAL_KEY: ${PAYMENT_SANDBOX_PRIMARY_TERMINAL:-LocalSandboxPrimary}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_LIVE_PASSWORD: ${PAYMENT_SANDBOX_TERMINAL_MARKER:-local-sandbox-only}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_TERMINAL_KEY: ${PAYMENT_SANDBOX_SECONDARY_TERMINAL:-LocalSandboxSecondary}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_PASSWORD: ${PAYMENT_SANDBOX_TERMINAL_MARKER:-local-sandbox-only}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_TEST_TERMINAL_KEY: ${PAYMENT_SANDBOX_SECONDARY_TERMINAL:-LocalSandboxSecondary}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_TEST_PASSWORD: ${PAYMENT_SANDBOX_TERMINAL_MARKER:-local-sandbox-only}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_LIVE_TERMINAL_KEY: ${PAYMENT_SANDBOX_SECONDARY_TERMINAL:-LocalSandboxSecondary}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_LIVE_PASSWORD: ${PAYMENT_SANDBOX_TERMINAL_MARKER:-local-sandbox-only}
+      OTZIV_PAYMENTS_TBANK_TERMINAL_KEY: ""
+      OTZIV_PAYMENTS_TBANK_PASSWORD: ""
+      # Tochka: the fixed non-secret marker instead of the real token.
+      OTZIV_PAYMENTS_TOCHKA_JWT_TOKEN: ${PAPER_INVOICES_FIXTURE_BANK_TOKEN:-local-fixture-only}
+      # No messenger can be reached: client messages are kept by the fixture, employee chats stay silent.
+      MAX_BOT_TOKEN: ""
+      TELEGRAM_BOT_SENDING_ENABLED: "false"
+      OTZIV_MOBILE_PUSH_FIREBASE_ENABLED: "false"
+      MAIL_HOST: localhost
+      PAPER_INVOICES_STAFF_NOTIFICATIONS_ENABLED: "false"

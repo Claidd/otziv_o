@@ -392,10 +392,16 @@
       (paymentRouteChangeOpened)="openPaymentRouteChange()"
       (paymentRouteChangeClosed)="closePaymentRouteChange()"
       (paymentRouteChanged)="changePaymentRoute($event)"
+      (paymentGuideOpened)="orderPaymentGuideOpen.set(true)"
       (paperInvoiceIssued)="markPaperInvoiceIssued()"
       (paperInvoiceOpened)="openOrderPaperInvoice()"
     />
   }
+  <app-order-payment-route-windows
+    [facade]="orderPaymentFacade"
+    [guideOpen]="orderPaymentGuideOpen()"
+    (guideClosed)="orderPaymentGuideOpen.set(false)"
+  />
 
   @if (overdueModalOpen()) {
     @if (overdueOrders(); as overdue) {

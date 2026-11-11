@@ -7,8 +7,9 @@ const apiSource = apiTransportSource();
 const pageSource = fs.readFileSync('src/app/features/common-billing.page.ts', 'utf8');
 
 test('mobile common invoice exposes the same safe payment-route switches as web', () => {
-  assert.match(pageSource, />Сменить получателя</u);
-  assert.match(pageSource, />Выдать реквизиты без ссылки</u);
+  assert.match(pageSource, />Выдать номер карты</u);
+  assert.match(pageSource, /changePaymentRoute\(cardNumberRouteTarget\(invoice\.paymentRouteType\)\)/u);
+  assert.match(pageSource, /routeType === 'MANUAL_EXTERNAL_LINK' \? 'EMPLOYEE_REQUISITES' : 'DIFFERENT_RECIPIENT'/u);
   assert.match(pageSource, /'Бумажный счёт'/u);
   assert.match(pageSource, /'Вернуть авто-распределение'/u);
   assert.match(pageSource, />Счёт отправлен</u);

@@ -1,0 +1,349 @@
+// The host keeps Ionic's page layout (header, scrolling content, footer); only colours are set here.
+:host {
+  --pick-surface: var(--otziv-white, #ffffff);
+  --pick-soft: var(--otziv-muted-surface, #f8fafc);
+  --pick-border: rgba(103, 116, 131, 0.24);
+  --pick-control-border: rgba(103, 116, 131, 0.42);
+  --pick-text: var(--otziv-dark, #363949);
+  --pick-muted: #5c697c;
+  --pick-accent: #a93422;
+  --pick-accent-soft: #fff2ed;
+  --pick-success: #126650;
+  --pick-success-soft: #e8f7f2;
+  --pick-success-border: #a7d9ca;
+  --pick-warning: #805600;
+  --pick-warning-soft: #fff6df;
+  --pick-warning-border: #e4c36e;
+  --pick-danger: #a62b48;
+  --pick-danger-soft: #fff0f3;
+  --pick-danger-border: #e7a5b5;
+  color: var(--pick-text);
+}
+
+:host-context(body.otziv-dark-theme) {
+  --pick-border: rgba(163, 189, 204, 0.22);
+  --pick-control-border: rgba(163, 189, 204, 0.4);
+  --pick-muted: #aeb8c3;
+  --pick-accent: #ffad95;
+  --pick-accent-soft: #3b2a25;
+  --pick-success: #79d8c2;
+  --pick-success-soft: #203a34;
+  --pick-success-border: #386c61;
+  --pick-warning: #f0cf83;
+  --pick-warning-soft: #3a3221;
+  --pick-warning-border: #6b592f;
+  --pick-danger: #ff9ab6;
+  --pick-danger-soft: #402630;
+  --pick-danger-border: #754354;
+  color-scheme: dark;
+}
+
+.recipient-picker {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+
+.pick-head {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.pick-kicker {
+  color: var(--pick-accent);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pick-head p {
+  margin: 0;
+  color: var(--pick-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.pick-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--pick-border);
+  border-radius: 0.9rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--pick-surface);
+}
+
+.pick-amount span {
+  color: var(--pick-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.pick-amount strong {
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.pick-list {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.pick-list legend {
+  margin-bottom: 0.45rem;
+  padding: 0;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.pick-list--people {
+  margin-top: 0.55rem;
+}
+
+.pick-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.pick-option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3.25rem;
+  border: 1px solid var(--pick-border);
+  border-radius: 0.9rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--pick-surface);
+}
+
+.pick-option.selected {
+  border-color: var(--pick-success-border);
+  background: var(--pick-success-soft);
+}
+
+.pick-option.disabled {
+  opacity: 0.72;
+}
+
+.pick-option:focus-within {
+  outline: 2px solid var(--pick-accent);
+  outline-offset: 2px;
+}
+
+.pick-option input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--pick-success);
+}
+
+.pick-text {
+  display: grid;
+  flex: 1;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.pick-text strong {
+  font-size: 0.92rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.pick-text small {
+  color: var(--pick-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.pick-tag {
+  flex: none;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  color: var(--pick-accent);
+  background: var(--pick-accent-soft);
+  font-size: 0.66rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.pick-tag--success {
+  color: var(--pick-success);
+  background: var(--pick-success-soft);
+}
+
+.pick-tag--warning {
+  color: var(--pick-warning);
+  background: var(--pick-warning-soft);
+}
+
+.pick-tag--muted {
+  color: var(--pick-muted);
+  background: var(--pick-soft);
+}
+
+// The tag of the chosen row would otherwise merge with the row's own highlight.
+.pick-option.selected .pick-tag--success {
+  background: var(--pick-surface);
+}
+
+.pick-people {
+  border: 1px solid var(--pick-border);
+  border-radius: 0.9rem;
+  padding: 0.75rem;
+  background: var(--pick-soft);
+}
+
+.pick-people-head {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.pick-people-head strong {
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.pick-people-head small {
+  color: var(--pick-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.pick-people input[type='search'] {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 3rem;
+  margin-top: 0.55rem;
+  border: 1px solid var(--pick-control-border);
+  border-radius: 0.85rem;
+  padding: 0.6rem 0.8rem;
+  color: inherit;
+  background: var(--pick-surface);
+  font: inherit;
+}
+
+.pick-people input[type='search']:focus-visible {
+  outline: 2px solid var(--pick-accent);
+  outline-offset: 1px;
+}
+
+.pick-people ion-button {
+  margin: 0.55rem 0 0;
+}
+
+.pick-state,
+.pick-error,
+.pick-consequence {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.pick-state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  color: var(--pick-muted);
+}
+
+.pick-state ion-spinner {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.pick-error {
+  border: 1px solid var(--pick-danger-border);
+  border-radius: 0.8rem;
+  padding: 0.6rem 0.7rem;
+  color: var(--pick-danger);
+  background: var(--pick-danger-soft);
+  overflow-wrap: anywhere;
+}
+
+.pick-people .pick-error {
+  margin-top: 0.55rem;
+}
+
+// What the button does and the server's refusal stay next to the button, whatever the list is scrolled to.
+.pick-footer {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 60vh;
+  padding: 0.55rem 0.75rem max(0.35rem, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  color: var(--pick-text);
+}
+
+.pick-consequence {
+  display: flex;
+  gap: 0.5rem;
+  border: 1px solid var(--pick-border);
+  border-radius: 0.8rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--pick-soft);
+  font-size: 0.76rem;
+}
+
+.pick-consequence.warning {
+  border-color: var(--pick-warning-border);
+  color: var(--pick-warning);
+  background: var(--pick-warning-soft);
+}
+
+.pick-consequence .material-icons-sharp {
+  flex: none;
+  color: var(--pick-accent);
+  font-size: 1.05rem;
+}
+
+.pick-consequence.warning .material-icons-sharp {
+  color: var(--pick-warning);
+}
+
+.pick-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.5fr);
+  gap: 0.4rem;
+}
+
+.pick-actions ion-button {
+  margin: 0;
+}
+
+.pick-actions ion-spinner {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-right: 0.4rem;
+}
+
+// The keyboard of the name search leaves little room on a small phone: the list gets all of it,
+// and the button comes back, together with the line about what it does, once the keyboard is closed.
+:host-context(body.otziv-keyboard-open) ion-footer {
+  display: none;
+}
+
+@media (max-width: 340px) {
+  .pick-option {
+    flex-wrap: wrap;
+  }
+
+  .pick-tag {
+    margin-left: 1.95rem;
+  }
+}

@@ -41,6 +41,7 @@ import {
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { paymentLinkStatusLabel } from '../shared/payment-link-status-label';
 import { isBankPaymentInstructionSource } from '../shared/bank-payment-source';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { paymentTargetForUpdate } from '../shared/payment-navigation';
@@ -3617,25 +3618,7 @@ export class TbankPage implements OnInit, OnDestroy {
   }
 
   statusLabel(status: string): string {
-    const labels: Record<string, string> = {
-      CREATED: 'Создана',
-      INITIATED: 'Форма',
-      AUTHORIZED: 'Авторизован',
-      WAITING_MANUAL_PAYMENT: 'Ждет перевод',
-      MANUAL_REPORTED: 'Клиент оплатил',
-      TEST_CONFIRMED: 'Тест оплачен',
-      CONFIRMED: 'Оплачен',
-      REJECTED: 'Отклонен',
-      CANCELED: 'Отменен',
-      REVERSED: 'Отменен',
-      PARTIAL_REVERSED: 'Частично отменен',
-      REFUNDED: 'Возвращен',
-      PARTIAL_REFUNDED: 'Частичный возврат',
-      EXPIRED: 'Истек',
-      FAILED: 'Ошибка',
-      NEEDS_RECONCILIATION: 'Требует сверки с банком'
-    };
-    return labels[status] ?? status;
+    return paymentLinkStatusLabel(status);
   }
 
   statusClass(status: string): string {
