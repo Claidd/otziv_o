@@ -395,6 +395,16 @@ export interface ManualCardPaymentContext {
   preparedRecipient: ManualCardPaymentRecipientOption | null;
   preparedReason: string | null;
   preparedReceiptUrl: string | null;
+  /**
+   * Keys of the candidates offered only because they work in the manager's team. The window lists them
+   * apart, under «Другой получатель». Absent on a server that does not send it: then everyone is listed.
+   */
+  teamRecipientKeys?: string[] | null;
+  /**
+   * The invoice of the order is the owner's bank link. The owner is among the candidates only where the
+   * bank profile lets the owner take card transfers; a payment by the link itself is marked by the bank.
+   */
+  bankLinkRoute?: boolean;
 }
 
 export interface ManualCardPaymentConfirmationRequest {
@@ -588,11 +598,20 @@ export interface PaymentRouteRecipient {
   blockReason?: string | null;
 }
 
+/** The owner's card in «Выдать номер карты»; absent where the owner takes money through the bank only. */
+export interface PaymentRouteOwnerCard {
+  name: string;
+  remainingKopecks: number;
+  current: boolean;
+  blockReason?: string | null;
+}
+
 export interface PaymentRouteRecipientsResponse {
   orderId: number;
   paymentLinkId: number | null;
   amountKopecks: number;
   recipients: PaymentRouteRecipient[];
+  ownerCard?: PaymentRouteOwnerCard | null;
 }
 
 export interface PaymentRouteChangeResponse {

@@ -100,11 +100,21 @@ test('the current recipient and a blocked person are shown but can never be subm
   assert.deepEqual([1, 2, 3, 4, 99].map(profileId => picker.mobilePaymentRecipientChoiceAllowed(people, profileId)),
     [false, true, true, false, false]);
   assert.equal(picker.mobilePaymentRecipientChoiceAllowed([], null), true, 'the automatic choice needs no list');
+  // The owner's card is a choice of its own: allowed only when the server offers it and it can take the invoice.
+  const ownerCard = { name: 'Мия Р.', remainingKopecks: 4_500_000, current: false, blockReason: null };
+  assert.equal(picker.MOBILE_OWNER_CARD_PROFILE_ID, -1);
+  assert.match(webPickerSource, /export const OWNER_CARD_PROFILE_ID = -1;/u);
+  assert.equal(picker.mobilePaymentRecipientChoiceAllowed(people, -1), false, 'no owner line — no owner card');
+  assert.equal(picker.mobilePaymentRecipientChoiceAllowed(people, -1, ownerCard), true);
+  assert.equal(picker.mobilePaymentRecipientChoiceAllowed(people, -1, { ...ownerCard, current: true }), false);
+  assert.equal(picker.mobilePaymentRecipientChoiceAllowed(people, -1, { ...ownerCard, blockReason: 'лимит карты на этот месяц не вмещает счёт' }), false);
+  assert.match(templateSource, /\[disabled\]="!ownerCardSelectable\(\)"/u);
+  assert.match(webPickerSource, /\[disabled\]="!ownerCardSelectable\(\)"/u);
 
   assert.match(templateSource, /\[disabled\]="!selectable\(option\)"/u);
   assert.match(webPickerSource, /\[disabled\]="!selectable\(option\)"/u);
   const submit = block(componentSource, 'async submit(): Promise<void> {', '\n  }\n');
-  assert.match(submit, /!mobilePaymentRecipientChoiceAllowed\(this\.recipients\(\), profileId\)\) \{\s*return;/u);
+  assert.match(submit, /!mobilePaymentRecipientChoiceAllowed\(this\.recipients\(\), profileId, this\.ownerCard\(\)\)\) \{\s*return;/u);
   assert.ok(submit.indexOf('mobilePaymentRecipientChoiceAllowed') < submit.indexOf('this.issue('), 'the guard must stand before the request');
 });
 
@@ -118,7 +128,9 @@ test('the automatic choice is preselected and the window says what the button do
     picker.mobilePaymentRecipientConsequence(null),
     picker.mobilePaymentRecipientConsequence(enough),
     picker.mobilePaymentRecipientConsequence(above),
-    picker.mobilePaymentRecipientConsequence(person({ name: '', overrunKopecks: 100 }))
+    picker.mobilePaymentRecipientConsequence(person({ name: '', overrunKopecks: 100 })),
+    picker.mobilePaymentRecipientConsequence(null, { name: 'Мия Р.', remainingKopecks: 4_500_000, current: false, blockReason: null }),
+    picker.mobilePaymentRecipientConsequence(null, { name: '', remainingKopecks: 4_500_000, current: false, blockReason: null })
   ];
   assert.equal(outcomes[0], 'Клиенту сразу уйдёт новый счёт с номером карты, резерв прежнего получателя снимется. '
     + 'Нажимая кнопку, вы подтверждаете, что клиент ещё не оплатил по прежним реквизитам.');
@@ -126,6 +138,9 @@ test('the automatic choice is preselected and the window says what the button do
   assert.match(outcomes[2], /^Счёт будет выставлен на Анна П\. сверх резерва на 600,00 ₽\. Превышение сохранится для сверки/u);
   assert.match(outcomes[2], /система не будет сама назначать этого человека в новые счета, пока его остаток не восстановится/u);
   assert.match(outcomes[3], /на выбранного сотрудника сверх резерва на 1,00 ₽/u);
+  assert.match(outcomes[4], /^Счёт будет выставлен на карту владельца \(Мия Р\.\): клиенту сразу уйдёт новый счёт с номером этой карты/u);
+  assert.match(outcomes[4], /сумма займёт месячный лимит карты\. Когда клиент переведёт, поступление подтверждает владелец\./u);
+  assert.match(outcomes[5], /^Счёт будет выставлен на карту владельца: клиенту/u);
   for (const outcome of outcomes) {
     // Pressing the button is the confirmation that the client has not paid yet: there is no separate one.
     assert.match(outcome, /Нажимая кнопку, вы подтверждаете, что клиент ещё не оплатил по прежним реквизитам\.$/u);
@@ -162,7 +177,11 @@ test('the window speaks the same Russian as the website', () => {
     'Поиск по имени',
     'Поиск сотрудника по имени',
     'Никого не найдено. Проверьте имя.',
-    'Сотрудники',
+    'Владелец и сотрудники',
+    'Карту владельца — пока её лимит на месяц вмещает счёт.',
+    'карта владельца · ',
+    'осталось в этом месяце ',
+    'лимит вмещает',
     'Без имени',
     'Отмена',
     'Выдаём…'
@@ -184,6 +203,20 @@ test('the window speaks the same Russian as the website', () => {
       assert.ok(joined(source).includes(hint), `the website explains ${target} differently`);
     }
   }
+  // Where the owner's card may be issued, the order window of both clients says that it comes after the employees.
+  for (const target of ['EMPLOYEE_REQUISITES', 'DIFFERENT_RECIPIENT']) {
+    const hint = picker.mobilePaymentRecipientAutoHint(target, true);
+    assert.match(hint, /Если не подойдёт никто из сотрудников, клиент получит карту владельца/u);
+    assert.ok(joined(webOrderFacadeSource).includes(hint), `the website explains ${target} with the owner's card differently`);
+  }
+  assert.match(orderFacadeSource, /autoHintWithOwnerCard: mobilePaymentRecipientAutoHint\(target, true\)/u);
+  // A common invoice says the same and gets the owner's card from the same answer of the server.
+  for (const target of ['EMPLOYEE_REQUISITES', 'DIFFERENT_RECIPIENT']) {
+    assert.ok(joined(webCommonSource).includes(picker.mobilePaymentRecipientAutoHint(target, true)), `the website explains ${target} of a common invoice with the owner's card differently`);
+  }
+  assert.match(commonPageSource, /autoHintWithOwnerCard: mobilePaymentRecipientAutoHint\(target, true\)/u);
+  assert.match(commonPageSource, /ownerCard: mobilePaymentRecipientOwnerCard\(response\.ownerCard\)/u);
+  assert.match(webCommonSource, /this\.recipientPickerOwnerCard\.set\(response\.ownerCard \?\? null\);/u);
   assert.match(picker.mobilePaymentRecipientAutoHint('EMPLOYEE_REQUISITES'), /платёжное задание, затем специалиста заказа, затем менеджера/u);
   assert.match(picker.mobilePaymentRecipientAutoHint('DIFFERENT_RECIPIENT'), /Нынешний получатель исключается/u);
 
@@ -331,7 +364,8 @@ test('the window follows the dialog conventions of the app and closes only with 
   assert.match(flowSource, /htmlAttributes: \{ 'aria-label': 'Выдать номер карты' \}/u);
 
   // One group of radio buttons, a real fieldset with a legend, announced errors and status.
-  assert.equal(templateSource.match(/type="radio"\s+name="route-recipient"/gu)?.length, 2);
+  // The automatic choice, the owner's card and a person of the list.
+  assert.equal(templateSource.match(/type="radio"\s+name="route-recipient"/gu)?.length, 3);
   assert.match(templateSource, /<legend>Кому клиент будет переводить\?<\/legend>/u);
   assert.equal(templateSource.match(/role="alert"/gu)?.length, 2);
   assert.match(templateSource, /@if \(submitError\(\)\) \{\s*<p class="pick-error" role="alert">\{\{ submitError\(\) \}\}<\/p>/u);

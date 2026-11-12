@@ -33,7 +33,12 @@
       </section>
 
       <p class="notice info">
-        Изначально выбран получатель из счёта. Если клиент перевёл другому участнику, измените получателя.
+        @if (mode === 'TBANK_ROUTE_FALLBACK') {
+          Оплату по ссылке подтверждает банк. Для перевода на карту выберите, кому пришли деньги.
+          @if (!ownerOffered()) { Банковский профиль владельца не допускает приём переводов на его карту. }
+        } @else {
+          Проверьте, кому поступили деньги.
+        }
         Один платёж можно разделить между несколькими участниками.
       </p>
 
@@ -75,7 +80,7 @@
               </div>
             }
             @if (selected.recipientType === 'OWNER') {
-              <small>Для владельца лимит распределения не применяется.</small>
+              @if (mode === 'TBANK_ROUTE_FALLBACK') { <small>Перевод войдёт в месячный лимит карты владельца.</small> }
             } @else {
               <small>Доступно с учётом резерва этого счёта: {{ money(selected.availableKopecks) }}</small>
               @if (!selected.profileEnabled) {
@@ -140,7 +145,7 @@
       </label>
       <label class="check">
         <input type="checkbox" [ngModel]="finalAcknowledged()" [disabled]="saving()" (ngModelChange)="finalAcknowledged.set($event)">
-        <span>Понимаю: выбор сразу изменит резервы и лимиты; второго подтверждения владельцем не будет.</span>
+        <span>{{ ownerNeedsApproval() ? 'Счёт закроется после подтверждения владельцем или администратором.' : 'После подтверждения счёт закроется и расчёты обновятся.' }}</span>
       </label>
 
       @if (error()) {
@@ -171,9 +176,11 @@
   <ion-toolbar>
     <div class="actions">
       <ion-button type="button" fill="clear" color="medium" (click)="close()" [disabled]="saving()">Отмена</ion-button>
-      <ion-button type="button" (click)="submit()" [disabled]="!canSubmit()">
-        @if (saving()) { <ion-spinner name="crescent" /> } @else { Учесть и закрыть счёт }
-      </ion-button>
+      @if (!options()?.ownerReport) {
+        <ion-button type="button" (click)="submit()" [disabled]="!canSubmit()">
+          @if (saving()) { <ion-spinner name="crescent" /> } @else { {{ ownerNeedsApproval() ? 'Отправить владельцу на подтверждение' : 'Учесть и закрыть счёт' }} }
+        </ion-button>
+      }
     </div>
   </ion-toolbar>
 </ion-footer>

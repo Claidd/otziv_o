@@ -137,6 +137,48 @@ describe('ManagerCompanyEditModalComponent', () => {
     expect(element.textContent).toContain('City: Filial 7');
   });
 
+  it('tells why the company is kept out of a common invoice and which orders stay on their own invoices', async () => {
+    const fixture = TestBed.createComponent(ManagerCompanyEditModalComponent);
+    const component = fixture.componentInstance;
+    component.company = company();
+    component.draft = draft();
+    component.billingDraft = { name: 'Company - общий счет', enabled: false, autoRepeatOrders: true };
+    const linkOf = (enabled: boolean, problem: string | null, separateOrdersNote: string | null) => [{
+      id: 5, name: 'Company - общий счет', enabled: true, autoRepeatOrders: true,
+      companies: [{ companyId: 10, companyTitle: 'Company', enabled, problem, separateOrdersNote }]
+    }];
+
+    // The system switched the link off: the editor shows «Нет связи», so the reason must be told there.
+    component.billingAccounts = linkOf(false, 'Система выключила связь: заказы компании не удалось собрать в общий счёт. '
+      + 'Причина: Заказ #16655 нельзя включить в общий счет.', null);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.textContent).toContain('Нет связи');
+    const problem = element.querySelector('.company-billing-note--problem');
+    expect(problem?.textContent).toContain('Система выключила связь');
+    expect(problem?.textContent).toContain('Заказ #16655');
+    expect(problem?.getAttribute('role')).toBe('alert');
+    expect(element.querySelector('.company-billing-note--separate')).toBeNull();
+
+    // The link works, some orders keep their own invoices.
+    fixture.componentRef.setInput('billingAccounts',
+      linkOf(true, null, 'Отдельно остаются заказы №16654, №16655: клиенту уже выставлен по ним отдельный счёт.'));
+    fixture.detectChanges();
+    expect(element.querySelector('.company-billing-note--problem')).toBeNull();
+    expect(element.querySelector('.company-billing-note--separate')?.textContent).toContain('№16654, №16655');
+
+    // A working link with nothing left apart, and a link of another company, add no notes.
+    fixture.componentRef.setInput('billingAccounts', [
+      ...linkOf(true, null, null),
+      { id: 6, name: 'Other', enabled: true, autoRepeatOrders: false,
+        companies: [{ companyId: 11, companyTitle: 'Other', enabled: false, problem: 'Система выключила связь: чужая компания.', separateOrdersNote: null }] }
+    ]);
+    fixture.detectChanges();
+    expect(element.querySelector('.company-billing-note--problem')).toBeNull();
+    expect(element.querySelector('.company-billing-note--separate')).toBeNull();
+  });
+
   it('allows only authorized company editors to change payment routing', async () => {
     const fixture = TestBed.createComponent(ManagerCompanyEditModalComponent);
     const component = fixture.componentInstance;

@@ -257,6 +257,12 @@ public class PaymentProfileService {
         return profileId == null ? Optional.empty() : paymentProfileRepository.findById(profileId);
     }
 
+    /** May the owner of this bank profile take a client's transfer to a card at all (see OwnerCardPolicy). */
+    @Transactional(readOnly = true)
+    public boolean ownerCardAllowed(Long profileId) {
+        return findById(profileId).map(OwnerCardPolicy::allows).orElse(false);
+    }
+
     public String provider(PaymentProfile profile) {
         try {
             return profile == null

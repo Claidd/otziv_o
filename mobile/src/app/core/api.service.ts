@@ -346,11 +346,20 @@ export interface PaymentRouteRecipient {
   blockReason?: string | null;
 }
 
+/** The owner's card in «Выдать номер карты»; absent where the owner takes money through the bank only. */
+export interface PaymentRouteOwnerCard {
+  name: string;
+  remainingKopecks: number;
+  current: boolean;
+  blockReason?: string | null;
+}
+
 export interface PaymentRouteRecipientsResponse {
   orderId: number;
   paymentLinkId: number | null;
   amountKopecks: number;
   recipients: PaymentRouteRecipient[];
+  ownerCard?: PaymentRouteOwnerCard | null;
 }
 
 export interface PaymentRouteChangeResponse {
@@ -844,6 +853,8 @@ export interface CommonInvoiceRouteRecipientsResponse {
   invoiceId: number;
   amountKopecks: number;
   recipients: CommonInvoiceRouteRecipient[];
+  /** The owner's card; absent where the owner takes money through the bank only. */
+  ownerCard?: PaymentRouteOwnerCard | null;
 }
 
 /** An order of the invoice's own link that goes apart from the common invoice and may be returned to it. */
@@ -1147,6 +1158,11 @@ export interface ManualCardPaymentContext {
   preparedRecipient: ManualCardPaymentRecipientOption | null;
   preparedReason: string | null;
   preparedReceiptUrl: string | null;
+  /**
+   * The invoice of the order is the owner's bank link. The owner is among the candidates only where the
+   * bank profile lets the owner take card transfers; a payment by the link itself is marked by the bank.
+   */
+  bankLinkRoute?: boolean;
 }
 
 export interface ManualCardPaymentConfirmationRequest {
@@ -1172,7 +1188,7 @@ export interface CommonManualPaymentAttributionModeResponse {
 }
 
 export type CommonActualRecipientType = 'SPECIALIST' | 'MANAGER' | 'OWNER';
-export type CommonManualPaymentMode = 'STANDARD' | 'TBANK_FALLBACK';
+export type CommonManualPaymentMode = 'STANDARD' | 'TBANK_FALLBACK' | 'TBANK_ROUTE_FALLBACK';
 export type CommonPaymentCashDestinationKind = 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK';
 export type CommonManualPaymentTaskTargetKind = 'EXTERNAL_TASK' | 'OWNER' | 'SPECIALIST' | 'MANAGER';
 

@@ -60,6 +60,12 @@
    выдаются сразу, прежняя ссылка наблюдается (раздел 02).
 8. **Деньги владельцу подтверждает владелец или администратор.** Отметка менеджера «получил владелец» становится
    запросом (`common_owner_receipt_approval`) и уведомлением владельцам и администраторам (раздел 03).
+   **Карта владельца — только там, где её разрешает банковский профиль менеджера** (`OwnerCardPolicy.allows`:
+   политика «карта до лимита, затем банк» и заполненные реквизиты; добавлено 2026-11-12, для счёта заказа и общего счёта).
+   Там владельца можно выбрать в «Отметить оплату» и при счёте-ссылке банка — как запрос владельцу (у заказа —
+   кнопка в Telegram, у общего счёта — подтверждение в окне; раздел 03), а «Выдать номер карты» выдаёт карту владельца после сотрудников или по выбору менеджера, пока
+   остаток месячного лимита карты вмещает счёт (раздел 02). Владелец с профилем «только банк» (ИП) не
+   предлагается и не подставляется нигде.
 9. **«Не оплачено» ставит автоответчик.** Ручная кнопка в интерфейсах показана только владельцу и администратору;
    сервер ролью этот переход не ограничивает. Автоперевод работает только при включённом
    `client.messages.payment-overdue.live-enabled` (раздел 04). На бою он включён: в копии базы от 2026-11-10
@@ -84,7 +90,9 @@
 | Смена маршрута заказа | `payments/service/PaymentRouteReplacementWorkflow.java`, `PaymentRouteChangeService.java`, `OrderRecipientRouteAdapter.java` | `features/manager/manager-order-edit-modal.component.*`, `card-number-route-target.ts` | `mobile/src/app/features/order-details*` |
 | Отметка оплаты общего счёта | `common_billing/service/CommonInvoiceManualPaymentWorkflow.java`, `CommonManualPaymentAttributionCoordinator.java`, `CommonOwnerReceiptApprovals.java` | `features/admin/common-billing/common-manual-payment-attribution-modal.component.*` | диалог `mobile-common-manual-payment-dialog` |
 | Состав общего счёта: исключить и вернуть заказ | `common_billing/service/CommonInvoiceMembershipWorkflow.java` (`detachOrder`, `returnOrder`, `returnableOrders`) | `features/admin/common-billing/common-invoice-return-orders.component.ts`, `common-billing.component.*` | `shared/common-invoice-return-orders.ts`, `features/common-billing.page.ts` (блок «Состав») |
+| Подключение компании к общему счёту: что собирается, что остаётся на своём счёте, пояснения менеджеру | `common_billing/service/CommonBillingCompanyReconciliationWorkflow.java`, `CommonInvoiceInitializationService.java` (`keepsOrderOnItsOwnInvoice`), `CommonBillingLinkNotes.java` | `features/manager/manager-company-edit-modal.component.*` (блок «Общий счёт») | `features/manager/manager-company-billing.facade.ts`, `features/manager.page.ts` |
 | Учёт поступлений и резервов | `contractor_payments/service/ContractorActualPaymentAttributionService.java`, `ContractorPaymentAccountingService.java` | — | — |
+| Сводка «Кому зачтена оплата» за месяц (в т. ч. владелец для «Счёта и акта») | `payments/service/ManualPaymentRecipientMonthlySummaryService.java` | `features/admin/tbank-payments/tbank-payments.component.*` | `features/tbank.page.ts` |
 | Уведомления и спор | `payments/service/ManualPaymentRecipientTelegramNotificationService.java`, `CommonInvoicePaymentDisputeService.java`, `ManualCardPaymentReviewNotificationService.java` | — | — |
 | Автоответчик | `client_messages/service/ScheduledClientMessageService.java`, `common_billing/service/CommonInvoiceOverdueEscalation.java` | `features/admin/dictionaries/*` | — |
 | Инструкции для менеджеров: шаги на снимках экрана | — | `features/admin/common-billing/common-invoice-guide.component.ts` (окно и инструкция общего счёта), `features/manager/order-payment-guide.ts` (заказ), снимки `public/assets/guide/{light,dark}`, размеры `guide-shots.ts`; пересъёмка — `infrastructure/scripts/local/guide-shots/README.md` | — |

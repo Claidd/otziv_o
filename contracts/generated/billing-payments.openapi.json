@@ -116,7 +116,9 @@
         "required": [
           "companyId",
           "companyTitle",
-          "enabled"
+          "enabled",
+          "problem",
+          "separateOrdersNote"
         ],
         "properties": {
           "companyId": {
@@ -127,6 +129,26 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "separateOrdersNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -852,7 +874,10 @@
     ]
   },
   "x-compatibility-optional-fields": {
-    "CommonBillingCompanyResponse": [],
+    "CommonBillingCompanyResponse": [
+      "problem",
+      "separateOrdersNote"
+    ],
     "CommonInvoiceSummaryResponse": [
       "sentAt",
       "lastReminderAt",

@@ -396,7 +396,8 @@ public class CommonInvoiceManualPaymentWorkflow {
             }
             boolean alreadyReported = ownerReceipts.pendingReport(invoice.getId()).isPresent();
             boolean staged = ownerReceipts.stage(invoice, items, request, attention, principal,
-                    commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice), request));
+                    commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice), request,
+                            ownerCardReceiptAllowed(invoice)));
             if (staged && !alreadyReported) {
                 // A fresh report: the owner and administrators learn about it once, after this transaction commits.
                 ownerReceipts.pendingReport(invoice.getId()).ifPresent(report ->
@@ -724,7 +725,8 @@ public class CommonInvoiceManualPaymentWorkflow {
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         refreshInvoiceAmounts(invoice, items);
-        return ownerReceipts.attach(commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice)));
+        return ownerReceipts.attach(commonManualPaymentAttributionCoordinator.options(invoice, items, remainingKopecks(invoice),
+                null, ownerCardReceiptAllowed(invoice)));
     }
 
     @Transactional
@@ -929,8 +931,17 @@ public class CommonInvoiceManualPaymentWorkflow {
         return settlementService.isManualPayment(link);
     }
 
+    /**
+     * By the bank link the owner is paid through the bank and the bank confirms it. A transfer that went past
+     * the link to the owner's card may be recorded only where the bank profile of the invoice lets its owner
+     * take card transfers at all; an owner who works through the bank only is never recorded a card transfer.
+     */
+    boolean ownerCardReceiptAllowed(CommonInvoice invoice) {
+        return invoice != null && paymentProfileService.ownerCardAllowed(invoice.getPaymentRouteProfileId());
+    }
+
     private void requireManualRecipientsAllowed(CommonInvoice invoice, CommonManualPaymentAttributionRequest request) {
-        if (CommonOwnerReceiptApprovals.hasBankRoute(invoice)
+        if (CommonOwnerReceiptApprovals.hasBankRoute(invoice) && !ownerCardReceiptAllowed(invoice)
                 && CommonOwnerReceiptApprovals.includesOwner(request)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Поступление владельцу по банковской ссылке подтверждает банк");
         }

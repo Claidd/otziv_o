@@ -18,7 +18,27 @@ export interface PaymentRecipientOption {
   blockReason?: string | null;
 }
 
-/** `profileId: null` lets the system choose: payment task, then the order specialist, then the manager. */
+/** In place of an employee's profile: the card of the owner. The server reads the same value. */
+export const OWNER_CARD_PROFILE_ID = -1;
+
+/**
+ * The owner's card as a line of the window. The server sends it only where the owner of the manager's
+ * bank profile may take card transfers at all; an owner who works through the bank only is never offered.
+ */
+export interface PaymentRecipientOwnerCard {
+  name: string;
+  /** What may still be issued on the card this month. */
+  remainingKopecks: number;
+  /** The client already holds the owner's card. */
+  current: boolean;
+  /** Why the card cannot be issued for this invoice; empty when it can. */
+  blockReason?: string | null;
+}
+
+/**
+ * `profileId: null` lets the system choose: payment task, then the order specialist, then the manager,
+ * then the owner's card. `OWNER_CARD_PROFILE_ID` names the owner's card.
+ */
 export interface PaymentRecipientChoice {
   profileId: number | null;
 }
@@ -74,25 +94,44 @@ export function paymentRecipientRelation(option: PaymentRecipientOption): string
     <section class="pick-people" aria-label="Выбрать получателя самостоятельно">
       <div class="pick-people-head">
         <strong>Или выберите получателя сами</strong>
-        <small>Можно выбрать любого сотрудника, даже если резерва не хватает.</small>
+        <small>{{ ownerCard
+          ? 'Можно выбрать любого сотрудника, даже если резерва не хватает. Карту владельца — пока её лимит на месяц вмещает счёт.'
+          : 'Можно выбрать любого сотрудника, даже если резерва не хватает.' }}</small>
       </div>
       @if (loading) {
         <p class="pick-state">Загружаем сотрудников…</p>
       } @else if (error) {
         <p class="pick-error" role="alert">{{ error }}</p>
         <button type="button" class="pick-link" (click)="retry.emit()">Повторить</button>
-      } @else if (!(recipients ?? []).length) {
+      } @else if (!(recipients ?? []).length && !ownerCard) {
         <p class="pick-state">Сотрудников с платёжным профилем для этого счёта нет.</p>
       } @else {
         @if ((recipients ?? []).length > 6) {
           <input type="search" autocomplete="off" placeholder="Поиск по имени" aria-label="Поиск сотрудника по имени"
             [ngModel]="query()" [disabled]="saving" (ngModelChange)="query.set($event)" />
         }
-        @if (!visible().length) {
+        @if (!visible().length && (recipients ?? []).length) {
           <p class="pick-state">Никого не найдено. Проверьте имя.</p>
         }
         <fieldset class="pick-list pick-list--people" [disabled]="saving">
-          <legend class="pick-hidden">Сотрудники</legend>
+          <legend class="pick-hidden">Владелец и сотрудники</legend>
+          @if (ownerCard; as card) {
+            <label class="pick-option pick-option--owner" [class.selected]="selected() === ownerCardId" [class.disabled]="!ownerCardSelectable()">
+              <input type="radio" name="route-recipient" [checked]="selected() === ownerCardId"
+                [disabled]="!ownerCardSelectable()" (change)="select(ownerCardId)" />
+              <span class="pick-text">
+                <strong>Владелец{{ card.name ? ' · ' + card.name : '' }}</strong>
+                <small>карта владельца · {{ ownerCardNote() }}</small>
+              </span>
+              @if (card.current) {
+                <span class="pick-tag">сейчас в счёте</span>
+              } @else if (card.blockReason) {
+                <span class="pick-tag pick-tag--muted">недоступен</span>
+              } @else {
+                <span class="pick-tag pick-tag--success">лимит вмещает</span>
+              }
+            </label>
+          }
           @for (option of visible(); track option.profileId) {
             <label class="pick-option" [class.selected]="selected() === option.profileId" [class.disabled]="!selectable(option)">
               <input type="radio" name="route-recipient" [checked]="selected() === option.profileId"
@@ -365,6 +404,8 @@ export class PaymentRecipientPickerComponent {
   @Input() currentRecipient = '';
   @Input() autoHint = 'Система возьмёт платёжное задание, затем специалиста заказа, затем менеджера — первого, у кого хватает резерва. Если не подойдёт никто, счёт не изменится.';
   @Input() recipients: PaymentRecipientOption[] | null = null;
+  /** The owner's card, where the server offers it; null hides the line. */
+  @Input() ownerCard: PaymentRecipientOwnerCard | null = null;
   @Input() loading = false;
   @Input() error = '';
   @Input() saving = false;
@@ -379,6 +420,7 @@ export class PaymentRecipientPickerComponent {
   readonly selected = signal<number | null>(null);
   readonly query = signal('');
   readonly relation = paymentRecipientRelation;
+  readonly ownerCardId = OWNER_CARD_PROFILE_ID;
 
   readonly visible = computed(() => {
     const query = this.query().trim().toLocaleLowerCase('ru');
@@ -386,13 +428,20 @@ export class PaymentRecipientPickerComponent {
   });
   readonly chosenOption = computed(() => {
     const profileId = this.selected();
-    return profileId == null ? null : (this.recipients ?? []).find(option => option.profileId === profileId) ?? null;
+    return profileId == null || profileId === OWNER_CARD_PROFILE_ID
+      ? null : (this.recipients ?? []).find(option => option.profileId === profileId) ?? null;
   });
   readonly chosenOverrun = computed(() => this.chosenOption()?.overrunKopecks ?? 0);
   /** What the button will do, said before it is pressed. */
   readonly consequence = computed(() => {
     const unpaid = 'Нажимая кнопку, вы подтверждаете, что клиент ещё не оплатил по прежним реквизитам.';
     const option = this.chosenOption();
+    if (this.selected() === OWNER_CARD_PROFILE_ID) {
+      const owner = this.ownerCard?.name ? `владельца (${this.ownerCard.name})` : 'владельца';
+      return `Счёт будет выставлен на карту ${owner}: клиенту сразу уйдёт новый счёт с номером этой карты, `
+        + 'резерв прежнего получателя снимется, сумма займёт месячный лимит карты. '
+        + `Когда клиент переведёт, поступление подтверждает владелец. ${unpaid}`;
+    }
     if (!option) {
       return `Клиенту сразу уйдёт новый счёт с номером карты, резерв прежнего получателя снимется. ${unpaid}`;
     }
@@ -410,6 +459,20 @@ export class PaymentRecipientPickerComponent {
     return !option.current && !option.blockReason;
   }
 
+  ownerCardSelectable(): boolean {
+    return !!this.ownerCard && !this.ownerCard.current && !this.ownerCard.blockReason;
+  }
+
+  /** The line under the owner: what is left of the month, or why the card cannot be issued. */
+  ownerCardNote(): string {
+    const card = this.ownerCard;
+    if (!card) {
+      return '';
+    }
+    const remaining = `осталось в этом месяце ${this.money(card.remainingKopecks)}`;
+    return card.blockReason ? `${card.blockReason} (${remaining})` : remaining;
+  }
+
   select(profileId: number | null): void {
     this.selected.set(profileId);
   }
@@ -425,6 +488,12 @@ export class PaymentRecipientPickerComponent {
 
   submit(): void {
     if (this.saving) {
+      return;
+    }
+    if (this.selected() === OWNER_CARD_PROFILE_ID) {
+      if (this.ownerCardSelectable()) {
+        this.chosen.emit({ profileId: OWNER_CARD_PROFILE_ID });
+      }
       return;
     }
     const option = this.chosenOption();

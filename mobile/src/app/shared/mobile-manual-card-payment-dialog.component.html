@@ -30,6 +30,9 @@
         {{ recipientEffect(context.originalRecipient) }}
       </p>
     }
+    @if (bankLinkNotice(); as bankNotice) {
+      <p class="notice recipient-change bank-link" role="status">{{ bankNotice }}</p>
+    }
     @if (context.recipientSelectionFrozen) {
       <p class="notice recipient-change" role="status">
         Восстанавливаем ранее подготовленное подтверждение. Получатель, причина и чек уже зафиксированы сервером и недоступны для изменения; повтор отправит те же данные.

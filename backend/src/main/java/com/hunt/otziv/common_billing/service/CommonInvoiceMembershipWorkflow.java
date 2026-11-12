@@ -846,7 +846,9 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         CommonInvoice invoice = currentInvoices.isEmpty() ? createInvoice(lockedAccount) : normalizeAttachableInvoices(lockedAccount, currentInvoices);
         CommonInvoiceOrder item = attachOrderWithoutInvoiceRefresh(invoice, lockedOrder);
         consumeVerifiedManualRouteAfterAttach(invoice, lockedPaymentLinks);
-        recalculateInvoice(invoice);
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        recalculateInvoice(invoice, items);
+        alignAttachedOrderStatuses(invoice, items);
         publicationBlockerService.reconcileInvoice(invoice.getId());
         return item;
     }
@@ -862,7 +864,31 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         Long payable = payableKopecksOrMarkAttention(invoice, order);
         item.setAmountKopecks(payable == null ? 0 : payable);
         item.setOriginalOrderStatusTitle(limit(statusTitle(order), 64));
+        item.setReady(payable != null && READY_ON_ATTACH_STATUSES.contains(statusTitle(order))
+                && !hasActiveRecovery(item));
         return invoiceOrderRepository.save(item);
+    }
+
+    /** The caller owns the order and invoice locks for the changed composition. */
+    void alignAttachedOrderStatuses(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        if (!ATTACHABLE_INVOICE_STATUSES.contains(invoice.getStatus()) || !"STANDARD".equals(invoice.getInvoicePurpose())) {
+            return;
+        }
+        if (invoice.getStatus() == CommonInvoiceStatus.READY && !areInvoiceItemsReady(items)) {
+            invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+            invoiceRepository.save(invoice);
+        }
+        String target = invoice.getStatus() == CommonInvoiceStatus.READY ? STATUS_PUBLIC : STATUS_WAITING_COMMON_INVOICE;
+        for (CommonInvoiceOrder item : items) {
+            Order order = item.getOrder();
+            if (!item.isActiveMembership() || !item.isReady() || item.isPaid() || item.isUnpaid()
+                    || item.isOrdinaryAfterPaperCancel() || order == null || order.isComplete()) continue;
+            String current = statusTitle(order);
+            if (READY_ON_ATTACH_STATUSES.contains(current) && !target.equals(current)) {
+                order.setStatus(orderStatusService.getOrderStatusByTitle(target));
+                orderRepository.save(order);
+            }
+        }
     }
 
     void consumeVerifiedManualRouteAfterAttach(CommonInvoice invoice, Map<Long, List<PaymentLink>> paymentLinksByOrder) {

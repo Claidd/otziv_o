@@ -132,6 +132,8 @@ const EXPLICIT_RELEASE_SETS = {
   'c51-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c51-postgres.json', context: 'infrastructure/runtime-security/builds/c51-postgres', dockerfile: 'infrastructure/runtime-security/builds/c51-postgres/Dockerfile' },
   // C52 adds only the official Alpine libxslt 1.1.43-r4 (CVE-2026-87636, CVE-2026-9947) to the accepted C50 nginx.
   'c52-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c52-nginx.json', context: 'infrastructure/runtime-security/builds/c52-nginx', dockerfile: 'infrastructure/runtime-security/builds/c52-nginx/Dockerfile' },
+  // C53 adds only the official Alpine apache2 2.4.71-r0 (CVE-2026-119618) to the accepted C50 phpMyAdmin.
+  'c53-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c53-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c53-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c53-phpmyadmin/Dockerfile' },
 };
 // Later official OS package overlays are registered data (os-package-overlays.json).
 const RELEASE_SETS = Object.freeze({ ...EXPLICIT_RELEASE_SETS, ...overlayReleaseSets(EXPLICIT_RELEASE_SETS) });

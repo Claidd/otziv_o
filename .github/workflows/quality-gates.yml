@@ -106,6 +106,7 @@ on:
           - c36-postgres
           - c51-postgres
           - c52-nginx
+          - c53-phpmyadmin
           - c43-tempo
           - c43-loki
           - c43-alloy

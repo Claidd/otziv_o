@@ -672,6 +672,27 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("paidStatus") CommonInvoiceStatus paidStatus
     );
 
+    /**
+     * Money the owner received on a card past the bank link of a common invoice of this bank profile: the
+     * receipts recorded to the owner for invoices whose route is a bank link. A corrected receipt does not count.
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(receipt.amount_kopecks), 0)
+        FROM contractor_actual_payment_attributions receipt
+        JOIN common_invoices invoice ON invoice.invoice_id = receipt.common_invoice_id
+        WHERE invoice.payment_route_profile_id = :profileId
+          AND invoice.payment_route_type IN ('BANK_LINK', 'TBANK_LINK', 'TOCHKA_LINK')
+          AND receipt.actual_cash_destination_kind = 'OWNER'
+          AND receipt.effective_at >= :from
+          AND receipt.effective_at < :to
+          AND NOT EXISTS (SELECT 1 FROM manual_receipt_corrections correction WHERE correction.original_id = receipt.id)
+    """, nativeQuery = true)
+    long sumOwnerReceiptsPastBankLinkForPeriod(
+            @Param("profileId") Long profileId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
     default long sumReservedAndConfirmedMonthlyProfileRoutesForPeriod(
             Long profileId, LocalDateTime from, LocalDateTime to,
             Collection<CommonInvoiceStatus> activeStatuses, CommonInvoiceStatus paidStatus
@@ -790,5 +811,52 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
     List<ManualPaymentLegacyMonthlySourceProjection> findLegacyManualConfirmedForMonthlyRecipientSummary(
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to
+    );
+
+    /**
+     * Which of these invoices were paid by «Счёт и акт», and to which owner. Money of such an invoice
+     * arrives on the owner's bank account; the owner is the one linked to the manager of the invoice
+     * (the manager of its common account, or of its orders when the account has none). Archived
+     * invoices are read too. An invoice whose manager has no owner comes back with an empty owner.
+     * Each row is {@code [invoice id, owner user id or null, owner name or null]}.
+     */
+    @Query(value = """
+        SELECT resolved.sourceId AS sourceId, resolved.ownerUserId AS ownerUserId, owner_user.fio AS ownerName
+        FROM (
+            SELECT source.sourceId AS sourceId,
+                   (SELECT MIN(owner_manager.user_id)
+                    FROM managers_users owner_manager
+                    JOIN users_roles owner_role_link ON owner_role_link.user_id = owner_manager.user_id
+                    JOIN roles owner_role ON owner_role.id = owner_role_link.role_id
+                    WHERE owner_manager.manager_id = source.managerId
+                      AND owner_role.name = 'ROLE_OWNER') AS ownerUserId
+            FROM (
+                SELECT invoice.invoice_id AS sourceId,
+                       COALESCE(account.manager_id,
+                                (SELECT MIN(invoice_order.order_manager)
+                                 FROM common_invoice_orders item
+                                 JOIN orders invoice_order ON invoice_order.order_id = item.order_id
+                                 WHERE item.invoice_id = invoice.invoice_id)) AS managerId
+                FROM common_invoices invoice
+                LEFT JOIN common_billing_accounts account ON account.account_id = invoice.account_id
+                WHERE invoice.invoice_id IN (:invoiceIds)
+                  AND invoice.payment_method = 'OWNER_PAPER_INVOICE'
+                UNION
+                SELECT archived.invoice_id AS sourceId, account.manager_id AS managerId
+                FROM archive_common_invoices archived
+                LEFT JOIN common_billing_accounts account ON account.account_id = archived.account_id
+                WHERE archived.invoice_id IN (:invoiceIds)
+                  AND archived.restored_at IS NULL
+                  AND archived.payment_method = 'OWNER_PAPER_INVOICE'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM common_invoices live WHERE live.invoice_id = archived.invoice_id
+                  )
+            ) source
+        ) resolved
+        LEFT JOIN users owner_user ON owner_user.id = resolved.ownerUserId
+        ORDER BY resolved.sourceId
+    """, nativeQuery = true)
+    List<Object[]> findPaperInvoiceOwnersForMonthlyRecipientSummary(
+            @Param("invoiceIds") Collection<Long> invoiceIds
     );
 }

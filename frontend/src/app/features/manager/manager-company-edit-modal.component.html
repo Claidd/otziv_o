@@ -544,6 +544,19 @@
                       <span>{{ billingExplanation() }}</span>
                     </p>
 
+                    @if (billingCompanyProblem(); as problem) {
+                      <p class="company-billing-explanation company-billing-note company-billing-note--problem" role="alert">
+                        <span class="material-icons-sharp" aria-hidden="true">report</span>
+                        <span>{{ problem }}</span>
+                      </p>
+                    }
+                    @if (billingSeparateOrdersNote(); as separateOrders) {
+                      <p class="company-billing-explanation company-billing-note company-billing-note--separate">
+                        <span class="material-icons-sharp" aria-hidden="true">call_split</span>
+                        <span>{{ separateOrders }}</span>
+                      </p>
+                    }
+
                     @if (selectedBillingAccount(); as billingAccount) {
                       <div class="company-billing-actions">
                         @if (billingAccountHasCurrentCompany(billingAccount)) {

@@ -48,6 +48,7 @@ describe('«Выдать номер карты» for a common invoice in the app
     changeCommonInvoicePaymentRoute: ReturnType<typeof vi.fn>;
   };
   let confirm: ReturnType<typeof vi.fn>;
+  let confirmTransfer: ReturnType<typeof vi.fn>;
   let toast: { create: ReturnType<typeof vi.fn> };
   let request: MobilePaymentRecipientPickerRequest | undefined;
   let closeWindow: (result: MobilePaymentRecipientPickerResult | null) => void;
@@ -61,13 +62,14 @@ describe('«Выдать номер карты» for a common invoice in the app
       changeCommonInvoicePaymentRoute: vi.fn(() => of(cardNumber()))
     };
     confirm = vi.fn().mockResolvedValue(true);
+    confirmTransfer = vi.fn().mockResolvedValue(null);
     toast = { create: vi.fn().mockResolvedValue({ present: vi.fn().mockResolvedValue(undefined) }) };
     TestBed.configureTestingModule({ providers: [
       { provide: CommonBillingApi, useValue: api }, { provide: ApiService, useValue: {} },
       { provide: AuthService, useValue: { hasAnyRealmRole: () => true } },
       { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ invoiceId: '41' })) } },
       { provide: Router, useValue: {} }, { provide: MobileConfirmService, useValue: { confirm } },
-      { provide: MobileCommonManualPaymentFlowService, useValue: {} }, { provide: ToastController, useValue: toast },
+      { provide: MobileCommonManualPaymentFlowService, useValue: { confirm: confirmTransfer } }, { provide: ToastController, useValue: toast },
       // A window that stays open: the test presses its buttons through the captured request.
       { provide: MobilePaymentRecipientPickerFlowService, useValue: { open: (value: MobilePaymentRecipientPickerRequest) => {
         request = value; return new Promise<MobilePaymentRecipientPickerResult | null>(resolve => closeWindow = resolve);
@@ -78,6 +80,13 @@ describe('«Выдать номер карты» for a common invoice in the app
     page.ngOnInit(); await settle();
   });
   afterEach(() => { if (!destroyed) fixture.destroy(); });
+
+  it('marks a transfer past an issued bank link through the ordinary payment workflow', async () => {
+    page.manualAttributionRequired.set(true);
+    await page.runInvoiceAction('paid');
+    expect(confirmTransfer).toHaveBeenCalledExactlyOnceWith(41, 'TBANK_ROUTE_FALLBACK');
+    expect(page.summary()?.status).toBe('INVOICED');
+  });
 
   it('opens the window instead of a confirmation and issues the number of the person the manager named', async () => {
     const operation = page.changePaymentRoute(page.cardNumberRouteTarget(page.summary()?.paymentRouteType)); await settle();
@@ -94,6 +103,17 @@ describe('«Выдать номер карты» for a common invoice in the app
     closeWindow({ status: 'issued' }); await operation;
     expect(toast.create).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'Получатель изменён: Т-Банк владельца → Реквизиты · Анна П.' }));
     expect(page.mutating()).toBeNull(); expect(page.error()).toBeNull();
+  });
+
+  it('passes the card of the owner to the window and names it by its own id', async () => {
+    api.getCommonInvoicePaymentRouteRecipients.mockReturnValueOnce(of({ ...people(), ownerCard: { name: ' Мия Р. ', remainingKopecks: 4_500_000, current: false, blockReason: '' } }));
+    const operation = page.changePaymentRoute(page.cardNumberRouteTarget(page.summary()?.paymentRouteType)); await settle();
+    expect(request!.autoHintWithOwnerCard).toContain('клиент получит карту владельца');
+    const loaded = await request!.loadRecipients();
+    expect(loaded.ownerCard).toEqual({ name: 'Мия Р.', remainingKopecks: 4_500_000, current: false, blockReason: null });
+    expect(await request!.issue({ profileId: -1 })).toEqual({ status: 'issued' });
+    expect(api.changeCommonInvoicePaymentRoute).toHaveBeenCalledExactlyOnceWith(41, 'EMPLOYEE_REQUISITES', 'token-1', undefined, -1);
+    closeWindow({ status: 'issued' }); await operation;
   });
 
   it('lets the system choose another person for an invoice that already has a card number', async () => {

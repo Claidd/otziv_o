@@ -1039,6 +1039,15 @@ public class ManualCardPaymentWorkflow {
         evidence.setPaymentSuccessNotificationRetryEligible(false);
         evidence.setExpiresAt(now.plus(properties.getLinkTtl()));
         copyManualActualRecipientContext(bankLink, evidence);
+        if (bankLink.getManualActualRecipientType() == com.hunt.otziv.contractor_payments.model.ContractorRecipientType.OWNER
+                && bankLink.getManualActualRecipientProfileId() == null
+                && OwnerCardPolicy.allows(bankLink.getPaymentProfile())) {
+            // The money came to the owner's card past the bank link: it counts towards the monthly limit of
+            // that card, as an invoice issued on the card would.
+            evidence.setPaymentProfile(bankLink.getPaymentProfile());
+            evidence.setPaymentProfileCode(bankLink.getPaymentProfile().getCode());
+            evidence.setPaymentProfileName(bankLink.getPaymentProfile().getName());
+        }
         return evidence;
     }
 

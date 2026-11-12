@@ -9,13 +9,19 @@
   >
     <header class="pay-head">
       <div>
-        <span class="pay-kicker">Общий счёт №{{ invoiceId }}</span>
+        <span class="pay-kicker">{{ kicker || 'Общий счёт №' + invoiceId }}</span>
         <h2 id="common-actual-payment-title">{{ title() }}</h2>
         @if (invoiceTitle) { <p>{{ invoiceTitle }}</p> }
       </div>
-      <button type="button" class="pay-close" aria-label="Закрыть" [disabled]="saving()" (click)="close()">
-        <span class="material-icons-sharp" aria-hidden="true">close</span>
-      </button>
+      <div class="pay-head-tools">
+        <button type="button" class="pay-guide" title="Как отметить оплату: шаги со снимками" (click)="guideOpen.set(true)">
+          <span class="material-icons-sharp" aria-hidden="true">menu_book</span>
+          Инструкция
+        </button>
+        <button type="button" class="pay-close" aria-label="Закрыть" [disabled]="saving()" (click)="close()">
+          <span class="material-icons-sharp" aria-hidden="true">close</span>
+        </button>
+      </div>
     </header>
 
     @if (loading()) {
@@ -65,10 +71,19 @@
       </div>
 
       @if (options()!.remainingKopecks > 0) {
+        @if (options()!.notice; as notice) {
+          <p class="pay-warning" role="status">{{ notice }}</p>
+        }
         @if (reconcilesCurrentTbank()) {
           <p class="pay-warning">
             Система проверит прежнюю банковскую ссылку. Если платежа по ней ещё нет, перевод зачтётся выбранному получателю.
             Пока ссылка действует, система продолжит проверять возможную вторую оплату.
+            @if (ownerOffered()) {
+              Оплату по самой ссылке банк отмечает сам — отмечать её здесь не нужно. Если клиент перевёл мимо ссылки
+              владельцу на карту, выберите «Владелец»: такое поступление подтверждает владелец или администратор.
+            } @else {
+              На карту владелец этого счёта оплату не принимает, поэтому его в списке нет.
+            }
           </p>
         }
 
@@ -107,10 +122,79 @@
             }
           }
 
-          @if (listedCandidates().length > 1) {
+          @if (splitAllowed && listedCandidates().length > 1) {
             <button type="button" class="pay-link" [disabled]="saving()" (click)="startSplit()">
               Деньги пришли нескольким людям — разделить сумму
             </button>
+          }
+          @if (transferRecipientProfileId() != null) {
+            @if (!transferOpen()) {
+              <button type="button" class="pay-link" [disabled]="saving()" (click)="transferOpen.set(true)">
+                Одним переводом оплачено несколько заказов — добавить заказ
+              </button>
+            } @else {
+              <section class="pay-transfer" aria-label="Перевод за несколько заказов">
+                <div class="pay-split-head">
+                  <strong>Заказы в этом переводе</strong>
+                  @if (!transferLines().length) {
+                    <button type="button" class="pay-link" [disabled]="saving()" (click)="transferOpen.set(false)">Свернуть</button>
+                  }
+                </div>
+                <ul class="pay-transfer-lines">
+                  <li>
+                    <span>Заказ №{{ options()!.invoiceId }}</span>
+                    <strong>{{ money(options()!.remainingKopecks) }}</strong>
+                  </li>
+                  @for (line of transferLines(); track line.orderId) {
+                    <li>
+                      <span>Заказ №{{ line.orderId }}</span>
+                      <strong>{{ money(line.amountKopecks) }}</strong>
+                      <button type="button" class="pay-link pay-link--danger" [disabled]="saving()" (click)="removeTransferOrder(line.orderId)">Убрать</button>
+                    </li>
+                  }
+                </ul>
+                <div class="pay-transfer-add">
+                  <label class="pay-field">
+                    <span>Номер ещё одного заказа</span>
+                    <input
+                      type="text"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      [ngModel]="transferOrderId()"
+                      [disabled]="saving()"
+                      (ngModelChange)="transferOrderId.set($event)"
+                    />
+                  </label>
+                  <button type="button" class="pay-button" [disabled]="saving() || !transferOrderId().trim()" (click)="addTransferOrder()">
+                    Добавить заказ
+                  </button>
+                </div>
+                @if (transferLines().length) {
+                  <label class="pay-field">
+                    <span>Номер операции в выписке</span>
+                    <input
+                      type="text"
+                      maxlength="100"
+                      autocomplete="off"
+                      [ngModel]="transferReference()"
+                      [disabled]="saving()"
+                      (ngModelChange)="transferReference.set($event)"
+                    />
+                  </label>
+                  <label class="pay-field">
+                    <span>Полная сумма перевода, ₽</span>
+                    <input
+                      type="text"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      [ngModel]="transferRubles()"
+                      [disabled]="saving()"
+                      (ngModelChange)="transferRubles.set($event)"
+                    />
+                  </label>
+                }
+              </section>
+            }
           }
         } @else {
           <div class="pay-split-head">
@@ -240,6 +324,17 @@
     }
   </section>
 </div>
+
+<!-- Beside the window, not inside it: Escape in the manual must not close the payment window. -->
+@if (guideOpen()) {
+  <app-common-invoice-guide
+    [sections]="guide.sections"
+    [section]="guide.section"
+    [heading]="guide.heading"
+    [intro]="guide.intro"
+    (closed)="guideOpen.set(false)"
+  />
+}
 
 <ng-template #otherRecipient>
   @if (!pickerOpen()) {

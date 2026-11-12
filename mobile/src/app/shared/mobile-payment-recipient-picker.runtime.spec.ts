@@ -117,6 +117,47 @@ describe('«Выдать номер карты» window of the app', () => {
     expect(dismiss).toHaveBeenCalledExactlyOnceWith({ status: 'issued' }, 'issued');
   });
 
+  it('offers the card of the owner first, with what is left of the month, and sends it as its own choice', async () => {
+    const { fixture, component, element, issue } = await open({
+      loadRecipients: async () => ({ recipients: people, ownerCard: { name: 'Мия Р.', remainingKopecks: 4_500_000, current: false, blockReason: null } })
+    });
+    fixture.componentRef.setInput('autoHintWithOwnerCard', 'после сотрудников — карта владельца'); await render(fixture);
+    const list = rows(element);
+    expect(list).toHaveLength(5);
+    expect(list[0]).toContain('Владелец · Мия Р.'); expect(list[0]).toContain('осталось в этом месяце 45 000,00'); expect(list[0]).toContain('лимит вмещает');
+    expect(element.querySelector('.pick-option small')?.textContent).toContain('после сотрудников — карта владельца');
+
+    element.querySelector<HTMLInputElement>('.pick-option--owner input')!.dispatchEvent(new Event('change')); await render(fixture);
+    expect(component.selected()).toBe(-1); expect(component.chosenOverrun()).toBe(0);
+    const consequence = element.querySelector('ion-footer .pick-consequence')?.textContent ?? '';
+    expect(consequence).toContain('на карту владельца (Мия Р.)'); expect(consequence).toContain('месячный лимит карты');
+    expect(consequence).toContain('подтверждает владелец'); expect(consequence).toContain('клиент ещё не оплатил');
+
+    await component.submit();
+    expect(issue).toHaveBeenCalledExactlyOnceWith({ profileId: -1 });
+  });
+
+  it('shows why the card of the owner cannot be issued, never submits it then, and has no owner line where the server sends none', async () => {
+    const blocked = await open({
+      loadRecipients: async () => ({ recipients: [], ownerCard: { name: 'Мия Р.', remainingKopecks: 5_000, current: false, blockReason: 'лимит карты на этот месяц не вмещает счёт' } })
+    });
+    const row = blocked.element.querySelector('.pick-option--owner');
+    expect(row?.textContent?.replace(/\s+/g, ' ')).toContain('лимит карты на этот месяц не вмещает счёт (осталось в этом месяце 50,00');
+    expect(row?.textContent).toContain('недоступен'); expect(row?.querySelector('input')?.disabled).toBe(true);
+    // The automatic hint stays the ordinary one: the card cannot take this invoice.
+    blocked.fixture.componentRef.setInput('autoHintWithOwnerCard', 'после сотрудников — карта владельца'); await render(blocked.fixture);
+    expect(blocked.element.querySelector('.pick-option small')?.textContent).not.toContain('карта владельца');
+    blocked.component.select(-1); await blocked.component.submit();
+    expect(blocked.issue).not.toHaveBeenCalled();
+
+    TestBed.resetTestingModule();
+    const bankOnly = await open({ loadRecipients: async () => ({ recipients: [] }) });
+    expect(bankOnly.element.querySelector('.pick-option--owner')).toBeNull();
+    expect(bankOnly.element.querySelector('.pick-state')?.textContent).toContain('Сотрудников с платёжным профилем');
+    bankOnly.component.select(-1); await bankOnly.component.submit();
+    expect(bankOnly.issue).not.toHaveBeenCalled();
+  });
+
   it('closes with the answer of the bank queue and silently when the page was left', async () => {
     const accepted: MobilePaymentRecipientIssueOutcome = { status: 'accepted', message: 'Запрос принят. Ожидаем ответ банка.' };
     const first = await open({ issue: async () => accepted });

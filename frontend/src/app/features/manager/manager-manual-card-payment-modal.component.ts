@@ -1,8 +1,12 @@
 import { prepareManualTransfer, type ManualTransferLine } from '@otziv/client-common/billing-payments';
-import { HttpErrorResponse } from '@angular/common/http';
-import { Component, EventEmitter, Input, OnInit, Output, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { defer, firstValueFrom, from, map, of } from 'rxjs';
+import type {
+  CommonManualPaymentAttributionRequest,
+  CommonManualPaymentOptions,
+  CommonManualPaymentOtherRecipient,
+  CommonManualPaymentRecipientCandidate
+} from '../../core/common-manual-payment-attribution.api';
 import {
   ManagerApi,
   type ManualCardPaymentConfirmationRequest,
@@ -13,13 +17,16 @@ import {
 } from '../../core/manager.api';
 import {
   isManualPaymentTaskRecipient,
-  isRetryablePaymentRouteError,
-  manualPaymentBankRecipientName,
-  manualPaymentRecipientEffect,
   manualPaymentRecipientKey as taskAwareRecipientKey,
-  manualPaymentRecipientLabel,
-  manualPaymentRouteErrorMessage
+  manualPaymentRecipientLabel
 } from '../../shared/manual-payment-routing';
+import {
+  CommonManualPaymentAttributionModalComponent,
+  type PaymentMarkGuide,
+  type PaymentMarkSource,
+  type PaymentMarkTransfer
+} from '../admin/common-billing/common-manual-payment-attribution-modal.component';
+import { ORDER_PAYMENT_GUIDE } from './order-payment-guide';
 
 export interface ManagerManualCardPaymentCompleted {
   context: ManualCardPaymentContext;
@@ -79,254 +86,219 @@ export function manualCardPaymentSubmission(
   };
 }
 
+/** A payment made before the recipient accounting was switched on: it only closes the old order. */
+const HISTORICAL_RECIPIENT_KEY = 'LEGACY_PRE_CUTOVER_MANUAL_CARD';
+
+const ORDER_PAYMENT_MARK_GUIDE: PaymentMarkGuide = {
+  sections: ORDER_PAYMENT_GUIDE,
+  section: 'paid',
+  heading: 'Счёт и оплата заказа',
+  intro: 'Как заказ получает счёт, как отметить оплату и сменить получателя, что делать, если клиент не платит.'
+};
+
+function paymentWindowCandidate(
+  candidate: ManualCardPaymentRecipientOption,
+  originalKey: string,
+  ownToTheOrder: boolean
+): CommonManualPaymentRecipientCandidate {
+  const key = manualCardRecipientKey(candidate);
+  return {
+    key,
+    cashDestinationKind: candidate.cashDestinationKind ?? null,
+    recipientType: candidate.recipientType ?? null,
+    recipientProfileId: candidate.recipientProfileId ?? null,
+    recipientUserId: candidate.recipientUserId ?? null,
+    label: manualPaymentRecipientLabel(candidate),
+    originalRecipient: key === originalKey,
+    currentParticipant: ownToTheOrder,
+    // A switched-off profile is not offered for an order at all.
+    profileEnabled: true,
+    availableKopecks: candidate.availableKopecks ?? null,
+    manualPaymentTaskId: candidate.manualPaymentTaskId ?? null,
+    manualPaymentTaskGeneration: candidate.manualPaymentTaskGeneration ?? null,
+    taskTargetKind: candidate.taskTargetKind ?? null,
+    taskRecipientName: candidate.taskRecipientName ?? null,
+    accountingTargetLabel: candidate.accountingTargetLabel ?? null,
+    effectText: candidate.effectText ?? null
+  };
+}
+
+/**
+ * The recipients of an order in the shape the «Отметить оплату» window of a common invoice reads.
+ * The listed ones are the order's own people — the recipient of its invoice, its specialist and its
+ * manager, the owner first as in a common invoice; the rest of the manager's team is found through
+ * «Другой получатель». The recipient of the invoice is chosen at once, exactly as for a common invoice.
+ */
+export function manualCardPaymentWindowOptions(context: ManualCardPaymentContext): {
+  options: CommonManualPaymentOptions;
+  others: CommonManualPaymentOtherRecipient[];
+} {
+  const candidates = context.candidates ?? [];
+  const frozen = context.recipientSelectionFrozen ? manualCardPaymentSelectionRecipient(context) : null;
+  const ownerOffered = candidates.some(candidate => candidate.recipientType === 'OWNER');
+  // A server that does not name the route: the owner of the invoice missing from the list means a bank link.
+  const bankLink = context.bankLinkRoute ?? (!isManualPaymentTaskRecipient(context.originalRecipient)
+    && context.originalRecipient.recipientType === 'OWNER' && !ownerOffered);
+  // The recipient of a bank link is the bank: nobody in the list is «в счёте», and nobody is chosen in
+  // advance — the usual payment by the link needs no mark at all.
+  const originalKey = bankLink && !frozen ? '' : manualCardRecipientKey(context.originalRecipient);
+  const team = new Set(context.teamRecipientKeys ?? []);
+  let own = candidates.filter(candidate => !team.has(manualCardRecipientKey(candidate)));
+  if (!own.length) {
+    // A server that does not tell the team apart: everyone is listed.
+    own = candidates;
+  }
+  if (frozen) {
+    // An earlier attempt has fixed the recipient on the server: only that one can be repeated.
+    own = [frozen];
+  }
+  const listed = [
+    ...own.filter(candidate => candidate.recipientType === 'OWNER'),
+    ...own.filter(candidate => candidate.recipientType !== 'OWNER')
+  ];
+  const notice = frozen
+    ? 'Восстанавливаем ранее подготовленное подтверждение. Получатель, комментарий и чек уже зафиксированы сервером: повтор отправит те же данные.'
+    : !bankLink
+      ? null
+      : ownerOffered
+        ? 'Счёт этого заказа — ссылка банка владельца. Оплату по ссылке банк отмечает сам: отмечать её здесь не нужно. '
+          + 'Если клиент перевёл мимо ссылки владельцу на карту — выберите «Владелец»: запрос уйдёт владельцу, '
+          + 'и заказ закроется только после его подтверждения. Если клиент перевёл сотруднику — выберите сотрудника.'
+        : 'Счёт этого заказа — ссылка банка владельца. Оплату по ссылке банк отмечает сам, а на карту этот владелец '
+          + 'оплату не принимает, поэтому его в списке нет. Выберите сотрудника, только если клиент перевёл деньги ему напрямую.';
+  return {
+    options: {
+      ownerReport: null,
+      invoiceId: context.orderId,
+      remainingKopecks: context.amountKopecks,
+      defaultRecipientKey: frozen ? manualCardRecipientKey(frozen) : originalKey,
+      contractVersion: context.contractVersion ?? null,
+      routeRevision: context.routeRevision ?? null,
+      candidates: listed.map(candidate => paymentWindowCandidate(candidate, originalKey, true)),
+      history: [],
+      notice,
+      initialRecipientKey: frozen ? manualCardRecipientKey(frozen) : null
+    },
+    others: frozen ? [] : candidates
+      .filter(candidate => !own.includes(candidate))
+      .map(candidate => ({
+        candidate: paymentWindowCandidate(candidate, originalKey, false),
+        previousPerformer: false,
+        teamMember: true
+      }))
+  };
+}
+
+/**
+ * «оплатили» of an ordinary order. It is the «Отметить оплату» window of a common invoice itself:
+ * this component only gives it the recipients of the order and saves the mark through the order's API.
+ */
 @Component({
   selector: 'app-manager-manual-card-payment-modal',
-  imports: [FormsModule],
-  templateUrl: './manager-manual-card-payment-modal.component.html',
-  styleUrl: './manager-manual-card-payment-modal.component.scss'
+  imports: [CommonManualPaymentAttributionModalComponent],
+  template: `
+    <app-common-manual-payment-attribution-modal
+      [source]="source"
+      [kicker]="'Заказ №' + order.id"
+      [invoiceTitle]="order.companyTitle || ''"
+      [guide]="guide"
+      [splitAllowed]="false"
+      (closed)="closed.emit()"
+      (settled)="settle($event)"
+    />
+  `
 })
-export class ManagerManualCardPaymentModalComponent implements OnInit {
+export class ManagerManualCardPaymentModalComponent {
   private readonly managerApi = inject(ManagerApi);
 
   @Input({ required: true }) order!: OrderCardItem;
 
   @Output() readonly closed = new EventEmitter<void>();
   @Output() readonly completed = new EventEmitter<ManagerManualCardPaymentCompleted>();
-  readonly recipientKey = manualCardRecipientKey;
-  readonly recipientEffect = manualPaymentRecipientEffect;
-  readonly bankRecipientName = manualPaymentBankRecipientName;
-  readonly isTaskRecipient = isManualPaymentTaskRecipient;
 
-  readonly context = signal<ManualCardPaymentContext | null>(null);
-  readonly loading = signal(true);
-  readonly saving = signal(false);
-  readonly error = signal<string | null>(null);
-  readonly additionalOrders = signal<ManualTransferLine[]>([]);
-  additionalOrderId = '';
-  transferReference = '';
-  transferRubles = '';
+  readonly guide = ORDER_PAYMENT_MARK_GUIDE;
+  /** The recipients as the server returned them last: the mark is sent by their exact keys. */
+  private context: ManualCardPaymentContext | null = null;
+  private others: CommonManualPaymentOtherRecipient[] = [];
 
-  async addTransferOrder(): Promise<void> {
-    const current = this.context();
-    const orderId = Number(this.additionalOrderId);
-    if (!current || this.saving()) return;
-    if (!Number.isSafeInteger(orderId) || orderId <= 0 || orderId === current.orderId || this.additionalOrders().some(row => row.orderId === orderId)) {
-      this.error.set('Введите номер другого заказа.'); return;
-    }
-    this.saving.set(true);
-    try {
-      const other = await firstValueFrom(this.managerApi.getManualCardPaymentContext(orderId));
-      const profile = this.selectedRecipient()?.recipientProfileId;
-      if (!profile || other.recipientSelectionFrozen || !other.candidates.some(c => c.recipientProfileId === profile)) {
+  readonly source: PaymentMarkSource = {
+    ownerApprovalConsequence: 'Поступление владельцу подтверждает сам владелец: ему придёт сообщение с кнопкой в рабочую группу '
+      + 'менеджера в Телеграме. Заказ станет оплаченным после его подтверждения; до этого ничего не закрывается.',
+    options: () => this.managerApi.getManualCardPaymentContext(this.order.id).pipe(map(context => this.accept(context))),
+    otherRecipients: () => of({ recipients: this.others }),
+    confirm: (request, transfer) => defer(() => from(this.confirm(request, transfer))),
+    transferLine: (orderId, recipientProfileId) => this.managerApi.getManualCardPaymentContext(orderId).pipe(map(other => {
+      if (other.recipientSelectionFrozen || !(other.candidates ?? []).some(candidate => candidate.recipientProfileId === recipientProfileId)) {
         throw new Error('По этому заказу выбранный получатель недоступен или уже зарегистрирован перевод.');
       }
-      this.additionalOrders.update(lines => [...lines, {orderId, amountKopecks: other.amountKopecks}]);
-      this.additionalOrderId = '';
-      this.error.set(null);
-    } catch (failure) {
-      this.error.set(failure instanceof Error ? failure.message : 'Не удалось проверить заказ.');
-    } finally { this.saving.set(false); }
+      return { orderId, amountKopecks: other.amountKopecks };
+    }))
+  };
+
+  settle(outcome: unknown): void {
+    this.completed.emit(outcome as ManagerManualCardPaymentCompleted);
   }
 
-  removeTransferOrder(orderId: number): void {
-    this.additionalOrders.update(lines => lines.filter(row => row.orderId !== orderId));
-  }
-
-  readonly selectedRecipientKey = signal('');
-  readonly reason = signal('');
-  readonly receiptUrl = signal('');
-
-  readonly selectedRecipient = computed(() => {
-    const context = this.context();
-    const key = this.selectedRecipientKey();
-    return context?.candidates.find((candidate) => manualCardRecipientKey(candidate) === key) ?? null;
-  });
-
-  readonly recipientChanged = computed(() => {
-    const context = this.context();
-    const selected = this.selectedRecipient();
-    return Boolean(context && selected
-      && manualCardRecipientKey(context.originalRecipient) !== manualCardRecipientKey(selected));
-  });
-
-  readonly ownerSelected = computed(() => this.selectedRecipient()?.recipientType === 'OWNER');
-
-  readonly selectedAnomalyWarning = computed(() => {
-    const context = this.context();
-    const selected = this.selectedRecipient();
-    if (!context || !selected) {
-      return '';
+  private accept(context: ManualCardPaymentContext): CommonManualPaymentOptions {
+    const candidates = context.candidates ?? [];
+    if (!candidates.length) {
+      throw new Error('Сервер не вернул доступных получателей оплаты.');
     }
-    if ((selected.projectedOverrunKopecks ?? 0) > 0) {
-      return `Платёж всё равно будет учтён. Доступно для новых счетов станет 0 ₽, а превышение ${this.money(selected.projectedOverrunKopecks)} попадёт в аномалии для сверки.`;
+    if (candidates.some(candidate => !manualCardRecipientKey(candidate))) {
+      throw new Error('Сервер вернул получателя без безопасного ключа маршрута. Оплата не изменена.');
     }
-    if (selected.anomalyWarning?.trim()) {
-      return selected.anomalyWarning.trim();
-    }
-    if (context.anomalyWarning?.trim()) {
-      return context.anomalyWarning.trim();
-    }
-    if (selected.recipientType !== 'OWNER'
-      && selected.availableKopecks != null
-      && context.amountKopecks > selected.availableKopecks) {
-      return 'Сумма превышает доступный остаток выбранного получателя. После подтверждения система сохранит превышение как аномалию для сверки.';
-    }
-    return '';
-  });
-
-  ngOnInit(): void {
-    void this.loadContext();
-  }
-
-  async loadContext(preserveDraft = false): Promise<void> {
-    const draftReason = this.reason();
-    const draftReceiptUrl = this.receiptUrl();
-    this.loading.set(true);
-    this.error.set(null);
-    try {
-      const context = await firstValueFrom(this.managerApi.getManualCardPaymentContext(this.order.id));
-      const candidates = context.candidates ?? [];
-      if (!candidates.length) {
-        throw new Error('Сервер не вернул доступных получателей оплаты.');
+    const normalized = { ...context, candidates };
+    if (context.recipientSelectionFrozen) {
+      if (!manualCardPaymentSelectionRecipient(normalized)) {
+        throw new Error('Ранее выбранный получатель отсутствует в списке доступных получателей. Повтор оплаты заблокирован.');
       }
-      if (candidates.some(candidate => !manualCardRecipientKey(candidate))) {
-        throw new Error('Сервер вернул получателя без безопасного ключа маршрута. Оплата не изменена.');
+      const preparedReason = context.preparedReason ?? '';
+      if (!preparedReason.trim() || preparedReason.length > 500 || (context.preparedReceiptUrl ?? '').length > 1024) {
+        throw new Error('Сохранённые данные повторной оплаты повреждены. Повтор оплаты заблокирован.');
       }
-      const normalizedContext = { ...context, candidates };
-      const defaultRecipient = manualCardPaymentSelectionRecipient(normalizedContext);
-      if (context.recipientSelectionFrozen && !defaultRecipient) {
-        throw new Error(context.recipientSelectionFrozen
-          ? 'Ранее выбранный получатель отсутствует в списке доступных получателей. Повтор оплаты заблокирован.'
-          : 'Исходный получатель счёта отсутствует в списке доступных получателей. Оплата не изменена.');
-      }
-      if (context.recipientSelectionFrozen) {
-        const preparedReason = context.preparedReason ?? '';
-        const preparedReceiptUrl = context.preparedReceiptUrl ?? '';
-        if (!preparedReason.trim() || preparedReason.length > 500 || preparedReceiptUrl.length > 1024) {
-          throw new Error('Сохранённые данные повторной оплаты повреждены. Повтор оплаты заблокирован.');
-        }
-        this.reason.set(preparedReason);
-        this.receiptUrl.set(preparedReceiptUrl);
-      } else {
-        this.reason.set(preserveDraft ? draftReason : '');
-        this.receiptUrl.set(preserveDraft ? draftReceiptUrl : '');
-      }
-      this.context.set(normalizedContext);
-      this.selectedRecipientKey.set(context.recipientSelectionFrozen && defaultRecipient ? manualCardRecipientKey(defaultRecipient) : '');
-    } catch (error) {
-      this.context.set(null);
-      this.error.set(manualPaymentRouteErrorMessage(
-        error,
-        this.errorMessage(error, 'Не удалось загрузить данные ручной оплаты.')
-      ));
-    } finally {
-      this.loading.set(false);
     }
+    const view = manualCardPaymentWindowOptions(normalized);
+    this.context = normalized;
+    this.others = view.others;
+    return view.options;
   }
 
-  close(): void {
-    if (!this.saving()) {
-      this.closed.emit();
+  private async confirm(
+    request: CommonManualPaymentAttributionRequest,
+    transfer: PaymentMarkTransfer | null
+  ): Promise<ManagerManualCardPaymentCompleted> {
+    const context = this.context;
+    const line = request.attributions[0];
+    const chosen = context?.candidates.find(candidate => manualCardRecipientKey(candidate) === line?.recipientKey) ?? null;
+    const submission = context ? manualCardPaymentSubmission(context, chosen, request.reason, request.receiptUrl) : null;
+    if (!context || !submission || request.attributions.length !== 1) {
+      throw new Error('Выбранный получатель больше недоступен. Закройте окно и откройте его заново.');
     }
-  }
-
-  async submit(): Promise<void> {
-    const context = this.context();
-    if (!context || this.saving()) {
-      return;
-    }
-    const submission = manualCardPaymentSubmission(
-      context,
-      this.selectedRecipient(),
-      this.reason(),
-      this.receiptUrl()
-    );
-    if (!submission) {
-      this.error.set('Зафиксированный получатель недоступен. Оплата не изменена.');
-      return;
-    }
-    if (!submission.reason.trim()) {
-      this.error.set('Укажите короткую причину ручной оплаты.');
-      return;
-    }
-    if (submission.reason.length > 500) {
-      this.error.set('Причина не должна превышать 500 символов.');
-      return;
-    }
-    if ((submission.receiptUrl?.length ?? 0) > 1024) {
-      this.error.set('Ссылка на чек не должна превышать 1024 символа.');
-      return;
-    }
-
-    const request: ManualCardPaymentConfirmationRequest = {
+    const payload: ManualCardPaymentConfirmationRequest = {
       reason: submission.reason,
       receiptUrl: submission.receiptUrl,
       recipientKey: manualCardRecipientKey(submission.recipient),
       recipientType: submission.recipient.recipientType,
       recipientProfileId: submission.recipient.recipientProfileId ?? null
     };
-    this.saving.set(true);
-    this.error.set(null);
-    try {
-
-      let result: ManagerManualCardPaymentResult;
-      if (this.additionalOrders().length) {
-        const group = prepareManualTransfer([{orderId: context.orderId, amountKopecks: context.amountKopecks}, ...this.additionalOrders()],
-          this.transferReference, this.transferRubles, submission.recipient.recipientProfileId, submission.reason, submission.receiptUrl);
-        const results = await firstValueFrom(this.managerApi.recordTransfer(group));
-        const pending = results.filter(item => item.status !== 'COMPLETED');
-        if (pending.length) {
-          this.error.set('Перевод зарегистрирован. Требуется сверка заказов ' + pending.map(item => '№' + item.orderId).join(', '));
-          return;
-        }
-        const current = results.find(item => item.orderId === context.orderId);
-        if (!current) throw new Error('Проверьте результат распределения перевода.');
-        result = current;
-      } else {
-      result = await firstValueFrom(this.managerApi.confirmManualCardPayment(this.order.id, request));
+    let result: ManagerManualCardPaymentResult;
+    if (transfer?.lines.length) {
+      const group = prepareManualTransfer(
+        [{ orderId: context.orderId, amountKopecks: context.amountKopecks }, ...transfer.lines as ManualTransferLine[]],
+        transfer.reference, transfer.totalRubles, submission.recipient.recipientProfileId, submission.reason, submission.receiptUrl);
+      const results = await firstValueFrom(this.managerApi.recordTransfer(group));
+      const pending = results.filter(item => item.status !== 'COMPLETED');
+      if (pending.length) {
+        throw new Error('Перевод зарегистрирован. Требуется сверка заказов ' + pending.map(item => '№' + item.orderId).join(', '));
       }
-      this.completed.emit({ context, recipient: submission.recipient, result });
-    } catch (error) {
-      if (isRetryablePaymentRouteError(error)) {
-        await this.loadContext(true);
-        if (this.context()) {
-          this.error.set(manualPaymentRouteErrorMessage(error, 'Маршрут оплаты изменился. Проверьте выбор ещё раз.'));
-        }
-      } else {
-        this.error.set(manualPaymentRouteErrorMessage(error, 'Не удалось безопасно подтвердить перевод.'));
+      const current = results.find(item => item.orderId === context.orderId);
+      if (!current) {
+        throw new Error('Проверьте результат распределения перевода.');
       }
-    } finally {
-      this.saving.set(false);
+      result = current;
+    } else {
+      result = await firstValueFrom(this.managerApi.confirmManualCardPayment(this.order.id, payload));
     }
-  }
-
-  recipientLabel(candidate: ManualCardPaymentRecipientOption): string {
-    return manualPaymentRecipientLabel(candidate);
-  }
-
-  money(kopecks: number | null | undefined): string {
-    return `${new Intl.NumberFormat('ru-RU', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format((kopecks ?? 0) / 100)} ₽`;
-  }
-
-  private errorMessage(error: unknown, fallback: string): string {
-    if (error instanceof HttpErrorResponse) {
-      const payload = error.error;
-      const backendMessage = typeof payload === 'string'
-        ? payload
-        : payload && typeof payload === 'object'
-          ? ('message' in payload && typeof payload.message === 'string'
-            ? payload.message
-            : 'detail' in payload && typeof payload.detail === 'string'
-              ? payload.detail
-              : '')
-          : '';
-      if (backendMessage.trim()) {
-        return backendMessage.trim();
-      }
-    }
-    return error instanceof Error && error.message.trim() ? error.message.trim() : fallback;
+    return { context, recipient: submission.recipient, result };
   }
 }

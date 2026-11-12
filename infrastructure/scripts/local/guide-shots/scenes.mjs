@@ -84,6 +84,25 @@ const scenes = {
     });
     await studio.click({ find: ['.pay-modal .pay-button', 'Отмена'] }, 500);
     await waitGone('.pay-modal');
+    // «Оплачен переводом» of an invoice by the owner's bank link: nobody is chosen, the window explains what
+    // to do when the client transferred money past the link. The invoice belongs to a manager whose owner
+    // may take card transfers, so «Владелец» is in the list.
+    if (local.invoices.bankLink) {
+      await studio.open(invoiceUrl(local.invoices.bankLink));
+      await studio.click({ block: 'Оплата', find: ['.side-action', 'Оплачен'] }, 600);
+      await waitFor('.pay-modal .pay-warning');
+      await sleep(600);
+      await studio.snap('ci-pay-bank-window', {
+        clip: '.pay-modal',
+        marks: [
+          { target: '.pay-modal .pay-warning', n: 1, side: 'left' },
+          { target: { all: '.pay-modal .pay-recipient', nth: 0 }, n: 2, side: 'left' },
+          { target: '.pay-modal .pay-add', n: 3, side: 'left' }
+        ]
+      });
+      await studio.click({ find: ['.pay-modal .pay-button', 'Отмена'] }, 500);
+      await waitGone('.pay-modal');
+    }
   },
 
   // ---- common invoice: another recipient, a card number ----
@@ -306,6 +325,52 @@ const scenes = {
     });
   },
 
+  // ---- company editor: the common invoice of a company whose order already has its own invoice ----
+  async company() {
+    const companiesUrl = keyword => `/companies?status=${encodeURIComponent('Все')}&keyword=${encodeURIComponent(keyword)}&pageNumber=0&pageSize=5&sortDirection=desc`;
+    const section = 'app-manager-company-edit-modal .company-billing-section';
+    const openEditor = async keyword => {
+      await studio.open(companiesUrl(keyword), `!!document.querySelector('app-manager-company-card .company-edit-link')`);
+      // The card is found by its real title before the names on the page are replaced.
+      const opened = await studio.eval(`(() => {
+        const card = [...document.querySelectorAll('app-manager-company-card')].find(c => c.innerText.includes(${JSON.stringify(keyword)}));
+        if (!card) return false;
+        card.querySelector('.company-edit-link').click();
+        return true;
+      })()`);
+      if (!opened) throw new Error('company card not found: ' + keyword);
+      await waitFor(`${section} .company-billing-toggles`);
+      await sleep(1200);
+      // The editor scrolls inside itself and a capture resets that scroll: for the picture it is opened at full height.
+      await studio.eval(`(() => {
+        const modal = document.querySelector('app-manager-company-edit-modal .lead-edit-modal');
+        modal.style.maxHeight = 'none';
+        modal.style.overflow = 'visible';
+        return true;
+      })()`);
+      await sleep(600);
+    };
+    // A company without a link: where the common invoice is switched on. Nothing is pressed here.
+    await openEditor(local.company.withoutLink);
+    await studio.snap('ci-company-billing-on', {
+      clip: section,
+      marks: [{ target: `${section} .company-billing-toggles .company-switch-field`, n: 1, side: 'left' }]
+    });
+    await studio.click('app-manager-company-edit-modal .lead-edit-close', 700);
+    // A company whose link is already on while one of its orders keeps its own invoice.
+    await openEditor(local.company.withSeparateOrder);
+    await waitFor(`${section} .company-billing-note--separate`);
+    await studio.snap('ci-company-billing-separate', {
+      clip: section,
+      rules: [['ID \\d+', 'g', 'ID 1024']],
+      marks: [
+        { target: `${section} .company-billing-title strong`, n: 2, side: 'right', rx: 10 },
+        { target: `${section} .company-billing-note--separate`, n: 3, side: 'left' }
+      ]
+    });
+    await studio.click('app-manager-company-edit-modal .lead-edit-close', 700);
+  },
+
   // ---- order window: «Способ оплаты» ----
   async order() {
     await page.viewport(1180, 3200, 2);
@@ -359,28 +424,39 @@ const scenes = {
     await studio.click({ find: ['app-manager-order-edit-modal button', 'Отмена'] }, 800);
     // «оплатили» on the card
     await studio.click({ find: ['app-manager-order-card button', 'оплатили'] }, 800);
-    await waitFor('.manual-payment-modal');
-    await sleep(1500);
-    await studio.eval(`(() => {
-      const m = document.querySelector('.manual-payment-modal');
-      const select = m.querySelector('select[name=recipient]');
-      select.value = select.options[1].value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      const reason = m.querySelector('textarea[name=reason]');
-      reason.value = 'Клиент перевёл по номеру телефона, деньги видны в выписке';
-      reason.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    })()`);
-    await sleep(900);
+    // The same window as «Оплачен» of a common invoice: the recipient of the invoice is already chosen.
+    await waitFor('.pay-modal .pay-recipient.selected');
+    await sleep(800);
     await studio.snap('op-paid-window', {
-      clip: '.manual-payment-modal',
+      clip: '.pay-modal',
       marks: [
-        { target: '.manual-payment-modal select[name=recipient]', n: 2, side: 'left' },
-        { target: '.manual-payment-modal textarea[name=reason]', n: 3, side: 'left' },
-        { target: '.manual-payment-modal button[type=submit]', n: 4, side: 'right' }
+        { target: '.pay-modal .pay-recipient.selected', n: 2, side: 'left' },
+        { target: '.pay-modal .pay-add', n: 3, side: 'left' },
+        { target: '.pay-modal .pay-button--primary', n: 4, side: 'right' }
       ]
     });
-    await studio.click({ find: ['.manual-payment-modal button', 'Отмена'] }, 600);
+    await studio.click({ find: ['.pay-modal .pay-button', 'Отмена'] }, 600);
+    await waitGone('.pay-modal');
+    // «оплатили» of an order whose invoice is the owner's bank link: nobody is chosen, the window explains
+    // what to do when the client transferred money past the link. The order belongs to a manager whose
+    // owner may take card transfers, so «Владелец» is in the list.
+    if (local.bankLinkOrder) {
+      await studio.open(boardUrl(local.bankLinkOrder), `!!document.querySelector('app-manager-order-card')`);
+      await sleep(800);
+      await studio.click({ find: ['app-manager-order-card button', 'оплатили'] }, 800);
+      await waitFor('.pay-modal .pay-warning');
+      await sleep(800);
+      await studio.snap('op-paid-bank-window', {
+        clip: '.pay-modal',
+        marks: [
+          { target: '.pay-modal .pay-warning', n: 1, side: 'left' },
+          { target: { all: '.pay-modal .pay-recipient', nth: 0 }, n: 2, side: 'left' },
+          { target: '.pay-modal .pay-add', n: 3, side: 'left' }
+        ]
+      });
+      await studio.click({ find: ['.pay-modal .pay-button', 'Отмена'] }, 600);
+      await waitGone('.pay-modal');
+    }
     await page.viewport(1440, 3200, 2);
   }
 };

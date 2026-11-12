@@ -46,6 +46,29 @@ export class ManagerCompanyBillingFacade {
     this.companyBillingDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
   }
 
+  /**
+   * Why the orders of a company are not collected into a common invoice: the system switched its link
+   * off or keeps retrying. Read from every link of the company: a link the system switched off is no
+   * longer selected, and the editor offers «Создать общий счет».
+   */
+  companyBillingProblem(companyId: number | null | undefined): string {
+    return this.linksOfCompany(companyId).map((linked) => (linked.problem ?? '').trim()).find(Boolean) ?? '';
+  }
+
+  /** Which unfinished orders of a company stay on their own invoices, and what to do with them. */
+  companyBillingSeparateOrdersNote(companyId: number | null | undefined): string {
+    return this.linksOfCompany(companyId).filter((linked) => linked.enabled)
+      .map((linked) => (linked.separateOrdersNote ?? '').trim()).find(Boolean) ?? '';
+  }
+
+  private linksOfCompany(companyId: number | null | undefined): CommonBillingAccountResponse['companies'] {
+    if (!companyId) {
+      return [];
+    }
+    return this.companyBillingAccounts().flatMap((account) => account.companies ?? [])
+      .filter((linked) => linked.companyId === companyId);
+  }
+
   companyBillingStatusLabel(): string {
     const account = this.selectedCompanyBillingAccount();
     if (!account) {

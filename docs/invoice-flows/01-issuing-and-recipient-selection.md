@@ -164,6 +164,47 @@
 «Ожидает общего счета») и при публикации (`completePublishedOrderIntoCommonInvoice`). Заказ входит только в счёт,
 который ещё собирается (`COLLECTING`/`READY`, получатель не выбран); после отправки клиенту состав зафиксирован.
 
+**Подключение компании, у которой заказу уже выставлен свой счёт** (изменено 2026-11-12). При добавлении компании в
+связь (`CommonBillingCompanyReconciliationWorkflow.reconcileEnabledCompany`, фоновая задача
+`reconcilePendingCompanyLinks`) каждый незавершённый заказ проверяется по его отдельному счёту
+(`CommonInvoiceInitializationService.keepsOrderOnItsOwnInvoice`):
+
+| Отдельный счёт заказа | Что делает система |
+|---|---|
+| Нет | Заказ входит в общий счёт |
+| Закрыт: оплачен, отменён, истёк (`isSafelyClosedStandaloneRoute`) | Заказ входит |
+| Банковская заготовка, по которой клиент ничего не начал (`StandaloneBankPaymentPolicy.canAutoCloseForCommonInvoice`) | Заготовка закрывается, заказ входит |
+| Любой другой живой счёт: выдан номер карты (`WAITING_MANUAL_PAYMENT`), клиент открыл оплату по ссылке и т. п. | Заказ **остаётся на своём счёте** со своим резервом; остальные заказы компании входят в общий счёт |
+
+До 2026-11-12 один такой заказ останавливал всю компанию: 20 попыток с растущей паузой, затем связь выключалась
+(`company_reconcile_failed_final:`), ни один заказ в общий счёт не попадал, а менеджер видел только «сохранено»
+(случай 2026-11-06: три заказа компании с выданным номером карты, остальные четыре не собрались). Система по-прежнему
+не закрывает живой отдельный счёт сама: она не может убедиться, что клиент по нему не платил.
+
+Что видит менеджер — редактор компании, блок «Общий счёт», на сайте и в приложении. Данные приходят в
+`CommonBillingCompanyResponse` (`GET /api/common-billing/accounts/by-company/{companyId}` и чтение одной связи; в общих
+списках связей не считаются):
+
+| Поле | Когда заполнено | Текст |
+|---|---|---|
+| `separateOrdersNote` | Связь включена и есть заказы, оставшиеся на своих счетах (`ordersKeepingTheirOwnInvoice`, считается при чтении) | «Отдельно остаются заказы №…» (до 8 номеров, дальше «и ещё N») и что делать: дождаться оплаты по своему счёту либо, если клиент точно не платил, владелец или администратор закрывает отдельный счёт кнопкой «Платежа нет» в разделе «Банк», после чего заказ возвращают кнопкой «Вернуть заказ в счёт» |
+| `problem` | Система выключила связь после последней попытки; попытка не удалась и будет повторена; состав собирающегося счёта сейчас менять нельзя (выбран получатель) | Причина человеческим текстом без служебной обёртки `409 CONFLICT "…"` и что будет дальше. Если компанию исключил человек — пусто |
+
+Тексты строит `CommonBillingLinkNotes` из `reconcileLastError` связи; сама запись в базе сохраняет служебный префикс.
+Сайт: `manager-company-edit-modal.component.{ts,html}` (`billingCompanyProblem`, `billingSeparateOrdersNote`),
+приложение: `manager-company-billing.facade.ts` (`companyBillingProblem`, `companyBillingSeparateOrdersNote`). Причина
+читается по всем связям компании, включая выключенные: выключенная системой связь уже не выбрана в редакторе.
+
+Если заказ добавили уже опубликованным, выставленным или на этапе напоминания, готовая позиция собирающегося счёта
+получает статус «Ожидает общего счета» на доске сайта и в приложении. Это действует при подключении компании и при
+ручном возврате. Заказ в публикации сохраняет свой этап. Прежний статус хранится в позиции для исключения из счёта.
+Миграция V1_10_398 выравнивает статусы готовых позиций действующих собирающихся счетов.
+
+Оставшийся заказ сам в общий счёт не переходит. После оплаты по своему счёту он завершается как обычный заказ. После
+«Платежа нет» (`POST /api/admin/payments/manual-links/{linkId}/close-unpaid`, резерв освобождается) его возвращают в
+собирающийся счёт штатным «Вернуть заказ в счёт» — см. ниже. Тесты: сценарий 20 в
+`PaymentScenarioMatrixMySqlIntegrationTest`, `CommonBillingLinkNotesTest`.
+
 **Исключить** — кнопка на карточке заказа в счёте: `DELETE /api/common-billing/invoices/{invoiceId}/orders/{orderId}`
 → `CommonInvoiceMembershipWorkflow.detachOrder`. Заказ дальше идёт отдельно. Уже опубликованный заказ сам обратно
 не вернётся.
@@ -247,7 +288,8 @@
 - Отказы 409: компания запретила — «Для этой компании оплата принимается только на реквизиты владельца» (`backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentLiveRoutingService.java:982-985,1315-1320`); есть prior payment evidence — «По счёту уже есть оплата: выдать номер карты другого получателя нельзя» (`backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentLiveRoutingService.java:986-991`); человек не из пула — «Выбранный получатель недоступен для этого счёта. Обновите окно и выберите заново» (`backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentLiveRoutingService.java:1285-1294`); иной отказ — «Выбранному получателю сейчас нельзя выдать счёт: …» (`backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentLiveRoutingService.java:1302-1307,1323-1340`).
 - Список для окна: `GET /api/common-billing/invoices/{invoiceId}/payment-route-recipients` — доступный остаток, превышение и причина блокировки по каждому человеку: `backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java:140-152`, `backend/src/main/java/com/hunt/otziv/common_billing/service/CommonInvoicePaymentRouteWorkflow.java:199-216`, `backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentLiveRoutingService.java:897-902,1255-1281`.
 - Если банковская ссылка ещё открыта, выбор сохраняется вместе с отложенной сменой получателя (`bank_recipient_change.chosen_profile_id`): `backend/src/main/java/com/hunt/otziv/common_billing/service/BankRecipientChanges.java:160-181`, `backend/src/main/resources/db/migration/V1_10_396__bank_recipient_change_chosen_profile.sql:1-4`.
-- Для счёта заказа есть `reserveChosenContractorForPaymentLink` и `recipientOptionsForPaymentLink` (`backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentLiveRoutingService.java:713-734`); вызовов вне класса не найдено.
+- Для счёта заказа те же операции — `reserveChosenContractorForPaymentLink` и `recipientOptionsForPaymentLink`; их вызывает `PaymentRouteReplacementWorkflow` (окно «Выдать номер карты» заказа).
+- **Карта владельца в «Выдать номер карты» заказа (с 2026-11-12).** При выставлении счёта цепочка не менялась: карта владельца — шаг 4, в пределах месячного лимита. При смене способа оплаты раньше действовало `CONTRACTOR_ONLY` (владелец недопустим). Теперь, если профиль менеджера разрешает карту владельца (`OwnerCardPolicy.allows`) и остаток месячного лимита вмещает счёт, автоподбор после сотрудников выдаёт карту владельца (`reserveContractorElseOwnerForPaymentLink`), а менеджер может назвать её сам (`recipientProfileId = -1`). Владелец с профилем «только банк» (ИП) не предлагается и не подставляется никогда. Подробности и отказы — раздел 02, «Смена у счёта одного заказа». Для общего счёта правило то же (`CommonInvoicePaymentRouteWorkflow`: `reserveContractorElseOwnerForCommonInvoice`, `selectCommonInvoiceOwnerCardRoute`): карта владельца после сотрудников или по выбору менеджера, в пределах того же месячного лимита.
 
 ### Доступная сумма («резерв», capacity)
 

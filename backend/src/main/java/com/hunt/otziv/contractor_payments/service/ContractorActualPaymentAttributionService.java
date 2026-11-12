@@ -507,6 +507,11 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
             addCandidate(values, client, profiles, mode, accountingAllocation, link.getAmountKopecks(), true);
         }
         addAssignedCandidates(values, order, profiles, mode, accountingAllocation, link.getAmountKopecks(), client);
+        // Everyone listed so far belongs to this invoice or to this order; the team comes next.
+        // The map is keyed by role and profile; the window knows a candidate by the key of its response.
+        Set<String> invoiceAndOrderKeys = values.values().stream()
+                .map(ManualCardPaymentRecipientResponse::key)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         for (Long profileId : team) {
             addProfileCandidate(values, profileId, profiles, mode, accountingAllocation, link.getAmountKopecks(), client);
         }
@@ -544,6 +549,17 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
                         .filter(value -> value.key().equals(frozenRecipientKey(link)))
                         .findFirst()
                         .orElseThrow(() -> conflict("Ранее выбранный фактический получатель больше недоступен"));
+        // A team member who also holds the reserve, or was already named as the actual recipient, is not «another» one.
+        Set<Long> namedProfileIds = new LinkedHashSet<>();
+        addId(namedProfileIds, profileId(accountingAllocation));
+        addId(namedProfileIds, link.getManualActualRecipientProfileId());
+        List<String> teamRecipientKeys = values.values().stream()
+                .filter(value -> !value.original() && value.recipientType() != ContractorRecipientType.OWNER
+                        && value.manualPaymentTaskId() == null)
+                .filter(value -> !invoiceAndOrderKeys.contains(value.key())
+                        && !namedProfileIds.contains(value.recipientProfileId()))
+                .map(ManualCardPaymentRecipientResponse::key)
+                .toList();
         return new ManualCardPaymentContextResponse(
                 order.getId(),
                 link.getAmountKopecks(),
@@ -555,7 +571,8 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
                 link.getManualActualReason(),
                 link.getManualActualReceiptUrl(),
                 "TASK_RECIPIENT_V1",
-                taskCandidate.map(value -> value.source().sourceGeneration()).orElse(null)
+                taskCandidate.map(value -> value.source().sourceGeneration()).orElse(null),
+                teamRecipientKeys
         );
     }
 

@@ -630,6 +630,13 @@ type CompanyPreservedFields = Pick<
                           </label>
                         </div>
 
+                        @if (companyBillingProblem(company.id); as problem) {
+                          <p class="company-billing-note company-billing-note--problem" role="alert">{{ problem }}</p>
+                        }
+                        @if (companyBillingSeparateOrdersNote(company.id); as separateOrders) {
+                          <p class="company-billing-note">{{ separateOrders }}</p>
+                        }
+
                         @if (selectedCompanyBillingAccount(); as account) {
                           <div class="company-billing-actions">
                             <button type="button" (click)="saveCompanyBillingAccount()" [disabled]="!!companyBillingMutating() || !canSaveCompanyBillingAccount()">
@@ -1982,6 +1989,37 @@ type CompanyPreservedFields = Pick<
       gap: 0.42rem;
     }
 
+    /* Orders that stay on their own invoices: a note to act on. */
+    .company-billing-note {
+      margin: 0;
+      border: 1px solid rgba(214, 159, 43, 0.45);
+      border-radius: 0.7rem;
+      padding: 0.55rem 0.7rem;
+      color: #7a5600;
+      background: #fff6df;
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+
+    /* The system keeps the company out of the common invoice: the reason must not look like a hint. */
+    .company-billing-note--problem {
+      border-color: rgba(200, 60, 90, 0.4);
+      color: #a62b48;
+      background: #fff0f3;
+    }
+
+    :host-context(body.otziv-dark-theme) .company-billing-note {
+      border-color: #6b592f;
+      color: #f0cf83;
+      background: #3a3221;
+    }
+
+    :host-context(body.otziv-dark-theme) .company-billing-note--problem {
+      border-color: #754354;
+      color: #ff9ab6;
+      background: #402630;
+    }
+
     .company-billing-toggles label {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
@@ -2711,6 +2749,10 @@ export class ManagerPage implements OnInit, OnDestroy {
   readonly setCompanyBillingDraftField = this.companyBilling.setCompanyBillingDraftField.bind(this.companyBilling);
 
   readonly companyBillingStatusLabel = this.companyBilling.companyBillingStatusLabel.bind(this.companyBilling);
+
+  readonly companyBillingProblem = this.companyBilling.companyBillingProblem.bind(this.companyBilling);
+
+  readonly companyBillingSeparateOrdersNote = this.companyBilling.companyBillingSeparateOrdersNote.bind(this.companyBilling);
 
   readonly canSaveCompanyBillingAccount = this.companyBilling.canSaveCompanyBillingAccount.bind(this.companyBilling);
 

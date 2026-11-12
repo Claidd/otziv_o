@@ -163,18 +163,60 @@ public class CommonInvoiceRouteSelector {
     }
 
     boolean shouldUseManualPayment(PaymentProfile profile, long amountKopecks, LocalDateTime now, Long excludedLinkId) {
+        java.util.OptionalLong remaining = ownerCardRemainingKopecks(profile, now, excludedLinkId);
+        return remaining.isPresent() && amountKopecks > 0 && amountKopecks <= remaining.getAsLong();
+    }
+
+    /**
+     * What is left of this month's limit of the owner's card: what may still be issued on it. Empty when
+     * the profile does not let its owner take card transfers at all; zero when the month is used up.
+     */
+    java.util.OptionalLong ownerCardRemainingKopecks(PaymentProfile profile, LocalDateTime now, Long excludedLinkId) {
         if (profile == null || profile.getPaymentPolicy() != PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK || !hasManualPaymentTarget(profile)) {
-            return false;
+            return java.util.OptionalLong.empty();
         }
         long monthlyLimit = manualMonthlyHardLimit(profile);
-        if (monthlyLimit <= 0 || amountKopecks <= 0 || profile.getId() == null) {
-            return false;
+        if (monthlyLimit <= 0 || profile.getId() == null) {
+            return java.util.OptionalLong.empty();
         }
         LocalDateTime periodStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay();
         LocalDateTime periodEnd = periodStart.plusMonths(1);
         long alreadyUsed = paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(profile.getId(), MANUAL_PAYMENT_METHODS, MANUAL_USAGE_STATUSES, periodStart, periodEnd, now, PaymentLinkStatus.CONFIRMED, excludedLinkId);
         alreadyUsed += manualPaymentTaskService.commonInvoiceProfileUsageForPeriod(profile.getId(), periodStart, periodEnd);
-        return alreadyUsed < monthlyLimit && amountKopecks <= monthlyLimit - alreadyUsed;
+        return java.util.OptionalLong.of(Math.max(0L, monthlyLimit - alreadyUsed));
+    }
+
+    /**
+     * What is left of this month's limit of the owner's card of this manager. Empty where the manager's bank
+     * profile does not let the owner take card transfers, or new owner routes are blocked.
+     */
+    @Transactional(readOnly = true)
+    public java.util.OptionalLong ownerCardRemainingForManager(Manager manager) {
+        if (!allowLegacyManualProfileRoute()) {
+            return java.util.OptionalLong.empty();
+        }
+        return ownerCardRemainingKopecks(paymentProfileService.selectForManager(manager), LocalDateTime.now(), null);
+    }
+
+    /** The name on the requisites of the owner's card of this manager; empty when there is none. */
+    @Transactional(readOnly = true)
+    public String ownerCardRecipientName(Manager manager) {
+        PaymentProfile profile = paymentProfileService.selectForManager(manager);
+        return profile == null ? "" : normalize(profile.getManualRecipientName());
+    }
+
+    /**
+     * The owner's card for a common invoice whose manager asked for a card number. Unlike the automatic owner
+     * route it never falls back to the bank link: where the card may not be issued, it refuses.
+     */
+    @Transactional
+    public PaymentRouteSelection selectCommonInvoiceOwnerCardRoute(Manager manager, long amountKopecks) {
+        PaymentRouteSelection route = selectCommonInvoiceRoute(manager, amountKopecks, false, true);
+        if (!ManualPaymentSource.PROFILE_MONTHLY_LIMIT.name().equals(route.manualSource())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Карту владельца выдать нельзя: она не разрешена для этого менеджера или лимит карты на этот месяц не вмещает счёт");
+        }
+        return route;
     }
 
     long manualMonthlyHardLimit(PaymentProfile profile) {

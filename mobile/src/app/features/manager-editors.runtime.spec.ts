@@ -257,6 +257,23 @@ describe('manager editor sessions', () => {
     expect(api['removeCommonBillingCompany']).not.toHaveBeenCalled();
   });
 
+  it('tells why a company is kept out of its common invoice and which orders stay on their own invoices', async () => {
+    api['getManagerCompanyEdit'].mockReturnValue(of(company(101)));
+    api['getCommonBillingAccountsForCompany'].mockReturnValue(of([
+      // A link the system switched off still explains itself; its own-invoice note is no longer current.
+      { ...billing(7), companies: [{ companyId: 101, companyTitle: 'Company 101', enabled: false, problem: ' Система выключила связь. ', separateOrdersNote: 'устарело' }] },
+      { ...billing(8), companies: [
+        { companyId: 101, companyTitle: 'Company 101', enabled: true, problem: null, separateOrdersNote: 'Заказы №5 и №6 остаются на своих счетах.' },
+        { companyId: 202, companyTitle: 'Company 202', enabled: true, problem: 'чужая компания', separateOrdersNote: 'чужая компания' }
+      ] }
+    ]));
+    page.openCompanyEdit(companyItem(101)); await settle();
+    expect(page.companyBillingProblem(101)).toBe('Система выключила связь.');
+    expect(page.companyBillingSeparateOrdersNote(101)).toBe('Заказы №5 и №6 остаются на своих счетах.');
+    expect(page.companyBillingProblem(303)).toBe('');
+    expect(page.companyBillingSeparateOrdersNote(null)).toBe('');
+  });
+
   it('isolates company and billing drafts between two manager page instances', async () => {
     api['getManagerCompanyEdit'].mockReturnValueOnce(of(company(101))).mockReturnValueOnce(of(company(202)));
     const second = TestBed.createComponent(ManagerPage).componentInstance;

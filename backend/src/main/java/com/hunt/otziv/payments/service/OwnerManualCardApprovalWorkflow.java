@@ -155,7 +155,10 @@ public class OwnerManualCardApprovalWorkflow {
             if (!hasOrderBinding(link, orderId) || link.getAmountKopecks() != route.amountKopecks() || !isOwnerApprovalEligibleRoute(link)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Маршрут оплаты изменился. Запрос владельцу не отправлен.");
             }
-            if (isBankRoute(link)
+            // By the bank link the owner is paid through the bank and the bank confirms it. A transfer past the
+            // link, to the owner's card, may be reported only where the bank profile lets the owner take card
+            // transfers; the report closes nothing until the owner confirms it.
+            if (isBankRoute(link) && !manualCardRoutePolicy.ownerCardReceiptAllowed(link)
                     && ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(link.getId()).isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплату владельцу по банковской ссылке подтверждает банк");
             }

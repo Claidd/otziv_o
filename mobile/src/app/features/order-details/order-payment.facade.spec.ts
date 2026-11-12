@@ -80,6 +80,20 @@ describe('order payment facade', () => {
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('новый счёт с номером карты по заказу #1') }));
     expect(facade.paymentRouteChanging()).toBe(false);
   });
+  it('passes the card of the owner to the window and names it by its own id', async () => {
+    const { facade, api, pickRecipient } = create(); const picker = openWindow(pickRecipient);
+    api.getManagerOrderPaymentRouteChangeContext.mockReturnValueOnce(of(bankLink()));
+    api.getManagerOrderPaymentRouteRecipients.mockReturnValueOnce(of({ ...people(), ownerCard: { name: ' Мия Р. ', remainingKopecks: 4_500_000, current: false, blockReason: '' } }));
+    api.changeManagerOrderPaymentRoute.mockReturnValue(of({ clientNotificationScheduled: true }));
+    await facade.openPaymentRouteChange();
+    const operation = facade.changePaymentRoute(facade.cardNumberTarget(facade.paymentRouteContext()!)); await settle();
+    expect(picker.request().autoHintWithOwnerCard).toContain('клиент получит карту владельца');
+    const loaded = await picker.request().loadRecipients();
+    expect(loaded.ownerCard).toEqual({ name: 'Мия Р.', remainingKopecks: 4_500_000, current: false, blockReason: null });
+    expect(await picker.request().issue({ profileId: -1 })).toEqual({ status: 'issued' });
+    expect(api.changeManagerOrderPaymentRoute).toHaveBeenCalledWith(1, { expectedPaymentLinkId: 71, target: 'EMPLOYEE_REQUISITES', confirmedUnpaid: true, expectedTargetPaymentProfileId: null, recipientProfileId: -1 });
+    picker.close({ status: 'issued' }); await operation;
+  });
   it('lets the system choose another recipient when no person is named', async () => {
     const { facade, api, pickRecipient } = create(); const picker = openWindow(pickRecipient);
     api.getManagerOrderPaymentRouteChangeContext.mockReturnValueOnce(of({ ...context(), configuredMode: 'AUTO_ROUTING', currentRoute: 'Номер карты' } as PaymentRouteChangeContext));

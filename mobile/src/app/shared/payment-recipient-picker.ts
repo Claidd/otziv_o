@@ -15,7 +15,27 @@ export interface MobilePaymentRecipientOption {
   blockReason?: string | null;
 }
 
-/** `profileId: null` lets the system choose: payment task, then the order specialist, then the manager. */
+/** In place of an employee's profile: the card of the owner. The server reads the same value. */
+export const MOBILE_OWNER_CARD_PROFILE_ID = -1;
+
+/**
+ * The owner's card as a line of the window. The server sends it only where the owner of the manager's
+ * bank profile may take card transfers at all; an owner who works through the bank only is never offered.
+ */
+export interface MobilePaymentRecipientOwnerCard {
+  name: string;
+  /** What may still be issued on the card this month. */
+  remainingKopecks: number;
+  /** The client already holds the owner's card. */
+  current: boolean;
+  /** Why the card cannot be issued for this invoice; empty when it can. */
+  blockReason?: string | null;
+}
+
+/**
+ * `profileId: null` lets the system choose: payment task, then the order specialist, then the manager,
+ * then the owner's card. `MOBILE_OWNER_CARD_PROFILE_ID` names the owner's card.
+ */
 export interface MobilePaymentRecipientChoice {
   profileId: number | null;
 }
@@ -27,6 +47,8 @@ export interface MobilePaymentRecipientTag {
 
 export interface MobilePaymentRecipientLoad {
   recipients: MobilePaymentRecipientOption[];
+  /** The owner's card, where the server offers it. */
+  ownerCard?: MobilePaymentRecipientOwnerCard | null;
   /** The amount the server counted the reserve against; left out when the page already knows it. */
   amountKopecks?: number | null;
 }
@@ -50,6 +72,8 @@ export interface MobilePaymentRecipientPickerRequest {
   heading: string;
   currentRecipient: string;
   autoHint: string;
+  /** The hint of the automatic choice once the window knows that the owner's card may be issued. */
+  autoHintWithOwnerCard?: string;
   /** Known before the people are loaded (common invoice); an order learns it together with the people. */
   amountKopecks: number | null;
   /** Rejects with an Error whose message can be shown to the manager. */
@@ -89,6 +113,40 @@ export function mobilePaymentRecipientOptions(rows: readonly WireRecipient[] | n
     current: row.current === true,
     blockReason: (row.blockReason ?? '').trim() || null
   }] : []);
+}
+
+type WireOwnerCard = {
+  name?: string | null;
+  remainingKopecks?: number | null;
+  current?: boolean | null;
+  blockReason?: string | null;
+};
+
+/** The owner's card as the window shows it; null where the server sends none. */
+export function mobilePaymentRecipientOwnerCard(row: WireOwnerCard | null | undefined): MobilePaymentRecipientOwnerCard | null {
+  return row ? {
+    name: (row.name ?? '').trim(),
+    remainingKopecks: Math.max(0, row.remainingKopecks ?? 0),
+    current: row.current === true,
+    blockReason: (row.blockReason ?? '').trim() || null
+  } : null;
+}
+
+export function mobilePaymentOwnerCardSelectable(card: MobilePaymentRecipientOwnerCard | null | undefined): boolean {
+  return !!card && !card.current && !card.blockReason;
+}
+
+export function mobilePaymentOwnerCardTag(card: MobilePaymentRecipientOwnerCard): MobilePaymentRecipientTag {
+  if (card.current) {
+    return { text: 'сейчас в счёте', tone: 'current' };
+  }
+  return card.blockReason ? { text: 'недоступен', tone: 'muted' } : { text: 'лимит вмещает', tone: 'success' };
+}
+
+/** The line under the owner: what is left of the month, or why the card cannot be issued. */
+export function mobilePaymentOwnerCardNote(card: MobilePaymentRecipientOwnerCard): string {
+  const remaining = `осталось в этом месяце ${mobilePaymentRecipientMoney(card.remainingKopecks)}`;
+  return card.blockReason ? `${card.blockReason} (${remaining})` : remaining;
 }
 
 export function mobilePaymentRecipientRelation(option: MobilePaymentRecipientOption): string {
@@ -147,24 +205,38 @@ export function mobilePaymentRecipientChosen(
   options: readonly MobilePaymentRecipientOption[],
   profileId: number | null
 ): MobilePaymentRecipientOption | null {
-  return profileId == null ? null : options.find(option => option.profileId === profileId) ?? null;
+  return profileId == null || profileId === MOBILE_OWNER_CARD_PROFILE_ID
+    ? null : options.find(option => option.profileId === profileId) ?? null;
 }
 
-/** The automatic choice is always allowed; a named person must be in the list and selectable. */
+/** The automatic choice is always allowed; a named person or the owner's card must be offered and selectable. */
 export function mobilePaymentRecipientChoiceAllowed(
   options: readonly MobilePaymentRecipientOption[],
-  profileId: number | null
+  profileId: number | null,
+  ownerCard: MobilePaymentRecipientOwnerCard | null = null
 ): boolean {
   if (profileId == null) {
     return true;
+  }
+  if (profileId === MOBILE_OWNER_CARD_PROFILE_ID) {
+    return mobilePaymentOwnerCardSelectable(ownerCard);
   }
   const option = mobilePaymentRecipientChosen(options, profileId);
   return option !== null && mobilePaymentRecipientSelectable(option);
 }
 
 /** What the button will do, said before it is pressed. */
-export function mobilePaymentRecipientConsequence(option: MobilePaymentRecipientOption | null): string {
+export function mobilePaymentRecipientConsequence(
+  option: MobilePaymentRecipientOption | null,
+  chosenOwnerCard: MobilePaymentRecipientOwnerCard | null = null
+): string {
   const unpaid = 'Нажимая кнопку, вы подтверждаете, что клиент ещё не оплатил по прежним реквизитам.';
+  if (chosenOwnerCard) {
+    const owner = chosenOwnerCard.name ? `владельца (${chosenOwnerCard.name})` : 'владельца';
+    return `Счёт будет выставлен на карту ${owner}: клиенту сразу уйдёт новый счёт с номером этой карты, `
+      + 'резерв прежнего получателя снимется, сумма займёт месячный лимит карты. '
+      + `Когда клиент переведёт, поступление подтверждает владелец. ${unpaid}`;
+  }
   if (!option) {
     return `Клиенту сразу уйдёт новый счёт с номером карты, резерв прежнего получателя снимется. ${unpaid}`;
   }
@@ -179,7 +251,16 @@ export function mobilePaymentRecipientConsequence(option: MobilePaymentRecipient
 }
 
 /** How the automatic choice works for the route the card number is issued from. */
-export function mobilePaymentRecipientAutoHint(target: string): string {
+export function mobilePaymentRecipientAutoHint(target: string, ownerCardAvailable = false): string {
+  if (ownerCardAvailable) {
+    // Where the owner's card may be issued, it comes after the employees.
+    return target === 'DIFFERENT_RECIPIENT'
+      ? 'Система выдаст номер другого получателя — платёжного задания или менеджера, если у него хватает резерва. '
+        + 'Нынешний получатель исключается. Если не подойдёт никто из сотрудников, клиент получит карту владельца: '
+        + 'её лимит на этот месяц вмещает счёт.'
+      : 'Система возьмёт платёжное задание, затем специалиста заказа, затем менеджера — первого, у кого хватает резерва. '
+        + 'Если не подойдёт никто из сотрудников, клиент получит карту владельца: её лимит на этот месяц вмещает счёт.';
+  }
   return target === 'DIFFERENT_RECIPIENT'
     ? 'Система выдаст номер другого получателя — платёжного задания или менеджера, если у него хватает резерва. '
       + 'Нынешний получатель исключается. Если не подойдёт никто, счёт не изменится.'

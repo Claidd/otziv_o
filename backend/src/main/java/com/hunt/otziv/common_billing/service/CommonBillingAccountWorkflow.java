@@ -108,7 +108,7 @@ public class CommonBillingAccountWorkflow {
         Map<Long, List<CommonBillingAccountCompany>> companies = ids.isEmpty() ? Map.of() : accountCompanyRepository.findByAccountIds(ids).stream().collect(Collectors.groupingBy(link -> link.getAccount().getId()));
         List<CommonBillingAccount> visibleAccounts = accounts.stream().filter(account -> accountVisibleToManager(account, companies.getOrDefault(account.getId(), List.of()), visibleManagerIds)).toList();
         Map<Long, CommonInvoiceSummaryResponse> currentInvoices = currentInvoiceSummaries(visibleAccounts);
-        return visibleAccounts.stream().map(account -> toAccountResponse(account, companies.getOrDefault(account.getId(), List.of()), currentInvoices.get(account.getId()))).toList();
+        return visibleAccounts.stream().map(account -> toAccountResponse(account, companies.getOrDefault(account.getId(), List.of()), currentInvoices.get(account.getId()), true)).toList();
     }
 
     @Transactional
@@ -412,11 +412,17 @@ public class CommonBillingAccountWorkflow {
             refreshInvoiceAmounts(invoice, items);
             return toInvoiceSummary(invoice, items);
         }).orElse(null);
-        return toAccountResponse(account, companyLinks, current);
+        return toAccountResponse(account, companyLinks, current, true);
     }
 
+    /** The list of all links: the problem of a company is cheap to tell, its separate orders are not looked up. */
     CommonBillingAccountResponse toAccountResponse(CommonBillingAccount account, List<CommonBillingAccountCompany> companyLinks, CommonInvoiceSummaryResponse current) {
-        return new CommonBillingAccountResponse(account.getId(), account.getName(), account.isEnabled(), account.isAutoRepeatOrders(), account.getManager() == null ? null : account.getManager().getId(), managerName(account.getManager()), account.getInvoiceCompany() == null ? null : account.getInvoiceCompany().getId(), account.getInvoiceCompany() == null ? null : account.getInvoiceCompany().getTitle(), companyLinks.stream().map(this::toCompanyResponse).toList(), current, (account.getInvoicePaymentMode() == null ? InvoicePaymentMode.AUTO_ROUTING : account.getInvoicePaymentMode()).name());
+        return toAccountResponse(account, companyLinks, current, false);
+    }
+
+    CommonBillingAccountResponse toAccountResponse(CommonBillingAccount account, List<CommonBillingAccountCompany> companyLinks, CommonInvoiceSummaryResponse current, boolean withSeparateOrders) {
+        boolean lookUpOrders = withSeparateOrders && account.isEnabled();
+        return new CommonBillingAccountResponse(account.getId(), account.getName(), account.isEnabled(), account.isAutoRepeatOrders(), account.getManager() == null ? null : account.getManager().getId(), managerName(account.getManager()), account.getInvoiceCompany() == null ? null : account.getInvoiceCompany().getId(), account.getInvoiceCompany() == null ? null : account.getInvoiceCompany().getTitle(), companyLinks.stream().map(link -> toCompanyResponse(link, lookUpOrders)).toList(), current, (account.getInvoicePaymentMode() == null ? InvoicePaymentMode.AUTO_ROUTING : account.getInvoicePaymentMode()).name());
     }
 
     Map<Long, CommonInvoiceSummaryResponse> currentInvoiceSummaries(List<CommonBillingAccount> accounts) {
@@ -555,7 +561,23 @@ public class CommonBillingAccountWorkflow {
     }
 
     CommonBillingCompanyResponse toCompanyResponse(CommonBillingAccountCompany link) {
-        return invoicePresenter.toCompanyResponse(link);
+        return toCompanyResponse(link, false);
+    }
+
+    /**
+     * What a manager has to know about the company besides its place in the link: why its orders are
+     * not collected, and (only when asked, it costs two queries a company) which unfinished orders
+     * keep their own invoices.
+     */
+    CommonBillingCompanyResponse toCompanyResponse(CommonBillingAccountCompany link, boolean withSeparateOrders) {
+        CommonBillingCompanyResponse company = invoicePresenter.toCompanyResponse(link);
+        String separateOrders = withSeparateOrders && link.isEnabled()
+                ? CommonBillingLinkNotes.separateOrders(settlementService.ordersKeepingTheirOwnInvoice(
+                        company.companyId(), CommonBillingCompanyReconciliationWorkflow.BACKFILL_STATUSES,
+                        invoiceInitialization::keepsOrderOnItsOwnInvoice))
+                : null;
+        return new CommonBillingCompanyResponse(company.companyId(), company.companyTitle(), company.enabled(),
+                CommonBillingLinkNotes.problem(link), separateOrders);
     }
 
     void ensureCommonPaymentRouteAllowsCompositionChange(CommonInvoice invoice) {

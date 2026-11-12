@@ -102,10 +102,19 @@ export interface CommonInvoiceRouteRecipient {
   blockReason?: string | null;
 }
 
+/** The owner's card in «Выдать номер карты»; absent where the owner takes money through the bank only. */
+export interface CommonInvoiceRouteOwnerCard {
+  name: string;
+  remainingKopecks: number;
+  current: boolean;
+  blockReason?: string | null;
+}
+
 export interface CommonInvoiceRouteRecipientsResponse {
   invoiceId: number;
   amountKopecks: number;
   recipients: CommonInvoiceRouteRecipient[];
+  ownerCard?: CommonInvoiceRouteOwnerCard | null;
 }
 
 /** A row of the «Вернуть заказ в счёт» window: an order of the invoice's own link that goes separately now. */

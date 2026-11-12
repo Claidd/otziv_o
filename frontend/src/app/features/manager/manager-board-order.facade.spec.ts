@@ -105,6 +105,7 @@ function createFacade(config: {
   orderPayload?: OrderEditPayload;
   openPaperInvoice?: ManagerBoardOrderFacadeDeps['openPaperInvoice'];
   routeBlockReason?: string;
+  ownerCard?: { name: string; remainingKopecks: number; current: boolean; blockReason?: string | null } | null;
 } = {}) {
   const calls: string[] = [];
   const toastMessages: string[] = [];
@@ -175,7 +176,8 @@ function createFacade(config: {
           recipients: [
             { profileId: 44, role: 'SPECIALIST', name: 'Лидия З.', orderSpecialist: true, manager: false, teamMember: true,
               workedWithClient: true, availableKopecks: 50_000, overrunKopecks: 100_000, current: false, blockReason: null }
-          ]
+          ],
+          ...(config.ownerCard === undefined ? {} : { ownerCard: config.ownerCard })
         });
       },
       changePaymentRoute: (orderId, request) => {
@@ -359,6 +361,41 @@ describe('ManagerBoardOrderFacade', () => {
     state.facade.changePaymentRoute('EMPLOYEE_REQUISITES');
     state.facade.submitRecipientChoice({ profileId: null });
     expect(state.lastPaymentRouteRequest?.recipientProfileId).toBeUndefined();
+  });
+
+  it('offers the card of the owner where the server sends it and names it by its own id', () => {
+    const state = createFacade({ ownerCard: { name: 'Мия Р.', remainingKopecks: 4_500_000, current: false, blockReason: null } });
+
+    state.facade.openOrderEdit(order({ id: 30 }));
+    state.facade.openPaymentRouteChange();
+    state.facade.changePaymentRoute('EMPLOYEE_REQUISITES');
+
+    expect(state.facade.recipientPickerOwnerCard()).toEqual(expect.objectContaining({ name: 'Мия Р.', remainingKopecks: 4_500_000 }));
+    // The automatic choice says that the card of the owner comes after the employees.
+    expect(state.facade.recipientPickerAutoHint()).toContain('клиент получит карту владельца');
+
+    state.facade.submitRecipientChoice({ profileId: -1 });
+    expect(state.lastPaymentRouteRequest?.recipientProfileId).toBe(-1);
+    expect(state.facade.recipientPicker()).toBeNull();
+    expect(state.facade.recipientPickerOwnerCard()).toBeNull();
+  });
+
+  it('keeps the old automatic hint where the owner works through the bank only or the card cannot hold the invoice', () => {
+    const bankOnly = createFacade();
+    bankOnly.facade.openOrderEdit(order({ id: 30 }));
+    bankOnly.facade.openPaymentRouteChange();
+    bankOnly.facade.changePaymentRoute('EMPLOYEE_REQUISITES');
+    expect(bankOnly.facade.recipientPickerOwnerCard()).toBeNull();
+    expect(bankOnly.facade.recipientPickerAutoHint()).toContain('Если не подойдёт никто, счёт не изменится');
+
+    const overLimit = createFacade({
+      ownerCard: { name: 'Мия Р.', remainingKopecks: 5_000, current: false, blockReason: 'лимит карты на этот месяц не вмещает счёт' }
+    });
+    overLimit.facade.openOrderEdit(order({ id: 30 }));
+    overLimit.facade.openPaymentRouteChange();
+    overLimit.facade.changePaymentRoute('EMPLOYEE_REQUISITES');
+    expect(overLimit.facade.recipientPickerOwnerCard()?.blockReason).toContain('лимит карты');
+    expect(overLimit.facade.recipientPickerAutoHint()).toContain('Если не подойдёт никто, счёт не изменится');
   });
 
   describe('the single «Счёт и акт Точки» button of the order window', () => {

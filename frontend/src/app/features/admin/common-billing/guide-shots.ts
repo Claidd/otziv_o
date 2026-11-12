@@ -4,6 +4,8 @@
  * Written by the screenshot script (infrastructure/scripts/local/guide-shots); do not edit by hand.
  */
 export const GUIDE_SHOTS = {
+  'ci-company-billing-on': [998, 305],
+  'ci-company-billing-separate': [1070, 624],
   'ci-danger': [356, 383],
   'ci-orders-return': [450, 557],
   'ci-panel-folded': [476, 529],
@@ -11,14 +13,15 @@ export const GUIDE_SHOTS = {
   'ci-paper-flow': [378, 889],
   'ci-paper-pay': [378, 200],
   'ci-paper-start': [450, 360],
+  'ci-pay-bank-window': [684, 985],
   'ci-pay-button': [378, 242],
-  'ci-pay-window': [756, 954],
+  'ci-pay-window': [756, 886],
   'ci-return-confirm': [788, 383],
   'ci-return-window': [716, 257],
-  'ci-route-bank': [378, 495],
-  'ci-route-block': [378, 495],
+  'ci-route-bank': [378, 481],
+  'ci-route-block': [378, 481],
   'ci-route-result': [404, 699],
-  'ci-route-window': [724, 873],
+  'ci-route-window': [724, 905],
   'ci-send': [450, 332],
   'ci-settings-companies': [449, 534],
   'ci-term': [450, 534],
@@ -28,15 +31,16 @@ export const GUIDE_SHOTS = {
   'op-card': [436, 440],
   'op-context': [902, 253],
   'op-invoice-copy': [364, 440],
+  'op-paid-bank-window': [684, 920],
   'op-paid-card': [364, 440],
-  'op-paid-window': [756, 1069],
+  'op-paid-window': [756, 886],
   'op-paper-button': [830, 151],
   'op-paper-window': [760, 1035],
-  'op-pick-window': [724, 873],
+  'op-pick-window': [724, 905],
   'op-unpaid-card': [364, 440]
 } as const satisfies Record<string, readonly [number, number]>;
 
 export type GuideShot = keyof typeof GUIDE_SHOTS;
 
 /** Changes with every new set of pictures, so browsers do not show a cached old one. */
-export const GUIDE_SHOTS_VERSION = '20261111-3';
+export const GUIDE_SHOTS_VERSION = '20261112-4';

@@ -40,6 +40,7 @@ import type { CommonInvoiceReturnableOrder, CommonInvoiceReturnableOrdersRespons
 import {
   mobilePaymentRecipientAutoHint,
   mobilePaymentRecipientOptions,
+  mobilePaymentRecipientOwnerCard,
   type MobilePaymentRecipientChoice,
   type MobilePaymentRecipientIssueOutcome
 } from '../shared/payment-recipient-picker';
@@ -217,11 +218,11 @@ type InvoiceAction =
                 <button type="button" (click)="runInvoiceAction('approve-review-orders')" [disabled]="!!mutating() || !canApproveReviewOrders()">Одобрить все</button>
                 @if (invoice.contractorPaymentRoute) {
                   @if (manualAttributionRequired() && canMarkInvoicePaid(invoice)) {
-                    <button type="button" (click)="runInvoiceAction('paid')" [disabled]="!!mutating()">Оплата конкретному специалисту</button>
+                    <button type="button" (click)="runInvoiceAction('paid')" [disabled]="!!mutating()">Отметить оплату переводом</button>
                   }
                   <button type="button" class="success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource(invoice)">Сверить поступление</button>
                 } @else {
-                  <button type="button" class="success" (click)="runInvoiceAction('paid')" [disabled]="!!mutating() || !canMarkInvoicePaid(invoice)">Оплачен</button>
+                  <button type="button" class="success" (click)="runInvoiceAction('paid')" [disabled]="!!mutating() || !canMarkInvoicePaid(invoice)">{{ manualAttributionRequired() && isBankPaymentRoute(invoice.paymentRouteType) ? 'Оплачен переводом' : 'Оплачен' }}</button>
                 }
                 @if (manualUnpaidAllowed()) {
                   <button type="button" class="danger" (click)="runInvoiceAction('unpaid')" [disabled]="!!mutating() || !canMarkInvoiceUnpaid(invoice)">Не оплачен</button>
@@ -952,7 +953,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return;
       }
       if (required) {
-        await this.runAttributedPayment(ticket, invoiceId, this.isBankPaymentRoute(invoice?.paymentRouteType) ? 'TBANK_FALLBACK' : 'STANDARD');
+        await this.runAttributedPayment(ticket, invoiceId, this.isBankPaymentRoute(invoice?.paymentRouteType) ? 'TBANK_ROUTE_FALLBACK' : 'STANDARD');
         return;
       }
     }
@@ -1146,11 +1147,12 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         amountKopecks: Math.max(0, (invoice.amountKopecks ?? 0) - (invoice.paidKopecks ?? 0)),
         currentRecipient: context.currentRecipient?.trim() ?? '',
         autoHint: mobilePaymentRecipientAutoHint(target),
+        autoHintWithOwnerCard: mobilePaymentRecipientAutoHint(target, true),
         signal: leave.signal,
         loadRecipients: async () => {
           try {
             const response = await firstValueFrom(this.commonBillingApi.getCommonInvoicePaymentRouteRecipients(invoiceId));
-            return { recipients: mobilePaymentRecipientOptions(response.recipients) };
+            return { recipients: mobilePaymentRecipientOptions(response.recipients), ownerCard: mobilePaymentRecipientOwnerCard(response.ownerCard) };
           } catch (error) {
             throw new Error(this.errorMessage(error, 'Не удалось загрузить сотрудников.'));
           }
