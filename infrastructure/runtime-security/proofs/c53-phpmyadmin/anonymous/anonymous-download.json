@@ -1,0 +1,78 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "phpmyadmin",
+  "commit": "7d1da276a66f56e200be10c3077a5626ba79cad6",
+  "run": "43306909429",
+  "attempt": "1",
+  "manifestSet": "c53-phpmyadmin",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c53-phpmyadmin.json",
+  "runner": "GitHub Actions 1000034518",
+  "startedAt": "2026-11-12T21:08:32.118Z",
+  "sourcePublicationSha256": "a751a8802f45acca5ce637c025881883c172878fe197da2315bd47513714ec6b",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:e6a68833d01e2a161f21565570659067bfd4a90d7af9817bac0eb82d5e6ee03d",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:72bc0c9fbbc9997bfca6cc7b837d22d98d2a48771570295f73f67b697f6eed09",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:e6a68833d01e2a161f21565570659067bfd4a90d7af9817bac0eb82d5e6ee03d",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:72bc0c9fbbc9997bfca6cc7b837d22d98d2a48771570295f73f67b697f6eed09",
+        "size": 8437
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:f8ef1e0cbc408cf6060cce1ca98b8621d580e7abe99a34fa8c381cd9620f94f9",
+        "size": 35880
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:25bba7a8d59ddaad10f0a121aaa186b9056d8df902199b47e72c2504714db5be",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:29517cbe30172dc3316ef35f3c3e5b8290b60d1fe24470b3712c5b1ce65d19ab",
+        "size": 894989
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:d8aa9ef860f87e57c047cc611e6123c71f01d827a086890482eee037d945a8f3",
+        "size": 36531
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:f8ef1e0cbc408cf6060cce1ca98b8621d580e7abe99a34fa8c381cd9620f94f9",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "7d1da276a66f56e200be10c3077a5626ba79cad6",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "phpmyadmin",
+    "com.otziv.security.brotli-refresh": "C40: official Alpine3.24 brotli-libs1.2.1-r0; C39 PHP/iconv/application/config and unrelated packages unchanged",
+    "com.otziv.security.c50": "C50: official musl security package; accepted application and configuration bytes unchanged",
+    "com.otziv.security.c53": "C53: official apache2 security package; accepted application and configuration bytes unchanged",
+    "com.otziv.security.curl-refresh": "C41: official Alpine3.24 curl/libcurl8.23.0-r0; C40 PHP/iconv/application/config and all other packages unchanged",
+    "com.otziv.security.expat-refresh": "C47: official Alpine3.24 libexpat2.10.0-r0; C41 server/application/config and unrelated packages unchanged",
+    "com.otziv.security.php-refresh": "C39: PHP8.3.36-r0; version-matched official iconv with GNU libiconv1.18; C32 application/config/non-PHP runtime preserved",
+    "com.otziv.security.scope": "Exact C7 PMA5.2.3 Composer tree; signed Alpine3.24 PHP83/Apache; unmodified PHP8.3.35 iconv extension with GNU libiconv1.18; community refresh required",
+    "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; official symfony/expression-language v5.4.54 Parser.php and composer.json; C47 server/application/config and unrelated packages unchanged"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-12T21:08:43.044Z"
+}

@@ -41,3 +41,6 @@ The recipe was built locally and scanned with
 build log shows the single upgrade `apache2 (2.4.69-r0 -> 2.4.71-r0)`, `Syntax OK`
 and `Server version: Apache/2.4.71`. Release through
 `deploy.ps1 -ImageTransport Direct` follows successful CI for the exact merged main.
+
+GitHub Actions run [43306909429](https://github.com/Claidd/otziv_o/actions/runs/43306909429) published and independently pulled
+`ghcr.io/claidd/otziv-security@sha256:e6a68833d01e2a161f21565570659067bfd4a90d7af9817bac0eb82d5e6ee03d`. The production and local db-admin profiles use this digest.
