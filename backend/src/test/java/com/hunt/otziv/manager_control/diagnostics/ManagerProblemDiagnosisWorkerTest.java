@@ -154,6 +154,25 @@ class ManagerProblemDiagnosisWorkerTest {
         verify(collector).scan(100, 5);
     }
 
+    @Test
+    void everyScanEndsTheJobsOfResolvedProblemsEvenWhenTheCardScanIsUnavailable() {
+        when(collector.scanCurrent(0, 20)).thenThrow(new IllegalStateException("database is busy"));
+        worker.scan();
+        verify(store).retireUnclaimable();
+
+        // A failed cleanup is only postponed to the next pass: it must not stop the scheduler.
+        when(store.retireUnclaimable()).thenThrow(new IllegalStateException("database is busy"));
+        worker.scan();
+        verify(store, times(2)).retireUnclaimable();
+    }
+
+    @Test
+    void switchedOffDiagnosticsLeaveTheQueueAlone() {
+        when(diagnostics.mode()).thenReturn("OFF");
+        worker.scan();
+        verify(store, never()).retireUnclaimable();
+    }
+
     private static ProblemDiagnosticModel.Result result(String text, int input, int output) {
         return new ProblemDiagnosticModel.Result(text, "deepseek-flash", input, output, "");
     }

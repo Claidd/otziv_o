@@ -162,6 +162,25 @@ public class ManagerProblemDiagnosisStore {
                 DiagnosticRedactor.redact(error).substring(0, Math.min(DiagnosticRedactor.redact(error).length(), 500)), job.caseId(), job.version(), job.leaseToken());
     }
 
+    /**
+     * Ends the jobs the worker will never take. {@link #candidates} skips a closed case and a case
+     * whose card is already resolved, so such a job would stay «в очереди» or «на повторе» for ever
+     * and its card would keep promising an analysis. The snapshot of facts stays as it is; a new
+     * snapshot of a reopened problem is queued by {@link #capture} as usual.
+     */
+    public int retireUnclaimable() {
+        LocalDateTime now = LocalDateTime.now(); // Same clock as claim(): an unexpired lease still belongs to its worker.
+        return jdbc.update("""
+                UPDATE manager_problem_evidence_versions v
+                JOIN manager_problem_cases c ON c.case_id=v.case_id AND c.current_version=v.evidence_version
+                SET v.status='NOT_NEEDED',v.lease_token=NULL,v.lease_until=NULL
+                WHERE (v.status IN ('QUEUED','RETRY','UNAVAILABLE') OR (v.status='RUNNING' AND v.lease_until<?))
+                  AND (c.closed=TRUE
+                    OR EXISTS (SELECT 1 FROM manager_daily_control_concrete_items resolved_source
+                               WHERE resolved_source.control_entity_id=c.source_task_id AND resolved_source.item_status='RESOLVED'))
+                """, now);
+    }
+
     Stored read(long id, long version) {
         return jdbc.queryForObject("""
                 SELECT v.*,c.manager_id,CASE WHEN c.current_version=v.evidence_version THEN c.updated_at ELSE v.observed_at END AS verified_at

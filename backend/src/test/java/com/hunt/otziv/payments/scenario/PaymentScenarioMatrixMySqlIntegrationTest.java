@@ -1010,6 +1010,51 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("17б «Не оплачено» → выполнена плохая задача → получатель подобран снова без менеджера, клиенту ушёл счёт с новой суммой")
+    void s17b_badReviewAfterUnpaidGetsARecipientAgainAndTheClientTheNewAmount() {
+        Person anna = world.specialist("Анна Специалист");
+        world.payable(anna, ContractorRole.SPECIALIST, 10_000_00);
+        long order = world.order(world.company("Кафе"), anna, 3_000_00, STATUS_PUBLISHED);
+        CommonInvoiceSeed invoice = world.commonInvoice("Связь", order);
+        issue(invoice);
+        Object firstReserve = invoice(invoice).get("contractor_allocation_id");
+        assertThat(reserve(firstReserve)).containsEntry("status", "RESERVED");
+
+        // The client did not pay in time: «Не оплачено» releases the reserve of the first recipient.
+        billing.markUnpaid(invoice.invoiceId());
+        assertThat(invoice(invoice)).containsEntry("status", "UNPAID");
+        assertThat(reserve(firstReserve)).containsEntry("status", "RELEASED_UNPAID");
+        clientMessages.clear();
+
+        // A specialist completed a bad review task and the order costs 200 ₽ more. The task itself belongs to
+        // bad_reviews and has its own tests: its effect on the order amount is seeded, the rest is production code.
+        jdbc.update("UPDATE orders SET order_sum = order_sum + 200 WHERE order_id = ?", order);
+        SecurityContextHolder.clearContext();
+        // The completion of a bad review calls the recalculation inside its own transaction.
+        var taskCompletion = new org.springframework.transaction.support.TransactionTemplate(
+                context.getBean(org.springframework.transaction.PlatformTransactionManager.class));
+        Boolean recalculated = taskCompletion.execute(status -> billing.repriceBadReviewInvoice(order, 1L));
+        assertThat(recalculated).isTrue();
+        // The after-commit send and its safety net, the five-minute scheduler; then the delivery worker.
+        billing.sendUnsentActionInvoices(20);
+        deliverQueuedClientMessages();
+
+        // The released attempt is settled as unpaid, so the cycle picks a recipient itself — no 409 that
+        // would keep the invoice with the new amount from the client until a person interferes.
+        Map<String, Object> repriced = invoice(invoice);
+        assertThat(repriced).containsEntry("status", "UNPAID");
+        assertThat(num(repriced, "amount_kopecks")).isEqualTo(3_200_00);
+        assertThat(jdbc.queryForObject("SELECT bad_review_notice_pending FROM common_invoices WHERE invoice_id = ?",
+                Boolean.class, invoice.invoiceId())).isFalse();
+        assertThat(reserves(invoice)).extracting(row -> row.get("status")).containsExactly("RELEASED_UNPAID", "RESERVED");
+        Map<String, Object> secondReserve = reserve(repriced.get("contractor_allocation_id"));
+        assertThat(num(secondReserve, "attempt_no")).isEqualTo(2);
+        assertThat(num(secondReserve, "amount_kopecks")).isEqualTo(3_200_00);
+        assertThat(num(secondReserve, "recipient_profile_id")).isEqualTo(anna.specialistProfileId);
+        assertThat(clientMessages).hasSize(1);
+    }
+
     // ================================================================================================
     // «Выдать ссылку банка»
     // ================================================================================================

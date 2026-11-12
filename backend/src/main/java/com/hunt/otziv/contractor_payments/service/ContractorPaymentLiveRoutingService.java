@@ -935,7 +935,7 @@ public class ContractorPaymentLiveRoutingService {
         );
         if (latest.isPresent()) {
             if (retryable(latest.get())) {
-                if (!explicitReplacement) {
+                if (!explicitReplacement && !closedUnpaidInBadReviewCycle(invoice, latest.get())) {
                     throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
                             "Повторный маршрут общего счета требует явной сверки старой попытки"
@@ -1055,6 +1055,22 @@ public class ContractorPaymentLiveRoutingService {
         );
         allocation.setCurrentManagerId(manager == null ? null : manager.getId());
         return save(allocation, decision);
+    }
+
+    /**
+     * The bad-review cycle of an invoice in «Не оплачено». The system closed the previous attempt
+     * itself — when the invoice moved to «Не оплачено» or when its amount was recalculated after a
+     * bad review — and that attempt holds neither a confirmed payment nor a client's report. The
+     * invoice with the new amount then gets its recipient automatically, as an order's invoice does.
+     * An expired or returned attempt, and any attempt outside this cycle, still needs a person.
+     */
+    private boolean closedUnpaidInBadReviewCycle(CommonInvoice invoice, ContractorPaymentAllocation previous) {
+        return invoice.isRepricedUnpaid()
+                && (previous.getStatus() == ContractorAllocationStatus.RELEASED_UNPAID
+                || previous.getStatus() == ContractorAllocationStatus.CANCELED)
+                && Objects.equals(previous.getCommonInvoiceId(), invoice.getId())
+                && previous.getConfirmedKopecks() == 0
+                && previous.getClientReportedAt() == null;
     }
 
     private enum CommonInvoiceRoutePreference {

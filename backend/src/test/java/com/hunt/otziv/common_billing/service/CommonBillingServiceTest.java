@@ -8470,6 +8470,41 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void repricedInvoiceWhoseNewAmountDoesNotReachTheClientForADayNeedsTheManager() {
+        CommonInvoice unpaid = unpaidWithPositions(unpaidPosition(101L, true));
+        unpaid.setBadReviewPayable(true);
+        unpaid.setBadReviewNoticePending(true);
+        when(badReviewTaskService.getSummaryByOrderIds(List.of(101L))).thenReturn(Map.of(101L, tasks(11, 1)));
+        when(badReviewTaskService.countOverdueTasks(eq(List.of(101L)), any())).thenReturn(0L);
+
+        // The scheduler is still inside its day of retries.
+        unpaid.setUpdatedAt(LocalDateTime.now().minusHours(3));
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).isEmpty());
+
+        unpaid.setUpdatedAt(LocalDateTime.now().minusHours(30));
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).orElseThrow().contains("не уходит клиенту больше суток"));
+
+        // A queued message is on its way: the queue reports its own outcome.
+        unpaid.setPaymentMessageOperationId("bad-review-invoice:10:1");
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).isEmpty());
+
+        // The notice was delivered: the cycle runs on.
+        unpaid.setPaymentMessageOperationId(null);
+        unpaid.setBadReviewNoticePending(false);
+        assertTrue(archiveWorkflow().attention(10L, LocalDateTime.now()).isEmpty());
+    }
+
+    @Test
+    void backgroundFailureKeepsARefusalTextAndHidesOtherMessagesInTheLog() {
+        assertEquals("409 Повторный маршрут общего счета требует явной сверки старой попытки",
+                CommonInvoiceDeliveryService.failureReason(new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Повторный маршрут общего счета требует явной сверки старой попытки")));
+        assertEquals("423", CommonInvoiceDeliveryService.failureReason(new ResponseStatusException(HttpStatus.LOCKED)));
+        assertEquals("IllegalStateException",
+                CommonInvoiceDeliveryService.failureReason(new IllegalStateException("Клиент Иванов +79990000000")));
+    }
+
+    @Test
     void overdueBadReviewsBringTheUnpaidInvoiceBack() {
         unpaidWithPositions(unpaidPosition(101L, true));
         when(badReviewTaskService.getSummaryByOrderIds(List.of(101L))).thenReturn(Map.of(101L, tasks(11, 1)));

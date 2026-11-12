@@ -103,6 +103,10 @@ public class ManagerProblemDiagnosisWorker {
                 catch (RuntimeException e) { log.warn("Problem snapshot scan deferred sourceTaskId={} reason={}", id, e.getClass().getSimpleName(), e); }
             });
         } catch (RuntimeException e) { log.warn("Problem scan unavailable: {}", e.getClass().getSimpleName(), e); }
+        try {
+            int retired = store.retireUnclaimable();
+            if (retired > 0) log.info("Problem diagnosis jobs closed without analysis: {} (the problem was resolved or closed first)", retired);
+        } catch (RuntimeException e) { log.warn("Problem diagnosis queue cleanup deferred: {}", e.getClass().getSimpleName(), e); }
     }
 
     @Scheduled(fixedDelayString = "${manager-control.diagnostics.worker-delay-ms:15000}", initialDelayString = "${manager-control.diagnostics.initial-delay-ms:45000}", scheduler = "managerProblemDiagnosisScheduler")
