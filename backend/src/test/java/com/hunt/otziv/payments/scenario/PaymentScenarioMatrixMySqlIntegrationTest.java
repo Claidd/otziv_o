@@ -1193,7 +1193,7 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
         world.payable(anna, ContractorRole.SPECIALIST, 10_000_00);
         long company = world.company("Школа");
         long invoicedOrder = world.order(company, anna, 1_200_00, STATUS_PUBLISHED);
-        long publishedOrder = world.order(company, anna, 1_200_00, STATUS_PUBLISHED);
+        long publishedOrder = world.order(company, anna, 1_200_00, STATUS_INVOICED);
         long orderInWork = world.order(company, anna, 1_200_00, "Публикация");
 
         // The client already holds a card number for the first order.
@@ -1223,6 +1223,8 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
         assertThat(jdbc.queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id = ? ORDER BY order_id", Long.class, invoiceId))
                 .containsExactly(publishedOrder, orderInWork);
         assertThat(jdbc.queryForObject("SELECT status FROM common_invoices WHERE invoice_id = ?", String.class, invoiceId)).isEqualTo("COLLECTING");
+        assertThat(orderStatus(publishedOrder)).isEqualTo("Ожидает общего счета");
+        assertThat(orderStatus(orderInWork)).isEqualTo("Публикация");
         // The order with the card number keeps its invoice and its reserve untouched.
         assertThat(link(num(ownInvoice, "id"))).containsEntry("status", "WAITING_MANUAL_PAYMENT");
         assertThat(reserve(ownReserve)).containsEntry("status", "RESERVED");
@@ -1245,6 +1247,7 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
         login(world.manager);
         assertThat(billing.accountsForCompany(company).getFirst().companies().getFirst().separateOrdersNote()).isNull();
         billing.returnOrder(invoiceId, invoicedOrder);
+        assertThat(orderStatus(invoicedOrder)).isEqualTo("Ожидает общего счета");
         assertThat(jdbc.queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id = ? ORDER BY order_id", Long.class, invoiceId))
                 .containsExactly(invoicedOrder, publishedOrder, orderInWork);
         assertThat(clientMessages).isEmpty();

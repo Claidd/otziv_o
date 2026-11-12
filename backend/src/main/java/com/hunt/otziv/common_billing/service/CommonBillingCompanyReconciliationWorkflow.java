@@ -327,7 +327,7 @@ public class CommonBillingCompanyReconciliationWorkflow {
                 throw invoiceMembershipChanged("заказ " + orderId + " перестал подходить для автопривязки");
             }
             CommonInvoiceOrder item = attachOrderWithoutInvoiceRefresh(targetInvoice, lockedOrder);
-            if (markBackfilledOrderReadyIfPublished(item)) {
+            if (item.isReady()) {
                 ready++;
             }
         }
@@ -335,6 +335,7 @@ public class CommonBillingCompanyReconciliationWorkflow {
         List<CommonInvoiceOrder> targetItems = invoiceOrderRepository.findByInvoiceIdWithOrders(targetInvoice.getId());
         recalculateInvoice(targetInvoice, targetItems);
         promoteCollectingInvoiceToReadyIfPossible(targetInvoice, targetItems);
+        invoiceMembershipWorkflow.alignAttachedOrderStatuses(targetInvoice, targetItems);
         publicationBlockerService.reconcileInvoice(targetInvoice.getId());
         for (CommonInvoice sourceInvoice : sourceInvoices) {
             List<CommonInvoiceOrder> remainingItems = invoiceOrderRepository.findByInvoiceIdWithOrders(sourceInvoice.getId());
@@ -350,6 +351,7 @@ public class CommonBillingCompanyReconciliationWorkflow {
             }
             recalculateInvoice(sourceInvoice, remainingItems);
             promoteCollectingInvoiceToReadyIfPossible(sourceInvoice, remainingItems);
+            invoiceMembershipWorkflow.alignAttachedOrderStatuses(sourceInvoice, remainingItems);
             publicationBlockerService.reconcileInvoice(sourceInvoice.getId());
         }
         clearCompanyReconcileState(reconcileLink);
@@ -480,22 +482,6 @@ public class CommonBillingCompanyReconciliationWorkflow {
         invoiceMembershipWorkflow.consumeVerifiedManualRouteAfterAttach(invoice, paymentLinksByOrder);
     }
 
-    boolean markBackfilledOrderReadyIfPublished(CommonInvoiceOrder item) {
-        Order order = item.getOrder();
-        String status = statusTitle(order);
-        if (!READY_ON_ATTACH_STATUSES.contains(status)) {
-            return false;
-        }
-        Long payable = payableKopecksOrMarkAttention(item.getInvoice(), order);
-        if (payable == null) {
-            return false;
-        }
-        item.setReady(true);
-        item.setAmountKopecks(payable);
-        invoiceOrderRepository.save(item);
-        return true;
-    }
-
     CommonInvoice normalizeAttachableInvoices(CommonBillingAccount account, List<CommonInvoice> invoices) {
         return invoiceMembershipWorkflow.normalizeAttachableInvoices(account, invoices);
     }
@@ -514,10 +500,6 @@ public class CommonBillingCompanyReconciliationWorkflow {
 
     void recalculateInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         settlementService.recalculateInvoice(invoice, items);
-    }
-
-    Long payableKopecksOrMarkAttention(CommonInvoice invoice, Order order) {
-        return invoiceMembershipWorkflow.payableKopecksOrMarkAttention(invoice, order);
     }
 
     boolean hasFrozenCommonPaymentRoute(CommonInvoice invoice) {

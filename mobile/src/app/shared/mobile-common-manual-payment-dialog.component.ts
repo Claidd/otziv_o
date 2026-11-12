@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { CommonBillingApi } from '../core/common-billing.api';
+import { AuthService } from '../core/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, Input, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -71,6 +72,7 @@ export function mobileCommonPaymentRublesToKopecks(raw: string): number | null {
 })
 export class MobileCommonManualPaymentDialogComponent implements OnInit {
   private readonly commonBillingApi = inject(CommonBillingApi);
+  private readonly auth = inject(AuthService);
   @Input({ required: true }) invoiceId!: number;
   @Input() mode: CommonManualPaymentMode = 'STANDARD';
 
@@ -90,7 +92,7 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
   readonly isTaskRecipient = mobileIsTaskRecipient;
   readonly recipientEffect = mobileTaskAwareRecipientEffect;
 
-  readonly title = computed(() => this.mode === 'TBANK_FALLBACK'
+  readonly title = computed(() => this.mode !== 'STANDARD'
     ? 'Оплата переводом вместо банковской ссылки'
     : 'Фактические получатели оплаты');
   readonly totalKopecks = computed(() => {
@@ -114,8 +116,10 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
   });
   readonly canSubmit = computed(() => Boolean(
     this.options()
+      && !this.options()!.ownerReport
       && this.options()!.remainingKopecks > 0
       && this.rows().length
+      && this.rows().every(row => this.candidate(row.recipientKey))
       && this.totalKopecks() === this.options()!.remainingKopecks
       && this.reason().trim()
       && this.paymentReceived()
@@ -123,6 +127,10 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
       && !this.loading()
       && !this.saving()
   ));
+
+  readonly ownerOffered = computed(() => this.options()?.candidates.some(person => person.key === 'OWNER'));
+  readonly ownerNeedsApproval = computed(() => this.rows().some(row => row.recipientKey === 'OWNER')
+    && !this.auth.hasAnyRealmRole(['OWNER', 'ADMIN']));
 
   constructor(private readonly modalController: ModalController
   ) {}
@@ -161,7 +169,8 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
       const options = await firstValueFrom(this.commonBillingApi.getCommonManualPaymentOptions(this.invoiceId));
       const normalized = {
         ...options,
-        candidates: options.candidates ?? [],
+        candidates: (options.candidates ?? []).map(person => this.mode === 'TBANK_ROUTE_FALLBACK'
+          ? { ...person, originalRecipient: false } : person),
         history: options.history ?? []
       };
       this.options.set(normalized);
@@ -171,7 +180,12 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
         preserveDraft ? draftReceiptUrl : '',
         () => this.newKey()
       );
-      this.rows.set(refreshedDraft.rows);
+      const original = normalized.candidates.filter(person => person.originalRecipient);
+      const initial = original.find(person => person.key === normalized.defaultRecipientKey)
+        ?? (original.length === 1 ? original[0] : undefined);
+      this.rows.set(refreshedDraft.rows.map(row => ({ ...row,
+        recipientKey: !preserveDraft && this.mode === 'STANDARD' ? initial?.key ?? '' : ''
+      })));
       this.reason.set(refreshedDraft.reason);
       this.receiptUrl.set(refreshedDraft.receiptUrl);
       this.paymentReceived.set(refreshedDraft.paymentReceived);

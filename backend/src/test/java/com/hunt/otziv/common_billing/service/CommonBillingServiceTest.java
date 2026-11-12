@@ -3592,6 +3592,7 @@ class CommonBillingServiceTest {
         when(orderAggregateMutationLockService.lock(100L)).thenReturn(member);
         when(orderAggregateMutationLockService.lock(101L)).thenReturn(foreign);
         when(badReviewTaskService.getPayableSum(foreign)).thenReturn(BigDecimal.valueOf(1000));
+        when(orderStatusService.getOrderStatusByTitle("Ожидает общего счета")).thenReturn(status("Ожидает общего счета"));
 
         ResponseStatusException refusal = assertThrows(ResponseStatusException.class, () -> service.returnOrder(10L, 101L));
 
