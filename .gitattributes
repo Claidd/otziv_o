@@ -196,6 +196,10 @@ infrastructure/runtime-security/builds/c50-*/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c50-*.json text eol=lf
 infrastructure/runtime-security/adjudications/grafana-tempo-c50/** -text
 
+# C53 phpMyAdmin apache2 recipe and publication manifest hashes must survive Windows checkouts unchanged.
+infrastructure/runtime-security/builds/c53-*/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c53-*.json text eol=lf
+
 # C52 nginx libxslt recipe and publication manifest hashes must survive Windows checkouts unchanged.
 infrastructure/runtime-security/builds/c52-*/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c52-*.json text eol=lf
