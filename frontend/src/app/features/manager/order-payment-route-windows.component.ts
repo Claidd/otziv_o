@@ -5,8 +5,9 @@ import type { ManagerBoardOrderFacade } from './manager-board-order.facade';
 import { ORDER_PAYMENT_GUIDE } from './order-payment-guide';
 
 /**
- * Windows that belong to the «Способ оплаты» block of the order editor: the recipient choice for
- * «Выдать номер карты» and the manual. Every page that shows the order editor renders this once.
+ * Windows that belong to the payment of an ordinary order: the recipient choice for «Выдать номер карты»
+ * of the «Способ оплаты» block and the manual «Счёт и оплата заказа». Every page that shows the order
+ * editor renders this once.
  */
 @Component({
   selector: 'app-order-payment-route-windows',
@@ -31,8 +32,9 @@ import { ORDER_PAYMENT_GUIDE } from './order-payment-guide';
     @if (guideOpen) {
       <app-common-invoice-guide
         [sections]="guide"
-        heading="Способ оплаты заказа"
-        intro="Как сменить способ оплаты, выбрать получателя и что при этом происходит с резервами."
+        [section]="guideSection"
+        heading="Счёт и оплата заказа"
+        intro="Как заказ получает счёт, как отметить оплату и сменить получателя, что делать, если клиент не платит."
         (closed)="guideClosed.emit()"
       />
     }
@@ -41,6 +43,8 @@ import { ORDER_PAYMENT_GUIDE } from './order-payment-guide';
 export class OrderPaymentRouteWindowsComponent {
   @Input({ required: true }) facade!: ManagerBoardOrderFacade;
   @Input() guideOpen = false;
+  /** Section shown first: «Способ оплаты» opens its own part, the orders board opens the beginning. */
+  @Input() guideSection: 'overview' | 'route' = 'route';
   @Output() readonly guideClosed = new EventEmitter<void>();
 
   readonly guide = ORDER_PAYMENT_GUIDE;

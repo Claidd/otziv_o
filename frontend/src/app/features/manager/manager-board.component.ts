@@ -275,6 +275,7 @@ export class ManagerBoardComponent implements OnDestroy {
   /** The order editor's own windows: recipient choice for «Выдать номер карты» and the manual. */
   readonly orderPaymentFacade = this.orderFacade;
   readonly orderPaymentGuideOpen = signal(false);
+  readonly orderPaymentGuideSection = signal<'overview' | 'route'>('overview');
   readonly paymentRouteContextLoading = this.orderFacade.paymentRouteContextLoading;
   readonly paymentRouteChanging = this.orderFacade.paymentRouteChanging;
   readonly createOrderPayload = this.orderFacade.createOrderPayload;
@@ -1042,6 +1043,12 @@ export class ManagerBoardComponent implements OnDestroy {
     this.orderFacade.openPaymentRouteChange();
   }
   openOrderPaperInvoice(): void {this.orderFacade.openPaperInvoice();}
+
+  /** The manual «Счёт и оплата заказа»: from the toolbar it opens at the start, from «Способ оплаты» at its section. */
+  openOrderPaymentGuide(section: 'overview' | 'route'): void {
+    this.orderPaymentGuideSection.set(section);
+    this.orderPaymentGuideOpen.set(true);
+  }
 
   closePaymentRouteChange(): void {
     this.orderFacade.closePaymentRouteChange();

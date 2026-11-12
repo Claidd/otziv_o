@@ -65,6 +65,11 @@
 
         <div class="quick-links">
           <button type="button" (click)="openManualCompanyCreate()">Новая компания</button>
+          <button type="button" class="quick-links-guide" (click)="openOrderPaymentGuide('overview')"
+            title="Счёт и оплата заказа: по шагам, со снимками экрана">
+            <span class="material-icons-sharp" aria-hidden="true">menu_book</span>
+            Инструкция
+          </button>
           <a routerLink="/manager/archive">Архив</a>
           <a routerLink="/admin/dictionaries">Категории</a>
           <a [routerLink]="workersRoute">Специалисты</a>
@@ -392,7 +397,7 @@
       (paymentRouteChangeOpened)="openPaymentRouteChange()"
       (paymentRouteChangeClosed)="closePaymentRouteChange()"
       (paymentRouteChanged)="changePaymentRoute($event)"
-      (paymentGuideOpened)="orderPaymentGuideOpen.set(true)"
+      (paymentGuideOpened)="openOrderPaymentGuide('route')"
       (paperInvoiceIssued)="markPaperInvoiceIssued()"
       (paperInvoiceOpened)="openOrderPaperInvoice()"
     />
@@ -400,6 +405,7 @@
   <app-order-payment-route-windows
     [facade]="orderPaymentFacade"
     [guideOpen]="orderPaymentGuideOpen()"
+    [guideSection]="orderPaymentGuideSection()"
     (guideClosed)="orderPaymentGuideOpen.set(false)"
   />
 

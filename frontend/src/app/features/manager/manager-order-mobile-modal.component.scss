@@ -1,3 +1,5 @@
+@use '../../shared/plain-modal' as plain;
+
 :host {
   display: contents;
 }
@@ -313,5 +315,186 @@
 
   :host :is(.order-create-modal, .order-edit-modal) .lead-edit-actions-group--danger {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ---- The order editor in the shared look of the editors (shared/plain-modal.scss) ----
+   Only a window marked lead-edit-modal--plain: the order creation window and the specialist's editor
+   share this stylesheet and keep their own look. */
+:host {
+  @include plain.tokens;
+}
+
+:host-context(body.otziv-dark-theme) {
+  @include plain.dark-tokens;
+}
+
+:host .lead-edit-backdrop:has(> .lead-edit-modal--plain) {
+  background: rgba(12, 16, 22, 0.62);
+  backdrop-filter: none;
+}
+
+:host .order-edit-modal.lead-edit-modal--plain.lead-edit-modal--plain {
+  @include plain.skin;
+  /* The head band runs from edge to edge, as in the company editor. */
+  padding: 0;
+
+  .lead-edit-head {
+    margin: 0;
+    padding: 1rem 1.15rem 0.85rem;
+  }
+
+  /* The same icon tile and title block as in the company editor; «Удалить заказ» stands beside the close button. */
+  .lead-edit-head > div {
+    display: grid;
+    grid-template-columns: 2.4rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: 0.7rem;
+    order: 1;
+  }
+
+  .lead-edit-head > div::before {
+    @include plain.icon-tile;
+    content: 'receipt_long';
+    grid-row: 1 / span 2;
+  }
+
+  .lead-edit-head small,
+  .lead-edit-head h2 {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .order-delete-action {
+    @include plain.button;
+    @include plain.button-danger;
+    order: 2;
+    width: auto;
+    min-width: 0;
+    height: 2.1rem;
+    min-height: 2.1rem;
+    gap: 0.35rem;
+    padding: 0 0.75rem;
+    font-size: 0.78rem;
+  }
+
+  .order-delete-label {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  .lead-edit-close {
+    order: 3;
+  }
+
+  > .error,
+  > .empty {
+    margin: 0.9rem 1.15rem 0;
+  }
+
+  .lead-edit-form {
+    padding: 0.9rem 1.15rem 1.15rem;
+  }
+
+  .lead-edit-grid {
+    scrollbar-width: thin;
+    scrollbar-color: var(--plain-control-border) transparent;
+  }
+
+  .lead-edit-actions {
+    background: var(--plain-surface);
+  }
+
+  .worker-transfer-option span {
+    color: var(--plain-text);
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  .payment-route-change {
+    @include plain.block;
+    gap: 0.6rem;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .payment-route-change__head {
+    gap: 0.6rem;
+  }
+
+  .payment-route-change__icon {
+    @include plain.icon-chip;
+  }
+
+  .payment-route-change strong {
+    color: var(--plain-text);
+    font-size: 0.88rem;
+    font-weight: 800;
+  }
+
+  .payment-route-change small,
+  .payment-route-change p {
+    color: var(--plain-muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  .payment-route-change p strong {
+    font-size: inherit;
+  }
+
+  /* Two ways of payment stand side by side; there is no third button to push them apart. */
+  .payment-route-change__options {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.5rem;
+  }
+
+  .payment-route-change__warning {
+    border: 1px solid var(--plain-warning-border);
+    border-radius: 10px;
+    padding: 0.55rem 0.7rem;
+    color: var(--plain-warning);
+    background: var(--plain-warning-soft);
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
+  .payment-route-change__close {
+    @include plain.button;
+    min-height: 2.1rem;
+    padding: 0 0.9rem;
+    font-size: 0.78rem;
+  }
+}
+
+/* On a phone the editor fills the screen: its own geometry stays, the look comes from the skin. */
+@media (max-width: 860px) {
+  :host .order-edit-modal.lead-edit-modal--plain.lead-edit-modal--plain {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+
+    /* The head reads as in the company editor: the tile and the title on the left, the round buttons on the right. */
+    .lead-edit-head {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      min-height: 0;
+      padding: calc(0.9rem + env(safe-area-inset-top)) 1rem 0.8rem;
+    }
+
+    .lead-edit-head > div {
+      grid-column: 1;
+      text-align: left;
+    }
+
+    .lead-edit-head > .order-delete-action {
+      grid-column: 2;
+      width: 2.1rem;
+      border-radius: 999px;
+      padding: 0;
+    }
+
+    .lead-edit-head > .lead-edit-close {
+      grid-column: 3;
+    }
   }
 }

@@ -878,3 +878,13 @@ select {
   color: #fff;
   border-color: #e84932;
 }
+
+.quick-links .quick-links-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.quick-links .quick-links-guide .material-icons-sharp {
+  font-size: 1.05em;
+}

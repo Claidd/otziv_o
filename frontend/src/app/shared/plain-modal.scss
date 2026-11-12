@@ -1,0 +1,370 @@
+// One look for the editors built on .lead-edit-modal and for the payment windows of an order.
+// Its base is the «Выдать номер карты» window (payment-recipient-picker.component.ts): the page font,
+// the same palette, fields and buttons. On top of it come the colours of the site itself: the brand
+// gradient (--otziv-action-fill) for the head stripe, icon tiles, number chips and «Сохранить», and the
+// soft surface gradients (--otziv-surface-gradient-*) for the head and the blocks.
+//
+// A component puts `tokens` on its host, `dark-tokens` under the dark theme and includes `skin` under
+// its own modal selector. That selector has to outweigh the global .lead-edit-* and .admin-layout button
+// rules of styles.scss, so it repeats the modifier class: `.lead-edit-modal--plain.lead-edit-modal--plain`.
+
+@mixin tokens {
+  --plain-surface: #ffffff;
+  --plain-soft: #f5f7fa;
+  --plain-border: #e3e8ef;
+  --plain-control-border: #d5dde7;
+  --plain-text: #1f2430;
+  --plain-muted: #67758a;
+  --plain-accent: #a93422;
+  --plain-accent-soft: #fff2ed;
+  --plain-accent-border: #e4a493;
+  --plain-success: #126650;
+  --plain-success-soft: #e8f7f2;
+  --plain-success-border: #a7d9ca;
+  --plain-warning: #805600;
+  --plain-warning-soft: #fff6df;
+  --plain-warning-border: #e4c36e;
+  --plain-danger: #a62b48;
+  --plain-danger-soft: #fff0f3;
+  --plain-danger-border: #e7a5b5;
+  --plain-disabled-text: #929ba8;
+  --plain-brand-shadow: rgba(239, 69, 31, 0.26);
+}
+
+@mixin dark-tokens {
+  --plain-surface: #22272b;
+  --plain-soft: #2a3137;
+  --plain-border: #3b444c;
+  --plain-control-border: #46515a;
+  --plain-text: #f2f5f8;
+  --plain-muted: #aeb8c3;
+  --plain-accent: #ffad95;
+  --plain-accent-soft: #3b2a25;
+  --plain-accent-border: #765044;
+  --plain-success: #79d8c2;
+  --plain-success-soft: #203a34;
+  --plain-success-border: #386c61;
+  --plain-warning: #f0cf83;
+  --plain-warning-soft: #3a3221;
+  --plain-warning-border: #6b592f;
+  --plain-danger: #ff9ab6;
+  --plain-danger-soft: #402630;
+  --plain-danger-border: #754354;
+  --plain-disabled-text: #707b85;
+  --plain-brand-shadow: rgba(0, 0, 0, 0.4);
+}
+
+/// A neutral button: a white surface; the border, the text and the icon take the brand colour on hover.
+@mixin button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  border: 1px solid var(--plain-control-border);
+  border-radius: 12px;
+  padding: 0 1.1rem;
+  color: var(--plain-text);
+  background: var(--plain-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  opacity: 1;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+
+  .material-icons-sharp {
+    color: var(--otziv-action);
+    font-size: 1.1rem;
+  }
+
+  &:not(:disabled):hover {
+    border-color: var(--otziv-action-border);
+    color: var(--otziv-action);
+    background: var(--plain-surface);
+    box-shadow: 0 4px 12px var(--otziv-action-soft);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--otziv-action);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    border-style: dashed;
+    color: var(--plain-disabled-text);
+    background: var(--plain-soft);
+    box-shadow: none;
+    opacity: 1;
+    cursor: not-allowed;
+
+    .material-icons-sharp {
+      color: inherit;
+    }
+  }
+}
+
+/// The confirming action of a payment window, as in the recipient window: «Отметить оплату».
+@mixin button-primary {
+  border-color: var(--plain-success-border);
+  color: var(--plain-success);
+  background: var(--plain-success-soft);
+
+  &:not(:disabled):hover {
+    border-color: var(--plain-success);
+    color: var(--plain-success);
+    background: var(--plain-success-soft);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--plain-success) 18%, transparent);
+  }
+
+  &:disabled {
+    border-color: var(--plain-control-border);
+    color: var(--plain-disabled-text);
+    background: var(--plain-soft);
+  }
+}
+
+/// «Сохранить» of an editor: filled with the brand gradient of the site.
+@mixin button-save {
+  border-color: transparent;
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 16px var(--plain-brand-shadow);
+
+  &:not(:disabled):hover {
+    border-color: transparent;
+    color: #ffffff;
+    background: var(--otziv-action-fill);
+    box-shadow: 0 8px 20px var(--plain-brand-shadow);
+    filter: brightness(1.06);
+  }
+
+  &:disabled {
+    border-color: var(--plain-control-border);
+    color: var(--plain-disabled-text);
+    background: var(--plain-soft);
+    box-shadow: none;
+    filter: none;
+  }
+}
+
+/// An action that removes or cancels something.
+@mixin button-danger {
+  border-color: var(--plain-danger-border);
+  color: var(--plain-danger);
+  background: var(--plain-danger-soft);
+  box-shadow: none;
+
+  .material-icons-sharp {
+    color: inherit;
+  }
+
+  &:not(:disabled):hover {
+    border-color: var(--plain-danger);
+    color: var(--plain-danger);
+    background: var(--plain-danger-soft);
+    box-shadow: none;
+  }
+}
+
+/// A bordered block inside the window: the soft surface gradient the cards of the site use.
+@mixin block {
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 14px;
+  color: var(--plain-text);
+  background: var(--otziv-surface-gradient-neutral);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/// The head of a window: a warm band under the brand stripe.
+@mixin head-band {
+  border-bottom: 1px solid var(--otziv-surface-border-blue);
+  background: var(--otziv-action-fill) top / 100% 3px no-repeat, var(--otziv-surface-gradient-blue);
+  backdrop-filter: none;
+}
+
+/// The square with an icon beside the title of a window.
+@mixin icon-tile {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: 12px;
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 14px var(--plain-brand-shadow);
+  font-family: 'Material Icons Sharp';
+  font-size: 1.3rem;
+  font-feature-settings: 'liga';
+  line-height: 1;
+}
+
+/// The round icon in front of the title of a block.
+@mixin icon-chip {
+  display: grid;
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
+  font-size: 1.15rem;
+}
+
+/// The number of a section: a small filled circle in the brand gradient.
+@mixin number-chip {
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 3px 8px var(--plain-brand-shadow);
+}
+
+@mixin skin {
+  border: 1px solid var(--plain-border);
+  border-radius: 18px;
+  color: var(--plain-text);
+  background: var(--plain-surface);
+  box-shadow: 0 24px 60px rgba(8, 12, 18, 0.35);
+  font-family: var(--otziv-font-family);
+  scrollbar-width: thin;
+  scrollbar-color: var(--plain-control-border) transparent;
+
+  .lead-edit-head {
+    @include head-band;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .lead-edit-head small {
+    display: block;
+    color: var(--otziv-action);
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    line-height: 1.3;
+    text-transform: uppercase;
+  }
+
+  .lead-edit-head h2 {
+    margin: 0.1rem 0 0;
+    color: var(--plain-text);
+    font-family: inherit;
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .lead-edit-close {
+    display: grid;
+    flex: none;
+    width: 2.1rem;
+    height: 2.1rem;
+    min-height: 0;
+    place-items: center;
+    border: 1px solid var(--plain-control-border);
+    border-radius: 999px;
+    padding: 0;
+    color: var(--plain-text);
+    background: var(--plain-surface);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+
+    &:not(:disabled):hover {
+      border-color: var(--otziv-action-border);
+      color: var(--otziv-action);
+      background: var(--plain-surface);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--otziv-action);
+      outline-offset: 2px;
+    }
+
+    .material-icons-sharp {
+      font-size: 1.25rem;
+    }
+  }
+
+  .lead-edit-field > span {
+    color: var(--plain-muted);
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .lead-edit-field :is(input:not([type='checkbox']):not([type='radio']), select, textarea) {
+    min-height: 2.5rem;
+    border: 1px solid var(--plain-control-border);
+    border-radius: 10px;
+    color: var(--plain-text);
+    background: var(--plain-surface);
+    box-shadow: none;
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+
+    &:hover {
+      border-color: var(--otziv-action-border);
+    }
+
+    &:focus,
+    &:focus-visible {
+      border-color: var(--otziv-action-border);
+      outline: 0;
+      box-shadow: 0 0 0 3px var(--otziv-action-soft);
+    }
+
+    &::placeholder {
+      color: var(--plain-disabled-text);
+      font-weight: 500;
+    }
+  }
+
+  // A field that only shows a value. The selector is longer than the one above on purpose: it has to win over it.
+  .lead-edit-field :is(input, select, textarea):is([readonly], :disabled):not([type='checkbox']):not([type='radio']) {
+    border-color: var(--otziv-surface-border-neutral);
+    color: var(--plain-muted);
+    background: var(--otziv-surface-gradient-neutral);
+    box-shadow: none;
+  }
+
+  .lead-edit-field input:is([type='checkbox'], [type='radio']) {
+    accent-color: var(--otziv-action);
+  }
+
+  button {
+    font-family: inherit;
+  }
+
+  .lead-edit-actions button,
+  button.secondary {
+    @include button;
+  }
+
+  .lead-edit-actions button[type='submit'] {
+    @include button-save;
+  }
+
+  .lead-edit-actions button.danger,
+  button.secondary.danger,
+  button.danger {
+    @include button-danger;
+  }
+
+  .error {
+    border: 1px solid var(--plain-danger-border);
+    border-radius: 10px;
+    padding: 0.55rem 0.7rem;
+    color: var(--plain-danger);
+    background: var(--plain-danger-soft);
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
+  .empty {
+    color: var(--plain-muted);
+    font-size: 0.85rem;
+  }
+}

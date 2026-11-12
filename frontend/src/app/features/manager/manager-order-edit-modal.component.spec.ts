@@ -163,6 +163,43 @@ describe('ManagerOrderEditModalComponent', () => {
     expect(element.querySelector('.payment-route-change')).toBeNull();
   });
 
+  it('offers the paper invoice in one place only', () => {
+    const fixture = TestBed.createComponent(ManagerOrderEditModalComponent);
+    const component = fixture.componentInstance;
+    let opened = 0;
+    const selectedTargets: string[] = [];
+    component.order = order();
+    component.draft = draft();
+    component.allowPaymentRouteChange = true;
+    component.allowPaperInvoiceMode = true;
+    component.paymentRouteContext = {
+      paymentLinkId: 81,
+      currentRoute: 'Оплата по реквизитам',
+      currentRecipient: 'Специалист',
+      status: 'WAITING_MANUAL_PAYMENT',
+      canChange: true,
+      blockReason: ''
+    };
+    component.paperInvoiceOpened.subscribe(() => opened++);
+    component.paymentRouteChanged.subscribe((target) => selectedTargets.push(target));
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const paperButtons = Array.from(element.querySelectorAll<HTMLButtonElement>('.payment-route-change button'))
+      .filter((button) => /сч[её]т и акт/i.test(button.textContent ?? ''));
+    expect(paperButtons.length).toBe(1);
+    expect(paperButtons[0].closest('.payment-route-change--paper')).not.toBeNull();
+    paperButtons[0].click();
+    expect(opened).toBe(1);
+
+    // «Способ оплаты» offers a card number and a bank link only.
+    const options = Array.from(element.querySelectorAll<HTMLButtonElement>('.payment-route-change__options button'))
+      .map((button) => (button.textContent ?? '').replace(/\s+/g, ' ').trim());
+    expect(options).toEqual(['dialpad Выдать номер карты', 'account_balance Выдать ссылку банка']);
+    expect(selectedTargets).toEqual([]);
+  });
+
   it('emits typed draft changes', () => {
     const fixture = TestBed.createComponent(ManagerOrderEditModalComponent);
     const component = fixture.componentInstance;

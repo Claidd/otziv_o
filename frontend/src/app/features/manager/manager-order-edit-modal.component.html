@@ -1,6 +1,6 @@
 <div class="lead-edit-backdrop" role="presentation" (click)="closed.emit()">
   <section
-    class="lead-edit-modal order-edit-modal"
+    class="lead-edit-modal lead-edit-modal--plain order-edit-modal"
     role="dialog"
     aria-modal="true"
     aria-labelledby="order-edit-title"
@@ -176,20 +176,32 @@
           </div>
 
           @if (allowPaperInvoiceMode) {
-            <section class="payment-route-change" aria-label="Банковские документы заказа">
-              <strong>Счёт и акт Точки</strong>
-              <button type="button" class="secondary" (click)="paperInvoiceOpened.emit()" [disabled]="saving || deleting || paymentRouteChanging">Выставить или открыть счёт и акт</button>
+            <!-- The only entry to the paper invoice of an order: «Способ оплаты» below offers a card number or a bank link. -->
+            <section class="payment-route-change payment-route-change--paper" aria-label="Банковские документы заказа">
+              <div class="payment-route-change__head">
+                <span class="payment-route-change__icon material-icons-sharp" aria-hidden="true">description</span>
+                <div>
+                  <strong>Счёт и акт Точки</strong>
+                  <small>Для клиентов, которым нужны документы на организацию</small>
+                </div>
+                <button type="button" class="secondary" (click)="paperInvoiceOpened.emit()" [disabled]="saving || deleting || paymentRouteChanging">
+                  <span class="material-icons-sharp" aria-hidden="true">note_add</span>
+                  Выставить или открыть счёт и акт
+                </button>
+              </div>
             </section>
           }
           @if (allowPaymentRouteChange && !order.complete) {
             <section class="payment-route-change" aria-label="Смена способа оплаты">
               <div class="payment-route-change__head">
+                <span class="payment-route-change__icon material-icons-sharp" aria-hidden="true">swap_horiz</span>
                 <div>
                   <strong>Способ оплаты</strong>
                   <small>Используйте, если клиент попросил оплатить иначе</small>
                 </div>
                 <button type="button" class="secondary payment-route-change__guide" (click)="paymentGuideOpened.emit()"
                   title="Как сменить способ оплаты и выбрать получателя">
+                  <span class="material-icons-sharp" aria-hidden="true">menu_book</span>
                   Инструкция
                 </button>
                 @if (!paymentRouteContext) {
@@ -213,7 +225,7 @@
                     }
                   </p>
                   @if (!paymentRouteContext.canChange && !paymentRouteContext.bankRecipientChangeAvailable) {
-                    @if (paymentRouteContext.configuredMode === 'OWNER_PAPER_INVOICE') {
+                    @if (!allowPaperInvoiceMode && paymentRouteContext.configuredMode === 'OWNER_PAPER_INVOICE') {
                       <button type="button" class="secondary" (click)="paymentRouteChanged.emit('OWNER_PAPER_INVOICE')">Счёт и акт Точки</button>
                     }
                     <div class="payment-route-change__warning">{{ paymentRouteContext.blockReason }}</div>
@@ -225,22 +237,17 @@
                         [title]="cardNumberTarget(paymentRouteContext) === 'EMPLOYEE_REQUISITES'
                           ? 'Ссылка → номер карты: получатель может остаться прежним'
                           : 'Номер карты другого человека: нынешний получатель исключается'">
+                        <span class="material-icons-sharp" aria-hidden="true">dialpad</span>
                         Выдать номер карты
                       </button>
                       <button type="button" class="secondary"
                         (click)="paymentRouteChanged.emit('OWNER_TBANK')"
                         [disabled]="paymentRouteChanging || !paymentRouteContext.canChange">
+                        <span class="material-icons-sharp" aria-hidden="true">account_balance</span>
                         {{ paymentRouteContext.configuredMode === 'OWNER_TBANK'
                           ? 'Выдать новую ссылку банка'
                           : 'Выдать ссылку банка' }}
                       </button>
-                      @if (allowPaperInvoiceMode) {
-                        <button type="button" class="secondary"
-                          (click)="paymentRouteChanged.emit('OWNER_PAPER_INVOICE')"
-                          [disabled]="paymentRouteChanging">
-                          Счёт и акт Точки
-                        </button>
-                      }
                     </div>
                     <small class="payment-route-change__hint">
                       «Выдать номер карты» открывает окно: система подберёт получателя сама, или выберите сотрудника —

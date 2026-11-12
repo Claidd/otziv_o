@@ -70,6 +70,10 @@ export class Studio {
   /** Captures the clip in every theme and writes the framed, numbered pictures. */
   async snap(name, { clip, marks = [], pad = 0, rules = [], quiet = false } = {}) {
     let last;
+    // The stand reminds of overdue invoices with a window of its own; it must not cover the picture.
+    if (await this.page.eval(`(() => { const close = document.querySelector('.overdue-reminder-modal .lead-edit-close'); close?.click(); return !!close; })()`)) {
+      await sleep(400);
+    }
     for (const theme of this.themes) {
       await this.page.eval(`document.body.classList.toggle('otziv-dark-theme', ${theme === 'dark'})`);
       await this.anonymize(rules);
