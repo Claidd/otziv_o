@@ -234,6 +234,124 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
         ));
     }
 
+    @Test
+    void bankDocumentInvoicesResolveTheOwnerOfTheirManager() throws Exception {
+        seedManagersAndOwners();
+        jdbc.update("""
+                INSERT INTO common_billing_accounts (account_id, manager_id)
+                VALUES (1, 3), (2, 2), (3, NULL), (4, 4)
+                """);
+        jdbc.update("""
+                INSERT INTO common_invoices (invoice_id, account_id, payment_method)
+                VALUES
+                    (40, 1, 'OWNER_PAPER_INVOICE'),
+                    (41, 2, 'OWNER_PAPER_INVOICE'),
+                    (42, 3, 'OWNER_PAPER_INVOICE'),
+                    (43, 4, 'OWNER_PAPER_INVOICE'),
+                    (44, 1, 'MANUAL'),
+                    (46, 2, 'OWNER_PAPER_INVOICE')
+                """);
+        // Invoice 42 has no manager on its account: the manager of its orders answers.
+        jdbc.update("INSERT INTO orders (order_id, order_manager) VALUES (420, 2)");
+        jdbc.update("""
+                INSERT INTO common_invoice_orders (invoice_order_id, invoice_id, order_id, amount_kopecks, paid)
+                VALUES (4200, 42, 420, 100, 1)
+                """);
+        jdbc.update("""
+                INSERT INTO archive_common_invoices (invoice_id, account_id, payment_method, restored_at)
+                VALUES
+                    (45, 1, 'OWNER_PAPER_INVOICE', NULL),
+                    (46, 1, 'OWNER_PAPER_INVOICE', NULL),
+                    (47, 1, 'OWNER_PAPER_INVOICE', '2026-08-10 10:00:00'),
+                    (48, 1, 'MANUAL', NULL)
+                """);
+
+        Map<Long, String> owners = new LinkedHashMap<>();
+        namedJdbc.query(
+                repositorySql(CommonInvoiceRepository.class,
+                        "findPaperInvoiceOwnersForMonthlyRecipientSummary", java.util.Collection.class),
+                Map.of("invoiceIds", java.util.List.of(40L, 41L, 42L, 43L, 44L, 45L, 46L, 47L, 48L, 49L)),
+                rs -> {
+                    Object ownerId = rs.getObject("ownerUserId");
+                    String previous = owners.put(rs.getLong("sourceId"), ownerId + ":" + rs.getString("ownerName"));
+                    assertThat(previous).as("one row per invoice").isNull();
+                });
+
+        // 44 and 48 were not paid by bank documents, 47 was restored from the archive, 49 does not exist.
+        // 46 is live again with another account: the live invoice wins over its archived copy.
+        assertThat(owners).containsExactlyInAnyOrderEntriesOf(Map.of(
+                40L, "10:Иван Хант",
+                41L, "9:Мия Ригз",
+                42L, "9:Мия Ригз",
+                43L, "null:null",
+                45L, "10:Иван Хант",
+                46L, "9:Мия Ригз"
+        ));
+    }
+
+    @Test
+    void ordersPaidByBankDocumentsAreCreditedToTheOwnerOfTheOrderManager() throws Exception {
+        seedManagersAndOwners();
+        jdbc.update("INSERT INTO orders (order_id, order_manager) VALUES (501, 3), (502, 2), (504, 4), (505, 3), (506, 3), (507, 3)");
+        jdbc.update("INSERT INTO archive_orders (order_id, order_manager) VALUES (503, 2)");
+        jdbc.update("""
+                INSERT INTO payment_links
+                    (id, order_id, status, payment_method, amount_kopecks, confirmed_amount_kopecks, paid_at)
+                VALUES
+                    (51, 501, 'CONFIRMED', 'OWNER_PAPER_INVOICE', 5100, 5100, '2026-08-02 10:00:00'),
+                    (52, 502, 'CONFIRMED', 'OWNER_PAPER_INVOICE', 5200, NULL, '2026-08-03 10:00:00'),
+                    (54, 504, 'CONFIRMED', 'OWNER_PAPER_INVOICE', 5400, 5400, '2026-08-05 10:00:00'),
+                    (55, 505, 'WAITING_MANUAL_PAYMENT', 'OWNER_PAPER_INVOICE', 5500, NULL, NULL),
+                    (56, 506, 'CONFIRMED', 'OWNER_PAPER_INVOICE', 5600, 5600, '2026-09-01 00:00:00'),
+                    (57, 507, 'CONFIRMED', 'TBANK', 5700, 5700, '2026-08-06 10:00:00'),
+                    (58, 501, 'CONFIRMED', 'OWNER_PAPER_INVOICE', 5800, 5800, '2026-08-07 10:00:00')
+                """);
+        jdbc.update("""
+                INSERT INTO archive_payment_links
+                    (id, order_id, status, payment_method, amount_kopecks, confirmed_amount_kopecks, paid_at)
+                VALUES
+                    (51, 501, 'CONFIRMED', 'OWNER_PAPER_INVOICE', 5100, 5100, '2026-08-02 10:00:00'),
+                    (53, 503, 'CONFIRMED', 'OWNER_PAPER_INVOICE', 5300, 5300, '2026-08-04 10:00:00')
+                """);
+        // Link 58 already has an exact recipient row: it is counted there, not here.
+        jdbc.update("""
+                INSERT INTO contractor_actual_payment_attributions (source_kind, source_id, evidence_id)
+                VALUES ('PAYMENT_LINK', 58, NULL)
+                """);
+
+        Map<Long, String> receipts = new LinkedHashMap<>();
+        namedJdbc.query(
+                repositorySql(PaymentLinkRepository.class,
+                        "findPaperInvoiceReceiptsForMonthlyRecipientSummary", LocalDateTime.class, LocalDateTime.class),
+                Map.of("from", LocalDateTime.of(2026, 8, 1, 0, 0), "to", LocalDateTime.of(2026, 9, 1, 0, 0)),
+                rs -> {
+                    String previous = receipts.put(rs.getLong("sourceId"),
+                            rs.getLong("amountKopecks") + ":" + rs.getObject("ownerUserId") + ":" + rs.getString("ownerName"));
+                    assertThat(previous).as("one row per payment").isNull();
+                });
+
+        assertThat(receipts).containsExactlyInAnyOrderEntriesOf(Map.of(
+                51L, "5100:10:Иван Хант",
+                52L, "5200:9:Мия Ригз",
+                53L, "5300:9:Мия Ригз",
+                54L, "5400:null:null"
+        ));
+    }
+
+    /** Manager 3 works for owner 10, manager 2 for owner 9; manager 4 has staff but no owner. */
+    private void seedManagersAndOwners() {
+        jdbc.update("INSERT INTO roles (id, name) VALUES (1, 'ROLE_ADMIN'), (2, 'ROLE_OWNER'), (3, 'ROLE_WORKER')");
+        jdbc.update("""
+                INSERT INTO users (id, fio)
+                VALUES (1, 'Админ'), (9, 'Мия Ригз'), (10, 'Иван Хант'), (20, 'Специалист'), (30, 'Сотрудник')
+                """);
+        jdbc.update("INSERT INTO users_roles (user_id, role_id) VALUES (1, 1), (9, 2), (10, 2), (20, 3), (30, 3)");
+        jdbc.update("""
+                INSERT INTO managers_users (manager_id, user_id)
+                VALUES (3, 1), (3, 10), (3, 20), (2, 9), (2, 20), (4, 30)
+                """);
+    }
+
     private Map<Long, Long> execute(String sql) {
         return execute(sql, LocalDateTime.of(2026, 8, 1, 0, 0),
                 LocalDateTime.of(2026, 9, 1, 0, 0));
@@ -249,10 +367,12 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
     }
 
     private String repositorySql(Class<?> repositoryType, Class<?>... parameterTypes) throws Exception {
-        Method method = repositoryType.getMethod(
-                "findLegacyManualConfirmedForMonthlyRecipientSummary",
-                parameterTypes
-        );
+        return repositorySql(repositoryType, "findLegacyManualConfirmedForMonthlyRecipientSummary", parameterTypes);
+    }
+
+    private String repositorySql(Class<?> repositoryType, String methodName, Class<?>... parameterTypes)
+            throws Exception {
+        Method method = repositoryType.getMethod(methodName, parameterTypes);
         return method.getAnnotation(Query.class).value();
     }
 
@@ -266,12 +386,20 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
         jdbc.execute("DROP TABLE IF EXISTS contractor_actual_payment_attributions");
         jdbc.execute("DROP TABLE IF EXISTS archive_payment_links");
         jdbc.execute("DROP TABLE IF EXISTS payment_links");
+        jdbc.execute("DROP TABLE IF EXISTS common_billing_accounts");
+        jdbc.execute("DROP TABLE IF EXISTS archive_orders");
+        jdbc.execute("DROP TABLE IF EXISTS orders");
+        jdbc.execute("DROP TABLE IF EXISTS managers_users");
+        jdbc.execute("DROP TABLE IF EXISTS users_roles");
+        jdbc.execute("DROP TABLE IF EXISTS roles");
+        jdbc.execute("DROP TABLE IF EXISTS users");
     }
 
     private void createTables() {
         jdbc.execute("""
                 CREATE TABLE payment_links (
                     id BIGINT PRIMARY KEY,
+                    order_id BIGINT NULL,
                     status VARCHAR(32) NOT NULL,
                     payment_method VARCHAR(32) NOT NULL,
                     manual_source VARCHAR(32) NULL,
@@ -312,6 +440,7 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
         jdbc.execute("""
                 CREATE TABLE common_invoices (
                     invoice_id BIGINT PRIMARY KEY,
+                    account_id BIGINT NULL,
                     payment_method VARCHAR(32) NULL
                 ) ENGINE=InnoDB
                 """);
@@ -319,6 +448,7 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
                 CREATE TABLE common_invoice_orders (
                     invoice_order_id BIGINT PRIMARY KEY,
                     invoice_id BIGINT NOT NULL,
+                    order_id BIGINT NULL,
                     amount_kopecks BIGINT NOT NULL,
                     paid BOOLEAN NOT NULL,
                     paid_at DATETIME(6) NULL,
@@ -333,10 +463,18 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
         jdbc.execute("""
                 CREATE TABLE archive_common_invoices (
                     invoice_id BIGINT PRIMARY KEY,
+                    account_id BIGINT NULL,
                     payment_method VARCHAR(32) NULL,
                     restored_at DATETIME(6) NULL
                 ) ENGINE=InnoDB
                 """);
         jdbc.execute("CREATE TABLE archive_common_invoice_orders LIKE common_invoice_orders");
+        jdbc.execute("CREATE TABLE common_billing_accounts (account_id BIGINT PRIMARY KEY, manager_id BIGINT NULL) ENGINE=InnoDB");
+        jdbc.execute("CREATE TABLE orders (order_id BIGINT PRIMARY KEY, order_manager BIGINT NULL) ENGINE=InnoDB");
+        jdbc.execute("CREATE TABLE archive_orders LIKE orders");
+        jdbc.execute("CREATE TABLE managers_users (manager_id BIGINT NOT NULL, user_id BIGINT NOT NULL) ENGINE=InnoDB");
+        jdbc.execute("CREATE TABLE users_roles (user_id BIGINT NOT NULL, role_id BIGINT NOT NULL) ENGINE=InnoDB");
+        jdbc.execute("CREATE TABLE roles (id BIGINT PRIMARY KEY, name VARCHAR(64) NOT NULL) ENGINE=InnoDB");
+        jdbc.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, fio VARCHAR(255) NULL) ENGINE=InnoDB");
     }
 }

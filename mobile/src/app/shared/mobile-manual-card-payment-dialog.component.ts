@@ -24,6 +24,7 @@ import {
 } from '../core/api.service';
 import {
   mobileManualCardMoney,
+  mobileManualCardBankLinkNotice,
   mobileManualCardPaymentSelectionRecipient,
   mobileManualCardPaymentSubmission,
   mobileManualCardRecipientKey,
@@ -133,6 +134,14 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
 
   constructor(private readonly modalController: ModalController
   ) {}
+
+  /**
+   * The invoice of the order is the owner's bank link: a payment by the link is marked by the bank, and
+   * the owner is offered only where the bank profile lets the owner take card transfers.
+   */
+  bankLinkNotice(): string {
+    return mobileManualCardBankLinkNotice(this.context);
+  }
 
   ngOnInit(): void {
     const defaultRecipient = mobileManualCardPaymentSelectionRecipient(this.context);

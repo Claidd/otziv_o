@@ -77,12 +77,14 @@ describe('Common invoice guide', () => {
         'paper: Как выставить счёт и акт и следить за оплатой',
         'orders: Как вернуть исключённый заказ в счёт',
         'danger: Где эти кнопки',
-        'settings: Как добавить или убрать компанию связи'
+        'settings: Как добавить или убрать компанию связи',
+        'settings: Как включить общий счёт компании, у которой заказу уже выставлен свой счёт'
       ]);
       expect(tasks(ORDER_PAYMENT_GUIDE)).toEqual([
         'overview: Что где на карточке заказа',
         'invoice: Как отправить счёт самому',
         'paid: Как отметить оплату переводом',
+        'paid: Счёт — ссылка банка, а клиент перевёл на карту',
         'route: Как открыть блок и что в нём',
         'route: Как выдать номер карты',
         'route: Как вернуть клиенту ссылку банка',
@@ -184,7 +186,7 @@ describe('Common invoice guide', () => {
     it('renders the order manual with its own pictures', () => {
       const element: HTMLElement = render('overview', ORDER_PAYMENT_GUIDE).nativeElement;
       const sources = [...element.querySelectorAll('.guide-shot img')].map(image => image.getAttribute('src') ?? '');
-      expect(sources.length).toBe(12);
+      expect(sources.length).toBe(13);
       expect(sources.every(source => source.startsWith('/assets/guide/light/op-'))).toBe(true);
       expect(element.querySelector('#common-invoice-guide-route .guide-walk-intro')?.textContent).toContain('Сменить способ оплаты');
     });

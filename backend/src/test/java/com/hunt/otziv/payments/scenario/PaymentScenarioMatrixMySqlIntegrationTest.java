@@ -1036,9 +1036,18 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
                 context.getBean(org.springframework.transaction.PlatformTransactionManager.class));
         Boolean recalculated = taskCompletion.execute(status -> billing.repriceBadReviewInvoice(order, 1L));
         assertThat(recalculated).isTrue();
-        // The after-commit send and its safety net, the five-minute scheduler; then the delivery worker.
-        billing.sendUnsentActionInvoices(20);
-        deliverQueuedClientMessages();
+        // This notice is sent by the rules of the autoresponder, its business windows included: at night it
+        // waits for the morning. The scenario opens the window for the whole day, so that it checks the
+        // route and the amount at any hour it is run, and puts the setting back.
+        String businessWindows = settings.getString(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS, "");
+        settings.setString(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS, "00:00-23:59:59.999999999");
+        try {
+            // The after-commit send and its safety net, the five-minute scheduler; then the delivery worker.
+            billing.sendUnsentActionInvoices(20);
+            deliverQueuedClientMessages();
+        } finally {
+            settings.setString(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS, businessWindows);
+        }
 
         // The released attempt is settled as unpaid, so the cycle picks a recipient itself — no 409 that
         // would keep the invoice with the new amount from the client until a person interferes.
@@ -1168,6 +1177,300 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
             assertThat(reserve(ownerReserve)).containsEntry("status", "CONFIRMED");
             assertThat(num(reserve(ownerReserve), "confirmed_kopecks")).isEqualTo(3_000_00);
         } finally {
+            settings.setString(AppSettingService.PAYMENTS_TBANK_RUNTIME_MODE, "TEST");
+            settings.setBoolean(AppSettingService.PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS, false);
+        }
+    }
+
+    // ================================================================================================
+    // Включение общего счёта для компании с уже выставленным счётом заказа
+    // ================================================================================================
+
+    @Test
+    @DisplayName("20 общий счёт включают компании, у заказа которой клиенту уже выдан номер карты → остальные заказы собраны, этот остаётся на своём счёте и назван менеджеру; после «Платежа нет» заказ возвращён в общий счёт")
+    void s20_companyJoinsCommonInvoiceWhileAnAlreadyInvoicedOrderKeepsItsOwnInvoice() {
+        Person anna = world.specialist("Анна Специалист");
+        world.payable(anna, ContractorRole.SPECIALIST, 10_000_00);
+        long company = world.company("Школа");
+        long invoicedOrder = world.order(company, anna, 1_200_00, STATUS_PUBLISHED);
+        long publishedOrder = world.order(company, anna, 1_200_00, STATUS_PUBLISHED);
+        long orderInWork = world.order(company, anna, 1_200_00, "Публикация");
+
+        // The client already holds a card number for the first order.
+        login(world.manager);
+        payments.createForOrderAuthorized(invoicedOrder, world.manager.auth());
+        Map<String, Object> ownInvoice = currentLink(invoicedOrder);
+        assertThat(ownInvoice).containsEntry("status", "WAITING_MANUAL_PAYMENT");
+        Object ownReserve = ownInvoice.get("contractor_allocation_id");
+
+        // The manager switches the common invoice on in the company editor; the collection runs in the background.
+        long account = billing.createAccount(new com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest(
+                "Школа - общий счет", true, false, null, company, List.of(company))).id();
+        SecurityContextHolder.clearContext();
+        billing.reconcilePendingCompanyLinks(20);
+
+        // The link stays on, nothing waits for a retry and nothing is written as an error.
+        Map<String, Object> link = jdbc.queryForMap(
+                "SELECT * FROM common_billing_account_companies WHERE account_id = ? AND company_id = ?", account, company);
+        assertThat(jdbc.queryForObject("SELECT enabled FROM common_billing_account_companies WHERE account_id = ? AND company_id = ?",
+                Boolean.class, account, company)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT reconcile_pending FROM common_billing_account_companies WHERE account_id = ? AND company_id = ?",
+                Boolean.class, account, company)).isFalse();
+        assertThat(link.get("reconcile_last_error")).isNull();
+
+        // The two other orders are collected; the published one is ready, the invoice waits for the one in work.
+        long invoiceId = jdbc.queryForObject("SELECT invoice_id FROM common_invoices WHERE account_id = ?", Long.class, account);
+        assertThat(jdbc.queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id = ? ORDER BY order_id", Long.class, invoiceId))
+                .containsExactly(publishedOrder, orderInWork);
+        assertThat(jdbc.queryForObject("SELECT status FROM common_invoices WHERE invoice_id = ?", String.class, invoiceId)).isEqualTo("COLLECTING");
+        // The order with the card number keeps its invoice and its reserve untouched.
+        assertThat(link(num(ownInvoice, "id"))).containsEntry("status", "WAITING_MANUAL_PAYMENT");
+        assertThat(reserve(ownReserve)).containsEntry("status", "RESERVED");
+
+        // The company editor names the order that stayed separate and says what to do.
+        login(world.manager);
+        var editorView = billing.accountsForCompany(company).getFirst().companies().getFirst();
+        assertThat(editorView.enabled()).isTrue();
+        assertThat(editorView.problem()).isNull();
+        assertThat(editorView.separateOrdersNote()).contains("№" + invoicedOrder).contains("«Платежа нет»")
+                .doesNotContain("№" + publishedOrder).doesNotContain("№" + orderInWork);
+
+        // The owner checked the recipient's statement: the client did not pay by the card number.
+        login(world.owner);
+        payments.closeManualAsUnpaid(num(ownInvoice, "id"), true, true, "Выписка получателя проверена, перевода нет", "owner",
+                world.owner.auth());
+        assertThat(link(num(ownInvoice, "id"))).containsEntry("status", "CANCELED");
+
+        // Now nothing keeps the order apart: the manager returns it into the collecting invoice.
+        login(world.manager);
+        assertThat(billing.accountsForCompany(company).getFirst().companies().getFirst().separateOrdersNote()).isNull();
+        billing.returnOrder(invoiceId, invoicedOrder);
+        assertThat(jdbc.queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id = ? ORDER BY order_id", Long.class, invoiceId))
+                .containsExactly(invoicedOrder, publishedOrder, orderInWork);
+        assertThat(clientMessages).isEmpty();
+    }
+
+    @Test
+    @DisplayName("21 счёт заказа — ссылка банка, клиент перевёл владельцу на карту: запрос владельцу только там, где карта разрешена профилем; после подтверждения заказ оплачен, ссылка отменена, сумма в месячном лимите карты")
+    void s21_transferToTheOwnersCardPastTheBankLinkIsConfirmedByTheOwner() {
+        Person anna = world.specialist("Анна Специалист");
+        world.payable(anna, ContractorRole.SPECIALIST, 10_000_00);
+        long order = world.order(world.company("Кафе"), anna, 3_000_00, STATUS_PUBLISHED);
+        login(world.manager);
+        payments.createForOrderAuthorized(order, world.manager.auth());
+        Map<String, Object> cardLink = currentLink(order);
+        settings.setBoolean(AppSettingService.PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS, true);
+        settings.setString(AppSettingService.PAYMENTS_TBANK_RUNTIME_MODE, "LIVE");
+        long profileId = 0;
+        Map<String, Object> profileBefore = null;
+        try {
+            // The client asked for a bank link: the invoice of the order is the owner's bank link now.
+            var window = orderRouteChanges.context(order, world.manager.auth());
+            PaymentRouteChangeResponse changed = orderRouteChanges.change(order, new PaymentRouteChangeRequest(
+                    num(cardLink, "id"), PaymentRouteChangeTarget.OWNER_TBANK, true, window.expectedTargetPaymentProfileId(), null, null),
+                    world.manager.auth());
+            long bankLinkId = changed.paymentLinkId();
+            Map<String, Object> bankLink = link(bankLinkId);
+            assertThat(bankLink).containsEntry("status", "CREATED").containsEntry("payment_method", "BANK_FORM");
+            profileId = num(bankLink, "payment_profile_id");
+            profileBefore = jdbc.queryForMap("SELECT * FROM payment_profiles WHERE id = ?", profileId);
+
+            // The owner of this profile takes money through the bank only: nobody can report a card transfer to them.
+            jdbc.update("UPDATE payment_profiles SET payment_policy = 'T_BANK_ONLY' WHERE id = ?", profileId);
+            var bankOnly = payments.manualCardPaymentContextForOrder(order, world.manager.auth());
+            assertThat(bankOnly.bankLinkRoute()).isTrue();
+            assertThat(bankOnly.candidates()).noneMatch(candidate -> candidate.recipientType() == ContractorRecipientType.OWNER);
+            assertThatThrownBy(() -> payments.submitManagerManualCardPaymentForOrder(order, "Клиент перевёл владельцу на карту", null,
+                    ContractorRecipientType.OWNER, null, "OWNER", world.manager.username, world.manager.auth()))
+                    .isInstanceOf(ResponseStatusException.class);
+            assertThat(orderStatus(order)).isNotEqualTo(STATUS_PAID);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM owner_manual_card_payment_approvals WHERE order_id = ?", Long.class, order))
+                    .isZero();
+
+            // The owner of this profile may take card transfers (a self-employed owner): the manager reports the
+            // transfer, and nothing is closed until the owner confirms it.
+            jdbc.update("""
+                    UPDATE payment_profiles SET payment_policy = 'MANUAL_UNTIL_LIMIT_THEN_TBANK', manual_payment_type = 'MOBILE_BANK',
+                        manual_phone = '+79000000000', manual_recipient_name = 'Мария Владелец',
+                        manual_monthly_soft_limit_kopecks = 100000000, manual_monthly_hard_limit_kopecks = 100000000
+                    WHERE id = ?
+                    """, profileId);
+            // Other scenarios of this class may have used the card this month: the remainder is measured, not assumed.
+            long leftBefore = orderRouteChanges.recipients(order, world.manager.auth()).ownerCard().remainingKopecks();
+            var withOwner = payments.manualCardPaymentContextForOrder(order, world.manager.auth());
+            assertThat(withOwner.bankLinkRoute()).isTrue();
+            assertThat(withOwner.candidates()).anyMatch(candidate -> candidate.recipientType() == ContractorRecipientType.OWNER);
+            ManagerManualCardPaymentResultResponse reported = payments.submitManagerManualCardPaymentForOrder(order,
+                    "Клиент перевёл владельцу на карту", null, ContractorRecipientType.OWNER, null, "OWNER",
+                    world.manager.username, world.manager.auth());
+            assertThat(reported.status()).isEqualTo(ManagerManualCardPaymentResultResponse.OWNER_APPROVAL_PENDING);
+            assertThat(orderStatus(order)).isNotEqualTo(STATUS_PAID);
+            assertThat(link(bankLinkId)).containsEntry("status", "CREATED");
+
+            // The owner presses «Подтвердить поступление владельцу» in the audit group of the manager.
+            var button = org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(staffTelegram).sendMessageWithInlineButton(eq(world.manager.groupChatId), anyString(), anyString(), button.capture());
+            var press = new org.telegram.telegrambots.meta.api.objects.CallbackQuery();
+            var chat = new org.telegram.telegrambots.meta.api.objects.Chat();
+            chat.setId(world.manager.groupChatId);
+            chat.setType("supergroup");
+            var message = new org.telegram.telegrambots.meta.api.objects.Message();
+            message.setChat(chat);
+            message.setMessageId(17);
+            var from = new org.telegram.telegrambots.meta.api.objects.User();
+            from.setId(world.owner.telegramChatId);
+            press.setMessage(message);
+            press.setFrom(from);
+            press.setData(button.getValue());
+            SecurityContextHolder.clearContext();
+            var answer = context.getBean(com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalTelegramCallbackService.class)
+                    .handle(press);
+            assertThat(answer).contains("Поступление владельцу подтверждено");
+
+            assertThat(orderStatus(order)).isEqualTo(STATUS_PAID);
+            // The bank link is closed: the client cannot pay the same order by it a second time.
+            assertThat(link(bankLinkId).get("status")).isIn("CANCELED", "EXPIRED");
+            Map<String, Object> evidence = jdbc.queryForMap(
+                    "SELECT * FROM payment_links WHERE contractor_evidence_original_link_id = ?", bankLinkId);
+            assertThat(evidence).containsEntry("status", "CONFIRMED").containsEntry("manual_actual_recipient_type", "OWNER");
+            // The money came to the owner's card: it uses the monthly limit of that card.
+            assertThat(num(evidence, "payment_profile_id")).isEqualTo(profileId);
+            List<Map<String, Object>> receipts = jdbc.queryForList(
+                    "SELECT * FROM contractor_actual_payment_attributions WHERE order_id = ? ORDER BY id", order);
+            assertThat(receipts).hasSize(1);
+            assertThat(receipts.getFirst()).containsEntry("actual_cash_destination_kind", "OWNER");
+            assertThat(num(receipts.getFirst(), "amount_kopecks")).isEqualTo(3_000_00);
+            assertThat(jdbc.queryForObject("SELECT status FROM owner_manual_card_payment_approvals WHERE order_id = ?", String.class, order))
+                    .isEqualTo("CONFIRMED");
+            // The next invoice of the same manager sees less of the month left on the owner's card.
+            login(world.manager);
+            long next = world.order(world.company("Пекарня"), anna, 1_000_00, STATUS_PUBLISHED);
+            payments.createForOrderAuthorized(next, world.manager.auth());
+            assertThat(orderRouteChanges.recipients(next, world.manager.auth()).ownerCard().remainingKopecks())
+                    .isEqualTo(leftBefore - 3_000_00);
+        } finally {
+            if (profileBefore != null) {
+                jdbc.update("""
+                        UPDATE payment_profiles SET payment_policy = ?, manual_payment_type = ?, manual_phone = ?, manual_recipient_name = ?,
+                            manual_monthly_soft_limit_kopecks = ?, manual_monthly_hard_limit_kopecks = ?
+                        WHERE id = ?
+                        """, profileBefore.get("payment_policy"), profileBefore.get("manual_payment_type"), profileBefore.get("manual_phone"),
+                        profileBefore.get("manual_recipient_name"), profileBefore.get("manual_monthly_soft_limit_kopecks"),
+                        profileBefore.get("manual_monthly_hard_limit_kopecks"), profileId);
+            }
+            settings.setString(AppSettingService.PAYMENTS_TBANK_RUNTIME_MODE, "TEST");
+            settings.setBoolean(AppSettingService.PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS, false);
+        }
+    }
+
+    @Test
+    @DisplayName("22 счёт заказа — ссылка банка, «Выдать номер карты», резерва нет ни у кого: карта владельца в пределах месячного лимита; сверх лимита и при профиле «только банк» — отказ")
+    void s22_cardNumberFallsBackToTheOwnersCardWithinItsMonthlyLimit() {
+        // Neither the specialist nor the manager has a free reserve for the whole invoice.
+        Person anna = world.specialist("Анна Специалист");
+        world.payable(anna, ContractorRole.SPECIALIST, 500_00);
+        world.payable(world.manager, ContractorRole.MANAGER, 500_00);
+        long order = world.order(world.company("Кафе"), anna, 3_000_00, STATUS_PUBLISHED);
+        login(world.manager);
+        settings.setBoolean(AppSettingService.PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS, true);
+        settings.setString(AppSettingService.PAYMENTS_TBANK_RUNTIME_MODE, "LIVE");
+        long profileId = 0;
+        Map<String, Object> profileBefore = null;
+        try {
+            payments.createForOrderAuthorized(order, world.manager.auth());
+            Map<String, Object> bankLink = currentLink(order);
+            assertThat(bankLink).containsEntry("status", "CREATED").containsEntry("payment_method", "BANK_FORM");
+            profileId = num(bankLink, "payment_profile_id");
+            profileBefore = jdbc.queryForMap("SELECT * FROM payment_profiles WHERE id = ?", profileId);
+
+            // The owner takes money through the bank only: the window does not offer the card, the automatic
+            // choice refuses, and naming the owner's card is refused as well.
+            jdbc.update("UPDATE payment_profiles SET payment_policy = 'T_BANK_ONLY' WHERE id = ?", profileId);
+            assertThat(orderRouteChanges.recipients(order, world.manager.auth()).ownerCard()).isNull();
+            long bankLinkId = num(bankLink, "id");
+            assertThatThrownBy(() -> orderRouteChanges.change(order, new PaymentRouteChangeRequest(
+                    bankLinkId, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, null, null), world.manager.auth()))
+                    .isInstanceOf(ResponseStatusException.class);
+            assertThatThrownBy(() -> orderRouteChanges.change(order, new PaymentRouteChangeRequest(
+                    bankLinkId, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, null, PaymentRouteChangeRequest.OWNER_CARD),
+                    world.manager.auth())).isInstanceOf(ResponseStatusException.class);
+            assertThat(link(bankLinkId)).containsEntry("status", "CREATED");
+
+            // A self-employed owner: the card is allowed, but this month's limit holds less than the invoice.
+            jdbc.update("""
+                    UPDATE payment_profiles SET payment_policy = 'MANUAL_UNTIL_LIMIT_THEN_TBANK', manual_payment_type = 'MOBILE_BANK',
+                        manual_phone = '+79000000000', manual_recipient_name = 'Мария Владелец',
+                        manual_monthly_soft_limit_kopecks = 100000000, manual_monthly_hard_limit_kopecks = 100000000
+                    WHERE id = ?
+                    """, profileId);
+            // Other scenarios of this class may have used the card this month: both limits are set over that usage.
+            long used = 1_000_000_00L - orderRouteChanges.recipients(order, world.manager.auth()).ownerCard().remainingKopecks();
+            jdbc.update("UPDATE payment_profiles SET manual_monthly_soft_limit_kopecks = ?, manual_monthly_hard_limit_kopecks = ? WHERE id = ?",
+                    used + 2_000_00, used + 2_000_00, profileId);
+            var overLimit = orderRouteChanges.recipients(order, world.manager.auth()).ownerCard();
+            assertThat(overLimit).isNotNull();
+            assertThat(overLimit.remainingKopecks()).isEqualTo(2_000_00);
+            assertThat(overLimit.blockReason()).contains("лимит карты");
+            assertThatThrownBy(() -> orderRouteChanges.change(order, new PaymentRouteChangeRequest(
+                    bankLinkId, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, null, PaymentRouteChangeRequest.OWNER_CARD),
+                    world.manager.auth())).isInstanceOf(ResponseStatusException.class);
+            assertThat(link(bankLinkId)).containsEntry("status", "CREATED");
+
+            // The limit holds the invoice: the automatic choice finds no employee and issues the owner's card.
+            jdbc.update("UPDATE payment_profiles SET manual_monthly_soft_limit_kopecks = ?, manual_monthly_hard_limit_kopecks = ? WHERE id = ?",
+                    used + 100_000_00, used + 100_000_00, profileId);
+            var offered = orderRouteChanges.recipients(order, world.manager.auth()).ownerCard();
+            assertThat(offered.name()).isEqualTo("Мария Владелец");
+            assertThat(offered.remainingKopecks()).isEqualTo(100_000_00);
+            assertThat(offered.blockReason()).isNull();
+            PaymentRouteChangeResponse changed = orderRouteChanges.change(order, new PaymentRouteChangeRequest(
+                    bankLinkId, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, null, null), world.manager.auth());
+
+            assertThat(link(bankLinkId).get("status")).isIn("CANCELED", "EXPIRED");
+            Map<String, Object> cardLink = link(changed.paymentLinkId());
+            assertThat(cardLink).containsEntry("status", "WAITING_MANUAL_PAYMENT").containsEntry("manual_source", "PROFILE_MONTHLY_LIMIT");
+            assertThat(num(cardLink, "payment_profile_id")).isEqualTo(profileId);
+            assertThat(reserve(cardLink.get("contractor_allocation_id"))).containsEntry("recipient_type", "OWNER")
+                    .containsEntry("status", "OWNER_FALLBACK");
+            // The order is back in the ordinary choice of a recipient, so this invoice stays its own.
+            assertThat(jdbc.queryForObject("SELECT invoice_payment_mode FROM orders WHERE order_id = ?", String.class, order))
+                    .isIn("AUTO_ROUTING", null);
+            // The client gets the new requisites through the route-change outbox.
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_route_change_notification_outbox WHERE payment_link_id = ?",
+                    Long.class, changed.paymentLinkId())).isEqualTo(1L);
+            // The card is in use now: what is left of the month is less by this invoice.
+            var afterIssue = orderRouteChanges.recipients(order, world.manager.auth()).ownerCard();
+            assertThat(afterIssue.current()).isTrue();
+            assertThat(afterIssue.blockReason()).isNotNull();
+            // The client holds the owner's card: it is not issued a second time, neither by name nor as «another» recipient.
+            long cardLinkId = changed.paymentLinkId();
+            assertThatThrownBy(() -> orderRouteChanges.change(order, new PaymentRouteChangeRequest(
+                    cardLinkId, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, null, PaymentRouteChangeRequest.OWNER_CARD),
+                    world.manager.auth())).isInstanceOf(ResponseStatusException.class);
+            assertThatThrownBy(() -> orderRouteChanges.change(order, new PaymentRouteChangeRequest(
+                    cardLinkId, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, null, null),
+                    world.manager.auth(), true)).isInstanceOf(ResponseStatusException.class);
+            assertThat(link(cardLinkId)).containsEntry("status", "WAITING_MANUAL_PAYMENT");
+
+            // «оплатили»: the owner is the recipient of the invoice, and the mark goes to the owner for confirmation.
+            var paid = payments.manualCardPaymentContextForOrder(order, world.manager.auth());
+            assertThat(paid.bankLinkRoute()).isFalse();
+            assertThat(paid.originalRecipient().recipientType()).isEqualTo(ContractorRecipientType.OWNER);
+            ManagerManualCardPaymentResultResponse reported = payments.submitManagerManualCardPaymentForOrder(order,
+                    "Клиент перевёл на карту владельца", null, ContractorRecipientType.OWNER, null, "OWNER",
+                    world.manager.username, world.manager.auth());
+            assertThat(reported.status()).isEqualTo(ManagerManualCardPaymentResultResponse.OWNER_APPROVAL_PENDING);
+            assertThat(orderStatus(order)).isNotEqualTo(STATUS_PAID);
+        } finally {
+            if (profileBefore != null) {
+                jdbc.update("""
+                        UPDATE payment_profiles SET payment_policy = ?, manual_payment_type = ?, manual_phone = ?, manual_recipient_name = ?,
+                            manual_monthly_soft_limit_kopecks = ?, manual_monthly_hard_limit_kopecks = ?
+                        WHERE id = ?
+                        """, profileBefore.get("payment_policy"), profileBefore.get("manual_payment_type"), profileBefore.get("manual_phone"),
+                        profileBefore.get("manual_recipient_name"), profileBefore.get("manual_monthly_soft_limit_kopecks"),
+                        profileBefore.get("manual_monthly_hard_limit_kopecks"), profileId);
+            }
             settings.setString(AppSettingService.PAYMENTS_TBANK_RUNTIME_MODE, "TEST");
             settings.setBoolean(AppSettingService.PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS, false);
         }

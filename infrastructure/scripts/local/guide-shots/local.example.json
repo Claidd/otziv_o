@@ -2,8 +2,10 @@
   "comment": "Copy outside the repository, fill in for the current stand copy and pass its path in OTZIV_GUIDE_SHOTS_LOCAL. The left side of every rule is a real name: never commit the filled file.",
   "invoices": { "issued": 0, "paper": 0, "collecting": 0 },
   "order": 0,
+  "bankLinkOrder": 0,
   "publishedOrders": [0],
   "unpaidOrder": 0,
+  "company": { "withoutLink": "Настоящее название компании без общего счёта", "withSeparateOrder": "Настоящее название компании с включённым общим счётом" },
   "rules": [
     ["Тест (?=[А-ЯЁ][а-яё]+ [А-ЯЁ])", "g", ""],
     ["Настоящее название компании( - общий счет)+", "g", "Автосервис «Мотор» - общий счёт"],

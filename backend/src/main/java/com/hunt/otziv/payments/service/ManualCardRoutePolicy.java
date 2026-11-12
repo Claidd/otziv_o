@@ -84,11 +84,23 @@ public class ManualCardRoutePolicy {
             return new ManualCardPaymentContextResponse(order == null ? null : order.getId(), link == null ? 0L : link.getAmountKopecks(), recipient, List.of(recipient), "Старая оплата до запуска новой системы будет закрыта без нового учёта выплат.", false, null, null, null, "TASK_RECIPIENT_V1", HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY + ":" + (link == null ? "" : link.getId()));
         }
         ManualCardPaymentContextResponse context = actualPaymentAttributionService.manualCardPaymentContext(order, link);
-        if (!isBankPaymentRoute(link) || context.recipientSelectionFrozen()
-                || context.candidates().stream().noneMatch(candidate -> candidate.recipientType() == ContractorRecipientType.OWNER)) return context;
+        if (!isBankPaymentRoute(link)) return context;
+        // A payment by the bank link is confirmed by the bank alone. A transfer that went past the link to
+        // the owner's card may be reported, as a request for the owner's confirmation, only where the bank
+        // profile lets the owner take card transfers at all; elsewhere the owner is not offered.
+        if (context.recipientSelectionFrozen() || ownerCardReceiptAllowed(link)
+                || context.candidates().stream().noneMatch(candidate -> candidate.recipientType() == ContractorRecipientType.OWNER)) {
+            return context.onBankLinkRoute();
+        }
         return new ManualCardPaymentContextResponse(context.orderId(), context.amountKopecks(), context.originalRecipient(),
                 context.candidates().stream().filter(candidate -> candidate.recipientType() != ContractorRecipientType.OWNER).toList(),
-                context.anomalyWarning(), false, null, null, null, context.contractVersion(), context.routeRevision());
+                context.anomalyWarning(), false, null, null, null, context.contractVersion(), context.routeRevision(),
+                context.teamRecipientKeys(), true);
+    }
+
+    /** The bank profile of this invoice lets its owner take a client's transfer to a card. */
+    boolean ownerCardReceiptAllowed(PaymentLink link) {
+        return link != null && OwnerCardPolicy.allows(link.getPaymentProfile());
     }
 
     SelectedManagerRecipient resolveManagerRecipient(

@@ -221,6 +221,30 @@ export class ManagerCompanyEditModalComponent implements OnInit, OnDestroy {
     return account ? this.billingAccountHasCompany(account, companyId) : false;
   }
 
+  /**
+   * Why the orders of this company are not collected into a common invoice: the system switched the
+   * link off or keeps retrying. Read from every link of the company, because a link the system
+   * switched off no longer counts as «участвует» and the editor shows «Нет связи».
+   */
+  billingCompanyProblem(): string {
+    return this.currentCompanyLinks().map((linked) => (linked.problem ?? '').trim()).find(Boolean) ?? '';
+  }
+
+  /** Which unfinished orders of this company stay on their own invoices, and what to do with them. */
+  billingSeparateOrdersNote(): string {
+    return this.currentCompanyLinks().filter((linked) => linked.enabled)
+      .map((linked) => (linked.separateOrdersNote ?? '').trim()).find(Boolean) ?? '';
+  }
+
+  private currentCompanyLinks(): CommonBillingAccountResponse['companies'] {
+    const companyId = this.company?.id;
+    if (!companyId) {
+      return [];
+    }
+    return this.billingAccounts.flatMap((account) => account.companies ?? [])
+      .filter((linked) => linked.companyId === companyId);
+  }
+
   billingStatusText(): string {
     const account = this.currentCompanyBillingAccount();
     if (!account) {

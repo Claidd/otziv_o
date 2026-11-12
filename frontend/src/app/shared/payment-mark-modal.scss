@@ -1,3 +1,5 @@
+// The window «Отметить оплату» (common-manual-payment-attribution-modal): one window for a common
+// invoice and for an ordinary order.
 :host {
   position: fixed;
   inset: 0;
@@ -109,7 +111,42 @@
   overflow-wrap: anywhere;
 }
 
+.pay-head-tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 /* Selectors below outweigh the admin-wide button baseline (accent border, gradient hover). */
+.pay-modal .pay-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.2rem;
+  border: 1px solid var(--pay-border);
+  border-radius: 999px;
+  padding: 0 0.7rem;
+  color: var(--pay-text);
+  background: var(--pay-soft);
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pay-modal .pay-guide:hover {
+  border-color: var(--pay-accent-border);
+  color: var(--pay-accent);
+  background: var(--pay-accent-soft);
+}
+
+.pay-guide .material-icons-sharp {
+  font-size: 1rem;
+}
+
 .pay-modal .pay-close {
   display: grid;
   flex: 0 0 auto;
@@ -456,6 +493,7 @@
 
 .pay-modal .pay-button:focus-visible,
 .pay-modal .pay-close:focus-visible,
+.pay-modal .pay-guide:focus-visible,
 .pay-modal .pay-link:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--otziv-action, #e53220) 30%, transparent);
   outline-offset: 2px;
@@ -569,6 +607,50 @@
 
   .pay-modal .pay-button {
     width: 100%;
+  }
+}
+
+/* One bank transfer that paid several orders (an ordinary order only). */
+.pay-transfer {
+  display: grid;
+  gap: 0.6rem;
+  border: 1px solid var(--pay-border);
+  border-radius: 0.8rem;
+  padding: 0.75rem;
+  background: var(--pay-soft);
+}
+
+.pay-transfer-lines {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pay-transfer-lines li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.pay-transfer-lines li > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pay-transfer-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.6rem;
+}
+
+@media (max-width: 640px) {
+  .pay-transfer-add {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

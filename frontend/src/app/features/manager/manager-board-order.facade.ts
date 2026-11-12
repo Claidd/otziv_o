@@ -13,7 +13,11 @@ import type {
   OrderUpdateRequest
 } from '../../core/manager.api';
 import type { ToastService } from '../../shared/toast.service';
-import type { PaymentRecipientChoice, PaymentRecipientOption } from '../../shared/payment-recipient-picker.component';
+import type {
+  PaymentRecipientChoice,
+  PaymentRecipientOption,
+  PaymentRecipientOwnerCard
+} from '../../shared/payment-recipient-picker.component';
 import {
   readSessionDraft,
   removeSessionDraft,
@@ -86,6 +90,25 @@ export class ManagerBoardOrderFacade {
     autoHint: string;
   } | null>(null);
   readonly recipientPickerOptions = signal<PaymentRecipientOption[] | null>(null);
+  /** The owner's card of the window; null where the server does not offer it. */
+  readonly recipientPickerOwnerCard = signal<PaymentRecipientOwnerCard | null>(null);
+  /** What the automatic choice will do: the employees' chain, and the owner's card after it where it may be issued. */
+  readonly recipientPickerAutoHint = computed(() => {
+    const picker = this.recipientPicker();
+    if (!picker) {
+      return '';
+    }
+    const card = this.recipientPickerOwnerCard();
+    if (!card || card.current || card.blockReason) {
+      return picker.autoHint;
+    }
+    return picker.target === 'DIFFERENT_RECIPIENT'
+      ? 'Система выдаст номер другого получателя — платёжного задания или менеджера, если у него хватает резерва. '
+        + 'Нынешний получатель исключается. Если не подойдёт никто из сотрудников, клиент получит карту владельца: '
+        + 'её лимит на этот месяц вмещает счёт.'
+      : 'Система возьмёт платёжное задание, затем специалиста заказа, затем менеджера — первого, у кого хватает резерва. '
+        + 'Если не подойдёт никто из сотрудников, клиент получит карту владельца: её лимит на этот месяц вмещает счёт.';
+  });
   readonly recipientPickerAmount = signal(0);
   readonly recipientPickerLoading = signal(false);
   readonly recipientPickerError = signal('');
@@ -357,6 +380,7 @@ export class ManagerBoardOrderFacade {
       // or a person the manager names.
       this.recipientPickerSubmitError.set('');
       this.recipientPickerOptions.set(null);
+      this.recipientPickerOwnerCard.set(null);
       this.recipientPickerAmount.set(0);
       this.recipientPicker.set({
         orderId: order.id,
@@ -430,6 +454,7 @@ export class ManagerBoardOrderFacade {
           return;
         }
         this.recipientPickerOptions.set(response.recipients ?? []);
+        this.recipientPickerOwnerCard.set(response.ownerCard ?? null);
         this.recipientPickerAmount.set(response.amountKopecks ?? 0);
         this.recipientPickerLoading.set(false);
       },
@@ -449,6 +474,7 @@ export class ManagerBoardOrderFacade {
     }
     this.recipientPicker.set(null);
     this.recipientPickerOptions.set(null);
+    this.recipientPickerOwnerCard.set(null);
     this.recipientPickerSubmitError.set('');
   }
 

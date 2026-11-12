@@ -142,7 +142,23 @@ public class PaymentRouteReplacementWorkflow {
                         option.availableKopecks(), option.overrunKopecks(),
                         currentUserId != null && currentUserId.equals(option.userId()), option.blockReason()))
                 .toList();
-        return new com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse(orderId, current.getId(), current.getAmountKopecks(), recipients);
+        return new com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse(orderId, current.getId(), current.getAmountKopecks(),
+                recipients, ownerCardOption(current));
+    }
+
+    /** The owner's card as a line of the «Выдать номер карты» window; null where the owner takes money through the bank only. */
+    private com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse.OwnerCard ownerCardOption(PaymentLink current) {
+        Order order = current.getOrder();
+        PaymentProfile profile = paymentProfileService.selectForManager(orderManager(order));
+        java.util.OptionalLong remaining = commonInvoiceRouteSelector.ownerCardRemainingKopecks(profile, LocalDateTime.now(), current.getId());
+        if (remaining.isEmpty() || !commonInvoiceRouteSelector.allowLegacyManualProfileRoute()) {
+            return null;
+        }
+        boolean issuedOnTheCard = current.getManualSource() == ManualPaymentSource.PROFILE_MONTHLY_LIMIT;
+        String blockReason = issuedOnTheCard ? "клиенту уже выдана карта владельца"
+                : current.getAmountKopecks() > remaining.getAsLong() ? "лимит карты на этот месяц не вмещает счёт" : null;
+        return new com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse.OwnerCard(
+                profile.getManualRecipientName(), remaining.getAsLong(), issuedOnTheCard, blockReason);
     }
 
     /** The person whose card number the client holds now; null for a bank link, a paper invoice or a damaged reserve. */
@@ -226,6 +242,7 @@ public class PaymentRouteReplacementWorkflow {
         if (target == null || (differentRecipient && target != PaymentRouteChangeTarget.EMPLOYEE_REQUISITES)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный запрос смены способа оплаты");
         }
+        boolean ownerCardChosen = chosenProfileId != null && chosenProfileId == com.hunt.otziv.payments.dto.PaymentRouteChangeRequest.OWNER_CARD;
         if (chosenProfileId != null && target != PaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Получателя выбирают только при выдаче номера карты");
         }
@@ -326,19 +343,43 @@ public class PaymentRouteReplacementWorkflow {
             Objects.requireNonNull(profile, "profile");
             // A person named by the manager bypasses both the payment task and the automatic choice. The
             // balance may be exceeded; the overrun keeps this person out of automatic routing until it recovers.
+            // The owner's card is issued where the bank profile lets the owner take card transfers and this
+            // month's limit of the card still holds the invoice. The old invoice is already closed above.
+            // The client who already holds the owner's card is never given the same card again as «another» one.
+            boolean ownerCardAvailable = current.getManualSource() != ManualPaymentSource.PROFILE_MONTHLY_LIMIT
+                    && commonInvoiceRouteSelector.allowLegacyManualProfileRoute()
+                    && commonInvoiceRouteSelector.shouldUseManualPayment(profile, amountKopecks, now, current.getId());
             Optional<ManualPaymentTaskRouteSnapshot> taskRoute = chosenProfileId == null && actualPaymentAttributionService.actualRecipientAccountingEnabled() ? taskReceiptIntegrationService.reserveForPaymentLink(replacement, manager.getId(), profile.getId(), filter) : Optional.empty();
             if (taskRoute.isPresent()) {
                 applyManualTaskPayment(replacement, taskRoute.get());
+            } else if (ownerCardChosen) {
+                // The manager named the owner's card. A new invoice on it never exceeds the month's limit.
+                if (!ownerCardAvailable) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Карту владельца выдать нельзя: она не разрешена для этого менеджера или лимит карты на этот месяц не вмещает счёт");
+                }
+                requireLiveRouteChangeEnabled();
+                prepareLivePaymentLinkSourceOrFail(replacement, now);
+                ContractorPaymentAllocation allocation = requireLiveRoutingAllocation(replacement,
+                        contractorPaymentLiveRoutingService.reserveOwnerForPaymentLink(replacement), "route_change_owner_card_returned_null");
+                applyOwnerCardRoute(order, replacement, profile, allocation);
             } else {
                 requireLiveRouteChangeEnabled();
                 prepareLivePaymentLinkSourceOrFail(replacement, now);
+                // Automatic choice: an employee with a free reserve; the owner's card when nobody has one and
+                // the card may be issued; otherwise the refusal, and the manager names a person.
                 ContractorPaymentAllocation allocation = requireLiveRoutingAllocation(replacement, chosenProfileId != null
                         ? contractorPaymentLiveRoutingService.reserveChosenContractorForPaymentLink(replacement, chosenProfileId)
-                        : contractorPaymentLiveRoutingService.reserveContractorForPaymentLink(replacement, filter.excludedUserId()), "route_change_contractor_returned_null");
-                if (!isContractorRecipient(allocation)) {
+                        : ownerCardAvailable
+                                ? contractorPaymentLiveRoutingService.reserveContractorElseOwnerForPaymentLink(replacement, filter.excludedUserId())
+                                : contractorPaymentLiveRoutingService.reserveContractorForPaymentLink(replacement, filter.excludedUserId()), "route_change_contractor_returned_null");
+                if (isContractorRecipient(allocation)) {
+                    applyContractorPaymentRoute(replacement, allocation);
+                } else if (chosenProfileId == null && ownerCardAvailable) {
+                    applyOwnerCardRoute(order, replacement, profile, allocation);
+                } else {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось выбрать специалиста или менеджера для оплаты");
                 }
-                applyContractorPaymentRoute(replacement, allocation);
             }
         } else {
             Objects.requireNonNull(profile, "profile");
@@ -355,6 +396,19 @@ public class PaymentRouteReplacementWorkflow {
         ManagerPaymentLinkResponse response = toManagerResponseWithShadowRoute(replacement);
         log.info("Payment route replaced: orderId={}, oldLinkId={}, newLinkId={}, target={}, actor={}", orderId, current.getId(), replacement.getId(), target, authentication == null ? "system" : authentication.getName());
         return new PaymentRouteReplacement(current.getId(), replacement.getId(), target, response);
+    }
+
+    /**
+     * The invoice goes out with the requisites of the owner's card and uses this month's limit of the card.
+     * The order returns to the ordinary choice of a recipient: «номер карты сотрудника» as an explicit mode
+     * would not recognise this invoice as its own and would issue another one in its place.
+     */
+    private void applyOwnerCardRoute(Order order, PaymentLink replacement, PaymentProfile profile, ContractorPaymentAllocation ownerAllocation) {
+        applyPaymentProfile(replacement, profile);
+        commonInvoiceRouteSelector.applyManualProfilePayment(replacement, profile);
+        replacement.setContractorAllocationId(ownerAllocation.getId());
+        order.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        orderRepository.save(order);
     }
 
     private void validateExpectedTargetPaymentProfile(PaymentRouteChangeTarget target, Long expectedTargetPaymentProfileId, PaymentProfile profile) {

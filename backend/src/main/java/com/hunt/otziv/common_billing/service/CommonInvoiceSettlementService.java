@@ -1380,6 +1380,24 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         return isFrozenLiveContractorSource(invoice) && invoice.getManualConfirmedAt() != null && normalize(invoice.getManualPaymentComment()).startsWith(CONTRACTOR_COMMON_SOURCE_CONFIRMATION_AUDIT_PREFIX);
     }
 
+    /**
+     * Unfinished orders of a company that stay out of every common invoice because their own invoice
+     * is still alive. Reads only. The rule itself is
+     * {@link CommonInvoiceInitializationService#keepsOrderOnItsOwnInvoice}.
+     */
+    List<Long> ordersKeepingTheirOwnInvoice(
+            Long companyId, Collection<String> statuses, java.util.function.Predicate<PaymentLink> keepsOwnInvoice) {
+        if (companyId == null || statuses == null || statuses.isEmpty()) {
+            return List.of();
+        }
+        List<Long> candidates = orderRepository.findCommonBillingBackfillOrderIds(companyId, statuses);
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        return paymentLinkRepository.findByOrderIdInForRead(candidates).stream().filter(keepsOwnInvoice)
+                .map(link -> link.getOrder() == null ? null : link.getOrder().getId()).filter(Objects::nonNull).distinct().sorted().toList();
+    }
+
     boolean isSafelyClosedStandaloneRoute(PaymentLink link) {
         if (link == null || link.getStatus() == null) {
             return false;

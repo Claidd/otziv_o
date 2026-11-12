@@ -70,6 +70,23 @@ export function mobileManualCardPaymentSubmission(
   };
 }
 
+/**
+ * What the dialog says above the form when the invoice of the order is the owner's bank link: a payment by
+ * the link is marked by the bank, and the owner is offered only where the bank profile lets the owner take
+ * card transfers. Empty for any other invoice and for a repeated, already fixed confirmation.
+ */
+export function mobileManualCardBankLinkNotice(context: ManualCardPaymentContext): string {
+  if (!context.bankLinkRoute || context.recipientSelectionFrozen) {
+    return '';
+  }
+  return (context.candidates ?? []).some(candidate => candidate.recipientType === 'OWNER')
+    ? 'Счёт этого заказа — ссылка банка владельца. Оплату по ссылке банк отмечает сам: отмечать её здесь не нужно. '
+      + 'Если клиент перевёл мимо ссылки владельцу на карту — выберите «Владелец»: запрос уйдёт владельцу, '
+      + 'и заказ закроется только после его подтверждения. Если клиент перевёл сотруднику — выберите сотрудника.'
+    : 'Счёт этого заказа — ссылка банка владельца. Оплату по ссылке банк отмечает сам, а на карту этот владелец '
+      + 'оплату не принимает, поэтому его в списке нет. Выберите сотрудника, только если клиент перевёл деньги ему напрямую.';
+}
+
 export function mobileManualCardRecipientLabel(candidate: ManualCardPaymentRecipientOption): string {
   return mobileTaskAwareRecipientLabel(candidate);
 }

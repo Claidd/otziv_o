@@ -501,14 +501,9 @@
   min-width: 0;
   max-width: 100%;
   width: 100%;
-  border: 1px solid #e8ecf1;
-  border-left: 0.24rem solid transparent;
   border-radius: var(--otziv-small-radius, 0.55rem);
   padding: 0.42rem 0.48rem;
-  color: var(--otziv-text, #1f2430);
-  background: var(--otziv-field-background, #f7f9fc) !important;
   text-align: left;
-  box-shadow: 0 0.45rem 1.2rem rgba(34, 40, 52, 0.04);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
@@ -534,17 +529,11 @@
 }
 
 .company-billing-account:disabled,
-.company-billing-results button:disabled {
-  color: #7c8592;
-  background: #f4f6f8;
-}
 
 .company-billing-empty {
   min-height: 3.35rem;
   align-content: center;
   border-style: dashed;
-  color: #51627a;
-  background: #f8fafc !important;
   box-shadow: none;
   cursor: default;
 }
@@ -598,7 +587,6 @@
 .company-billing-results small,
 .company-billing-subtitle small,
 .company-billing-state {
-  color: #637086;
   font-size: 0.62rem;
   font-weight: 880;
   line-height: 1.3;
@@ -624,11 +612,8 @@
   align-items: center;
   gap: 0.55rem;
   margin: 0;
-  border: 1px solid rgba(108, 155, 207, 0.18);
   border-radius: var(--otziv-small-radius, 0.55rem);
   padding: 0.55rem 0.66rem;
-  color: #50627a;
-  background: rgba(108, 155, 207, 0.08);
   font-size: 0.7rem;
   font-weight: 860;
   line-height: 1.28;
@@ -640,8 +625,6 @@
   height: 1.8rem;
   place-items: center;
   border-radius: 0.5rem;
-  color: var(--otziv-primary, #6c9bcf);
-  background: rgba(108, 155, 207, 0.14);
   font-size: 1rem;
 }
 
@@ -701,13 +684,11 @@
 .company-billing-linked small,
 .company-billing-subtitle strong,
 .company-billing-subtitle small,
-.company-billing-explanation,
 .company-billing-empty strong,
 .company-billing-empty small {
   color: var(--otziv-dark, #1f2430);
 }
 
-.company-billing-explanation .material-icons-sharp,
 .company-billing-empty .material-icons-sharp,
 .company-billing-account .material-icons-sharp,
 .company-billing-linked .material-icons-sharp {
@@ -800,11 +781,6 @@
   border-radius: 0.5rem;
   padding: 0.6rem 0.7rem;
   background: #f6f8fb;
-}
-
-.company-billing-state.error {
-  color: #a23243;
-  background: #fff1f3;
 }
 
 @media (max-width: 760px) {
@@ -1269,6 +1245,29 @@
     border: 1px solid var(--plain-border);
     color: var(--plain-muted);
     background: var(--plain-surface);
+  }
+
+  /* The system keeps the company out of the common invoice: the reason must not look like a hint. */
+  .company-billing-note--problem {
+    border-color: var(--plain-danger-border);
+    color: var(--plain-danger);
+    background: var(--plain-danger-soft);
+  }
+
+  /* Orders that stay on their own invoices: a note to act on, not an error. */
+  .company-billing-note--separate {
+    border-color: var(--plain-warning-border);
+    color: var(--plain-warning);
+    background: var(--plain-warning-soft);
+  }
+
+  /* The text and the icon are spans: without this they keep the grey of the field captions. */
+  .company-billing-note span {
+    color: inherit;
+  }
+
+  .company-billing-note .material-icons-sharp {
+    background: color-mix(in srgb, currentColor 12%, transparent);
   }
 
   .company-billing-toggles .company-switch-field {

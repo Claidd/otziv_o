@@ -29,7 +29,7 @@
         <input type="radio" name="route-recipient" [checked]="selected() === null" (change)="select(null)" />
         <span class="pick-text">
           <strong>Подобрать автоматически</strong>
-          <small>{{ autoHint }}</small>
+          <small>{{ hint() }}</small>
         </span>
       </label>
     </fieldset>
@@ -37,14 +37,16 @@
     <section class="pick-people" aria-label="Выбрать получателя самостоятельно">
       <div class="pick-people-head">
         <strong>Или выберите получателя сами</strong>
-        <small>Можно выбрать любого сотрудника, даже если резерва не хватает.</small>
+        <small>{{ ownerCard()
+          ? 'Можно выбрать любого сотрудника, даже если резерва не хватает. Карту владельца — пока её лимит на месяц вмещает счёт.'
+          : 'Можно выбрать любого сотрудника, даже если резерва не хватает.' }}</small>
       </div>
       @if (loading()) {
         <p class="pick-state" role="status"><ion-spinner name="crescent" aria-hidden="true" /> Загружаем сотрудников…</p>
       } @else if (loadError()) {
         <p class="pick-error" role="alert">{{ loadError() }}</p>
         <ion-button type="button" expand="block" fill="outline" (click)="load()" [disabled]="saving()">Повторить</ion-button>
-      } @else if (!recipients().length) {
+      } @else if (!recipients().length && !ownerCard()) {
         <p class="pick-state">Сотрудников с платёжным профилем для этого счёта нет.</p>
       } @else {
         @if (recipients().length > 6) {
@@ -59,11 +61,27 @@
             (ngModelChange)="query.set($event)"
           >
         }
-        @if (!visible().length) {
+        @if (!visible().length && recipients().length) {
           <p class="pick-state" role="status">Никого не найдено. Проверьте имя.</p>
         }
         <fieldset class="pick-list pick-list--people" [disabled]="saving()">
-          <legend class="pick-hidden">Сотрудники</legend>
+          <legend class="pick-hidden">Владелец и сотрудники</legend>
+          @if (ownerCard(); as card) {
+            <label class="pick-option pick-option--owner" [class.selected]="selected() === ownerCardId" [class.disabled]="!ownerCardSelectable()">
+              <input
+                type="radio"
+                name="route-recipient"
+                [checked]="selected() === ownerCardId"
+                [disabled]="!ownerCardSelectable()"
+                (change)="select(ownerCardId)"
+              />
+              <span class="pick-text">
+                <strong>Владелец{{ card.name ? ' · ' + card.name : '' }}</strong>
+                <small>карта владельца · {{ ownerCardNote(card) }}</small>
+              </span>
+              <span class="pick-tag" [class]="'pick-tag--' + ownerCardTag(card).tone">{{ ownerCardTag(card).text }}</span>
+            </label>
+          }
           @for (option of visible(); track option.profileId) {
             <label class="pick-option" [class.selected]="selected() === option.profileId" [class.disabled]="!selectable(option)">
               <input

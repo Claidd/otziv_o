@@ -11,7 +11,9 @@
     {
       "companyId": 91,
       "companyTitle": "Компания",
-      "enabled": true
+      "enabled": true,
+      "problem": null,
+      "separateOrdersNote": null
     }
   ],
   "currentInvoice": {

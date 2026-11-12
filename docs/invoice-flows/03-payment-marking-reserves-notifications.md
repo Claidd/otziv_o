@@ -7,7 +7,7 @@
 
 ## Коротко — 8–12 правил, которые нельзя нарушать
 
-1. Оплату по банковской ссылке подтверждает только банк (webhook или фоновая сверка). Отметить вручную «получил владелец» при банковском маршруте нельзя: `CommonInvoiceManualPaymentWorkflow.java:905-910`, `ManualCardPaymentWorkflow.java:383-388`.
+1. Оплату по банковской ссылке подтверждает только банк (webhook или фоновая сверка). Отметить вручную «получил владелец» при банковском маршруте нельзя: `CommonInvoiceManualPaymentWorkflow.java:905-910`, `ManualCardPaymentWorkflow.java:383-388`. Исключение с 2026-11-12 — только счёт одного заказа и только перевод **мимо ссылки на карту владельца**: если банковский профиль менеджера разрешает владельцу принимать переводы на карту (`OwnerCardPolicy.allows`: политика `MANUAL_UNTIL_LIMIT_THEN_TBANK` и заполненные реквизиты), менеджер может отправить запрос владельцу; заказ закрывается только после подтверждения владельца в Telegram и после проверки ссылки в банке. Для профиля «только банк» (`T_BANK_ONLY`, владелец-ИП) владельца нет в списке и сервер отказывает. Общий счёт правило не меняет.
 2. Ручная отметка общего счёта принимает только весь остаток. Частичная сумма отклоняется, разбиение остатка между несколькими получателями разрешено: `CommonManualPaymentAttributionCoordinator.java:392-394`.
 3. Клиент не выбирает произвольный платёжный профиль: каждая строка сверяется со списком кандидатов, построенным сервером: `CommonManualPaymentAttributionCoordinator.java:356-367`.
 4. Менеджер не зачисляет деньги владельцу. Его запрос становится отчётом в `common_owner_receipt_approval` и ждёт OWNER/ADMIN: `CommonOwnerReceiptApprovals.java:75-106,115-122`.
@@ -67,7 +67,7 @@
 | **Прочее** `backend/src/main/java/com/hunt/otziv/p_products/payment/service/OrderPaymentCancellationService.java`, `backend/src/main/java/com/hunt/otziv/t_telegrambot/service/TelegramService.java`, `backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentReviewView.java`, `backend/src/main/java/com/hunt/otziv/payments/dto/ManagerManualCardPaymentResultResponse.java`, `backend/src/main/java/com/hunt/otziv/common_billing/service/CommonInvoiceCancellationService.java`, `backend/src/main/java/com/hunt/otziv/common_billing/service/CommonInvoicePaymentRouteWorkflow.java` | Откат оплаты заказа; диспетчер callback Telegram; правило «спор разрешён»; ответ менеджеру после отметки заказа; два других места вызова `getState` |
 | `MIG/V1_10_273__common_invoice_payment_notification_outbox.sql`, `MIG/V1_10_389__common_owner_receipt_approval.sql`, `MIG/V1_10_394__manual_receipt_corrections.sql`, `MIG/V1_10_395__common_invoice_recipient_dispute.sql` | Таблицы outbox, отчёта владельцу, исправлений, колонки спора |
 | `FE/features/admin/common-billing/common-manual-payment-attribution-modal.component.{ts,html}`, `FE/shared/common-manual-payment-route-refresh.ts`, `FE/core/common-manual-payment-attribution.api.ts` | Окно сайта для общего счёта |
-| `FE/features/manager/manager-manual-card-payment-modal.component.{ts,html}` | Окно сайта для счёта одного заказа |
+| `FE/features/manager/manager-manual-card-payment-modal.component.ts` | «оплатили» одного заказа: обёртка над окном общего счёта, даёт ему получателей заказа |
 | `FE/features/admin/tbank-payments/manual-receipt-correction.component.{ts,html}` | Блок «Исправить ручное поступление» на странице «Платежи, возвраты и чеки» |
 | `MOB/shared/mobile-common-manual-payment-dialog.component.{ts,html}`, `MOB/shared/mobile-common-manual-payment-flow.service.ts`, `MOB/shared/common-manual-payment-route-refresh.ts`, `MOB/core/common-billing.api.ts` | Окно приложения для общего счёта |
 
@@ -229,11 +229,13 @@
 | 1 | Окно `manager-manual-card-payment-modal` запрашивает `GET /api/manager/orders/{id}/manual-card-payment-context` (ADMIN/OWNER/MANAGER) | `AdminPaymentController.java:117-127`; `FE/features/manager/manager-manual-card-payment-modal.component.ts:181-225` |
 | 2 | Выбор платёжного источника заказа; другой активный или подтверждённый способ оплаты → 409; заказ в активном общем счёте не принимается | `ManualCardPaymentWorkflow.java:132-146,209-227` |
 | 3 | `manualCardPaymentContext`: получатель из счёта или задание, специалист и менеджер заказа, команда менеджера с включённым профилем (пока выбор не зафиксирован), владелец; предупреждение о превышении | `ContractorActualPaymentAttributionService.java:454-560` |
-| 4 | Банковская ссылка без зафиксированного выбора: владелец из кандидатов убран. Бумажный счёт: только владелец | `ManualCardRoutePolicy.java:77-92` |
-| 5 | Окно сайта: получатель не предвыбран, пока выбор не зафиксирован; причина обязательна | `FE/features/manager/manager-manual-card-payment-modal.component.ts:215,248-250` |
+| 4 | Банковская ссылка без зафиксированного выбора: в ответе `bankLinkRoute=true`; владелец остаётся в кандидатах, только если профиль ссылки разрешает ему переводы на карту (`ownerCardReceiptAllowed` → `OwnerCardPolicy.allows(link.paymentProfile)`), иначе убран. Бумажный счёт: только владелец | `ManualCardRoutePolicy.manualCardPaymentContextForRoute`, `ownerCardReceiptAllowed`; `payments/service/OwnerCardPolicy.java` |
+| 4а | `teamRecipientKeys` в ответе: ключи кандидатов, предложенных только как команда менеджера (не получатель счёта, не специалист и не менеджер заказа, не держатель резерва, не уже названный получатель). Окно показывает их отдельно, под «Другой получатель» | `ContractorActualPaymentAttributionService.manualCardPaymentContext`; `ManualCardPaymentContextResponse` |
+| 5 | Окно сайта «Отметить оплату» — с 2026-11-12 это само окно общего счёта (`common-manual-payment-attribution-modal`, стили `FE/shared/payment-mark-modal.scss`): компонент заказа только передаёт ему источник данных (`PaymentMarkSource`) и сохраняет отметку через API заказа. Отсюда одинаковое поведение: владелец первым, получатель из счёта («в счёте») выбран сразу, остальные сотрудники менеджера — под «Другой получатель», комментарий необязателен (при пустом уходит «Оплата поступила получателю из счёта» / «Клиент перевёл деньги не получателю из счёта»; сервер по-прежнему требует непустую причину), кнопка «Инструкция». Отличия заказа: нет деления суммы между получателями (сервер принимает только полную сумму заказа), есть «Одним переводом оплачено несколько заказов». Если счёт — ссылка банка владельца (`bankLinkRoute`), никто не выбран заранее и никто не помечен «в счёте» (получатель ссылки — банк), а окно объясняет: оплату по ссылке банк отмечает сам; где владелец предложен — «выберите «Владелец», запрос уйдёт владельцу»; где не предложен — «на карту этот владелец оплату не принимает». Для заказа выбор владельца всегда даёт кнопку «Отправить владельцу на подтверждение» (и для роли OWNER/ADMIN: сервер заказа создаёт запрос при любом вошедшем пользователе) — `PaymentMarkSource.ownerApprovalConsequence`. Зафиксированный ранее выбор повторяется без изменений. Приложение показывает тот же текст над формой (`bankLinkNotice`). | `FE/features/manager/manager-manual-card-payment-modal.component.ts` (`manualCardPaymentWindowOptions`, `source`); `FE/features/admin/common-billing/common-manual-payment-attribution-modal.component.{ts,html}` (`PaymentMarkSource`) |
 | 6 | `POST /api/manager/orders/{id}/confirm-manual-card-payment` → `submitManagerManualCardPaymentForOrder`; причина до 500 символов | `AdminPaymentController.java:129-150`; `OwnerManualCardApprovalWorkflow.java:91-103` |
 | 7 | Получатель — владелец → запрос владельцу: запись `PENDING`, кнопка «Подтвердить поступление владельцу» в Telegram-группе менеджера; ответ `OWNER_APPROVAL_PENDING` | `OwnerManualCardApprovalWorkflow.java:123-126,148-222`; `ManualCardPaymentReviewNotificationService.java:299-330` |
-| 8 | Владелец на банковской ссылке без уже существующего запроса → 409 «Оплату владельцу по банковской ссылке подтверждает банк» | `OwnerManualCardApprovalWorkflow.java:158-161` |
+| 8 | Владелец на банковской ссылке: профиль ссылки не разрешает карту владельца и запроса ещё нет → 409 «Оплату владельцу по банковской ссылке подтверждает банк». Профиль разрешает → обычный запрос владельцу (шаг 7), ссылка остаётся `CREATED`, заказ не закрыт | `OwnerManualCardApprovalWorkflow.requestOwnerManualCardPaymentApproval` |
+| 8а | Подтверждение владельца по такому запросу идёт тем же путём, что шаг 13: наблюдение банка и отмена ссылки; оплата, найденная в банке, закрывает заказ банковской оплатой вместо ручной отметки. Ссылка-доказательство получает банковский профиль исходной ссылки (`payment_profile_id`), поэтому сумма входит в месячный лимит карты владельца (`sumManualReservedAndConfirmedForPeriod`). Запись разрешена и при исчерпанном лимите: деньги уже пришли; новые счета после этого продолжают уходить ссылкой банка | `ManualCardPaymentWorkflow.manualCardPaymentEvidenceLink`; `CommonInvoiceRouteSelector.ownerCardRemainingKopecks` |
 | 9 | Подтвердить может активный OWNER/ADMIN, он же вошедший пользователь, только в группе менеджера компании заказа | `OwnerManualCardApprovalWorkflow.java:238-279,318-325` |
 | 10 | Получатель — специалист или менеджер → запись проверки (`PENDING_DELIVERY`, срок = отметка + 24 часа), зачисление сразу, затем уведомление с кнопкой «Оспорить поступление» | `OwnerManualCardApprovalWorkflow.java:127-139`; `SpecialistManualPaymentReviewService.java:43,125-146,361-389` |
 | 11 | Кандидат без типа получателя → прямое зачисление | `OwnerManualCardApprovalWorkflow.java:140-145` |
@@ -283,6 +285,27 @@
 | Выданный маршрут задания общего счёта | Режим из `paymentRouteManualTaskAccountingMode`; пусто и маршрут выбран до включения учёта → `SHADOW`; иначе 409 | `CommonManualPaymentAttributionCoordinator.java:290-324` |
 | Ссылка одного заказа | Режим фиксируется вместе с выбором получателя до обращения к банку | `ContractorActualPaymentAttributionService.java:563-617,629-684` |
 | Сохранённый режим ≠ записанному | 409 «Режим учёта выданного платежа изменился» | `ContractorActualPaymentAttributionService.java:213-216` |
+
+## Сводка «Кому зачтена оплата» за месяц
+
+- Где: сайт и приложение, раздел «Банк» (`admin/bank-payments`, ADMIN/OWNER), таблица «Кому зачтена оплата»;
+  `GET` сводки — `AdminPaymentController.manualRecipientMonthlySummary` → `ManualPaymentRecipientMonthlySummaryService.summary(month)`.
+- Сводка только читает; в учёте она ничего не меняет и пересчитывается при каждом открытии, в том числе за прошлые месяцы.
+
+| Источник строки | Кому зачтено |
+|---|---|
+| Строка поступления (`contractor_actual_payment_attributions`) | Фактический получатель: профиль специалиста или менеджера, владелец, задание на перевод |
+| Ручная оплата без строки поступления (старые оплаты) | «Получатель не указан (старые оплаты без атрибуции)», `attributionKnown=false` |
+| Оплата по «Счёту и акту Точки» (`payment_method = OWNER_PAPER_INVOICE`), общий счёт или отдельный заказ | Владелец, связанный с менеджером: «Владелец · ФИО (счёт и акт Точки)», ключ `OWNER:PAPER_INVOICE:<id пользователя>`, `attributionKnown=true` (с 2026-11-12) |
+
+У оплаты по «Счёту и акту» строки поступления нет: резерв под неё не создаётся, деньги приходят на расчётный счёт
+владельца. Раньше такие общие счета попадали в «Получатель не указан», а оплаченные так отдельные заказы в сводку не
+попадали вовсе. Владельца система определяет сама: менеджер общего счёта (`common_billing_accounts.manager_id`, при его
+отсутствии — менеджер заказов счёта) или менеджер заказа → пользователь с ролью `ROLE_OWNER` из `managers_users` этого
+менеджера. Если у менеджера владельца нет, строка называется «Владелец (счёт и акт Точки)». Запросы:
+`CommonInvoiceRepository.findPaperInvoiceOwnersForMonthlyRecipientSummary`,
+`PaymentLinkRepository.findPaperInvoiceReceiptsForMonthlyRecipientSummary` (читают и архив). Тесты:
+`ManualPaymentRecipientMonthlySummaryServiceTest`, `ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest`.
 
 ## Исправление ошибочного зачисления
 
@@ -374,6 +397,8 @@
 
 | Условие | Что делает система | Сообщение / результат | Где | Тест |
 |---|---|---|---|---|
+| Счёт заказа — ссылка банка, клиент перевёл владельцу на карту, профиль «карта до лимита» | Владелец есть в списке; отметка менеджера → запрос `PENDING`, заказ и ссылка не меняются; после кнопки владельца в Telegram заказ оплачен, ссылка закрыта, поступление записано на владельца, сумма в месячном лимите карты | `OWNER_APPROVAL_PENDING` → «Поступление владельцу подтверждено» | `ManualCardRoutePolicy`, `OwnerManualCardApprovalWorkflow`, `ManualCardPaymentWorkflow.manualCardPaymentEvidenceLink` | `PaymentScenarioMatrixMySqlIntegrationTest#s21_transferToTheOwnersCardPastTheBankLinkIsConfirmedByTheOwner`; окно — `manager-manual-card-payment-modal.component.spec.ts` «offers the owner on a bank link only as a request…» |
+| То же, профиль «только банк» (владелец-ИП) | Владельца нет в кандидатах; запрос с владельцем отклоняется, записи запроса не создаётся | 409 «Оплату владельцу по банковской ссылке подтверждает банк» | те же | тот же сценарий 21 (первая часть); окно — «explains why the owner is absent…» |
 | Webhook T-Bank `CONFIRMED` по ссылке заказа | Закрывает заказ оплатой | Ссылка `CONFIRMED` | `PaymentLinkSettlementService.java:330-341` | `PaymentLinkServiceTest#confirmedWebhookAppliesOrderPaymentTransitionOnlyWhenEnabled` |
 | То же, заказ не выполнен | Предоплата | Заказ не закрыт | `PaymentLinkSettlementService.java:325-329` | `PaymentLinkServiceTest#confirmedWebhookBeforeOrderCompletionStoresPrepaymentWithoutClosingOrder` |
 | То же, сумма устарела | Не оплачивает | `AMOUNT_MISMATCH` | `PaymentLinkSettlementService.java:308-310` | `PaymentLinkServiceTest#confirmedWebhookWithStaleAmountDoesNotMarkOrderPaid` |

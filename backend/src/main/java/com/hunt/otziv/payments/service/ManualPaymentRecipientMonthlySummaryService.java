@@ -10,6 +10,7 @@ import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
 import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
 import com.hunt.otziv.payments.repository.ManualPaymentLegacyMonthlySourceProjection;
+import com.hunt.otziv.payments.repository.ManualPaymentPaperInvoiceReceiptProjection;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -36,6 +37,8 @@ public class ManualPaymentRecipientMonthlySummaryService {
 
     static final String LEGACY_UNKNOWN_KEY = "LEGACY:UNATTRIBUTED";
     static final String LEGACY_UNKNOWN_LABEL = "Получатель не указан (старые оплаты без атрибуции)";
+    static final String PAPER_INVOICE_OWNER_KEY = "OWNER:PAPER_INVOICE";
+    static final String PAPER_INVOICE_LABEL_SUFFIX = " (счёт и акт Точки)";
 
     private final ContractorActualPaymentAttributionRepository attributionRepository;
     private final PaymentLinkRepository paymentLinkRepository;
@@ -71,19 +74,34 @@ public class ManualPaymentRecipientMonthlySummaryService {
                         to
                 )),
                 ContractorActualPaymentSourceKind.PAYMENT_LINK,
-                allSources
+                allSources,
+                recipients,
+                Map.of()
         );
+        List<ManualPaymentLegacyMonthlySourceProjection> invoiceRows = safeList(
+                commonInvoiceRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(from, to));
         legacy = addLegacy(
                 legacy,
-                safeList(commonInvoiceRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
-                        from,
-                        to
-                )),
+                invoiceRows,
                 ContractorActualPaymentSourceKind.COMMON_INVOICE,
-                allSources
+                allSources,
+                recipients,
+                paperInvoiceOwners(invoiceRows)
         );
         if (legacy != null) {
             recipients.put(LEGACY_UNKNOWN_KEY, legacy);
+        }
+        // An order paid by «Счёт и акт» has no recipient row either: the bank credits the owner.
+        for (ManualPaymentPaperInvoiceReceiptProjection row : safeList(
+                paymentLinkRepository.findPaperInvoiceReceiptsForMonthlyRecipientSummary(from, to))) {
+            if (row == null || row.getSourceId() == null) {
+                continue;
+            }
+            RecipientDescriptor owner = RecipientDescriptor.paperInvoiceOwner(row.getOwnerUserId(), row.getOwnerName());
+            SourceKey source = new SourceKey(ContractorActualPaymentSourceKind.PAYMENT_LINK, row.getSourceId());
+            recipients.computeIfAbsent(owner.key(), ignored -> new RecipientAccumulator(owner))
+                    .add(source, row.getAmountKopecks() == null ? 0L : row.getAmountKopecks(), row.getEffectiveAt());
+            allSources.add(source);
         }
 
         List<ManualPaymentRecipientMonthlySummaryItem> items = new ArrayList<>(recipients.size());
@@ -117,7 +135,9 @@ public class ManualPaymentRecipientMonthlySummaryService {
             RecipientAccumulator accumulator,
             Collection<ManualPaymentLegacyMonthlySourceProjection> rows,
             ContractorActualPaymentSourceKind sourceKind,
-            Set<SourceKey> allSources
+            Set<SourceKey> allSources,
+            Map<String, RecipientAccumulator> recipients,
+            Map<Long, RecipientDescriptor> paperInvoiceOwners
     ) {
         RecipientAccumulator result = accumulator;
         for (ManualPaymentLegacyMonthlySourceProjection row : rows) {
@@ -128,14 +148,48 @@ public class ManualPaymentRecipientMonthlySummaryService {
             if (amountKopecks <= 0) {
                 continue;
             }
+            SourceKey source = new SourceKey(sourceKind, row.getSourceId());
+            allSources.add(source);
+            RecipientDescriptor owner = paperInvoiceOwners.get(row.getSourceId());
+            if (owner != null) {
+                // «Счёт и акт»: the bank credited the owner's account, so the recipient is known.
+                recipients.computeIfAbsent(owner.key(), ignored -> new RecipientAccumulator(owner))
+                        .add(source, amountKopecks, row.getEffectiveAt());
+                continue;
+            }
             if (result == null) {
                 result = new RecipientAccumulator(RecipientDescriptor.legacy());
             }
-            SourceKey source = new SourceKey(sourceKind, row.getSourceId());
             result.add(source, amountKopecks, row.getEffectiveAt());
-            allSources.add(source);
         }
         return result;
+    }
+
+    /**
+     * Invoices of these rows that were paid by «Счёт и акт». Such a payment has no recipient row of
+     * its own (no reserve is made for a paper invoice), but its recipient is not unknown: it is the
+     * owner linked to the manager of the invoice.
+     */
+    private Map<Long, RecipientDescriptor> paperInvoiceOwners(List<ManualPaymentLegacyMonthlySourceProjection> rows) {
+        Set<Long> invoiceIds = new HashSet<>();
+        for (ManualPaymentLegacyMonthlySourceProjection row : rows) {
+            if (row != null && row.getSourceId() != null) {
+                invoiceIds.add(row.getSourceId());
+            }
+        }
+        if (invoiceIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, RecipientDescriptor> owners = new LinkedHashMap<>();
+        // Rows are [invoice id, owner user id or null, owner name or null].
+        for (Object[] paper : safeList(commonInvoiceRepository.findPaperInvoiceOwnersForMonthlyRecipientSummary(invoiceIds))) {
+            if (paper != null && paper.length >= 3 && paper[0] instanceof Number invoiceId) {
+                owners.put(invoiceId.longValue(), RecipientDescriptor.paperInvoiceOwner(
+                        paper[1] instanceof Number ownerUserId ? ownerUserId.longValue() : null,
+                        paper[2] == null ? null : paper[2].toString()));
+            }
+        }
+        return owners;
     }
 
     private RecipientDescriptor descriptor(ContractorActualPaymentAttribution row) {
@@ -289,6 +343,22 @@ public class ManualPaymentRecipientMonthlySummaryService {
             ManualPaymentTaskAccountingTargetKind taskTargetKind,
             boolean attributionKnown
     ) {
+        /** The owner who received a «Счёт и акт» payment; a manager without an owner leaves the owner unnamed. */
+        private static RecipientDescriptor paperInvoiceOwner(Long ownerUserId, String ownerName) {
+            String name = ownerName == null ? "" : ownerName.trim();
+            return new RecipientDescriptor(
+                    ownerUserId == null ? PAPER_INVOICE_OWNER_KEY : PAPER_INVOICE_OWNER_KEY + ":" + ownerUserId,
+                    (name.isBlank() ? "Владелец" : "Владелец · " + name) + PAPER_INVOICE_LABEL_SUFFIX,
+                    ContractorCashDestinationKind.OWNER,
+                    ContractorRecipientType.OWNER,
+                    null,
+                    null,
+                    null,
+                    null,
+                    true
+            );
+        }
+
         private static RecipientDescriptor legacy() {
             return new RecipientDescriptor(
                     LEGACY_UNKNOWN_KEY,

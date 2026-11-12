@@ -4,12 +4,16 @@ export interface CommonBillingCompanyResponseWire {
   companyId: number;
   companyTitle: string;
   enabled: boolean;
+  problem: string | null;
+  separateOrdersNote: string | null;
 }
 
 export interface CommonBillingCompanyResponse {
   companyId: number;
   companyTitle: string;
   enabled: boolean;
+  problem?: string | null;
+  separateOrdersNote?: string | null;
 }
 
 export interface CommonInvoiceSummaryResponseWire {
@@ -263,7 +267,9 @@ export const billingPaymentSchemas = {
     "required": [
       "companyId",
       "companyTitle",
-      "enabled"
+      "enabled",
+      "problem",
+      "separateOrdersNote"
     ],
     "properties": {
       "companyId": {
@@ -274,6 +280,26 @@ export const billingPaymentSchemas = {
       },
       "enabled": {
         "type": "boolean"
+      },
+      "problem": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "separateOrdersNote": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     }
   },
@@ -944,7 +970,10 @@ export const billingPaymentSchemas = {
   }
 } as const;
 export const billingPaymentOptionalFields: Record<string, readonly string[]> = {
-  "CommonBillingCompanyResponse": [],
+  "CommonBillingCompanyResponse": [
+    "problem",
+    "separateOrdersNote"
+  ],
   "CommonInvoiceSummaryResponse": [
     "sentAt",
     "lastReminderAt",

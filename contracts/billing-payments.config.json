@@ -9,7 +9,10 @@
     "DeliveryOperation": "backend/src/main/java/com/hunt/otziv/client_messages/api/DeliveryOperation.java"
   },
   "nullable": {
-    "CommonBillingCompanyResponse": [],
+    "CommonBillingCompanyResponse": [
+      "problem",
+      "separateOrdersNote"
+    ],
     "CommonInvoiceSummaryResponse": [
       "sentAt",
       "lastReminderAt",
@@ -63,7 +66,10 @@
     ]
   },
   "optionalForCompatibility": {
-    "CommonBillingCompanyResponse": [],
+    "CommonBillingCompanyResponse": [
+      "problem",
+      "separateOrdersNote"
+    ],
     "CommonInvoiceSummaryResponse": [
       "sentAt",
       "lastReminderAt",

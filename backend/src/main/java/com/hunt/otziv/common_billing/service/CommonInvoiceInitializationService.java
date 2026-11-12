@@ -971,6 +971,16 @@ public class CommonInvoiceInitializationService {
         return settlementService.isSafelyClosedStandaloneRoute(link);
     }
 
+    /**
+     * A standalone route the common invoice can neither ignore nor retire by itself, because the client
+     * may already be paying by it: a card number that was given out, a started bank payment, a confirmed
+     * prepayment. The order of such a route keeps its own invoice.
+     */
+    boolean keepsOrderOnItsOwnInvoice(PaymentLink link) {
+        return link != null && !isSafelyClosedStandaloneRoute(link)
+                && !StandaloneBankPaymentPolicy.canAutoCloseForCommonInvoice(link);
+    }
+
     void markStandalonePaymentRouteConflict(CommonInvoice invoice, ResponseStatusException conflict) {
         settlementService.markStandalonePaymentRouteConflict(invoice, conflict);
     }

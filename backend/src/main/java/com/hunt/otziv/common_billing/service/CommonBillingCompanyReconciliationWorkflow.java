@@ -291,8 +291,19 @@ public class CommonBillingCompanyReconciliationWorkflow {
         if (!currentBackfillOrderIds.equals(expectedBackfillOrderIds)) {
             throw invoiceMembershipChanged("состав непривязанных заказов компании изменился");
         }
-        closeProvablyUnstartedStandaloneRoutesOrThrow(lockedBackfillPaymentLinks, null);
-        if (expectedTargetInvoiceIds.isEmpty() && movableItems.isEmpty() && expectedBackfillOrderIds.isEmpty()) {
+        // An order whose client already holds a card number (or any other route that cannot be proven
+        // unused) keeps its own invoice. It is left out here instead of failing the whole company: the
+        // other orders are collected, and the company editor names the orders that stayed separate.
+        Set<Long> separateOrderIds = lockedBackfillPaymentLinks.entrySet().stream()
+                .filter(entry -> entry.getValue().stream().anyMatch(invoiceInitialization::keepsOrderOnItsOwnInvoice))
+                .map(Map.Entry::getKey).collect(Collectors.toCollection(TreeSet::new));
+        Set<Long> attachableOrderIds = new TreeSet<>(expectedBackfillOrderIds);
+        attachableOrderIds.removeAll(separateOrderIds);
+        Map<Long, List<PaymentLink>> attachablePaymentLinks = lockedBackfillPaymentLinks.entrySet().stream()
+                .filter(entry -> !separateOrderIds.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        closeProvablyUnstartedStandaloneRoutesOrThrow(attachablePaymentLinks, null);
+        if (expectedTargetInvoiceIds.isEmpty() && movableItems.isEmpty() && attachableOrderIds.isEmpty()) {
             clearCompanyReconcileState(reconcileLink);
             accountCompanyRepository.save(reconcileLink);
             return;
@@ -310,7 +321,7 @@ public class CommonBillingCompanyReconciliationWorkflow {
             invoiceOrderRepository.saveAll(movableItems);
         }
         int ready = 0;
-        for (Long orderId : expectedBackfillOrderIds) {
+        for (Long orderId : attachableOrderIds) {
             Order lockedOrder = lockedOrders.get(orderId);
             if (lockedOrder == null || lockedOrder.getCompany() == null || !Objects.equals(companyId, lockedOrder.getCompany().getId()) || lockedOrder.isComplete() || !BACKFILL_STATUSES.contains(statusTitle(lockedOrder)) || invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId).isPresent()) {
                 throw invoiceMembershipChanged("заказ " + orderId + " перестал подходить для автопривязки");
@@ -320,7 +331,7 @@ public class CommonBillingCompanyReconciliationWorkflow {
                 ready++;
             }
         }
-        consumeVerifiedManualRouteAfterAttach(targetInvoice, lockedBackfillPaymentLinks);
+        consumeVerifiedManualRouteAfterAttach(targetInvoice, attachablePaymentLinks);
         List<CommonInvoiceOrder> targetItems = invoiceOrderRepository.findByInvoiceIdWithOrders(targetInvoice.getId());
         recalculateInvoice(targetInvoice, targetItems);
         promoteCollectingInvoiceToReadyIfPossible(targetInvoice, targetItems);
@@ -343,7 +354,7 @@ public class CommonBillingCompanyReconciliationWorkflow {
         }
         clearCompanyReconcileState(reconcileLink);
         accountCompanyRepository.save(reconcileLink);
-        log.info("Reconciled company {} with common account {} invoice {}: moved={}, backfilled={}, ready={}, sources={}", companyId, accountId, targetInvoice.getId(), movableItems.size(), expectedBackfillOrderIds.size(), ready, sourceInvoices.stream().map(CommonInvoice::getId).toList());
+        log.info("Reconciled company {} with common account {} invoice {}: moved={}, backfilled={}, ready={}, sources={}, keptOnOwnInvoice={}", companyId, accountId, targetInvoice.getId(), movableItems.size(), attachableOrderIds.size(), ready, sourceInvoices.stream().map(CommonInvoice::getId).toList(), separateOrderIds);
     }
 
     boolean isEnabledCompanyLink(Long accountId, Long companyId, CommonBillingAccount account) {

@@ -295,6 +295,47 @@ class ContractorActualPaymentAttributionServiceTest {
     }
 
     @Test
+    void manualCardContextTellsTheTeamApartFromTheInvoiceRecipientAndThePeopleOfTheOrder() {
+        Order order = new Order();
+        order.setId(ORDER_ID);
+        Worker worker = new Worker();
+        worker.setId(31L);
+        worker.setUser(specialist.getUser());
+        order.setWorker(worker);
+        PaymentLink link = new PaymentLink();
+        link.setId(SOURCE_ID);
+        link.setOrder(order);
+        link.setAmountKopecks(2_000L);
+        link.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        ContractorPaymentAllocation original = sourceAllocation(
+                100L, ContractorAllocationMode.LIVE, specialist, ContractorAllocationStatus.RESERVED
+        );
+        link.setContractorAllocationId(original.getId());
+        ContractorPaymentProfile teammate = profile(3L, 33L, ContractorRole.SPECIALIST, "Ольга Из команды");
+        profiles.put(teammate.getId(), teammate);
+        com.hunt.otziv.u_users.model.Manager routeManager = new com.hunt.otziv.u_users.model.Manager();
+        routeManager.setId(7L);
+        routeManager.setUser(manager.getUser());
+        when(orderManagerResolver.resolveForRouting(order)).thenReturn(routeManager);
+        when(profileRepository.findIdByUserIdAndRole(
+                specialist.getUser().getId(), ContractorRole.SPECIALIST
+        )).thenReturn(Optional.of(specialist.getId()));
+        when(profileRepository.findIdByUserIdAndRole(
+                manager.getUser().getId(), ContractorRole.MANAGER
+        )).thenReturn(Optional.of(manager.getId()));
+        // The team of the manager holds the specialist of the order as well: only the outsider is «another recipient».
+        when(profileRepository.findTeamProfileIds(List.of(7L), ContractorRole.SPECIALIST))
+                .thenReturn(List.of(specialist.getId(), teammate.getId()));
+        when(targetAccessPolicy.canManageUser(any())).thenReturn(true);
+
+        ManualCardPaymentContextResponse context = service.manualCardPaymentContext(order, link);
+
+        assertThat(context.candidates()).extracting(ManualCardPaymentRecipientResponse::key)
+                .containsExactly("PROFILE:1", "PROFILE:2", "PROFILE:3", "OWNER");
+        assertThat(context.teamRecipientKeys()).containsExactly("PROFILE:3");
+    }
+
+    @Test
     void manualCardContextSeparatesAccountingWorkerFromBankRecipient() {
         Order order = new Order();
         order.setId(ORDER_ID);

@@ -18,12 +18,17 @@ import {
   mobilePaymentRecipientConsequence,
   mobilePaymentRecipientMoney,
   mobilePaymentRecipientNote,
+  mobilePaymentOwnerCardNote,
+  mobilePaymentOwnerCardSelectable,
+  mobilePaymentOwnerCardTag,
+  MOBILE_OWNER_CARD_PROFILE_ID,
   mobilePaymentRecipientRelation,
   mobilePaymentRecipientSearch,
   mobilePaymentRecipientSelectable,
   mobilePaymentRecipientTag,
   type MobilePaymentRecipientIssueOutcome,
   type MobilePaymentRecipientOption,
+  type MobilePaymentRecipientOwnerCard,
   type MobilePaymentRecipientPickerRequest
 } from './payment-recipient-picker';
 
@@ -52,11 +57,19 @@ export class MobilePaymentRecipientPickerComponent implements OnInit, OnDestroy 
   @Input() heading = '';
   @Input() currentRecipient = '';
   @Input() autoHint = mobilePaymentRecipientAutoHint('EMPLOYEE_REQUISITES');
+  /** Shown in place of autoHint once the loaded owner's card can take this invoice. */
+  @Input() autoHintWithOwnerCard = '';
   @Input() amountKopecks: number | null = null;
   @Input({ required: true }) loadRecipients!: MobilePaymentRecipientPickerRequest['loadRecipients'];
   @Input({ required: true }) issue!: MobilePaymentRecipientPickerRequest['issue'];
 
   readonly recipients = signal<MobilePaymentRecipientOption[]>([]);
+  /** The owner's card; null where the server does not offer it. */
+  readonly ownerCard = signal<MobilePaymentRecipientOwnerCard | null>(null);
+  readonly ownerCardId = MOBILE_OWNER_CARD_PROFILE_ID;
+  readonly ownerCardSelectable = computed(() => mobilePaymentOwnerCardSelectable(this.ownerCard()));
+  readonly ownerCardTag = mobilePaymentOwnerCardTag;
+  readonly ownerCardNote = mobilePaymentOwnerCardNote;
   readonly amount = signal<number | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal('');
@@ -77,7 +90,8 @@ export class MobilePaymentRecipientPickerComponent implements OnInit, OnDestroy 
   readonly chosenOption = computed(() => mobilePaymentRecipientChosen(this.recipients(), this.selected()));
   readonly chosenOverrun = computed(() => this.chosenOption()?.overrunKopecks ?? 0);
   /** What the button will do, said before it is pressed. */
-  readonly consequence = computed(() => mobilePaymentRecipientConsequence(this.chosenOption()));
+  readonly consequence = computed(() => mobilePaymentRecipientConsequence(this.chosenOption(),
+    this.selected() === MOBILE_OWNER_CARD_PROFILE_ID ? this.ownerCard() : null));
 
   private loadRun = 0;
   /** Set once the window is closing or gone: a late answer must not touch it or another dialog. */
@@ -104,6 +118,7 @@ export class MobilePaymentRecipientPickerComponent implements OnInit, OnDestroy 
         return;
       }
       this.recipients.set(loaded.recipients ?? []);
+      this.ownerCard.set(loaded.ownerCard ?? null);
       if (loaded.amountKopecks != null) {
         this.amount.set(loaded.amountKopecks);
       }
@@ -112,12 +127,18 @@ export class MobilePaymentRecipientPickerComponent implements OnInit, OnDestroy 
         return;
       }
       this.recipients.set([]);
+      this.ownerCard.set(null);
       this.loadError.set(this.errorText(error, 'Не удалось загрузить сотрудников'));
     } finally {
       if (run === this.loadRun) {
         this.loading.set(false);
       }
     }
+  }
+
+  /** The hint of the automatic choice: with the owner's card after the employees once that card can take the invoice. */
+  hint(): string {
+    return this.ownerCardSelectable() && this.autoHintWithOwnerCard ? this.autoHintWithOwnerCard : this.autoHint;
   }
 
   select(profileId: number | null): void {
@@ -137,7 +158,7 @@ export class MobilePaymentRecipientPickerComponent implements OnInit, OnDestroy 
   /** Pressing the button is also the confirmation that the client has not paid yet. */
   async submit(): Promise<void> {
     const profileId = this.selected();
-    if (this.saving() || this.closed || !mobilePaymentRecipientChoiceAllowed(this.recipients(), profileId)) {
+    if (this.saving() || this.closed || !mobilePaymentRecipientChoiceAllowed(this.recipients(), profileId, this.ownerCard())) {
       return;
     }
     this.saving.set(true);

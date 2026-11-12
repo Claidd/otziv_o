@@ -21,6 +21,8 @@
     "ManagerControlConcreteItemResponse": ["delivery", "diagnosis", "auditCommitments", "clientMessageSendBlockedReason"],
     "ManagerReportReviewResponse": ["answerAttempts"],
     "ManagerManualCardPaymentResultResponse": ["manualPaymentReview"],
+    "ManualCardPaymentContextResponse": ["teamRecipientKeys", "bankLinkRoute"],
+    "PaymentRouteRecipientsResponse": ["ownerCard"],
     "SpecialistManualPaymentReviewResponse": ["creditedAt", "confirmationBasis"],
     "CommonInvoiceDetailsResponse": ["delivery"],
     "CommonManualPaymentOptionsResponse": ["ownerReport"],

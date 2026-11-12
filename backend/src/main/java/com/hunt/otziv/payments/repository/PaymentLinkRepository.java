@@ -639,6 +639,58 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             @Param("to") LocalDateTime to
     );
 
+    /**
+     * Orders paid by «Счёт и акт» in the period, each with the owner who received the money: the
+     * owner linked to the manager of the order. The bank credits such a payment to the owner's
+     * account, so the link has no recipient row of its own. Archived links and orders are read too.
+     */
+    @Query(value = """
+        SELECT receipt.sourceId AS sourceId, receipt.amountKopecks AS amountKopecks,
+               receipt.effectiveAt AS effectiveAt, receipt.ownerUserId AS ownerUserId,
+               owner_user.fio AS ownerName
+        FROM (
+            SELECT source.id AS sourceId,
+                   COALESCE(source.confirmed_amount_kopecks, source.amount_kopecks) AS amountKopecks,
+                   source.paid_at AS effectiveAt,
+                   (SELECT MIN(owner_manager.user_id)
+                    FROM managers_users owner_manager
+                    JOIN users_roles owner_role_link ON owner_role_link.user_id = owner_manager.user_id
+                    JOIN roles owner_role ON owner_role.id = owner_role_link.role_id
+                    WHERE owner_manager.manager_id = COALESCE(
+                              (SELECT live_order.order_manager FROM orders live_order
+                               WHERE live_order.order_id = source.order_id),
+                              (SELECT archived_order.order_manager FROM archive_orders archived_order
+                               WHERE archived_order.order_id = source.order_id))
+                      AND owner_role.name = 'ROLE_OWNER') AS ownerUserId
+            FROM (
+                SELECT link.id, link.order_id, link.confirmed_amount_kopecks, link.amount_kopecks, link.paid_at
+                FROM payment_links link
+                WHERE link.payment_method = 'OWNER_PAPER_INVOICE'
+                  AND link.status = 'CONFIRMED'
+                  AND link.paid_at >= :from AND link.paid_at < :to
+                UNION ALL
+                SELECT archived.id, archived.order_id, archived.confirmed_amount_kopecks,
+                       archived.amount_kopecks, archived.paid_at
+                FROM archive_payment_links archived
+                WHERE archived.payment_method = 'OWNER_PAPER_INVOICE'
+                  AND archived.status = 'CONFIRMED'
+                  AND archived.paid_at >= :from AND archived.paid_at < :to
+                  AND NOT EXISTS (SELECT 1 FROM payment_links live WHERE live.id = archived.id)
+            ) source
+            WHERE NOT EXISTS (
+                SELECT 1 FROM contractor_actual_payment_attributions attribution
+                WHERE (attribution.source_kind = 'PAYMENT_LINK' AND attribution.source_id = source.id)
+                   OR attribution.evidence_id = source.id
+            )
+        ) receipt
+        LEFT JOIN users owner_user ON owner_user.id = receipt.ownerUserId
+        ORDER BY receipt.effectiveAt, receipt.sourceId
+    """, nativeQuery = true)
+    List<ManualPaymentPaperInvoiceReceiptProjection> findPaperInvoiceReceiptsForMonthlyRecipientSummary(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE PaymentLink link

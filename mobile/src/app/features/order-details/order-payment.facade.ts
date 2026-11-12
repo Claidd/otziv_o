@@ -11,6 +11,7 @@ import type { MobileConfirmService } from '../../shared/mobile-confirm.service';
 import {
   mobilePaymentRecipientAutoHint,
   mobilePaymentRecipientOptions,
+  mobilePaymentRecipientOwnerCard,
   type MobilePaymentRecipientChoice,
   type MobilePaymentRecipientIssueOutcome,
   type MobilePaymentRecipientLoad,
@@ -171,7 +172,7 @@ export class OrderPaymentFacade {
     try {
       const outcome = await this.deps.pickRecipient({
         heading: `Заказ №${orderId}`, amountKopecks: null, currentRecipient: context.currentRecipient?.trim() ?? '',
-        autoHint: mobilePaymentRecipientAutoHint(target), signal: leave.signal,
+        autoHint: mobilePaymentRecipientAutoHint(target), autoHintWithOwnerCard: mobilePaymentRecipientAutoHint(target, true), signal: leave.signal,
         loadRecipients: () => this.loadRecipientPickerOptions(orderId),
         issue: choice => this.submitRecipientChoice(orderId, target, context.paymentLinkId, choice, ticket, route)
       });
@@ -185,7 +186,7 @@ export class OrderPaymentFacade {
     const read = this.session.beginRead('recipients');
     try {
       const response = read ? await this.session.read(read, this.deps.api.getManagerOrderPaymentRouteRecipients(orderId)) : undefined;
-      return { amountKopecks: response?.amountKopecks ?? null, recipients: mobilePaymentRecipientOptions(response?.recipients) };
+      return { amountKopecks: response?.amountKopecks ?? null, recipients: mobilePaymentRecipientOptions(response?.recipients), ownerCard: mobilePaymentRecipientOwnerCard(response?.ownerCard) };
     } catch (error) { throw new Error(this.deps.errorMessage(error, 'Не удалось загрузить сотрудников')); }
   }
 

@@ -15404,9 +15404,23 @@
           },
           "enabled" : {
             "type" : "boolean"
+          },
+          "problem" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "separateOrdersNote" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
           }
         },
-        "required" : [ "companyId", "companyTitle", "enabled" ],
+        "required" : [ "companyId", "companyTitle", "enabled", "problem", "separateOrdersNote" ],
         "additionalProperties" : true
       },
       "CommonInvoiceArchiveDetailsResponseOutput" : {
@@ -23315,6 +23329,9 @@
               "type" : "null"
             } ]
           },
+          "bankLinkRoute" : {
+            "type" : "boolean"
+          },
           "candidates" : {
             "anyOf" : [ {
               "type" : "array",
@@ -23376,9 +23393,19 @@
             }, {
               "type" : "null"
             } ]
+          },
+          "teamRecipientKeys" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }, {
+              "type" : "null"
+            } ]
           }
         },
-        "required" : [ "amountKopecks", "anomalyWarning", "candidates", "contractVersion", "orderId", "originalRecipient", "preparedReason", "preparedReceiptUrl", "preparedRecipient", "recipientSelectionFrozen", "routeRevision" ],
+        "required" : [ "amountKopecks", "anomalyWarning", "bankLinkRoute", "candidates", "contractVersion", "orderId", "originalRecipient", "preparedReason", "preparedReceiptUrl", "preparedRecipient", "recipientSelectionFrozen", "routeRevision", "teamRecipientKeys" ],
         "additionalProperties" : true
       },
       "ManualCardPaymentRecipientResponseOutput" : {
@@ -26097,6 +26124,13 @@
               "type" : "null"
             } ]
           },
+          "ownerCard" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/PaymentRouteRecipientsResponseOwnerCardOutput"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "paymentLinkId" : {
             "anyOf" : [ {
               "type" : "integer"
@@ -26115,7 +26149,36 @@
             } ]
           }
         },
-        "required" : [ "amountKopecks", "orderId", "paymentLinkId", "recipients" ],
+        "required" : [ "amountKopecks", "orderId", "ownerCard", "paymentLinkId", "recipients" ],
+        "additionalProperties" : true
+      },
+      "PaymentRouteRecipientsResponseOwnerCardOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse$OwnerCard",
+        "type" : "object",
+        "properties" : {
+          "blockReason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "current" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "remainingKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          }
+        },
+        "required" : [ "blockReason", "current", "name", "remainingKopecks" ],
         "additionalProperties" : true
       },
       "PaymentRouteRecipientsResponseRecipientOutput" : {
@@ -28946,7 +29009,7 @@
     "sha256" : "260dba2400efc38108023e041675fe562a4bbcd94d62303c55454213af576494"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonBillingCompanyResponse.java",
-    "sha256" : "b39711bc89af5f6de7d78e977252e857c9faf8418dba92f1bfe51c97230714bd"
+    "sha256" : "1b7ec2bca864e94c7d94e50aed5c415bb84f89a97237acdd4b901f08584276d5"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceArchiveDetailsResponse.java",
     "sha256" : "1c4cc536eb6a34cd9bcd07f204bd189fa796aeab120cc353fa6633f5461cea0f"
@@ -29054,7 +29117,7 @@
     "sha256" : "526668a847748ed9d750bd7b7e4bc1843ea5508d47395c1bb1e232f3c6f4518f"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/contractor_payments/dto/ManualCardPaymentContextResponse.java",
-    "sha256" : "58d9185037789a4c2395c617ad5cb378b21ef4cb7b0ca2dbf01cf01d34935c62"
+    "sha256" : "8c645f51a769af7915b426da2244b3fcaa5371b92ea0b34bff09e69f225c187a"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/contractor_payments/dto/ManualCardPaymentRecipientResponse.java",
     "sha256" : "541128ebe44f277e07db3c16dbadcce6946d77ecd644070d0e553e70133252c4"
@@ -29408,7 +29471,7 @@
     "sha256" : "45772100d5655c64f0bafd0c73897202b8fab4e1e77b4a37da509d5069737f36"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/PaymentRouteChangeRequest.java",
-    "sha256" : "03bb63d76e1b69e9b64b912b172a43d38cb9bc4b62f5059c42053cde682a00db"
+    "sha256" : "fcf3fbc1fba7b43643d1c641a714da1c4b8747d2dfce193f41b579e7f1402dfc"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/PaymentRouteChangeResponse.java",
     "sha256" : "ca703760cc1688f730d547dcd64cfd85c8931e5662c2c8ed860e4df73daa7f95"
@@ -29417,7 +29480,7 @@
     "sha256" : "45718715d7d5290ac159aed5cc2586571622b1d826d2abfb56e34509003798a8"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/PaymentRouteRecipientsResponse.java",
-    "sha256" : "3c0bdd935aece0ab60adc4834d121c1064df4ed612237d18e9fde275e0318287"
+    "sha256" : "b57e1179dbed4884c8dfb90fa6f8528e44e1fc8f1c9faf87cf002c8d3ee620df"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/PublicPaymentInitRequest.java",
     "sha256" : "76a90a8d3bca7d95578e8aa233f2e1d845d70ce9ed95db29be5d146d87137c4d"
@@ -29567,7 +29630,7 @@
     "sha256" : "2df85404d4ed11d696f31578e63c233185f81391eaec3e21b4d40c570f510435"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "14f9bbfecd551ab5f26c5f61eb129295be3448259d65b4128e9cfe87bcc902e5"
+    "sha256" : "882230dca0ac383f16f40b545466c4a1ac6e5f4e29955e602e60cadf5ef7496e"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {
@@ -29769,6 +29832,7 @@
     "PaymentRouteChangeTargetInput" : "com.hunt.otziv.payments.dto.PaymentRouteChangeTarget",
     "PaymentRouteChangeTargetOutput" : "com.hunt.otziv.payments.dto.PaymentRouteChangeTarget",
     "PaymentRouteRecipientsResponseOutput" : "com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse",
+    "PaymentRouteRecipientsResponseOwnerCardOutput" : "com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse$OwnerCard",
     "PaymentRouteRecipientsResponseRecipientOutput" : "com.hunt.otziv.payments.dto.PaymentRouteRecipientsResponse$Recipient",
     "ProductOptionResponseOutput" : "com.hunt.otziv.manager.dto.api.ProductOptionResponse",
     "PublicCommonInvoiceResponseOutput" : "com.hunt.otziv.common_billing.dto.PublicCommonInvoiceResponse",

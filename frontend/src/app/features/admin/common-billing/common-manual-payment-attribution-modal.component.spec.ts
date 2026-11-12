@@ -67,6 +67,25 @@ describe('common manual payment dialog', () => {
     return { fixture, component: fixture.componentInstance, confirm, otherRecipients };
   }
 
+  it('opens the manual of the common invoice at «Оплата» and keeps the window open when the manual is closed', async () => {
+    const { fixture, component } = await open('STANDARD', ['MANAGER']);
+    const element: HTMLElement = fixture.nativeElement;
+    const closed = vi.fn();
+    component.closed.subscribe(closed);
+
+    (element.querySelector('.pay-guide') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const guide = element.querySelector('app-common-invoice-guide') as HTMLElement;
+    expect(guide.querySelector('h2')?.textContent).toContain('Работа с общим счётом');
+    expect(guide.querySelector('.guide-toc button.active')?.textContent).toContain('Оплата');
+    (guide.querySelector('.guide-close') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('app-common-invoice-guide')).toBeNull();
+    expect(element.querySelector('.pay-modal')).not.toBeNull();
+    expect(closed).not.toHaveBeenCalled();
+  });
+
   it('opens with the invoice recipient chosen and closes the invoice in one click without checkboxes', async () => {
     const { fixture, component, confirm } = await open('STANDARD', ['MANAGER']);
     const element: HTMLElement = fixture.nativeElement;

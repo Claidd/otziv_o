@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, EventEmitter, Input, OnInit, Output, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, type Observable } from 'rxjs';
 import { AuthService } from '../../../core/auth.service';
 import type { CommonInvoiceDetailsResponse } from '../../../core/common-billing.api';
 import {
@@ -24,6 +24,53 @@ import {
   commonManualPaymentInitialRecipientKey
 } from '../../../shared/common-manual-payment-route-refresh';
 import { businessDateTimeStamp } from '../../../shared/business-date';
+import { COMMON_INVOICE_GUIDE, CommonInvoiceGuideComponent, type GuideSectionContent } from './common-invoice-guide.component';
+
+/** One more order paid by the same bank transfer (an ordinary order only). */
+export interface PaymentMarkTransferLine {
+  orderId: number;
+  amountKopecks: number;
+}
+
+export interface PaymentMarkTransfer {
+  lines: PaymentMarkTransferLine[];
+  reference: string;
+  totalRubles: string;
+}
+
+/**
+ * Where the window reads its recipients and where it sends the mark. A common invoice needs none: the
+ * window talks to its own API. An ordinary order gives its source, and the window stays the same.
+ */
+export interface PaymentMarkSource {
+  options(): Observable<CommonManualPaymentOptions>;
+  otherRecipients(): Observable<{ recipients: CommonManualPaymentOtherRecipient[] }>;
+  /** Sends the mark; what it resolves with is passed to (settled). */
+  confirm(request: CommonManualPaymentAttributionRequest, transfer: PaymentMarkTransfer | null): Observable<unknown>;
+  /** When present, one transfer may pay several orders: checks that the order can join it. */
+  transferLine?(orderId: number, recipientProfileId: number): Observable<PaymentMarkTransferLine>;
+  /**
+   * When present, a mark that names the owner is always a request for the owner's confirmation, whoever
+   * presses the button; the text says what happens after the button. A common invoice has none: there the
+   * owner and an administrator credit the owner at once.
+   */
+  ownerApprovalConsequence?: string;
+}
+
+/** The manual opened by «Инструкция». */
+export interface PaymentMarkGuide {
+  sections: readonly GuideSectionContent[];
+  section: string;
+  heading: string;
+  intro: string;
+}
+
+const COMMON_INVOICE_PAYMENT_GUIDE: PaymentMarkGuide = {
+  sections: COMMON_INVOICE_GUIDE,
+  section: 'payment',
+  heading: 'Работа с общим счётом',
+  intro: 'Что означает каждый блок панели и когда нажимать каждую кнопку.'
+};
 
 export interface CommonManualPaymentDraftRow {
   rowKey: string;
@@ -85,20 +132,29 @@ export function isCommonInvoiceOwnRecipient(candidate: CommonManualPaymentRecipi
 
 @Component({
   selector: 'app-common-manual-payment-attribution-modal',
-  imports: [FormsModule, NgTemplateOutlet],
+  imports: [FormsModule, NgTemplateOutlet, CommonInvoiceGuideComponent],
   templateUrl: './common-manual-payment-attribution-modal.component.html',
-  styleUrl: './common-manual-payment-attribution-modal.component.scss'
+  styleUrl: '../../../shared/payment-mark-modal.scss'
 })
 export class CommonManualPaymentAttributionModalComponent implements OnInit {
   private readonly api = inject(CommonManualPaymentAttributionApi);
   private readonly auth = inject(AuthService);
 
-  @Input({ required: true }) invoiceId!: number;
-  @Input({ required: true }) mode: CommonManualPaymentMode = 'STANDARD';
+  @Input() invoiceId = 0;
+  @Input() mode: CommonManualPaymentMode = 'STANDARD';
   @Input() invoiceTitle = '';
+  /** An ordinary order: its recipients and its way of saving. Without it the window serves a common invoice. */
+  @Input() source: PaymentMarkSource | null = null;
+  /** The line above the title; «Общий счёт №…» when empty. */
+  @Input() kicker = '';
+  @Input() guide: PaymentMarkGuide = COMMON_INVOICE_PAYMENT_GUIDE;
+  /** Splitting one receipt between several people exists for a common invoice only. */
+  @Input() splitAllowed = true;
 
   @Output() readonly closed = new EventEmitter<void>();
   @Output() readonly completed = new EventEmitter<CommonInvoiceDetailsResponse>();
+  /** With a source: what its confirm resolved with. */
+  @Output() readonly settled = new EventEmitter<unknown>();
 
   readonly options = signal<CommonManualPaymentOptions | null>(null);
   readonly rows = signal<CommonManualPaymentDraftRow[]>([]);
@@ -114,9 +170,17 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
   readonly othersLoading = signal(false);
   readonly othersError = signal('');
   readonly pickerOpen = signal(false);
+  /** The manual of the common invoice, opened at «Оплата». */
+  readonly guideOpen = signal(false);
   readonly pickerQuery = signal('');
   /** Recipients added through «+»: they count for this receipt only, the invoice keeps its recipient. */
   readonly oneOff = signal<CommonManualPaymentOtherRecipient[]>([]);
+  /** One bank transfer that paid several orders of the same recipient (a source with transferLine only). */
+  readonly transferOpen = signal(false);
+  readonly transferLines = signal<PaymentMarkTransferLine[]>([]);
+  readonly transferOrderId = signal('');
+  readonly transferReference = signal('');
+  readonly transferRubles = signal('');
 
   private idempotencyKey = this.newKey();
   // Business-zone time: the server reads it as its own clock, whatever the device is set to.
@@ -160,14 +224,22 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
   /** The server lets only the owner or an administrator credit money to the owner. */
   readonly ownerNeedsApproval = computed(() => {
     this.auth.tokenParsed();
-    return !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+    return (Boolean(this.source?.ownerApprovalConsequence) || !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']))
       && this.selectedCandidates().some(candidate => candidate.recipientType === 'OWNER' || candidate.key === 'OWNER');
+  });
+  /** A transfer of several orders is credited to one contractor profile. */
+  readonly transferRecipientProfileId = computed(() => {
+    const selected = this.selectedCandidates();
+    return this.source?.transferLine && !this.splitMode() && selected.length === 1
+      ? selected[0].recipientProfileId ?? null
+      : null;
   });
   readonly canSubmit = computed(() => Boolean(
     this.options()
       && this.options()!.remainingKopecks > 0
       && this.everyRowHasRecipient()
       && this.totalKopecks() === this.options()!.remainingKopecks
+      && (!this.transferLines().length || (this.transferReference().trim() && this.transferRubles().trim()))
       && !this.loading()
       && !this.saving()
   ));
@@ -184,7 +256,8 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       return 'Выберите, кому пришли деньги.';
     }
     if (this.ownerNeedsApproval()) {
-      return 'Поступление владельцу подтверждает владелец или администратор. Счёт закроется после его подтверждения.';
+      return this.source?.ownerApprovalConsequence
+        ?? 'Поступление владельцу подтверждает владелец или администратор. Счёт закроется после его подтверждения.';
     }
     const effect = (selected.length === 1
       ? this.recipientEffect(selected[0])
@@ -228,7 +301,7 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
     try {
-      const options = await firstValueFrom(this.api.options(this.invoiceId));
+      const options = await firstValueFrom(this.source ? this.source.options() : this.api.options(this.invoiceId));
       const candidates = options.candidates ?? [];
       this.options.set({
         ...options,
@@ -243,13 +316,16 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       );
       // First opening of an invoice with a card number: its recipient is already chosen.
       // After a route change, and for a bank link, the choice stays explicit.
-      const initialKey = !preserveDraft && this.mode === 'STANDARD'
-        ? commonManualPaymentInitialRecipientKey({ ...options, candidates })
-        : '';
+      const initialKey = options.initialRecipientKey
+        ?? (!preserveDraft && this.mode === 'STANDARD'
+          ? commonManualPaymentInitialRecipientKey({ ...options, candidates })
+          : '');
       this.rows.set(refreshedDraft.rows.map(row => ({ ...row, recipientKey: initialKey })));
       this.splitMode.set(false);
       this.oneOff.set([]);
+      this.others.set(null);
       this.pickerOpen.set(false);
+      this.transferLines.set([]);
       // A report waiting for the owner may name a one-off recipient: load the names to show it.
       const known = new Set(candidates.map(candidate => candidate.key));
       if ((options.ownerReport?.request.attributions ?? []).some(line => !known.has(line.recipientKey))) {
@@ -259,7 +335,8 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       this.receiptUrl.set(refreshedDraft.receiptUrl);
     } catch (error) {
       this.options.set(null);
-      this.error.set(this.errorMessage(error, 'Не удалось загрузить получателей общего счёта.'));
+      this.error.set(manualPaymentRouteErrorMessage(error, this.errorMessage(error,
+        this.source ? 'Не удалось загрузить получателей оплаты.' : 'Не удалось загрузить получателей общего счёта.')));
     } finally {
       this.loading.set(false);
     }
@@ -301,7 +378,9 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
     this.othersLoading.set(true);
     this.othersError.set('');
     try {
-      const response = await firstValueFrom(this.api.otherRecipients(this.invoiceId));
+      const response = await firstValueFrom(this.source
+        ? this.source.otherRecipients()
+        : this.api.otherRecipients(this.invoiceId));
       this.others.set(response.recipients ?? []);
     } catch (error) {
       this.othersError.set(this.errorMessage(error, 'Не удалось загрузить сотрудников.'));
@@ -366,6 +445,37 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
   updateRecipient(index: number, recipientKey: string): void {
     this.rows.update(rows => rows.map((row, rowIndex) =>
       rowIndex === index ? { ...row, recipientKey } : row));
+    // Orders of one transfer were checked against the previous recipient.
+    this.transferLines.set([]);
+  }
+
+  async addTransferOrder(): Promise<void> {
+    const options = this.options();
+    const profileId = this.transferRecipientProfileId();
+    const orderId = Number(this.transferOrderId());
+    if (!options || !this.source?.transferLine || profileId == null || this.saving()) {
+      return;
+    }
+    if (!Number.isSafeInteger(orderId) || orderId <= 0 || orderId === options.invoiceId
+      || this.transferLines().some(line => line.orderId === orderId)) {
+      this.error.set('Введите номер другого заказа.');
+      return;
+    }
+    this.saving.set(true);
+    try {
+      const line = await firstValueFrom(this.source.transferLine(orderId, profileId));
+      this.transferLines.update(lines => [...lines, line]);
+      this.transferOrderId.set('');
+      this.error.set('');
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось проверить заказ.'));
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  removeTransferOrder(orderId: number): void {
+    this.transferLines.update(lines => lines.filter(line => line.orderId !== orderId));
   }
 
   updateAmount(index: number, amountRubles: string): void {
@@ -454,6 +564,13 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
     this.saving.set(true);
     this.error.set('');
     try {
+      if (this.source) {
+        const transfer = this.transferLines().length
+          ? { lines: this.transferLines(), reference: this.transferReference(), totalRubles: this.transferRubles() }
+          : null;
+        this.settled.emit(await firstValueFrom(this.source.confirm(request, transfer)));
+        return;
+      }
       const details = await firstValueFrom(this.api.confirm(this.invoiceId, this.mode, request));
       if (details.summary.status !== 'PAID') {
         await this.load();

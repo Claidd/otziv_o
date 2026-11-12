@@ -87,6 +87,10 @@ export interface CommonManualPaymentOptions {
   routeRevision?: string | null;
   candidates: CommonManualPaymentRecipientCandidate[];
   history: CommonManualPaymentAttributionHistoryItem[];
+  /** Not sent by the server: a line the window's own source puts above the recipients. */
+  notice?: string | null;
+  /** Not sent by the server: the recipient the source wants chosen when the window opens. */
+  initialRecipientKey?: string | null;
 }
 
 export interface CommonManualPaymentAttributionRowRequest {

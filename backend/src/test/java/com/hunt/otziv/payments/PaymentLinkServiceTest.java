@@ -6980,7 +6980,8 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByIdForUpdate(8289L)).thenReturn(Optional.of(oldBank));
         when(actualPaymentAttributionService.manualCardPaymentContext(order, oldBank)).thenReturn(expected);
 
-        assertSame(expected, service.manualCardPaymentContextForOrder(25323L, authentication));
+        // The same recipients, told to the window as an invoice by a bank link.
+        assertEquals(expected.onBankLinkRoute(), service.manualCardPaymentContextForOrder(25323L, authentication));
         verify(actualPaymentAttributionService).manualCardPaymentContext(order, oldBank);
         verifyNoInteractions(ownerManualCardPaymentApprovalRepository, tbankClient);
     }

@@ -335,7 +335,9 @@
       "companies" : [ {
         "companyId" : 2,
         "companyTitle" : "contract-example",
-        "enabled" : false
+        "enabled" : false,
+        "problem" : "contract-example",
+        "separateOrdersNote" : "contract-example"
       } ],
       "currentInvoice" : {
         "id" : 2,
@@ -384,7 +386,9 @@
     "CommonBillingCompanyResponseOutput" : {
       "companyId" : 2,
       "companyTitle" : "contract-example",
-      "enabled" : false
+      "enabled" : false,
+      "problem" : "contract-example",
+      "separateOrdersNote" : "contract-example"
     },
     "CommonInvoiceArchiveDetailsResponseOutput" : {
       "invoice" : {
@@ -3276,7 +3280,9 @@
       "preparedReason" : "contract-example",
       "preparedReceiptUrl" : "contract-example",
       "contractVersion" : "contract-example",
-      "routeRevision" : "contract-example"
+      "routeRevision" : "contract-example",
+      "teamRecipientKeys" : [ "contract-example" ],
+      "bankLinkRoute" : false
     },
     "ManualCardPaymentRecipientResponseOutput" : {
       "recipientType" : "SPECIALIST",
@@ -4078,7 +4084,19 @@
         "overrunKopecks" : 2,
         "current" : false,
         "blockReason" : "contract-example"
-      } ]
+      } ],
+      "ownerCard" : {
+        "name" : "contract-example",
+        "remainingKopecks" : 2,
+        "current" : false,
+        "blockReason" : "contract-example"
+      }
+    },
+    "PaymentRouteRecipientsResponseOwnerCardOutput" : {
+      "name" : "contract-example",
+      "remainingKopecks" : 2,
+      "current" : false,
+      "blockReason" : "contract-example"
     },
     "PaymentRouteRecipientsResponseRecipientOutput" : {
       "profileId" : 2,
