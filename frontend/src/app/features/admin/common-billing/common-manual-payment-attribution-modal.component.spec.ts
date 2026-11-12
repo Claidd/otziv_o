@@ -169,6 +169,43 @@ describe('common manual payment dialog', () => {
     expect(request.reason).toBe('Клиент перевёл деньги не получателю из счёта');
   });
 
+  it('offers the owner on a bank link without the «в счёте» tag and says who confirms such a receipt', async () => {
+    const bankRoute = [
+      { key: 'OWNER', recipientType: 'OWNER', label: 'Владелец', originalRecipient: true, currentParticipant: false, profileEnabled: true },
+      candidates[1], candidates[2]
+    ].map(candidate => candidate.key === 'PROFILE:7' ? { ...candidate, originalRecipient: false } : candidate);
+    const { fixture, component, confirm } = await open('TBANK_ROUTE_FALLBACK', ['MANAGER'], bankRoute);
+    const element: HTMLElement = fixture.nativeElement;
+    const text = (node: Element | null) => (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    expect(component.ownerOffered()).toBe(true);
+    // Nobody is chosen and nobody is «в счёте»: the recipient of a bank link is the bank.
+    expect(component.selectedKey()).toBe('');
+    expect(element.querySelector('.pay-recipient .pay-tag')).toBeNull();
+    expect(text(element.querySelector('.pay-warning'))).toContain('Оплату по самой ссылке банк отмечает сам');
+    expect(text(element.querySelector('.pay-warning'))).toContain('выберите «Владелец»');
+
+    component.selectRecipient('OWNER');
+    fixture.detectChanges();
+    expect(component.submitLabel()).toBe('Отправить владельцу на подтверждение');
+    await component.submit();
+    // The money did not come by the invoice: the reason says so, whoever was named in it.
+    expect(confirm.mock.calls[0][1]).toBe('TBANK_ROUTE_FALLBACK');
+    expect(confirm.mock.calls[0][2]).toMatchObject({
+      reason: 'Клиент перевёл деньги не получателю из счёта',
+      attributions: [expect.objectContaining({ recipientKey: 'OWNER', recipientType: 'OWNER' })]
+    });
+  });
+
+  it('says why the owner is absent on a bank link where the owner takes money through the bank only', async () => {
+    const { fixture, component } = await open('TBANK_ROUTE_FALLBACK', ['MANAGER'], [candidates[1], candidates[2]]);
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(component.ownerOffered()).toBe(false);
+    expect((element.querySelector('.pay-warning')?.textContent ?? '').replace(/\s+/g, ' '))
+      .toContain('На карту владелец этого счёта оплату не принимает');
+  });
+
   it('writes a default reason that matches the chosen recipients', () => {
     expect(commonManualPaymentDefaultReason([{ originalRecipient: true }])).toBe('Оплата поступила получателю из счёта');
     expect(commonManualPaymentDefaultReason([{ originalRecipient: false }])).toBe('Клиент перевёл деньги не получателю из счёта');

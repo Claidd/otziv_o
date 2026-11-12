@@ -1,6 +1,6 @@
 {
   "comment": "Copy outside the repository, fill in for the current stand copy and pass its path in OTZIV_GUIDE_SHOTS_LOCAL. The left side of every rule is a real name: never commit the filled file.",
-  "invoices": { "issued": 0, "paper": 0, "collecting": 0 },
+  "invoices": { "issued": 0, "paper": 0, "collecting": 0, "bankLink": 0 },
   "order": 0,
   "bankLinkOrder": 0,
   "publishedOrders": [0],

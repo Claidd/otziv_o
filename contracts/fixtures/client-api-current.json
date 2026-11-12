@@ -738,7 +738,19 @@
         "overrunKopecks" : 2,
         "current" : false,
         "blockReason" : "contract-example"
-      } ]
+      } ],
+      "ownerCard" : {
+        "name" : "contract-example",
+        "remainingKopecks" : 2,
+        "current" : false,
+        "blockReason" : "contract-example"
+      }
+    },
+    "CommonInvoiceRouteRecipientsResponseOwnerCardOutput" : {
+      "name" : "contract-example",
+      "remainingKopecks" : 2,
+      "current" : false,
+      "blockReason" : "contract-example"
     },
     "CommonInvoiceRouteRecipientsResponseRecipientOutput" : {
       "profileId" : 2,

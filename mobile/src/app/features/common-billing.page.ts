@@ -40,6 +40,7 @@ import type { CommonInvoiceReturnableOrder, CommonInvoiceReturnableOrdersRespons
 import {
   mobilePaymentRecipientAutoHint,
   mobilePaymentRecipientOptions,
+  mobilePaymentRecipientOwnerCard,
   type MobilePaymentRecipientChoice,
   type MobilePaymentRecipientIssueOutcome
 } from '../shared/payment-recipient-picker';
@@ -1146,11 +1147,12 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         amountKopecks: Math.max(0, (invoice.amountKopecks ?? 0) - (invoice.paidKopecks ?? 0)),
         currentRecipient: context.currentRecipient?.trim() ?? '',
         autoHint: mobilePaymentRecipientAutoHint(target),
+        autoHintWithOwnerCard: mobilePaymentRecipientAutoHint(target, true),
         signal: leave.signal,
         loadRecipients: async () => {
           try {
             const response = await firstValueFrom(this.commonBillingApi.getCommonInvoicePaymentRouteRecipients(invoiceId));
-            return { recipients: mobilePaymentRecipientOptions(response.recipients) };
+            return { recipients: mobilePaymentRecipientOptions(response.recipients), ownerCard: mobilePaymentRecipientOwnerCard(response.ownerCard) };
           } catch (error) {
             throw new Error(this.errorMessage(error, 'Не удалось загрузить сотрудников.'));
           }

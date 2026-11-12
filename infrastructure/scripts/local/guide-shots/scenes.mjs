@@ -84,6 +84,25 @@ const scenes = {
     });
     await studio.click({ find: ['.pay-modal .pay-button', 'Отмена'] }, 500);
     await waitGone('.pay-modal');
+    // «Оплачен переводом» of an invoice by the owner's bank link: nobody is chosen, the window explains what
+    // to do when the client transferred money past the link. The invoice belongs to a manager whose owner
+    // may take card transfers, so «Владелец» is in the list.
+    if (local.invoices.bankLink) {
+      await studio.open(invoiceUrl(local.invoices.bankLink));
+      await studio.click({ block: 'Оплата', find: ['.side-action', 'Оплачен'] }, 600);
+      await waitFor('.pay-modal .pay-warning');
+      await sleep(600);
+      await studio.snap('ci-pay-bank-window', {
+        clip: '.pay-modal',
+        marks: [
+          { target: '.pay-modal .pay-warning', n: 1, side: 'left' },
+          { target: { all: '.pay-modal .pay-recipient', nth: 0 }, n: 2, side: 'left' },
+          { target: '.pay-modal .pay-add', n: 3, side: 'left' }
+        ]
+      });
+      await studio.click({ find: ['.pay-modal .pay-button', 'Отмена'] }, 500);
+      await waitGone('.pay-modal');
+    }
   },
 
   // ---- common invoice: another recipient, a card number ----

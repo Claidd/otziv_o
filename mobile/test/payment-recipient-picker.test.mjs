@@ -210,6 +210,13 @@ test('the window speaks the same Russian as the website', () => {
     assert.ok(joined(webOrderFacadeSource).includes(hint), `the website explains ${target} with the owner's card differently`);
   }
   assert.match(orderFacadeSource, /autoHintWithOwnerCard: mobilePaymentRecipientAutoHint\(target, true\)/u);
+  // A common invoice says the same and gets the owner's card from the same answer of the server.
+  for (const target of ['EMPLOYEE_REQUISITES', 'DIFFERENT_RECIPIENT']) {
+    assert.ok(joined(webCommonSource).includes(picker.mobilePaymentRecipientAutoHint(target, true)), `the website explains ${target} of a common invoice with the owner's card differently`);
+  }
+  assert.match(commonPageSource, /autoHintWithOwnerCard: mobilePaymentRecipientAutoHint\(target, true\)/u);
+  assert.match(commonPageSource, /ownerCard: mobilePaymentRecipientOwnerCard\(response\.ownerCard\)/u);
+  assert.match(webCommonSource, /this\.recipientPickerOwnerCard\.set\(response\.ownerCard \?\? null\);/u);
   assert.match(picker.mobilePaymentRecipientAutoHint('EMPLOYEE_REQUISITES'), /платёжное задание, затем специалиста заказа, затем менеджера/u);
   assert.match(picker.mobilePaymentRecipientAutoHint('DIFFERENT_RECIPIENT'), /Нынешний получатель исключается/u);
 

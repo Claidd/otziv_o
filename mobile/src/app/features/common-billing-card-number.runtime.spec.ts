@@ -96,6 +96,17 @@ describe('«Выдать номер карты» for a common invoice in the app
     expect(page.mutating()).toBeNull(); expect(page.error()).toBeNull();
   });
 
+  it('passes the card of the owner to the window and names it by its own id', async () => {
+    api.getCommonInvoicePaymentRouteRecipients.mockReturnValueOnce(of({ ...people(), ownerCard: { name: ' Мия Р. ', remainingKopecks: 4_500_000, current: false, blockReason: '' } }));
+    const operation = page.changePaymentRoute(page.cardNumberRouteTarget(page.summary()?.paymentRouteType)); await settle();
+    expect(request!.autoHintWithOwnerCard).toContain('клиент получит карту владельца');
+    const loaded = await request!.loadRecipients();
+    expect(loaded.ownerCard).toEqual({ name: 'Мия Р.', remainingKopecks: 4_500_000, current: false, blockReason: null });
+    expect(await request!.issue({ profileId: -1 })).toEqual({ status: 'issued' });
+    expect(api.changeCommonInvoicePaymentRoute).toHaveBeenCalledExactlyOnceWith(41, 'EMPLOYEE_REQUISITES', 'token-1', undefined, -1);
+    closeWindow({ status: 'issued' }); await operation;
+  });
+
   it('lets the system choose another person for an invoice that already has a card number', async () => {
     const operation = page.changePaymentRoute('DIFFERENT_RECIPIENT'); await settle();
     expect(request!.autoHint).toContain('Нынешний получатель исключается');

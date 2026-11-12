@@ -670,6 +670,8 @@ public class ManualPaymentTaskService {
         if (profileId == null || from == null || to == null || !from.isBefore(to)) {
             return 0;
         }
+        // Common invoices issued on the owner's card, and transfers to that card that went past the bank link
+        // of a common invoice: both are money on the card and use its monthly limit.
         return commonInvoiceRepository.sumReservedAndConfirmedProfilePaymentRoutesForPeriod(
                 profileId,
                 com.hunt.otziv.payments.model.ManualPaymentSource.PROFILE_MONTHLY_LIMIT,
@@ -677,7 +679,7 @@ public class ManualPaymentTaskService {
                 to,
                 ACTIVE_COMMON_ROUTE_STATUSES,
                 CommonInvoiceStatus.PAID
-        );
+        ) + commonInvoiceRepository.sumOwnerReceiptsPastBankLinkForPeriod(profileId, from, to);
     }
 
     private ManualPaymentType manualPaymentType(ManualPaymentTask task) {

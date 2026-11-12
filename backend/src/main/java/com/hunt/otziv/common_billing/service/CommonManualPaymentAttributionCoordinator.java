@@ -110,13 +110,28 @@ public class CommonManualPaymentAttributionCoordinator {
             long remainingKopecks,
             CommonManualPaymentAttributionRequest request
     ) {
+        return options(invoice, items, remainingKopecks, request, false);
+    }
+
+    /**
+     * @param ownerCardReceiptAllowed the bank profile of the invoice lets its owner take card transfers: then the
+     *                                owner stays in the list of an invoice by a bank link as well
+     */
+    @Transactional(readOnly = true)
+    public CommonManualPaymentOptionsResponse options(
+            CommonInvoice invoice,
+            List<CommonInvoiceOrder> items,
+            long remainingKopecks,
+            CommonManualPaymentAttributionRequest request,
+            boolean ownerCardReceiptAllowed
+    ) {
         requireInvoice(invoice);
         ContractorAllocationMode mode = accountingMode(invoice);
         PreparedContext context = context(invoice, activeItems(items), mode,
                 taskReceiptIntegrationService.candidate(invoice), OtherRecipients.named(request));
         List<CommonManualPaymentRecipientCandidateResponse> candidates = context.candidates().values().stream()
                 .map(CandidateState::response)
-                .filter(candidate -> !CommonOwnerReceiptApprovals.hasBankRoute(invoice)
+                .filter(candidate -> !CommonOwnerReceiptApprovals.hasBankRoute(invoice) || ownerCardReceiptAllowed
                         || candidate.recipientType() != ContractorRecipientType.OWNER)
                 .toList();
         if (candidates.isEmpty()) {

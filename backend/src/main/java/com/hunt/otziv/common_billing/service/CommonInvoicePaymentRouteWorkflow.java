@@ -212,7 +212,21 @@ public class CommonInvoicePaymentRouteWorkflow {
                         option.availableKopecks(), option.overrunKopecks(),
                         currentUserId != null && currentUserId.equals(option.userId()), option.blockReason()))
                 .toList();
-        return new CommonInvoiceRouteRecipientsResponse(invoiceId, amount, recipients);
+        return new CommonInvoiceRouteRecipientsResponse(invoiceId, amount, recipients,
+                ownerCardOption(invoice, managerForNewCommonPaymentAction(invoice, items), amount));
+    }
+
+    /** The owner's card as a line of the «Выдать номер карты» window; null where the owner takes money through the bank only. */
+    private CommonInvoiceRouteRecipientsResponse.OwnerCard ownerCardOption(CommonInvoice invoice, Manager manager, long amount) {
+        java.util.OptionalLong remaining = invoiceRouteSelector.ownerCardRemainingForManager(manager);
+        if (remaining.isEmpty()) {
+            return null;
+        }
+        boolean issuedOnTheCard = isOwnerManualProfileRoute(invoice);
+        String blockReason = issuedOnTheCard ? "клиенту уже выдана карта владельца"
+                : amount > remaining.getAsLong() ? "лимит карты на этот месяц не вмещает счёт" : null;
+        return new CommonInvoiceRouteRecipientsResponse.OwnerCard(
+                invoiceRouteSelector.ownerCardRecipientName(manager), remaining.getAsLong(), issuedOnTheCard, blockReason);
     }
 
     /** The person whose card number the client holds now; null for a bank link or a damaged reserve. */
@@ -316,6 +330,17 @@ public class CommonInvoicePaymentRouteWorkflow {
                     previousTask == null ? null : previousTask.accountingTargetProfileId());
             filter = ManualPaymentTaskRoutingFilter.otherRecipient(previousUserId, previousTask);
         }
+        // The owner's card is issued where the bank profile lets the owner take card transfers and this month's
+        // limit of the card still holds the invoice. The client who already holds it is never given it again.
+        boolean ownerCardChosen = request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES
+                && Objects.equals(request.recipientProfileId(), CommonInvoicePaymentRouteChangeRequest.OWNER_CARD);
+        java.util.OptionalLong ownerCardRemaining = request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES
+                && !currentlyOwnerManual ? invoiceRouteSelector.ownerCardRemainingForManager(routeManager) : java.util.OptionalLong.empty();
+        boolean ownerCardAvailable = ownerCardRemaining.isPresent() && remaining <= ownerCardRemaining.getAsLong();
+        if (ownerCardChosen && !ownerCardAvailable) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Карту владельца выдать нельзя: она не разрешена для этого менеджера или лимит карты на этот месяц не вмещает счёт");
+        }
         String reason = "Способ оплаты общего счёта изменён по просьбе клиента";
         if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {
             taskReceiptIntegrationService.release(invoice, reason);
@@ -330,7 +355,11 @@ public class CommonInvoicePaymentRouteWorkflow {
         invoice.setLastError(null);
         PaymentRouteSelection route;
         ContractorPaymentAllocation allocation = null;
-        if (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES && request.recipientProfileId() != null) {
+        if (ownerCardChosen) {
+            // The manager named the owner's card. A new invoice on it never exceeds the month's limit.
+            allocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveOwnerForCommonInvoice(invoice, routeOrders, routeManager, remaining));
+            route = invoiceRouteSelector.selectCommonInvoiceOwnerCardRoute(routeManager, remaining);
+        } else if (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES && request.recipientProfileId() != null) {
             // The manager named the person: no payment task and no automatic choice. The balance may be
             // exceeded; the overrun keeps this person out of automatic routing until it recovers.
             allocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveChosenContractorForCommonInvoice(invoice, routeOrders, routeManager, remaining, request.recipientProfileId()));
@@ -343,11 +372,18 @@ public class CommonInvoicePaymentRouteWorkflow {
             if (taskRoute.isPresent()) {
                 route = taskRoute.get();
             } else {
-                allocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(invoice, routeOrders, routeManager, remaining, filter.excludedUserId()));
-                if (!isContractorRecipient(allocation)) {
+                // Automatic choice: an employee with a free reserve; the owner's card when nobody has one and
+                // the card may be issued; otherwise the refusal, and the manager names a person.
+                allocation = requireLiveCommonInvoiceAllocation(invoice, ownerCardAvailable
+                        ? contractorPaymentLiveRoutingService.reserveContractorElseOwnerForCommonInvoice(invoice, routeOrders, routeManager, remaining, filter.excludedUserId())
+                        : contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(invoice, routeOrders, routeManager, remaining, filter.excludedUserId()));
+                if (isContractorRecipient(allocation)) {
+                    route = contractorCommonPaymentRoute(invoice, allocation);
+                } else if (ownerCardAvailable) {
+                    route = invoiceRouteSelector.selectCommonInvoiceOwnerCardRoute(routeManager, remaining);
+                } else {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось выбрать специалиста или менеджера для общего счёта");
                 }
-                route = contractorCommonPaymentRoute(invoice, allocation);
             }
         } else {
             allocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveOwnerForCommonInvoice(invoice, routeOrders, routeManager, remaining));

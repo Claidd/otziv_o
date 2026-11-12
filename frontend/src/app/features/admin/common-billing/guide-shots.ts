@@ -13,14 +13,15 @@ export const GUIDE_SHOTS = {
   'ci-paper-flow': [378, 889],
   'ci-paper-pay': [378, 200],
   'ci-paper-start': [450, 360],
+  'ci-pay-bank-window': [684, 985],
   'ci-pay-button': [378, 242],
   'ci-pay-window': [756, 886],
   'ci-return-confirm': [788, 383],
   'ci-return-window': [716, 257],
-  'ci-route-bank': [378, 495],
-  'ci-route-block': [378, 495],
+  'ci-route-bank': [378, 481],
+  'ci-route-block': [378, 481],
   'ci-route-result': [404, 699],
-  'ci-route-window': [724, 873],
+  'ci-route-window': [724, 905],
   'ci-send': [450, 332],
   'ci-settings-companies': [449, 534],
   'ci-term': [450, 534],
@@ -42,4 +43,4 @@ export const GUIDE_SHOTS = {
 export type GuideShot = keyof typeof GUIDE_SHOTS;
 
 /** Changes with every new set of pictures, so browsers do not show a cached old one. */
-export const GUIDE_SHOTS_VERSION = '20261112-3';
+export const GUIDE_SHOTS_VERSION = '20261112-4';

@@ -148,7 +148,9 @@ public class CommonBillingAdminController {
         return new com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse(
                 response.invoiceId(), response.amountKopecks(), response.recipients().stream()
                         .filter(recipient -> contractorPaymentTargetAccessPolicy.canManageUser(recipient.userId()))
-                        .toList());
+                        .toList(),
+                // The owner's card is not a person of the team: it is offered to everyone who may change this invoice.
+                response.ownerCard());
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

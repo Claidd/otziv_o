@@ -23,6 +23,7 @@
     "ManagerManualCardPaymentResultResponse": ["manualPaymentReview"],
     "ManualCardPaymentContextResponse": ["teamRecipientKeys", "bankLinkRoute"],
     "PaymentRouteRecipientsResponse": ["ownerCard"],
+    "CommonInvoiceRouteRecipientsResponse": ["ownerCard"],
     "SpecialistManualPaymentReviewResponse": ["creditedAt", "confirmationBasis"],
     "CommonInvoiceDetailsResponse": ["delivery"],
     "CommonManualPaymentOptionsResponse": ["ownerReport"],

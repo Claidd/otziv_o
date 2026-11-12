@@ -672,6 +672,27 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("paidStatus") CommonInvoiceStatus paidStatus
     );
 
+    /**
+     * Money the owner received on a card past the bank link of a common invoice of this bank profile: the
+     * receipts recorded to the owner for invoices whose route is a bank link. A corrected receipt does not count.
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(receipt.amount_kopecks), 0)
+        FROM contractor_actual_payment_attributions receipt
+        JOIN common_invoices invoice ON invoice.invoice_id = receipt.common_invoice_id
+        WHERE invoice.payment_route_profile_id = :profileId
+          AND invoice.payment_route_type IN ('BANK_LINK', 'TBANK_LINK', 'TOCHKA_LINK')
+          AND receipt.actual_cash_destination_kind = 'OWNER'
+          AND receipt.effective_at >= :from
+          AND receipt.effective_at < :to
+          AND NOT EXISTS (SELECT 1 FROM manual_receipt_corrections correction WHERE correction.original_id = receipt.id)
+    """, nativeQuery = true)
+    long sumOwnerReceiptsPastBankLinkForPeriod(
+            @Param("profileId") Long profileId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
     default long sumReservedAndConfirmedMonthlyProfileRoutesForPeriod(
             Long profileId, LocalDateTime from, LocalDateTime to,
             Collection<CommonInvoiceStatus> activeStatuses, CommonInvoiceStatus paidStatus

@@ -853,6 +853,8 @@ export interface CommonInvoiceRouteRecipientsResponse {
   invoiceId: number;
   amountKopecks: number;
   recipients: CommonInvoiceRouteRecipient[];
+  /** The owner's card; absent where the owner takes money through the bank only. */
+  ownerCard?: PaymentRouteOwnerCard | null;
 }
 
 /** An order of the invoice's own link that goes apart from the common invoice and may be returned to it. */

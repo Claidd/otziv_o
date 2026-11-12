@@ -194,6 +194,12 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       ? 'Клиент оплатил не по ссылке'
       : 'Отметить оплату');
   readonly reconcilesCurrentTbank = computed(() => this.mode === 'TBANK_ROUTE_FALLBACK');
+  /**
+   * The owner is among the recipients. For an invoice by a bank link the server offers the owner only where
+   * the bank profile lets the owner take card transfers; a payment by the link itself is marked by the bank.
+   */
+  readonly ownerOffered = computed(() => (this.options()?.candidates ?? [])
+    .some(candidate => candidate.recipientType === 'OWNER' || candidate.key === 'OWNER'));
   readonly totalKopecks = computed(() => commonManualPaymentTotalKopecks(this.rows()));
   readonly differenceKopecks = computed(() => {
     const options = this.options();
@@ -302,7 +308,9 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
     this.error.set('');
     try {
       const options = await firstValueFrom(this.source ? this.source.options() : this.api.options(this.invoiceId));
-      const candidates = options.candidates ?? [];
+      // The recipient of a bank link is the bank: nobody of the list is «в счёте», the owner included.
+      const candidates = (options.candidates ?? []).map(candidate => this.reconcilesCurrentTbank() && candidate.originalRecipient
+        ? { ...candidate, originalRecipient: false } : candidate);
       this.options.set({
         ...options,
         candidates,

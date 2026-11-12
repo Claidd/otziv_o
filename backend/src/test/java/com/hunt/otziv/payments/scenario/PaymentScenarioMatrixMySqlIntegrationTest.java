@@ -1477,6 +1477,176 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
     }
 
     // ================================================================================================
+    // Общий счёт: карта владельца
+    // ================================================================================================
+
+    @Test
+    @DisplayName("23 общий счёт — ссылка банка, клиент перевёл владельцу на карту: только там, где карта разрешена профилем; менеджер шлёт запрос, владелец подтверждает — ссылка отменена в банке, счёт оплачен, сумма в месячном лимите карты")
+    void s23_transferToTheOwnersCardPastTheBankLinkOfACommonInvoice() {
+        Person anna = world.specialist("Анна Специалист");
+        world.payable(anna, ContractorRole.SPECIALIST, 100_00);
+        CommonInvoiceSeed invoice = invoiceOnUnpaidTbankLink(anna);
+        Map<String, Object> issued = invoice(invoice);
+        String bankPaymentId = (String) issued.get("tbank_payment_id");
+        long order = jdbc.queryForObject("SELECT order_id FROM common_invoice_orders WHERE invoice_id = ?", Long.class, invoice.invoiceId());
+        long profileId = num(issued, "payment_route_profile_id");
+        Map<String, Object> profileBefore = jdbc.queryForMap("SELECT * FROM payment_profiles WHERE id = ?", profileId);
+        try {
+            // The owner of this profile takes money through the bank only: nobody can report a card transfer to them.
+            jdbc.update("UPDATE payment_profiles SET payment_policy = 'T_BANK_ONLY' WHERE id = ?", profileId);
+            login(world.manager);
+            assertThat(billing.manualPaymentOptions(invoice.invoiceId()).candidates())
+                    .noneMatch(candidate -> candidate.recipientType() == ContractorRecipientType.OWNER);
+            assertRejected(409, "подтверждает банк", () -> billing.markPaidWithAttributions(invoice.invoiceId(),
+                    receipt("Клиент перевёл владельцу на карту", new CommonManualPaymentAttributionRowRequest(
+                            "r1", "OWNER", ContractorRecipientType.OWNER, null, 3_000_00)), world.manager.auth()));
+            assertThat(invoice(invoice)).containsEntry("status", "INVOICED").containsEntry("payment_route_type", "BANK_LINK");
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM common_owner_receipt_approval WHERE invoice_id = ?", Long.class,
+                    invoice.invoiceId())).isZero();
+
+            // The owner of this profile may take card transfers (a self-employed owner).
+            jdbc.update("""
+                    UPDATE payment_profiles SET payment_policy = 'MANUAL_UNTIL_LIMIT_THEN_TBANK', manual_payment_type = 'MOBILE_BANK',
+                        manual_phone = '+79000000000', manual_recipient_name = 'Мария Владелец',
+                        manual_monthly_soft_limit_kopecks = 100000000, manual_monthly_hard_limit_kopecks = 100000000
+                    WHERE id = ?
+                    """, profileId);
+            // Other scenarios of this class may have used the card this month: the remainder is measured, not assumed.
+            long leftBefore = billing.commonInvoiceRouteRecipients(invoice.invoiceId()).ownerCard().remainingKopecks();
+            login(world.manager);
+            billing.markPaidWithAttributions(invoice.invoiceId(),
+                    receipt("Клиент перевёл владельцу на карту", row("r1", candidate(invoice, null), 3_000_00)), world.manager.auth());
+
+            // Staged for the owner: nothing is credited, and the bank link is still open for the client.
+            Map<String, Object> report = jdbc.queryForMap("SELECT * FROM common_owner_receipt_approval WHERE invoice_id = ?", invoice.invoiceId());
+            assertThat(num(report, "pending_invoice_id")).isEqualTo(invoice.invoiceId());
+            assertThat(report).containsEntry("reported_by", world.manager.username);
+            assertThat(invoice(invoice)).containsEntry("status", "INVOICED").containsEntry("payment_route_type", "BANK_LINK");
+            assertThat(orderStatus(order)).isEqualTo(STATUS_INVOICED);
+            assertThat(receipts(invoice)).isEmpty();
+            assertThat(bank.status(bankPaymentId)).isEqualTo("NEW");
+            verify(tbank, never()).cancel(any(), any());
+
+            // The owner confirms: the link is checked and cancelled at the bank, then the invoice is closed.
+            login(world.owner);
+            CommonManualPaymentOptionsResponse.OwnerReport waiting = billing.manualPaymentOptions(invoice.invoiceId()).ownerReport();
+            assertThat(waiting.canDecide()).isTrue();
+            billing.markPaidWithAttributions(invoice.invoiceId(), waiting.request(), world.owner.auth());
+
+            assertThat(bank.status(bankPaymentId)).isEqualTo("CANCELED");
+            assertThat(invoice(invoice)).containsEntry("status", "PAID");
+            assertThat(orderStatus(order)).isEqualTo(STATUS_PAID);
+            assertThat(jdbc.queryForMap("SELECT * FROM common_owner_receipt_approval WHERE id = ?", num(report, "id")))
+                    .containsEntry("decision", "ACCEPTED").containsEntry("decided_by", world.owner.username);
+            assertThat(receipts(invoice)).hasSize(1);
+            assertThat(receipts(invoice).getFirst()).containsEntry("actual_recipient_type", "OWNER")
+                    .containsEntry("actual_cash_destination_kind", "OWNER");
+            assertThat(num(receipts(invoice).getFirst(), "amount_kopecks")).isEqualTo(3_000_00);
+            // The money came to the owner's card: it uses the monthly limit of that card.
+            assertThat(billing.commonInvoiceRouteRecipients(invoice.invoiceId()).ownerCard().remainingKopecks())
+                    .isEqualTo(leftBefore - 3_000_00);
+        } finally {
+            restoreOwnerCardProfile(profileBefore, profileId);
+        }
+    }
+
+    @Test
+    @DisplayName("24 общий счёт — ссылка банка, «Выдать номер карты», резерва нет ни у кого: карта владельца в пределах месячного лимита; сверх лимита и при профиле «только банк» — отказ, ссылка действует")
+    void s24_cardNumberOfACommonInvoiceFallsBackToTheOwnersCardWithinItsMonthlyLimit() {
+        Person anna = world.specialist("Анна Специалист");
+        world.payable(anna, ContractorRole.SPECIALIST, 100_00);
+        CommonInvoiceSeed invoice = invoiceOnUnpaidTbankLink(anna);
+        Map<String, Object> issued = invoice(invoice);
+        String bankPaymentId = (String) issued.get("tbank_payment_id");
+        long profileId = num(issued, "payment_route_profile_id");
+        Map<String, Object> profileBefore = jdbc.queryForMap("SELECT * FROM payment_profiles WHERE id = ?", profileId);
+        try {
+            // The owner takes money through the bank only: the window does not offer the card, the automatic
+            // choice refuses, and naming the owner's card is refused as well. The bank link stays open.
+            jdbc.update("UPDATE payment_profiles SET payment_policy = 'T_BANK_ONLY' WHERE id = ?", profileId);
+            login(world.manager);
+            assertThat(billing.commonInvoiceRouteRecipients(invoice.invoiceId()).ownerCard()).isNull();
+            assertRejected(409, "ни специалист, ни менеджер",
+                    () -> recipientChanges.invoice(invoice.invoiceId(), cardNumber(invoice, null), world.manager.auth(), false));
+            assertRejected(409, "Карту владельца выдать нельзя", () -> recipientChanges.invoice(invoice.invoiceId(),
+                    cardNumber(invoice, CommonInvoicePaymentRouteChangeRequest.OWNER_CARD), world.manager.auth(), false));
+            verify(tbank, never()).cancel(any(), any());
+            assertThat(bank.status(bankPaymentId)).isEqualTo("NEW");
+            assertThat(invoice(invoice)).containsEntry("status", "INVOICED").containsEntry("payment_route_type", "BANK_LINK");
+
+            // A self-employed owner: the card is allowed, but this month's limit holds less than the invoice.
+            jdbc.update("""
+                    UPDATE payment_profiles SET payment_policy = 'MANUAL_UNTIL_LIMIT_THEN_TBANK', manual_payment_type = 'MOBILE_BANK',
+                        manual_phone = '+79000000000', manual_recipient_name = 'Мария Владелец',
+                        manual_monthly_soft_limit_kopecks = 100000000, manual_monthly_hard_limit_kopecks = 100000000
+                    WHERE id = ?
+                    """, profileId);
+            // Other scenarios of this class may have used the card this month: both limits are set over that usage.
+            long used = 1_000_000_00L - billing.commonInvoiceRouteRecipients(invoice.invoiceId()).ownerCard().remainingKopecks();
+            jdbc.update("UPDATE payment_profiles SET manual_monthly_soft_limit_kopecks = ?, manual_monthly_hard_limit_kopecks = ? WHERE id = ?",
+                    used + 2_000_00, used + 2_000_00, profileId);
+            var overLimit = billing.commonInvoiceRouteRecipients(invoice.invoiceId()).ownerCard();
+            assertThat(overLimit.remainingKopecks()).isEqualTo(2_000_00);
+            assertThat(overLimit.blockReason()).contains("лимит карты");
+            assertRejected(409, "Карту владельца выдать нельзя", () -> recipientChanges.invoice(invoice.invoiceId(),
+                    cardNumber(invoice, CommonInvoicePaymentRouteChangeRequest.OWNER_CARD), world.manager.auth(), false));
+            assertRejected(409, "ни специалист, ни менеджер",
+                    () -> recipientChanges.invoice(invoice.invoiceId(), cardNumber(invoice, null), world.manager.auth(), false));
+            verify(tbank, never()).cancel(any(), any());
+            assertThat(bank.status(bankPaymentId)).isEqualTo("NEW");
+
+            // The limit holds the invoice: the automatic choice finds no employee and issues the owner's card.
+            jdbc.update("UPDATE payment_profiles SET manual_monthly_soft_limit_kopecks = ?, manual_monthly_hard_limit_kopecks = ? WHERE id = ?",
+                    used + 100_000_00, used + 100_000_00, profileId);
+            var offered = billing.commonInvoiceRouteRecipients(invoice.invoiceId()).ownerCard();
+            assertThat(offered.name()).isEqualTo("Мария Владелец");
+            assertThat(offered.remainingKopecks()).isEqualTo(100_000_00);
+            assertThat(offered.blockReason()).isNull();
+            assertThat(offered.current()).isFalse();
+            recipientChanges.invoice(invoice.invoiceId(), cardNumber(invoice, null), world.manager.auth(), false);
+            deliverQueuedClientMessages();
+
+            // The bank link is cancelled once, and the invoice now carries the requisites of the owner's card.
+            verify(tbank, times(1)).cancel(any(), any());
+            assertThat(bank.status(bankPaymentId)).isEqualTo("CANCELED");
+            assertThat(recipientChangeJobs(invoice)).last().isEqualTo("DONE");
+            Map<String, Object> changed = invoice(invoice);
+            assertThat(changed).containsEntry("status", "INVOICED").containsEntry("payment_route_type", "MANUAL_MOBILE_BANK")
+                    .containsEntry("payment_route_manual_source", "PROFILE_MONTHLY_LIMIT");
+            assertThat(num(changed, "payment_route_profile_id")).isEqualTo(profileId);
+            assertThat(changed.get("tbank_payment_id")).isNull();
+            assertThat(reserve(issued.get("contractor_allocation_id"))).containsEntry("status", "CANCELED");
+            assertThat(reserve(changed.get("contractor_allocation_id"))).containsEntry("recipient_type", "OWNER")
+                    .containsEntry("status", "OWNER_FALLBACK");
+            assertThat(clientMessages.getLast()).contains("Способ оплаты изменён");
+            assertThat(digits(clientMessages.getLast())).contains("9000000000");
+
+            // The card is in use now: it is not issued a second time, neither by name nor as «another» recipient.
+            var afterIssue = billing.commonInvoiceRouteRecipients(invoice.invoiceId()).ownerCard();
+            assertThat(afterIssue.current()).isTrue();
+            assertThat(afterIssue.blockReason()).isNotNull();
+            assertRejected(409, "Карту владельца выдать нельзя", () -> recipientChanges.invoice(invoice.invoiceId(),
+                    cardNumber(invoice, CommonInvoicePaymentRouteChangeRequest.OWNER_CARD), world.manager.auth(), false));
+            assertRejected(409, "ни специалист, ни менеджер",
+                    () -> recipientChanges.invoice(invoice.invoiceId(), cardNumber(invoice, null), world.manager.auth(), true));
+            assertThat(invoice(invoice)).containsEntry("payment_route_manual_source", "PROFILE_MONTHLY_LIMIT");
+        } finally {
+            restoreOwnerCardProfile(profileBefore, profileId);
+        }
+    }
+
+    /** Puts the bank profile a scenario has turned into an owner's card (or into «только банк») back as it was. */
+    private void restoreOwnerCardProfile(Map<String, Object> profileBefore, long profileId) {
+        jdbc.update("""
+                UPDATE payment_profiles SET payment_policy = ?, manual_payment_type = ?, manual_phone = ?, manual_recipient_name = ?,
+                    manual_monthly_soft_limit_kopecks = ?, manual_monthly_hard_limit_kopecks = ?
+                WHERE id = ?
+                """, profileBefore.get("payment_policy"), profileBefore.get("manual_payment_type"), profileBefore.get("manual_phone"),
+                profileBefore.get("manual_recipient_name"), profileBefore.get("manual_monthly_soft_limit_kopecks"),
+                profileBefore.get("manual_monthly_hard_limit_kopecks"), profileId);
+    }
+
+    // ================================================================================================
     // Steps
     // ================================================================================================
 

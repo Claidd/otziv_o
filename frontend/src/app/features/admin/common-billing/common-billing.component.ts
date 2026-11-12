@@ -54,7 +54,8 @@ import { CommonInvoiceReturnOrdersComponent } from './common-invoice-return-orde
 import {
   PaymentRecipientPickerComponent,
   type PaymentRecipientChoice,
-  type PaymentRecipientOption
+  type PaymentRecipientOption,
+  type PaymentRecipientOwnerCard
 } from '../../../shared/payment-recipient-picker.component';
 import { CommonInvoiceGuideComponent, type CommonInvoiceGuideSection } from './common-invoice-guide.component';
 import {
@@ -1183,6 +1184,25 @@ export class CommonBillingComponent implements OnDestroy {
     before: string;
   } | null>(null);
   readonly recipientPickerOptions = signal<PaymentRecipientOption[] | null>(null);
+  /** The owner's card of the window; null where the server does not offer it. */
+  readonly recipientPickerOwnerCard = signal<PaymentRecipientOwnerCard | null>(null);
+  /** What the automatic choice will do: the employees' chain, and the owner's card after it where it may be issued. */
+  readonly recipientPickerAutoHint = computed(() => {
+    const picker = this.recipientPicker();
+    if (!picker) {
+      return '';
+    }
+    const card = this.recipientPickerOwnerCard();
+    if (!card || card.current || card.blockReason) {
+      return picker.autoHint;
+    }
+    return picker.target === 'DIFFERENT_RECIPIENT'
+      ? 'Система выдаст номер другого получателя — платёжного задания или менеджера, если у него хватает резерва. '
+        + 'Нынешний получатель исключается. Если не подойдёт никто из сотрудников, клиент получит карту владельца: '
+        + 'её лимит на этот месяц вмещает счёт.'
+      : 'Система возьмёт платёжное задание, затем специалиста заказа, затем менеджера — первого, у кого хватает резерва. '
+        + 'Если не подойдёт никто из сотрудников, клиент получит карту владельца: её лимит на этот месяц вмещает счёт.';
+  });
   readonly recipientPickerLoading = signal(false);
   readonly recipientPickerError = signal('');
   readonly recipientPickerSubmitError = signal('');
@@ -1200,6 +1220,7 @@ export class CommonBillingComponent implements OnDestroy {
           return;
         }
         this.recipientPickerOptions.set(response.recipients ?? []);
+        this.recipientPickerOwnerCard.set(response.ownerCard ?? null);
         this.recipientPickerLoading.set(false);
       },
       error: (err) => {
@@ -1215,6 +1236,7 @@ export class CommonBillingComponent implements OnDestroy {
   closeRecipientPicker(): void {
     this.recipientPicker.set(null);
     this.recipientPickerOptions.set(null);
+    this.recipientPickerOwnerCard.set(null);
     this.recipientPickerSubmitError.set('');
   }
 
@@ -1297,6 +1319,7 @@ export class CommonBillingComponent implements OnDestroy {
           // A card number is issued from the window: the system's own choice or a person the manager names.
           this.recipientPickerSubmitError.set('');
           this.recipientPickerOptions.set(null);
+          this.recipientPickerOwnerCard.set(null);
           this.recipientPicker.set({
             invoiceId: invoice.id,
             target,

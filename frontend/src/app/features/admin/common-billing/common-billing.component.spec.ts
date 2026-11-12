@@ -411,7 +411,7 @@ describe('recipient shown in the route block', () => {
         commonInvoiceRouteRecipients: () => of({ invoiceId: 385, amountKopecks: 560_000, recipients: [
           { profileId: 44, role: 'SPECIALIST', name: 'Лидия З.', orderSpecialist: true, manager: false, teamMember: true,
             workedWithClient: true, availableKopecks: 100_000, overrunKopecks: 460_000, current: false, blockReason: null }
-        ] }),
+        ], ownerCard: { name: 'Нина В.', remainingKopecks: 4_500_000, current: false, blockReason: null } }),
         changeCommonInvoicePaymentRoute: changeRoute
       },
       toastService: { success, error: vi.fn() },
@@ -419,6 +419,7 @@ describe('recipient shown in the route block', () => {
       invoiceAction,
       recipientPicker: signal(null),
       recipientPickerOptions: signal(null),
+      recipientPickerOwnerCard: signal(null),
       recipientPickerLoading: signal(false),
       recipientPickerError: signal(''),
       recipientPickerSubmitError: signal(''),
@@ -443,6 +444,12 @@ describe('recipient shown in the route block', () => {
       expect(invoiceAction).toHaveBeenCalledOnce();
       (invoiceAction.mock.calls[0][2] as () => unknown)();
       expect(changeRoute).toHaveBeenCalledWith(385, 'EMPLOYEE_REQUISITES', 't', null, 44);
+
+      // The owner's card comes with the people and is named by its own id.
+      expect(context.recipientPickerOwnerCard()).toEqual(expect.objectContaining({ name: 'Нина В.', remainingKopecks: 4_500_000 }));
+      proto.submitRecipientChoice.call(context, { profileId: -1 });
+      (invoiceAction.mock.calls[1][2] as () => unknown)();
+      expect(changeRoute).toHaveBeenLastCalledWith(385, 'EMPLOYEE_REQUISITES', 't', null, -1);
 
       // A refusal keeps the window open, so another person can be chosen at once.
       const onError = invoiceAction.mock.calls[0][5] as (message: string, status?: number) => boolean;

@@ -70,6 +70,7 @@ describe('Common invoice guide', () => {
       expect(tasks(COMMON_INVOICE_GUIDE)).toEqual([
         'overview: Что где на панели счёта',
         'payment: Как отметить оплату переводом',
+        'payment: Счёт — ссылка банка, а клиент перевёл на карту',
         'route: Как выдать номер карты',
         'route: Как вернуть клиенту ссылку банка',
         'send: Как отправить счёт клиенту',

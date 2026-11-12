@@ -886,6 +886,17 @@ public class ContractorPaymentLiveRoutingService {
         return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.CONTRACTOR_ONLY, true, excludedUserId);
     }
 
+    /**
+     * The automatic choice of «Выдать номер карты» of a common invoice where the owner's card is the last
+     * resort: an employee with a free reserve first; when nobody has one the owner, instead of a refusal.
+     * The caller issues the owner's card and has checked that it may.
+     */
+    @Transactional
+    public ContractorPaymentAllocation reserveContractorElseOwnerForCommonInvoice(CommonInvoice invoice, List<Order> orders,
+            Manager manager, long amount, Long excludedUserId) {
+        return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.AUTO, true, excludedUserId);
+    }
+
     private ContractorPaymentAllocation reserveForCommonInvoice(
             CommonInvoice invoice,
             List<Order> orders,

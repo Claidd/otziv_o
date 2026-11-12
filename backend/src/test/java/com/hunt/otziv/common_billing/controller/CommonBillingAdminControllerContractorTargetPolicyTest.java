@@ -46,6 +46,26 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
     );
 
     @Test
+    void cardNumberWindowKeepsTheOwnersCardAndOnlyThePeopleTheCallerMayManage() {
+        var mine = new com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse.Recipient(
+                44L, 7L, "SPECIALIST", "Лидия З.", true, false, true, true, 100_000L, 0L, false, null);
+        var foreign = new com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse.Recipient(
+                45L, 8L, "SPECIALIST", "Олег К.", false, false, true, false, 100_000L, 0L, false, null);
+        var ownerCard = new com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse.OwnerCard(
+                "Нина В.", 4_500_000L, false, null);
+        org.mockito.Mockito.when(commonBillingService.commonInvoiceRouteRecipients(INVOICE_ID)).thenReturn(
+                new com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse(INVOICE_ID, 300_000L, List.of(mine, foreign), ownerCard));
+        org.mockito.Mockito.when(targetAccessPolicy.canManageUser(7L)).thenReturn(true);
+
+        var response = controller.paymentRouteRecipients(INVOICE_ID);
+
+        assertThat(response.recipients()).containsExactly(mine);
+        // The owner's card is not a member of the team: the filter of people must not drop it.
+        assertThat(response.ownerCard()).isEqualTo(ownerCard);
+        assertThat(response.amountKopecks()).isEqualTo(300_000L);
+    }
+
+    @Test
     void everyInvoiceMutationAuthorizesTargetBeforeCallingBusinessService() {
         doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"))
                 .when(targetAccessPolicy)

@@ -186,6 +186,39 @@ public class CommonInvoiceRouteSelector {
         return java.util.OptionalLong.of(Math.max(0L, monthlyLimit - alreadyUsed));
     }
 
+    /**
+     * What is left of this month's limit of the owner's card of this manager. Empty where the manager's bank
+     * profile does not let the owner take card transfers, or new owner routes are blocked.
+     */
+    @Transactional(readOnly = true)
+    public java.util.OptionalLong ownerCardRemainingForManager(Manager manager) {
+        if (!allowLegacyManualProfileRoute()) {
+            return java.util.OptionalLong.empty();
+        }
+        return ownerCardRemainingKopecks(paymentProfileService.selectForManager(manager), LocalDateTime.now(), null);
+    }
+
+    /** The name on the requisites of the owner's card of this manager; empty when there is none. */
+    @Transactional(readOnly = true)
+    public String ownerCardRecipientName(Manager manager) {
+        PaymentProfile profile = paymentProfileService.selectForManager(manager);
+        return profile == null ? "" : normalize(profile.getManualRecipientName());
+    }
+
+    /**
+     * The owner's card for a common invoice whose manager asked for a card number. Unlike the automatic owner
+     * route it never falls back to the bank link: where the card may not be issued, it refuses.
+     */
+    @Transactional
+    public PaymentRouteSelection selectCommonInvoiceOwnerCardRoute(Manager manager, long amountKopecks) {
+        PaymentRouteSelection route = selectCommonInvoiceRoute(manager, amountKopecks, false, true);
+        if (!ManualPaymentSource.PROFILE_MONTHLY_LIMIT.name().equals(route.manualSource())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Карту владельца выдать нельзя: она не разрешена для этого менеджера или лимит карты на этот месяц не вмещает счёт");
+        }
+        return route;
+    }
+
     long manualMonthlyHardLimit(PaymentProfile profile) {
         Long hardLimit = profile.getManualMonthlyHardLimitKopecks();
         if (hardLimit != null && hardLimit > 0) {
