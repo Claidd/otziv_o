@@ -150,7 +150,7 @@ export interface ManagerProblemDiagnosticView {
   caseId: number;
   version: number;
   episode: number;
-  status: 'QUEUED' | 'RUNNING' | 'READY' | 'RETRY' | 'UNAVAILABLE' | 'NEEDS_CONTEXT' | string;
+  status: 'QUEUED' | 'RUNNING' | 'READY' | 'RETRY' | 'UNAVAILABLE' | 'NOT_NEEDED' | 'NEEDS_CONTEXT' | string;
   observedAt: string;
   facts: { reference: string; subject: string; field: string; value: string }[];
   diagnosis?: {

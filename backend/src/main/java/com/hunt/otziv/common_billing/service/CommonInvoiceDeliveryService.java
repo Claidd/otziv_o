@@ -252,7 +252,7 @@ public class CommonInvoiceDeliveryService {
         int queued = 0;
         for (var candidate : candidates) {
             try { if (queuePaymentMessage(candidate.getId(), true, false, true, now, false, false)) queued++; }
-            catch (RuntimeException failure) { log.warn("Common reminder queue preparation failed: invoiceId={}", candidate.getId()); }
+            catch (RuntimeException failure) { log.warn("Common reminder queue preparation failed: invoiceId={}, reason={}", candidate.getId(), failureReason(failure)); }
         }
         return queued;
     }
@@ -267,14 +267,26 @@ public class CommonInvoiceDeliveryService {
         if (immediateClientMessagesEnabled() && badReviewNoticesEnabled()) {
             for (long id : invoiceRepository.pendingBadReviewNotices(page)) {
                 try { if (queuePaymentMessage(id, false, false, false, null, false, false)) queued++; }
-                catch (RuntimeException failure) { log.warn("Bad review invoice notice deferred: invoiceId={}", id); }
+                catch (RuntimeException failure) { log.warn("Bad review invoice notice deferred: invoiceId={}, reason={}", id, failureReason(failure)); }
             }
         }
         for (var candidate : candidates) {
             try { if (queuePaymentMessage(candidate.getId(), false, false, false, null, false, false)) queued++; }
-            catch (RuntimeException failure) { log.warn("Common invoice queue preparation failed: invoiceId={}", candidate.getId()); }
+            catch (RuntimeException failure) { log.warn("Common invoice queue preparation failed: invoiceId={}, reason={}", candidate.getId(), failureReason(failure)); }
         }
         return queued;
+    }
+
+    /**
+     * What a background preparation stopped on, for the log. A refusal of the application keeps its
+     * own text; any other failure gives only its type, because its message may carry client data.
+     */
+    static String failureReason(RuntimeException failure) {
+        if (failure instanceof ResponseStatusException refusal) {
+            String reason = refusal.getReason();
+            return refusal.getStatusCode().value() + (reason == null || reason.isBlank() ? "" : " " + reason.trim());
+        }
+        return failure.getClass().getSimpleName();
     }
 
     @Transactional

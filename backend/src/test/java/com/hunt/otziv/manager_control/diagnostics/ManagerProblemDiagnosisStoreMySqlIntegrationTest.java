@@ -211,6 +211,56 @@ class ManagerProblemDiagnosisStoreMySqlIntegrationTest {
     }
 
     @Test
+    void jobsOfClosedAndResolvedProblemsEndInsteadOfWaitingForEver() {
+        var closed = store.capture(new ManagerProblemEvidenceCollector.Evidence("closed", 2, 1, true,
+                evidence("PAID", true).facts(), LocalDateTime.now()));
+        var resolvedQueued = queue(2, 10, LocalDate.of(2026, 7, 16), "OPEN");
+        var resolvedRetry = queue(3, 11, LocalDate.of(2026, 7, 16), "OPEN");
+        var resolvedExpired = queue(3, 12, LocalDate.of(2026, 7, 16), "OPEN");
+        var resolvedWorking = queue(3, 13, LocalDate.of(2026, 7, 16), "OPEN");
+        var open = queue(2, 20, LocalDate.of(2026, 10, 23), "OPEN");
+        jdbc.update("UPDATE manager_problem_evidence_versions SET status='RETRY',last_error='schema' WHERE case_id=?", resolvedRetry.caseId());
+        jdbc.update("UPDATE manager_problem_evidence_versions SET status='RUNNING',lease_token='expired',lease_until=? WHERE case_id=?",
+                LocalDateTime.now().minusMinutes(1), resolvedExpired.caseId());
+        jdbc.update("UPDATE manager_problem_evidence_versions SET status='RUNNING',lease_token='working',lease_until=? WHERE case_id=?",
+                LocalDateTime.now().plusMinutes(3), resolvedWorking.caseId());
+        jdbc.update("UPDATE manager_daily_control_concrete_items SET item_status='RESOLVED' WHERE control_entity_id IN (10,11,12,13)");
+
+        assertThat(store.retireUnclaimable()).isEqualTo(4);
+
+        assertThat(store.read(closed.caseId(), 1).status()).isEqualTo("NOT_NEEDED");
+        assertThat(store.read(resolvedQueued.caseId(), 1).status()).isEqualTo("NOT_NEEDED");
+        assertThat(store.read(resolvedRetry.caseId(), 1).status()).isEqualTo("NOT_NEEDED");
+        assertThat(store.read(resolvedExpired.caseId(), 1).status()).isEqualTo("NOT_NEEDED");
+        // A worker inside its lease finishes its own job; an open problem stays in the queue.
+        assertThat(store.read(resolvedWorking.caseId(), 1).status()).isEqualTo("RUNNING");
+        assertThat(store.read(open.caseId(), 1).status()).isEqualTo("QUEUED");
+        // The facts and the error of the last attempt stay as history.
+        assertThat(store.read(resolvedRetry.caseId(), 1).facts()).isEqualTo(resolvedRetry.facts());
+        assertThat(jdbc.queryForObject("SELECT last_error FROM manager_problem_evidence_versions WHERE case_id=?", String.class,
+                resolvedRetry.caseId())).isEqualTo("schema");
+        assertThat(store.retireUnclaimable()).isZero();
+        assertThat(store.claim(true, 0).caseId()).isEqualTo(open.caseId());
+        assertThat(store.claim(false, 0)).isNull();
+    }
+
+    @Test
+    void reopenedProblemIsQueuedAgainAfterItsEarlierJobEndedWithoutAnalysis() {
+        var closed = store.capture(new ManagerProblemEvidenceCollector.Evidence("closed", 2, 1, true,
+                evidence("PAID", true).facts(), LocalDateTime.now()));
+        assertThat(store.retireUnclaimable()).isEqualTo(1);
+
+        var reopened = store.capture(new ManagerProblemEvidenceCollector.Evidence("closed", 2, 1, false,
+                evidence("NEEDS_ATTENTION", false).facts(), LocalDateTime.now().plusSeconds(1)));
+
+        assertThat(reopened.version()).isEqualTo(2);
+        assertThat(reopened.episode()).isEqualTo(2);
+        assertThat(reopened.status()).isEqualTo("QUEUED");
+        assertThat(store.read(closed.caseId(), 1).status()).isEqualTo("NOT_NEEDED");
+        assertThat(store.retireUnclaimable()).isZero();
+    }
+
+    @Test
     void receiptChecksKeepImmutableSnapshotsAndOriginalQueueAge() {
         var firstEvidence = receiptEvidence("2026-10-23T09:00:00");
         var first = store.capture(firstEvidence);

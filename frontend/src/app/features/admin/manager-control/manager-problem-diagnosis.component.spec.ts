@@ -96,6 +96,17 @@ describe('ManagerProblemDiagnosisComponent', () => {
     }
   );
 
+  it('does not promise an analysis of a remark that was resolved before its turn', () => {
+    const waiting = render(fixtureView({ status: 'NOT_NEEDED', model: 'deepseek-flash' })).nativeElement.textContent;
+    expect(waiting).toContain('анализ не понадобился');
+    expect(waiting).not.toContain('анализируются');
+    expect(waiting).not.toContain('повторит проверку');
+
+    const advised: HTMLElement = render(fixtureView({ status: 'NOT_NEEDED', model: 'server-rules' })).nativeElement;
+    expect(advised.textContent).toContain('Предварительный разбор по данным системы');
+    expect(advised.querySelector('.diagnosis-note')).toBeNull();
+  });
+
   it.each(['SHADOW', 'OFF'])('does not expose advice in %s mode even for a server fallback', (rolloutMode) => {
     const text = render(fixtureView({ rolloutMode, model: 'server-rules' })).nativeElement.textContent;
     expect(text).not.toContain('Откройте отзыв');

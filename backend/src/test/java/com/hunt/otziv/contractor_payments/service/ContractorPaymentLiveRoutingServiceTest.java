@@ -884,6 +884,114 @@ class ContractorPaymentLiveRoutingServiceTest {
         assertEquals(135L, replacement.getRecipientUserId());
     }
 
+    /**
+     * «Не оплачено» released the reservation, a bad review changed the amount: the invoice with the
+     * new amount gets its recipient without a person, as an order's invoice does.
+     */
+    @ParameterizedTest
+    @EnumSource(value = ContractorAllocationStatus.class, names = {"RELEASED_UNPAID", "CANCELED"})
+    void badReviewCycleGetsTheNextAutomaticAttemptAfterItsUnpaidRelease(ContractorAllocationStatus previousStatus) {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(38L, 138L);
+        Manager manager = manager(48L, 148L);
+        ContractorPaymentProfile specialist = profile(59L, worker.getUser(), ContractorRole.SPECIALIST);
+        CommonInvoice invoice = repricedUnpaidInvoice(145L, 160_000L);
+        ContractorPaymentAllocation previous = commonAllocation(191L, invoice.getId(), previousStatus);
+        previous.setAttemptNo(1);
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.COMMON_INVOICE,
+                invoice.getId()
+        )).thenReturn(Optional.of(previous));
+        when(profileRepository.findByUserIdAndRoleForUpdate(138L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(specialist));
+        when(profileService.available(specialist, ContractorAllocationMode.LIVE)).thenReturn(160_000L);
+
+        ContractorPaymentAllocation next = service.reserveForCommonInvoice(
+                invoice,
+                List.of(order(138L, worker, manager)),
+                manager,
+                160_000L
+        );
+
+        assertEquals(2, next.getAttemptNo());
+        assertEquals(ContractorAllocationStatus.RESERVED, next.getStatus());
+        assertEquals(ContractorRecipientType.SPECIALIST, next.getRecipientType());
+        assertEquals(160_000L, next.getAmountKopecks());
+    }
+
+    @Test
+    void automaticCommonRouteOutsideTheBadReviewCycleStillNeedsThePreviousAttemptReconciled() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(39L, 139L);
+        Manager manager = manager(49L, 149L);
+        CommonInvoice invoice = invoice(146L, 100_000L, 0L);
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.COMMON_INVOICE,
+                invoice.getId()
+        )).thenReturn(Optional.of(commonAllocation(192L, invoice.getId(), ContractorAllocationStatus.RELEASED_UNPAID)));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveForCommonInvoice(invoice, List.of(order(139L, worker, manager)), manager, 100_000L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("явной сверки старой попытки"));
+        verify(accountingPhaseService, never()).lockAndPromoteForLiveRoute();
+    }
+
+    /** Money may have moved on these attempts: the bad-review cycle does not reopen them by itself. */
+    @ParameterizedTest
+    @EnumSource(value = ContractorAllocationStatus.class, names = {"EXPIRED", "PARTIALLY_RETURNED", "RETURNED"})
+    void badReviewCycleLeavesAnExpiredOrReturnedAttemptToAPerson(ContractorAllocationStatus previousStatus) {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(40L, 140L);
+        Manager manager = manager(50L, 150L);
+        CommonInvoice invoice = repricedUnpaidInvoice(147L, 100_000L);
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.COMMON_INVOICE,
+                invoice.getId()
+        )).thenReturn(Optional.of(commonAllocation(193L, invoice.getId(), previousStatus)));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveForCommonInvoice(invoice, List.of(order(140L, worker, manager)), manager, 100_000L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(accountingPhaseService, never()).lockAndPromoteForLiveRoute();
+    }
+
+    @Test
+    void badReviewCycleDoesNotReopenAnAttemptWithASignOfPayment() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(41L, 141L);
+        Manager manager = manager(51L, 151L);
+        CommonInvoice invoice = repricedUnpaidInvoice(148L, 100_000L);
+        ContractorPaymentAllocation reported = commonAllocation(194L, invoice.getId(), ContractorAllocationStatus.RELEASED_UNPAID);
+        reported.setClientReportedAt(LocalDateTime.of(2026, 11, 10, 12, 0));
+        ContractorPaymentAllocation confirmed = commonAllocation(195L, invoice.getId(), ContractorAllocationStatus.CANCELED);
+        confirmed.setConfirmedKopecks(1L);
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.COMMON_INVOICE,
+                invoice.getId()
+        )).thenReturn(Optional.of(reported), Optional.of(confirmed));
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            ResponseStatusException error = assertThrows(
+                    ResponseStatusException.class,
+                    () -> service.reserveForCommonInvoice(invoice, List.of(order(141L, worker, manager)), manager, 100_000L)
+            );
+            assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        }
+        verify(accountingPhaseService, never()).lockAndPromoteForLiveRoute();
+    }
+
     @Test
     void explicitCommonOwnerReplacementDoesNotSelectEligibleContractor() {
         when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
@@ -1797,6 +1905,14 @@ class ContractorPaymentLiveRoutingServiceTest {
         invoice.setShadowRoutePreparedAt(LocalDateTime.of(2026, 8, 24, 20, 0));
         invoice.setShadowRouteContractorEligible(true);
         invoice.setShadowRouteCompanyRoutingAllowed(true);
+        return invoice;
+    }
+
+    /** An invoice in «Не оплачено» whose amount a bad review has changed. */
+    private CommonInvoice repricedUnpaidInvoice(Long id, long amountKopecks) {
+        CommonInvoice invoice = invoice(id, amountKopecks, 0L);
+        invoice.setStatus(CommonInvoiceStatus.UNPAID);
+        invoice.setBadReviewPayable(true);
         return invoice;
     }
 

@@ -154,6 +154,15 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
                             + successor.getId() + ") не отправлен клиенту больше суток. Проверьте паузу и рабочие окна автоответчика, "
                             + "затем откройте новый счёт в «Деталях» и отправьте его.");
         }
+        if (invoice.isRepricedUnpaid() && invoice.isBadReviewNoticePending() && invoice.getPaymentMessageOperationId() == null
+                && invoice.getUpdatedAt() != null
+                && invoice.getUpdatedAt().plusHours(BAD_REVIEW_SUCCESSOR_SEND_GRACE_HOURS).isBefore(checkTime)) {
+            // The amount was recalculated in this invoice itself. The scheduler retries the invoice with
+            // the new amount every five minutes; a day without a queued message means it cannot prepare it.
+            return Optional.of("Почему в замечаниях: после плохого отзыва сумма счёта пересчитана, но счёт с новой суммой не уходит клиенту "
+                    + "больше суток. Проверьте паузу и рабочие окна автоответчика. Если они в порядке, причину подскажет уведомление "
+                    + "«Общий счёт требует внимания» по этому счёту; передайте счёт администратору.");
+        }
         List<Long> orderIds = unpaid.stream().map(item -> item.getOrder().getId()).distinct().toList();
         java.util.Map<Long, BadReviewTaskSummary> summaries = badReviewTaskService.getSummaryByOrderIds(orderIds);
         java.util.function.Function<Long, BadReviewTaskSummary> summary = orderId -> summaries.getOrDefault(orderId, BadReviewTaskSummary.empty());
