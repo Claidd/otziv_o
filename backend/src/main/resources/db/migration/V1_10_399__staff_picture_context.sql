@@ -44,8 +44,8 @@ WHERE event_code='WORKER_ACCOUNT_BLOCKED_TASKS' AND enabled=0
               AND a.storage_key='notification-media/worker_account_blocked_tasks/zheka-20261113-context/38-zheka.png');
 
 UPDATE notification_media_assets a
-JOIN staff_picture_mapping m ON SUBSTRING_INDEX(a.storage_key,'/',-1)=m.filename
-JOIN notification_media_rules r ON r.event_code=m.event_code
+JOIN staff_picture_mapping m ON CAST(SUBSTRING_INDEX(a.storage_key,'/',-1) AS BINARY)=CAST(m.filename AS BINARY)
+JOIN notification_media_rules r ON CAST(r.event_code AS BINARY)=CAST(m.event_code AS BINARY)
 SET a.rule_id=r.rule_id, a.context_condition=m.condition_code, a.active=1, a.updated_at=NOW(6)
 WHERE SUBSTRING_INDEX(SUBSTRING_INDEX(a.storage_key,'/',3),'/',-1)='zheka-20261113-context'
   AND a.storage_key LIKE 'notification-media/%';
