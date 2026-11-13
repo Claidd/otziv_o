@@ -1,5 +1,7 @@
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   color: var(--mobile-text, #26344e);
 }
 
@@ -175,4 +177,7 @@ textarea {
 
 .actions ion-button {
   margin: 0;
+  height: auto;
+  min-height: 2.75rem;
+  white-space: normal;
 }
