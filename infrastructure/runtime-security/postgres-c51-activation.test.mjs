@@ -256,7 +256,7 @@ test('actual C51 acceptance binds all three rehearsal records and both executed 
 
 test('actual C51 activation replays the C36 lineage and couples to the active C48 issuer only', async () => {
   const active = (await json(R + 'reviewed-image-activations.json')).images;
-  assert.deepEqual(active.find(item => item.component === 'postgres'), candidate);
+  assert.deepEqual(await json(R + 'c54-parent-postgres.json'), candidate);
   const {validateActivation} = await import('./reviewed-image-defaults.mjs');
   assert.equal(await validateActivation(image, candidate, baseline, read), candidate.reference);
   const readiness = await validatePostgresC51Transition(candidate, image, read);

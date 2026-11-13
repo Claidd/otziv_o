@@ -38,6 +38,21 @@ REPORT = {'schema': 'otziv-postgres-c54-rehearsal-v1', 'result': 'FAIL', 'checks
 exec(compile((ROOT / 'infrastructure/keycloak/security-generation/c14-migration-fix/private-runtime.py').read_text(),
              'private-runtime.py', 'exec'))
 
+# Password hashing after each cold start can exceed the discovery probe timeout.
+# Use one longer request for the real password grant. A denial is still a failed login.
+discovery_request = request
+def request(runner, url, options=None):
+    if not url.endswith('/protocol/openid-connect/token'):
+        return discovery_request(runner, url, options)
+    script = """let input = '';
+for await (const chunk of process.stdin) input += chunk;
+const {url, options} = JSON.parse(input);
+const response = await fetch(url, {...options, redirect:'manual', signal:AbortSignal.timeout(30000)});
+console.log(JSON.stringify({status:response.status, text:await response.text()}));"""
+    response = docker(['exec', '-i', runner, 'node', '--input-type=module', '-e', script],
+                      json.dumps({'url': url, 'options': options}).encode(), allow=True, timeout=40)
+    return json.loads(response.stdout) if response.returncode == 0 else None
+
 LOCAL_CAPTURE = '''
 import base64,json,subprocess,sys
 def command(arguments,data=None):

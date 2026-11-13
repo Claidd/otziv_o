@@ -2,8 +2,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot '../prod/DeploySnapshot.ps1')
 
-# The C51 PostgreSQL refresh archive is sealed from an exact commit and carries the
-# complete hash-bound C51 and C48 acceptance graph; a changed proof never ships.
+# The C54 PostgreSQL refresh archive is sealed from an exact commit and carries the
+# complete hash-bound C54 and C48 acceptance graph; a changed proof never ships.
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $tempRoot = Join-Path $repository '.codex-tmp'
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
@@ -18,11 +18,11 @@ function Fixture-Git([string[]]$Arguments) {
 try {
     $evidence = @(Get-OtzivCoordinatedPostgresBundlePaths -Repository $repository)
     foreach ($required in @('infrastructure/runtime-security/reviewed-image-activations.json',
-        'infrastructure/runtime-security/c51-parent-postgres.json',
-        'infrastructure/runtime-security/proofs/c51-postgres/acceptance.json',
-        'infrastructure/runtime-security/proofs/c51-postgres/rehearsal/replay.json',
-        'infrastructure/runtime-security/proofs/c51-postgres/rehearsal/capture-window.json',
-        'infrastructure/runtime-security/postgres-c51-rehearsal.py',
+        'infrastructure/runtime-security/c54-parent-postgres.json',
+        'infrastructure/runtime-security/proofs/c54-postgres/acceptance.json',
+        'infrastructure/runtime-security/proofs/c54-postgres/rehearsal/replay.json',
+        'infrastructure/runtime-security/proofs/c54-postgres/rehearsal/capture-window.json',
+        'infrastructure/runtime-security/postgres-c54-rehearsal.py',
         'infrastructure/runtime-security/proofs/c48-keycloak/acceptance.json')) {
         if ($required -notin $evidence) { throw "Reviewed PostgreSQL evidence inventory lacks $required" }
     }
@@ -61,7 +61,7 @@ try {
             throw "Reviewed PostgreSQL evidence missing or changed in the prepared archive: $path"
         }
     }
-    $replay = Join-Path $fixture 'infrastructure/runtime-security/proofs/c51-postgres/rehearsal/replay.json'
+    $replay = Join-Path $fixture 'infrastructure/runtime-security/proofs/c54-postgres/rehearsal/replay.json'
     [IO.File]::AppendAllText($replay, 'tampered')
     $rejected = $false
     try { $null = Get-OtzivDeployBundlePaths -Repository $fixture -CoordinatedPostgresRefresh }
@@ -80,7 +80,7 @@ try {
         $rejected = $true
     }
     if (-not $rejected) { throw 'An uncommitted PostgreSQL proof change entered the prepared archive.' }
-    Write-Output 'c51-postgres committed archive includes the exactly bound C51/C48 proof and rejects altered rehearsal.'
+    Write-Output 'c54-postgres committed archive includes the exactly bound C54/C48 proof and rejects altered rehearsal.'
 } finally {
     $resolved = [IO.Path]::GetFullPath($fixture)
     $allowed = [IO.Path]::GetFullPath($tempRoot).TrimEnd([char[]]@('/', '\')) + [IO.Path]::DirectorySeparatorChar

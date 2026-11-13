@@ -1,0 +1,233 @@
+{
+  "schema": "otziv-postgres-c54-capture-window-v1",
+  "result": "PASS",
+  "productionAccess": false,
+  "dataWrites": false,
+  "containersRestarted": false,
+  "originalNetwork": "otziv-prod-local_internal_net",
+  "temporaryNetwork": {
+    "name": "otziv-postgres-c54-capture-e7c60d1d9e04",
+    "label": "com.otziv.postgres-c54-capture.owner=e7c60d1d9e04",
+    "internal": true
+  },
+  "checkUrl": "http://localhost:8088/keycloak/realms/otziv/.well-known/openid-configuration",
+  "executedScriptSha256": "571d855bb76b47caab88478319346216ce012b3f7ad70fe28ff6dcd8daf074c9",
+  "dockerEndpoint": "npipe",
+  "before": {
+    "keycloak": {
+      "id": "0706fb05ba86ccf302fd3c2bf624d4aca279ea3491502962df3e7196c7ea870d",
+      "name": "otziv-prod-local-keycloak-1",
+      "imageId": "sha256:2e935efdb594ee4a3f0bc8343b1e6a76def33d70a4981cbd730ce5942ff47009",
+      "startedAt": "2026-11-13T15:38:39.686801248Z",
+      "restarts": 0,
+      "running": true,
+      "networks": [
+        "otziv-prod-local_internal_net"
+      ],
+      "portBindings": {},
+      "attachment": {
+        "aliases": [
+          "keycloak",
+          "otziv-prod-local-keycloak-1"
+        ],
+        "ipAddress": "172.18.0.11"
+      }
+    },
+    "keycloak-postgres": {
+      "id": "9ef21bfb551679819d64dae0967e8097219a78150cde2302bf1b03f6564d2727",
+      "name": "otziv-prod-local-keycloak-postgres-1",
+      "imageId": "sha256:13d2e1ba01b593f1f284d5d7869a9994f5251f036355e90064406ca4e7d809fc",
+      "startedAt": "2026-11-13T15:38:28.185346572Z",
+      "restarts": 0,
+      "running": true,
+      "networks": [
+        "otziv-prod-local_internal_net"
+      ],
+      "portBindings": {},
+      "attachment": {
+        "aliases": [
+          "keycloak-postgres",
+          "otziv-prod-local-keycloak-postgres-1"
+        ],
+        "ipAddress": "172.18.0.3"
+      }
+    }
+  },
+  "stackStatusBefore": 200,
+  "windowOpenedAt": "2026-11-13T16:31:44.276574+00:00",
+  "isolated": {
+    "keycloak": {
+      "networks": [
+        "otziv-postgres-c54-capture-e7c60d1d9e04"
+      ],
+      "aliases": [
+        "keycloak",
+        "otziv-prod-local-keycloak-1"
+      ]
+    },
+    "keycloak-postgres": {
+      "networks": [
+        "otziv-postgres-c54-capture-e7c60d1d9e04"
+      ],
+      "aliases": [
+        "keycloak-postgres",
+        "otziv-prod-local-keycloak-postgres-1"
+      ]
+    }
+  },
+  "captureStartedAt": "2026-11-13T16:31:50.095877+00:00",
+  "captureCompletedAt": "2026-11-13T16:32:07.939787+00:00",
+  "captureExitCode": 0,
+  "captureSha256": "8b0efa798ddabd9ac5d385864d031ed5b24f495546d1dd65dbbeb2b490367385",
+  "captureResult": "PASS",
+  "windowClosedAt": "2026-11-13T16:32:11.267253+00:00",
+  "restoreNotes": [],
+  "after": {
+    "keycloak": {
+      "id": "0706fb05ba86ccf302fd3c2bf624d4aca279ea3491502962df3e7196c7ea870d",
+      "name": "otziv-prod-local-keycloak-1",
+      "imageId": "sha256:2e935efdb594ee4a3f0bc8343b1e6a76def33d70a4981cbd730ce5942ff47009",
+      "startedAt": "2026-11-13T15:38:39.686801248Z",
+      "restarts": 0,
+      "running": true,
+      "networks": [
+        "otziv-prod-local_internal_net"
+      ],
+      "portBindings": {},
+      "attachment": {
+        "aliases": [
+          "keycloak",
+          "otziv-prod-local-keycloak-1"
+        ],
+        "ipAddress": "172.18.0.11"
+      }
+    },
+    "keycloak-postgres": {
+      "id": "9ef21bfb551679819d64dae0967e8097219a78150cde2302bf1b03f6564d2727",
+      "name": "otziv-prod-local-keycloak-postgres-1",
+      "imageId": "sha256:13d2e1ba01b593f1f284d5d7869a9994f5251f036355e90064406ca4e7d809fc",
+      "startedAt": "2026-11-13T15:38:28.185346572Z",
+      "restarts": 0,
+      "running": true,
+      "networks": [
+        "otziv-prod-local_internal_net"
+      ],
+      "portBindings": {},
+      "attachment": {
+        "aliases": [
+          "keycloak-postgres",
+          "otziv-prod-local-keycloak-postgres-1"
+        ],
+        "ipAddress": "172.18.0.3"
+      }
+    }
+  },
+  "nginxReloaded": false,
+  "stackStatus": 200,
+  "temporaryNetworkRemaining": 0,
+  "commands": [
+    [
+      "docker",
+      "network",
+      "create",
+      "--internal",
+      "--label",
+      "com.otziv.postgres-c54-capture.owner=e7c60d1d9e04",
+      "otziv-postgres-c54-capture-e7c60d1d9e04"
+    ],
+    [
+      "docker",
+      "network",
+      "connect",
+      "--alias",
+      "keycloak",
+      "--alias",
+      "otziv-prod-local-keycloak-1",
+      "otziv-postgres-c54-capture-e7c60d1d9e04",
+      "0706fb05ba86ccf302fd3c2bf624d4aca279ea3491502962df3e7196c7ea870d"
+    ],
+    [
+      "docker",
+      "network",
+      "disconnect",
+      "otziv-prod-local_internal_net",
+      "0706fb05ba86ccf302fd3c2bf624d4aca279ea3491502962df3e7196c7ea870d"
+    ],
+    [
+      "docker",
+      "network",
+      "connect",
+      "--alias",
+      "keycloak-postgres",
+      "--alias",
+      "otziv-prod-local-keycloak-postgres-1",
+      "otziv-postgres-c54-capture-e7c60d1d9e04",
+      "9ef21bfb551679819d64dae0967e8097219a78150cde2302bf1b03f6564d2727"
+    ],
+    [
+      "docker",
+      "network",
+      "disconnect",
+      "otziv-prod-local_internal_net",
+      "9ef21bfb551679819d64dae0967e8097219a78150cde2302bf1b03f6564d2727"
+    ],
+    [
+      "python",
+      "-B",
+      "infrastructure/runtime-security/postgres-c54-rehearsal.py",
+      "capture",
+      "--private-directory",
+      "<private>",
+      "--output",
+      ".codex-tmp/common-owner-rehearsal"
+    ],
+    [
+      "docker",
+      "network",
+      "connect",
+      "--alias",
+      "keycloak",
+      "--alias",
+      "otziv-prod-local-keycloak-1",
+      "--ip",
+      "172.18.0.11",
+      "otziv-prod-local_internal_net",
+      "0706fb05ba86ccf302fd3c2bf624d4aca279ea3491502962df3e7196c7ea870d"
+    ],
+    [
+      "docker",
+      "network",
+      "disconnect",
+      "otziv-postgres-c54-capture-e7c60d1d9e04",
+      "0706fb05ba86ccf302fd3c2bf624d4aca279ea3491502962df3e7196c7ea870d"
+    ],
+    [
+      "docker",
+      "network",
+      "connect",
+      "--alias",
+      "keycloak-postgres",
+      "--alias",
+      "otziv-prod-local-keycloak-postgres-1",
+      "--ip",
+      "172.18.0.3",
+      "otziv-prod-local_internal_net",
+      "9ef21bfb551679819d64dae0967e8097219a78150cde2302bf1b03f6564d2727"
+    ],
+    [
+      "docker",
+      "network",
+      "disconnect",
+      "otziv-postgres-c54-capture-e7c60d1d9e04",
+      "9ef21bfb551679819d64dae0967e8097219a78150cde2302bf1b03f6564d2727"
+    ],
+    [
+      "docker",
+      "network",
+      "rm",
+      "otziv-postgres-c54-capture-e7c60d1d9e04"
+    ]
+  ],
+  "restoredExactly": true,
+  "addressesPreserved": true
+}

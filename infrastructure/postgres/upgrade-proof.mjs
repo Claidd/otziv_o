@@ -95,7 +95,7 @@ try {
   await stop(old); check('source_clean_shutdown_before_data_upgrade', true);
   const upgraded = await start('new', candidate, data);
   proof.targetVersion = (await sql(upgraded, 'SHOW server_version')).trim();
-  assert.match(proof.targetVersion, /^17\.11\b/);
+  assert.match(proof.targetVersion, /^17\.12\b/);
   check('same_volume_data_schema_locale_and_privileges_preserved', await snapshot(upgraded) === baseline);
   check('role_can_read_existing_data', (await sql(upgraded, 'SET ROLE fixture_reader; SELECT count(*) FROM sample;')).trim().endsWith('1000'));
   let denied = false;

@@ -79,7 +79,7 @@ Useful options:
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
   -CoordinatedMysqlRefresh       Exact reviewed MySQL OS-package cutover after the protected backup.
   -CoordinatedSslRefresh         Reviewed C23-to-C36 PostgreSQL cutover after protected backups.
-  -CoordinatedPostgresRefresh    Reviewed C36-to-C51 PostgreSQL zlib refresh on the same volume after protected backups.
+  -CoordinatedPostgresRefresh    Reviewed PostgreSQL 17.11 to 17.12 refresh on the same volume after protected backups.
   -NoBuildCache                  Build images without Docker cache.
   -AllowDirtyWorktree            Emergency only: bypass the clean automatic snapshot.
   -SkipAutoSnapshotValidation    Emergency only: skip local gates for an automatic snapshot.
@@ -3253,7 +3253,7 @@ if [ "`$coordinated_ssl_enabled" = "1" ]; then
     --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
     --explicit-reviewed-ssl-cutover
 fi
-# The reviewed C36-to-C51 PostgreSQL zlib refresh keeps the active C48 Keycloak.
+# The reviewed PostgreSQL 17.11 to 17.12 refresh keeps the active C48 Keycloak.
 # It follows the verified main DB backup and both earlier cutovers, writes its own
 # encrypted PostgreSQL backup, recreates only keycloak-postgres on the same volume
 # and restores C36 through its checked override on any failed check.

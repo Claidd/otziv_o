@@ -1,4 +1,4 @@
-"""Fail-closed tests for the reviewed C36 -> C51 PostgreSQL zlib refresh."""
+"""Fail-closed tests for the reviewed C51 -> C54 PostgreSQL zlib refresh."""
 import copy
 import hashlib
 import json
@@ -60,7 +60,7 @@ class Production:
                 return json.dumps(resolved_config()).encode()
             rollback = args.count("-f") == 2
             if ("rollback" if rollback else "upgrade") in self.fail_compose:
-                raise GuardError("postgres_c51_command_failed_docker")
+                raise GuardError("postgres_c54_command_failed_docker")
             assert args[-1] == refresh.PG and "--no-deps" in args and args[args.index("--pull") + 1] == "never"
             if rollback:
                 override = json.loads(Path(args[args.index("-f", args.index("-f") + 1) + 1]).read_text())
@@ -89,7 +89,7 @@ class Production:
             identities = {refresh.TARGET: refresh.TARGET_CONFIG, refresh.SOURCE: refresh.SOURCE_CONFIG,
                           refresh.ISSUER: refresh.ISSUER_CONFIG}
             if name == refresh.TARGET and not self.target_present:
-                raise GuardError("postgres_c51_command_failed_docker")
+                raise GuardError("postgres_c54_command_failed_docker")
             return {"Id": identities[name], "RepoDigests": [name], "Os": "linux", "Architecture": "amd64"}
         if name == refresh.PG:
             return {"Name": "/" + refresh.PG, "Image": self.pg_image,
@@ -119,7 +119,7 @@ class Production:
         return next(i for i, call in enumerate(self.calls) if tuple(call[:len(prefix)]) == tuple(prefix))
 
 
-class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
+class CoordinatedPostgresMinorRefreshTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -141,6 +141,7 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
         with patch.object(refresh, "run", side_effect=self.host.run), \
              patch.object(refresh, "inspect", side_effect=self.host.inspect), \
              patch.object(refresh, "healthy", side_effect=lambda name, attempts=150: self.host.inspect(name)), \
+             patch.object(refresh, "server_version", side_effect=lambda: "170011" if self.host.pg_image == refresh.SOURCE_CONFIG else "170012"), \
              patch.object(refresh, "fingerprints", side_effect=self.host.fingerprints), \
              patch.object(refresh, "encrypted_backup", side_effect=self.host.encrypted_backup), \
              patch.object(refresh, "reviewed_plan") as plan, \
@@ -151,7 +152,7 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
                 self.plan, self.guard = plan, guard
 
     def stage(self):
-        return self.root / ".deploy-backups" / ("postgres-c51-refresh-" + TOKEN)
+        return self.root / ".deploy-backups" / ("postgres-c54-refresh-" + TOKEN)
 
     def stopped(self):
         return any(call[:2] == ("docker", "stop") for call in self.host.calls)
@@ -169,11 +170,11 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
                    "--explicit-reviewed-postgres-refresh"]
         result = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("postgres_c51_deploy_lock_changed", result.stderr)
+        self.assertIn("postgres_c54_deploy_lock_changed", result.stderr)
         self.assertNotIn(TOKEN, result.stderr)
         self.assertNotIn("b" * 32, result.stderr)
 
-    def test_repository_plan_binds_the_exact_c51_c48_evidence(self):
+    def test_repository_plan_binds_the_exact_c54_c48_evidence(self):
         entries = {entry["component"]: entry for entry in json.loads(
             (ROOT / PREFIX / "reviewed-image-activations.json").read_bytes())["images"]}
         publication = json.loads((ROOT / entries["postgres"]["publication"]["path"]).read_bytes())
@@ -191,7 +192,7 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
         paths = {PREFIX + "reviewed-image-activations.json", refresh.PARENT_PATH}
         entries = {entry["component"]: entry for entry in json.loads(
             (ROOT / PREFIX / "reviewed-image-activations.json").read_bytes())["images"]}
-        for entry, key in ((entries["postgres"], "postgresC51Acceptance"), (entries["keycloak"], "aptRefreshAcceptance")):
+        for entry, key in ((entries["postgres"], "postgresC54Acceptance"), (entries["keycloak"], "aptRefreshAcceptance")):
             paths |= {entry["manifest"]["path"], entry[key]["path"]}
             record = json.loads((ROOT / entry[key]["path"]).read_bytes())
             paths |= set(record["files"]) | set(record.get("executedSources", {}))
@@ -217,35 +218,35 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
         root, entries = self.copied_evidence()
         parent = json.loads((ROOT / refresh.PARENT_PATH).read_bytes())
         self.rewrite_index(root, "postgres", lambda entry: (entry.clear(), entry.update(parent)))
-        self.rejected(root, "postgres_c51_unreviewed_generation")
+        self.rejected(root, "postgres_c54_unreviewed_generation")
         self.rewrite_index(root, "postgres", lambda entry: (entry.clear(), entry.update(entries["postgres"])))
         self.rewrite_index(root, "keycloak", lambda entry: entry.update(reference=C45_KEYCLOAK))
-        self.rejected(root, "postgres_c51_unreviewed_generation")
+        self.rejected(root, "postgres_c54_unreviewed_generation")
 
     def test_changed_evidence_parent_or_compose_is_rejected(self):
         root, _ = self.copied_evidence()
         resolved = resolved_config()
         resolved["services"]["keycloak"]["image"] = C45_KEYCLOAK
-        self.rejected(root, "postgres_c51_compose_reference_changed", resolved)
+        self.rejected(root, "postgres_c54_compose_reference_changed", resolved)
         replay = root / refresh.REHEARSAL_PATHS["replayPath"]
         original = replay.read_bytes()
         replay.write_bytes(original + b" ")
-        self.rejected(root, "postgres_c51_evidence_changed")
+        self.rejected(root, "postgres_c54_evidence_changed")
         replay.write_bytes(original)
-        script = root / PREFIX / "postgres-c51-rehearsal.py"
+        script = root / PREFIX / "postgres-c54-rehearsal.py"
         script.write_bytes(script.read_bytes() + b"\n")
-        self.rejected(root, "postgres_c51_evidence_changed")
-        shutil.copyfile(ROOT / PREFIX / "postgres-c51-rehearsal.py", script)
+        self.rejected(root, "postgres_c54_evidence_changed")
+        shutil.copyfile(ROOT / PREFIX / "postgres-c54-rehearsal.py", script)
         (root / refresh.PARENT_PATH).write_text("{}")
-        self.rejected(root, "postgres_c51_parent_changed")
+        self.rejected(root, "postgres_c54_parent_changed")
 
     def test_unbound_transition_or_issuer_acceptance_is_rejected(self):
         root, _ = self.copied_evidence()
         self.rewrite_index(root, "postgres", lambda entry: entry.update(databaseTransition={"path": "x", "sha256": "0" * 64}))
-        self.rejected(root, "postgres_c51_transition_binding")
+        self.rejected(root, "postgres_c54_transition_binding")
         root, _ = self.copied_evidence()
         self.rewrite_index(root, "keycloak", lambda entry: entry.update(migrationAcceptance={"path": "x", "sha256": "0" * 64}))
-        self.rejected(root, "postgres_c51_transition_binding")
+        self.rejected(root, "postgres_c54_transition_binding")
 
     def test_refresh_backs_up_then_recreates_only_postgres_on_the_same_volume(self):
         self.cutover()
@@ -274,9 +275,9 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
         self.cutover()
         self.assertLess(self.host.index(("docker", "pull")), self.host.index(("docker", "stop")))
 
-    def test_changed_records_restore_c36_on_the_same_volume(self):
+    def test_changed_records_restore_c51_on_the_same_volume(self):
         self.host.records_after_target = {**self.host.records, "table_0": "b" * 64}
-        with self.assertRaisesRegex(GuardError, "^postgres_c51_records_changed$"):
+        with self.assertRaisesRegex(GuardError, "^postgres_c54_records_changed$"):
             self.cutover()
         rollback = [call for call in self.host.calls if call[:2] == ("docker", "compose") and call.count("-f") == 2]
         self.assertEqual(len(rollback), 1)
@@ -292,10 +293,10 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
             if args[:2] == ["docker", "start"] and self.host.pg_image == refresh.TARGET_CONFIG:
                 self.host.kc_running = True
                 self.host.records = {**self.host.records, "table_1": "c" * 64}  # a valid issuer write
-                raise GuardError("postgres_c51_command_failed_docker")
+                raise GuardError("postgres_c54_command_failed_docker")
             return original(args, timeout)
         self.host.run = run
-        with self.assertRaisesRegex(GuardError, "^postgres_c51_command_failed_docker$"):
+        with self.assertRaisesRegex(GuardError, "^postgres_c54_command_failed_docker$"):
             self.cutover()
         self.assertEqual(self.host.pg_image, refresh.SOURCE_CONFIG)
         self.assertTrue(self.host.kc_running)
@@ -306,16 +307,16 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
 
     def test_failed_rollback_requires_manual_recovery_and_keeps_lock(self):
         self.host.fail_compose = {"upgrade", "rollback"}
-        with self.assertRaisesRegex(GuardError, "^postgres_c51_manual_recovery_required_keep_lock_and_timer_paused$"):
+        with self.assertRaisesRegex(GuardError, "^postgres_c54_manual_recovery_required_keep_lock_and_timer_paused$"):
             self.cutover()
         self.assertTrue((self.stage() / "manual-recovery-required").exists())
         self.assertEqual((self.root / ".deploy.lock.d/owner").read_text(), TOKEN)
 
     def test_failed_backup_restarts_issuer_without_touching_postgres(self):
         def broken(root, directory, env_file):
-            raise GuardError("postgres_c51_backup_key_not_ready")
+            raise GuardError("postgres_c54_backup_key_not_ready")
         self.host.encrypted_backup = broken
-        with self.assertRaisesRegex(GuardError, "^postgres_c51_backup_key_not_ready$"):
+        with self.assertRaisesRegex(GuardError, "^postgres_c54_backup_key_not_ready$"):
             self.cutover()
         self.assertFalse(any(call[:2] == ("docker", "compose") and "up" in call for call in self.host.calls))
         self.assertTrue(self.host.kc_running)
@@ -330,10 +331,10 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
 
     def test_wrong_issuer_volume_or_paused_state_is_refused_before_any_stop(self):
         for name, change, code in [
-            ("issuer", lambda host: setattr(host, "kc_image", "sha256:" + "e" * 64), "postgres_c51_issuer_changed"),
-            ("volume", lambda host: setattr(host, "pg_volume", "other"), "postgres_c51_data_volume_changed"),
-            ("database", lambda host: setattr(host, "pg_image", "sha256:" + "f" * 64), "postgres_c51_container_identity_changed"),
-            ("timer", lambda host: setattr(host, "timer", "active"), "postgres_c51_self_heal_not_paused"),
+            ("issuer", lambda host: setattr(host, "kc_image", "sha256:" + "e" * 64), "postgres_c54_issuer_changed"),
+            ("volume", lambda host: setattr(host, "pg_volume", "other"), "postgres_c54_data_volume_changed"),
+            ("database", lambda host: setattr(host, "pg_image", "sha256:" + "f" * 64), "postgres_c54_container_identity_changed"),
+            ("timer", lambda host: setattr(host, "timer", "active"), "postgres_c54_self_heal_not_paused"),
         ]:
             with self.subTest(name=name):
                 self.host = Production(self.root)
@@ -345,13 +346,13 @@ class CoordinatedPostgresZlibRefreshTest(unittest.TestCase):
 
     def test_second_attempt_under_the_same_lock_is_refused(self):
         self.stage().mkdir()
-        with self.assertRaisesRegex(GuardError, "^postgres_c51_refresh_already_attempted$"):
+        with self.assertRaisesRegex(GuardError, "^postgres_c54_refresh_already_attempted$"):
             self.cutover()
         self.assertFalse(self.stopped())
 
     def test_reused_backup_helpers_keep_their_format_with_this_procedure_prefix(self):
         with patch.object(refresh.ssl_refresh, "backup_key", side_effect=GuardError("coordinated_ssl_backup_key_not_ready")):
-            with self.assertRaisesRegex(GuardError, "^postgres_c51_backup_key_not_ready$"):
+            with self.assertRaisesRegex(GuardError, "^postgres_c54_backup_key_not_ready$"):
                 refresh.encrypted_backup(self.root, self.root, self.env)
         self.assertEqual(refresh.ssl_refresh.encrypted_backup.__module__, "coordinated_ssl_refresh")
 

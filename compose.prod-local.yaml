@@ -119,7 +119,7 @@ services:
       - internal_net
 
   keycloak-postgres:
-    image: ghcr.io/claidd/otziv-security@sha256:13d2e1ba01b593f1f284d5d7869a9994f5251f036355e90064406ca4e7d809fc
+    image: ghcr.io/claidd/otziv-security@sha256:32adf590dacac8d07c6dcd5bfbad27d527ae2ddf18e9822a404ba52ce69524a2
     restart: unless-stopped
     logging: *default-logging
     environment:
