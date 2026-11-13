@@ -2102,20 +2102,14 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       return null;
     }
     const comment = window.prompt(
-      'Комментарий к проверке оплаты (например: «сверено по выписке, 04.08 15:30»). Если есть только чек — оставьте пустым.'
+      'Комментарий к проверке оплаты (например: «сверено по выписке, 04.08 15:30»).'
     );
     if (comment === null) {
       return null;
     }
-    const receiptUrl = window.prompt(
-      'Ссылка на чек или платёжный документ (необязательно, если заполнен комментарий):'
-    );
-    if (receiptUrl === null) {
-      return null;
-    }
-    const evidence = buildManualPaymentConfirmationRequest(comment, receiptUrl);
+    const evidence = buildManualPaymentConfirmationRequest(comment, '');
     if (!evidence) {
-      this.error.set('Оплата не отмечена: укажите комментарий по проверке или ссылку на чек.');
+      this.error.set('Оплата не отмечена: укажите комментарий по проверке.');
       return null;
     }
     return evidence;

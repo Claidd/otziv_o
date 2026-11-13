@@ -161,7 +161,6 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
   /** Several people received parts of one transfer: a rare case behind its own link. */
   readonly splitMode = signal(false);
   readonly reason = signal('');
-  readonly receiptUrl = signal('');
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly error = signal('');
@@ -303,7 +302,6 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
 
   async load(preserveDraft = false): Promise<void> {
     const draftReason = this.reason();
-    const draftReceiptUrl = this.receiptUrl();
     this.loading.set(true);
     this.error.set('');
     try {
@@ -319,7 +317,6 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       const refreshedDraft = commonManualPaymentDraftAfterRouteRefresh(
         { ...options, candidates },
         preserveDraft ? draftReason : '',
-        preserveDraft ? draftReceiptUrl : '',
         () => this.newKey()
       );
       // First opening of an invoice with a card number: its recipient is already chosen.
@@ -340,7 +337,6 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
         void this.loadOthers();
       }
       this.reason.set(refreshedDraft.reason);
-      this.receiptUrl.set(refreshedDraft.receiptUrl);
     } catch (error) {
       this.options.set(null);
       this.error.set(manualPaymentRouteErrorMessage(error, this.errorMessage(error,
@@ -529,7 +525,6 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
 
   async submit(): Promise<void> {
     const options = this.options();
-    const receiptUrl = this.receiptUrl().trim();
     if (!options || !this.canSubmit()) {
       this.error.set(this.validationMessage());
       return;
@@ -548,10 +543,6 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       this.error.set('Комментарий не должен превышать 500 символов.');
       return;
     }
-    if (receiptUrl.length > 1024) {
-      this.error.set('Ссылка на чек не должна превышать 1024 символа.');
-      return;
-    }
     // Pressing the button is the confirmation: the dialog names the recipient and the effect next to it.
     const request: CommonManualPaymentAttributionRequest = {
       idempotencyKey: this.idempotencyKey,
@@ -559,7 +550,7 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
       paymentReceived: true,
       effectiveAt: this.effectiveAt,
       reason,
-      receiptUrl,
+      receiptUrl: '',
       attributions: selected.map(({ row, candidate }) => ({
         rowKey: row.rowKey,
         recipientKey: candidate!.key,

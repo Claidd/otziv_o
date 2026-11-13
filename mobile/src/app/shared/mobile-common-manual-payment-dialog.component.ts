@@ -79,7 +79,6 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
   readonly options = signal<CommonManualPaymentOptions | null>(null);
   readonly rows = signal<CommonManualPaymentDraftRow[]>([]);
   readonly reason = signal('');
-  readonly receiptUrl = signal('');
   readonly paymentReceived = signal(false);
   readonly finalAcknowledged = signal(false);
   readonly loading = signal(true);
@@ -162,7 +161,6 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
 
   async load(preserveDraft = false): Promise<void> {
     const draftReason = this.reason();
-    const draftReceiptUrl = this.receiptUrl();
     this.loading.set(true);
     this.error.set('');
     try {
@@ -177,7 +175,6 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
       const refreshedDraft = mobileCommonManualPaymentDraftAfterRouteRefresh(
         normalized,
         preserveDraft ? draftReason : '',
-        preserveDraft ? draftReceiptUrl : '',
         () => this.newKey()
       );
       const original = normalized.candidates.filter(person => person.originalRecipient);
@@ -187,7 +184,6 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
         recipientKey: !preserveDraft && this.mode === 'STANDARD' ? initial?.key ?? '' : ''
       })));
       this.reason.set(refreshedDraft.reason);
-      this.receiptUrl.set(refreshedDraft.receiptUrl);
       this.paymentReceived.set(refreshedDraft.paymentReceived);
       this.finalAcknowledged.set(refreshedDraft.finalAcknowledged);
     } catch (error) {
@@ -254,17 +250,12 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
   async submit(): Promise<void> {
     const options = this.options();
     const reason = this.reason().trim();
-    const receiptUrl = this.receiptUrl().trim();
     if (!options || !this.canSubmit()) {
       this.error.set(this.validationMessage());
       return;
     }
     if (reason.length > 500) {
       this.error.set('Пояснение не должно превышать 500 символов.');
-      return;
-    }
-    if (!this.validReceiptUrl(receiptUrl)) {
-      this.error.set('Ссылка на чек должна быть безопасной ссылкой http или https.');
       return;
     }
     const selected = this.rows().map(row => ({ row, candidate: this.candidate(row.recipientKey) }));
@@ -282,7 +273,7 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
       paymentReceived: true,
       effectiveAt: this.effectiveAt,
       reason,
-      receiptUrl,
+      receiptUrl: '',
       attributions: selected.map(({ row, candidate }) => ({
         rowKey: row.rowKey,
         recipientKey: candidate!.key,
@@ -360,21 +351,6 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
       return crypto.randomUUID();
     }
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
-  }
-
-  private validReceiptUrl(value: string): boolean {
-    if (!value) {
-      return true;
-    }
-    if (value.length > 1024) {
-      return false;
-    }
-    try {
-      const url = new URL(value);
-      return (url.protocol === 'http:' || url.protocol === 'https:') && Boolean(url.hostname) && !url.username && !url.password;
-    } catch {
-      return false;
-    }
   }
 
   private errorMessage(error: unknown, fallback: string): string {

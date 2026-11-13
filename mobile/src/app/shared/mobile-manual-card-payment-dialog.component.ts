@@ -100,7 +100,6 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
 
   readonly selectedRecipientKey = signal('');
   readonly reason = signal('');
-  readonly receiptUrl = signal('');
   readonly recipientKey = mobileManualCardRecipientKey;
   readonly recipientLabel = mobileManualCardRecipientLabel;
   readonly money = mobileManualCardMoney;
@@ -156,7 +155,6 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
       const preparedReason = this.context.preparedReason ?? '';
       const preparedReceiptUrl = this.context.preparedReceiptUrl ?? '';
       this.reason.set(preparedReason);
-      this.receiptUrl.set(preparedReceiptUrl);
       if (!preparedReason.trim() || preparedReason.length > 500 || preparedReceiptUrl.length > 1024) {
         this.error.set('Сохранённые данные повторной оплаты повреждены. Повтор оплаты заблокирован.');
       }
@@ -179,7 +177,7 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
       this.context,
       this.selectedRecipient(),
       this.reason(),
-      this.receiptUrl()
+      ''
     );
     if (!submission) {
       this.error.set('Зафиксированный получатель недоступен. Оплата не изменена.');
@@ -246,7 +244,6 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
 
   private async reloadContextAfterConflict(sourceError: unknown): Promise<void> {
     const draftReason = this.reason();
-    const draftReceiptUrl = this.receiptUrl();
     try {
       const context = await firstValueFrom(this.managerManualPaymentsApi.getManagerManualCardPaymentContext(this.context.orderId));
       const candidates = context.candidates ?? [];
@@ -261,10 +258,8 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
       this.selectedRecipientKey.set(this.context.recipientSelectionFrozen && defaultRecipient ? mobileManualCardRecipientKey(defaultRecipient) : '');
       if (context.recipientSelectionFrozen) {
         this.reason.set(context.preparedReason ?? '');
-        this.receiptUrl.set(context.preparedReceiptUrl ?? '');
       } else {
         this.reason.set(draftReason);
-        this.receiptUrl.set(draftReceiptUrl);
       }
       this.error.set(mobilePaymentRouteErrorMessage(
         sourceError,

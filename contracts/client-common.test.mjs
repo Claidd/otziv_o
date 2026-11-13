@@ -34,7 +34,7 @@ test('routing behavior table preserves common rules and the deliberate legacy em
   }
 });
 
-test('route refresh retains the explanation and receipt and requires a fresh recipient choice and consent on both clients', () => {
+test('route refresh retains the explanation and requires a fresh recipient choice and consent on both clients', () => {
   const web = loadTsModule('../frontend/src/app/shared/common-manual-payment-route-refresh.ts');
   const mobile = loadTsModule('src/app/shared/common-manual-payment-route-refresh.ts');
   for (const options of [
@@ -43,13 +43,14 @@ test('route refresh retains the explanation and receipt and requires a fresh rec
     { remainingKopecks: 125050, defaultRecipientKey: 'missing', candidates: [{ key: 'OWNER:' }] },
     { remainingKopecks: 125050, defaultRecipientKey: 'missing', candidates: [] }
   ]) {
-    const first = web.commonManualPaymentDraftAfterRouteRefresh(options, 'reason', 'receipt', () => 'row');
-    const second = mobile.mobileCommonManualPaymentDraftAfterRouteRefresh(options, 'reason', 'receipt', () => 'row');
+    const first = web.commonManualPaymentDraftAfterRouteRefresh(options, 'reason', () => 'row');
+    const second = mobile.mobileCommonManualPaymentDraftAfterRouteRefresh(options, 'reason', () => 'row');
     assert.equal(JSON.stringify(first), JSON.stringify(second));
     assert.deepEqual(Array.from(first.rows, row => [row.recipientKey, row.amountRubles]),
       options.remainingKopecks ? [['', '1250,50']] : []);
     assert.equal(first.paymentReceived, false); assert.equal(first.finalAcknowledged, false);
-    assert.equal(first.reason, 'reason'); assert.equal(first.receiptUrl, 'receipt');
+    assert.equal(first.reason, 'reason');
+    assert.equal('receiptUrl' in first, false);
   }
 });
 

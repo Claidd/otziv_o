@@ -274,17 +274,6 @@
             placeholder="Например: клиент перевёл исполнителю по старой памяти"
           ></textarea>
         </label>
-        <label class="pay-field">
-          <span>Ссылка на чек (необязательно)</span>
-          <input
-            type="url"
-            maxlength="1024"
-            [ngModel]="receiptUrl()"
-            [disabled]="saving()"
-            (ngModelChange)="receiptUrl.set($event)"
-          />
-        </label>
-
         <p class="pay-consequence" role="status">
           <span class="material-icons-sharp" aria-hidden="true">info</span>
           <span>{{ consequence() }}</span>

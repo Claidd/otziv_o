@@ -128,19 +128,9 @@
         <small>{{ reason().length }}/500</small>
       </label>
 
-      <label>
-        <span>Ссылка на чек <em>необязательно</em></span>
-        <input
-          name="receiptUrl"
-          type="url"
-          inputmode="url"
-          maxlength="1024"
-          [ngModel]="receiptUrl()"
-          (ngModelChange)="receiptUrl.set($event)"
-          [disabled]="saving() || context.recipientSelectionFrozen"
-          placeholder="https://…"
-        >
-      </label>
+      @if (context.recipientSelectionFrozen && context.preparedReceiptUrl) {
+        <p>Чек: {{ context.preparedReceiptUrl }}</p>
+      }
 
       @if (error()) {
         <p class="notice error" role="alert">{{ error() }}</p>

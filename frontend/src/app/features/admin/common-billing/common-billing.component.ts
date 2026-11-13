@@ -1922,25 +1922,19 @@ export class CommonBillingComponent implements OnDestroy {
       return null;
     }
     const commentValue = window.prompt(
-      `${title}\n\nВведите комментарий (например: «сверено по выписке»). Если есть только чек — оставьте пустым.`
+      `${title}\n\nВведите комментарий (например: «сверено по выписке»).`
     );
     if (commentValue === null) {
       return null;
     }
-    const receiptValue = window.prompt(
-      'Ссылка на чек или платёжный документ (необязательно, если заполнен комментарий):'
-    );
-    if (receiptValue === null) {
-      return null;
-    }
     const evidence = {
       comment: commentValue.trim(),
-      receiptUrl: receiptValue.trim()
+      receiptUrl: ''
     };
-    if (!evidence.comment && !evidence.receiptUrl) {
+    if (!evidence.comment) {
       this.toastService.error(
         'Оплата не подтверждена',
-        'Для ручной оплаты обязательно укажите комментарий или ссылку на чек.'
+        'Для ручной оплаты обязательно укажите комментарий по проверке.'
       );
       return null;
     }

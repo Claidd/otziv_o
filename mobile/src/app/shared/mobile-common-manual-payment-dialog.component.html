@@ -126,19 +126,6 @@
           placeholder="Например: клиент отказался от ссылки и перевёл менеджеру"
         ></textarea>
       </label>
-      <label>
-        <span>Ссылка на чек <em>необязательно</em></span>
-        <input
-          type="url"
-          inputmode="url"
-          maxlength="1024"
-          [ngModel]="receiptUrl()"
-          [disabled]="saving()"
-          (ngModelChange)="receiptUrl.set($event)"
-          placeholder="https://…"
-        >
-      </label>
-
       <label class="check">
         <input type="checkbox" [ngModel]="paymentReceived()" [disabled]="saving()" (ngModelChange)="paymentReceived.set($event)">
         <span>Подтверждаю, что деньги фактически поступили указанным получателям.</span>
