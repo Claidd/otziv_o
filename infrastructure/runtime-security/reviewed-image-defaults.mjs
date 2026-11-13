@@ -34,6 +34,7 @@ import {validatePostgresC36Acceptance,validatePostgresC36Transition,
   couplePostgresC36WithKeycloakC35} from './postgres-c36-activation.mjs';
 import {validatePostgresC51Acceptance,validatePostgresC51Transition,
   couplePostgresC51WithKeycloakC48} from './postgres-c51-activation.mjs';
+import {validateC54Acceptance,validateC54Transition} from './postgres-c54-activation.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -248,7 +249,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   const anonymous = await proof(entry.anonymous);
   const identity = { commit: entry.commit, run: entry.run, attempt: entry.attempt };
   const digest = validatePublication(publication.value, identity, publicationImage, sha256(selected.manifestBytes), selected.manifestSet);
-  if (selected.manifestSet === 'c51-postgres') {
+  if (selected.manifestSet === 'c54-postgres') {
+    await validateC54Acceptance(entry,read);
+  } else if (selected.manifestSet === 'c51-postgres') {
     await validatePostgresC51Acceptance(entry, read);
   } else if (selected.manifestSet === 'c36-postgres') {
     await validatePostgresC36Acceptance(entry, read);
@@ -396,6 +399,8 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
         ? validateDatabaseTransitionReadiness(entry, image, read)
         : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c23-postgres.json'
           ? validateSslRefreshTransition(entry, image, read)
+          : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c54-postgres.json'
+            ? validateC54Transition(entry,image,read)
           : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c51-postgres.json'
             ? validatePostgresC51Transition(entry, image, read)
             : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c36-postgres.json'
