@@ -1,5 +1,8 @@
 package com.hunt.otziv.notification_media.model;
 
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -41,6 +44,10 @@ public class NotificationMediaAsset {
 
     @Column(name = "content_type", nullable = false, length = 80)
     private String contentType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "context_condition", length = 40)
+    private StaffPictureContext contextCondition;
 
     @Column(name = "active", nullable = false)
     private boolean active = true;

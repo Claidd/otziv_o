@@ -5,6 +5,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.service.PersonalService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaSelector.Selection;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
@@ -88,6 +90,9 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
 
     private final String botUsername;
     private final boolean sendingEnabled;
+    // Resolved lazily: the notification media delivery service itself uses this Telegram transport.
+    @Autowired
+    private ObjectProvider<NotificationMediaDeliveryService> paymentPictures;
     private final List<Long> adminChatIds;
     private final ObjectProvider<PersonalService> personalServiceProvider;
     private final UserService userService;
@@ -848,7 +853,25 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             return sendMessage(chatId, text);
         }
 
+        if (callbackData.matches("common-payment-dispute:[1-9][0-9]*")) {
+            Selection picture = disputePicture(chatId, text);
+            if (picture != null) return sendDisputeNotice(chatId, text, buttonText, callbackData, picture);
+        }
         return sendSingleMessage(chatId, text, null, inlineKeyboard(buttonText, callbackData));
+    }
+
+    private static boolean definitePaymentNoticeRejection(TelegramApiRequestException rejected) {
+        Integer code = rejected.getErrorCode();
+        return code != null && code >= 400 && code < 500 && code != 408 && code != 429;
+    }
+
+    private InputFile disputePhotoInput(Selection picture) {
+        try {
+            byte[] bytes = paymentPictures.getObject().loadDisputePicture(picture);
+            return new InputFile(new ByteArrayInputStream(bytes), "notification-" + picture.assetId() + ".png");
+        } catch (RuntimeException unavailable) {
+            return new InputFile(picture.imageUrl());
+        }
     }
 
     /** A payment dispute notice must never be retried after an ambiguous network failure. */
@@ -857,27 +880,61 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
                 || !hasText(text) || !hasText(buttonText) || !hasText(callbackData)) {
             return false;
         }
+        Selection picture = callbackData.matches("specialist-payment-dispute:[1-9][0-9]*")
+                ? disputePicture(chatId, text) : null;
+        return sendDisputeNotice(chatId, text, buttonText, callbackData, picture);
+    }
+
+    private Selection disputePicture(long chatId, String text) {
+        if (paymentPictures == null || text.length() > MAX_TELEGRAM_CAPTION_LENGTH) return null;
+        try {
+            return paymentPictures.getObject().selectDisputePicture(chatId);
+        } catch (RuntimeException unavailable) {
+            log.warn("Dispute picture unavailable for chat {}", chatId, unavailable);
+            return null;
+        }
+    }
+
+    private boolean sendDisputeNotice(long chatId, String text, String buttonText, String callbackData, Selection picture) {
+        var markup = inlineKeyboard(buttonText, callbackData);
+        if (picture != null) {
+            SendPhoto photo = new SendPhoto();
+            photo.setChatId(String.valueOf(chatId));
+            photo.setPhoto(disputePhotoInput(picture));
+            photo.setCaption(text);
+            photo.setReplyMarkup(markup);
+            try {
+                if (executeTelegramPhoto(photo) == null) throw new DeliveryUncertain(null);
+                paymentPictures.getObject().recordDisputePicture(picture, chatId);
+                return true;
+            } catch (TelegramApiRequestException rejected) {
+                // Only an explicit rejection confirms the photo was not delivered.
+                if (!definitePaymentNoticeRejection(rejected))
+                    throw new DeliveryUncertain(rejected);
+            } catch (TelegramApiException uncertain) {
+                throw new DeliveryUncertain(uncertain);
+            }
+        }
         SendMessage request = new SendMessage();
         request.setChatId(String.valueOf(chatId));
         request.setText(text);
         request.setDisableWebPagePreview(true);
-        request.setReplyMarkup(inlineKeyboard(buttonText, callbackData));
+        request.setReplyMarkup(markup);
         try {
             Message accepted = executeTelegramMessage(request);
             if (accepted == null) {
-                throw new IllegalStateException("Telegram did not return a message receipt");
+                throw new DeliveryUncertain(null);
             }
             return true;
         } catch (TelegramApiRequestException rejected) {
-            Integer code = rejected.getErrorCode();
-            if (code != null && code >= 400 && code < 500 && code != 408 && code != 429) {
+            if (definitePaymentNoticeRejection(rejected)) {
                 log.warn("Telegram rejected specialist payment notice chatId={}: {}", chatId,
                         safeRichSendError(rejected));
                 return false;
             }
-            throw new IllegalStateException("Telegram payment notice outcome is uncertain", rejected);
+            throw new DeliveryUncertain(rejected);
         } catch (TelegramApiException uncertain) {
-            throw new IllegalStateException("Telegram payment notice outcome is uncertain", uncertain);
+            throw new DeliveryUncertain(uncertain);
         }
     }
 

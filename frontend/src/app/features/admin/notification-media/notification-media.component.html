@@ -17,6 +17,7 @@
         <button type="button" [class.active]="audience() === 'ALL'" (click)="setAudience('ALL')">Все</button>
         <button type="button" [class.active]="audience() === 'MANAGER'" (click)="setAudience('MANAGER')">Менеджеры</button>
         <button type="button" [class.active]="audience() === 'WORKER'" (click)="setAudience('WORKER')">Специалисты</button>
+        <button type="button" [class.active]="audience() === 'STAFF'" (click)="setAudience('STAFF')">Получатели переводов</button>
       </div>
 
       <div class="add-rule">
@@ -94,6 +95,7 @@
                   </a>
                   <figcaption>
                     <strong>{{ asset.originalFilename || 'Картинка уведомления' }}</strong>
+                    @if (asset.contextLabel) { <span>{{ asset.contextLabel }} · через 1–2 подходящих сообщения</span> }
                     <span>{{ asset.active ? 'Участвует в случайном выборе' : 'Временно отключена' }}</span>
                   </figcaption>
                   <div class="asset-actions">

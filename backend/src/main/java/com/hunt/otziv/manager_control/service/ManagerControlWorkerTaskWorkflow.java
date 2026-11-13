@@ -1,5 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
+import java.util.Set;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import static com.hunt.otziv.manager_control.service.ManagerControlReminderWorkflow.*;
 import static com.hunt.otziv.manager_control.service.ManagerControlDayActions.*;
 import static com.hunt.otziv.manager_control.service.ManagerControlBoardWorkflow.*;
@@ -138,7 +140,8 @@ public class ManagerControlWorkerTaskWorkflow {
     boolean dispatchWorkerTaskRequest(WorkerTaskDispatch dispatch) {
         try {
             return notificationMediaDeliveryService.send(NotificationMediaEventCatalog.WORKER_TASK_FIRST.code(), dispatch.chatId(),
-                    dispatch.workerUserId(), dispatch.text(), null, dispatch.keyboard());
+                    dispatch.workerUserId(), dispatch.text(), null, dispatch.keyboard(),
+                    Set.of(StaffPictureContext.TASK_GUIDANCE, StaffPictureContext.TASK_HANDOFF));
         } catch (RuntimeException failure) {
             log.warn("Worker task request was not sent: cardId={}, workerUserId={}", dispatch.cardId(), dispatch.workerUserId(), failure);
             return false;

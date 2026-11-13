@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { mobileEnvironment } from './mobile-environment';
 
-export type NotificationRecipientType = 'MANAGER' | 'WORKER';
+export type NotificationRecipientType = 'MANAGER' | 'WORKER' | 'STAFF';
 
 export interface NotificationMediaEvent {
   code: string;
@@ -19,6 +19,7 @@ export interface NotificationMediaAsset {
   originalFilename: string | null;
   contentType: string;
   active: boolean;
+  contextLabel?: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

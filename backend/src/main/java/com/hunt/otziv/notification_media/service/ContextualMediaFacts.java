@@ -27,9 +27,12 @@ public class ContextualMediaFacts {
         String sql = switch (type) {
             case "review" -> """
                     SELECT r.review_id AS id, r.review_text AS text, r.review_vigul AS walked,
-                           r.review_publish AS published, COALESCE(b.bot_counter,2) AS account_count
+                           r.review_publish AS published, COALESCE(b.bot_counter,2) AS account_count,
+                           (r.review_bot=1) AS shortage_stub, f.filial_url AS branch_url, p.product_target_platform AS platform
                     FROM reviews r JOIN workers w ON w.worker_id=r.review_worker
                     LEFT JOIN bots b ON b.bot_id=r.review_bot
+                    LEFT JOIN filial f ON f.filial_id=r.review_filial
+                    LEFT JOIN products p ON p.product_id=r.review_product
                     WHERE r.review_id=:id AND w.user_id=:userId
                     """;
             case "recovery_task" -> """

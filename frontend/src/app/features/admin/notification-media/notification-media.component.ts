@@ -178,7 +178,7 @@ export class NotificationMediaComponent {
   }
 
   roleLabel(role: NotificationRecipientType): string {
-    return role === 'MANAGER' ? 'Менеджер' : 'Специалист';
+    return role === 'STAFF' ? 'Получатель перевода' : role === 'MANAGER' ? 'Менеджер' : 'Специалист';
   }
 
   private load(): void {

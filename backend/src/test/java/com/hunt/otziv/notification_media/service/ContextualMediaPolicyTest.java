@@ -16,6 +16,16 @@ class ContextualMediaPolicyTest {
         assertThat(ContextualMediaPolicy.resolve(signal("BAD_TASK_COMPLETE","bad_review_task","bad"),Map.of("status","NEW"),0)).isNull();
         assertThat(ContextualMediaPolicy.resolve(signal("REVIEW_PUBLISH","review","publish"),Map.of(),3)).isNull();
     }
+    @Test void vkPublicationAndAccountShortageUseVerifiedCardData() {
+        var vk = com.hunt.otziv.notification_media.api.StaffPictureContext.VK_PUBLICATION;
+        assertThat(ContextualMediaPolicy.pictureFacts(WORKER_PUBLICATION_PENDING, Map.of("branch_url", "https://m.vk.com/example")))
+                .containsExactly(vk);
+        assertThat(ContextualMediaPolicy.pictureFacts(WORKER_PUBLICATION_PENDING, Map.of("branch_url", "https://vk.com.example.org"))).isEmpty();
+        assertThat(ContextualMediaPolicy.pictureFacts(WORKER_PUBLICATION_PENDING, Map.of())).isEmpty();
+        assertThat(ContextualMediaPolicy.resolve(signal("BOARD", "review", "nagul"),
+                Map.of("shortage_stub", 1, "account_count", 0), 0)).isEqualTo(WORKER_ACCOUNT_SHORTAGE);
+    }
+
     @Test void thirdPublicationHasItsOwnExactMilestone() {
         var signal=signal("REVIEW_PUBLISH","review","publish");
         assertThat(ContextualMediaPolicy.resolve(signal,Map.of("published",true),2)).isEqualTo(WORKER_PUBLICATION_DONE);

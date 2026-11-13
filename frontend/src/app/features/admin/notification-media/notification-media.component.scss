@@ -268,6 +268,8 @@ button:disabled, input:disabled {
 
 figure {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   grid-template-rows: auto 1fr auto;
   gap: .55rem;
   margin: 0;
@@ -312,11 +314,17 @@ figure {
 
 .asset-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr));
   gap: .35rem;
 
+  > * {
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+  }
+
   .danger {
-    grid-column: span 2;
+    grid-column: 1 / -1;
   }
 }
 

@@ -132,6 +132,20 @@ class CommonInvoicePaymentNotificationDeliveryServiceTest {
         verifyNoInteractions(commonBillingService, recipientNotificationService);
     }
 
+    @Test
+    void uncertainIllustratedRecipientNoticeDoesNotReenterTheRetryQueue() {
+        var delivery = recipientDelivery();
+        when(repository.findDueDeliveryIds(50)).thenReturn(List.of(91L));
+        when(claimService.tryClaim(91L)).thenReturn(Optional.of(delivery));
+        when(recipientNotificationService.notifyCommonInvoiceRecipient(any())).thenReturn(
+                ClientMessageSendResult.failed("recipient_telegram_delivery_uncertain", "проверьте группу"));
+
+        assertEquals(0, service.retryBatch());
+
+        verify(claimService).markSkipped(delivery, "recipient_telegram_delivery_uncertain: проверьте группу");
+        verify(claimService, never()).markFailed(any(), any());
+    }
+
     private Delivery clientDelivery() {
         return new Delivery(
                 92L,
