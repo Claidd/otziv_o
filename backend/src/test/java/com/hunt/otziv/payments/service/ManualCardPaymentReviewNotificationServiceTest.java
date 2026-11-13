@@ -290,8 +290,7 @@ class ManualCardPaymentReviewNotificationServiceTest {
         }
         verify(personalReminderService, never()).createSystemReminderDueNow(
                 eq(inactiveAdmin), any(), any(), any(), any(), any());
-        verify(telegramService).sendMessage(eq(100L), contains("Денег нет — отклонить"));
-        verify(telegramService, times(1)).sendMessage(org.mockito.ArgumentMatchers.anyLong(), any());
+        verifyNoInteractions(telegramService);
         verifyNoInteractions(paymentIssueReminderService);
     }
 

@@ -90,6 +90,7 @@ public class CommonOwnerReceiptApprovals {
                     || !saved.fingerprint().equals(fingerprint)) throw conflict("Счёт или запрос изменился. Проверьте ожидающее подтверждение владельца");
             return !canDecide();
         }
+        requireUnusedKey(invoice.getId(), request);
         if (canDecide()) return false;
         long remaining = options.remainingKopecks();
         var seen = new java.util.HashSet<String>();
@@ -101,9 +102,6 @@ public class CommonOwnerReceiptApprovals {
             remaining -= row.amountKopecks();
         }
         if (remaining != 0) throw conflict("Сумма не совпадает с остатком общего счёта");
-        Integer used = jdbc.queryForObject("SELECT COUNT(*) FROM common_owner_receipt_approval WHERE invoice_id=? AND request_key=?",
-                Integer.class, invoice.getId(), request.idempotencyKey());
-        if (used != null && used > 0) throw conflict("Этот запрос уже рассмотрен. Откройте форму заново");
         try {
             jdbc.update("""
                     INSERT INTO common_owner_receipt_approval(invoice_id,pending_invoice_id,request_key,request_json,
@@ -114,8 +112,16 @@ public class CommonOwnerReceiptApprovals {
         return true;
     }
 
+    private void requireUnusedKey(long invoiceId, CommonManualPaymentAttributionRequest request) {
+        if (includesOwner(request) && Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM common_owner_receipt_approval WHERE invoice_id=? AND request_key=? AND decision IS NOT NULL)
+                """, Boolean.class, invoiceId, request.idempotencyKey())))
+            throw conflict("Этот запрос уже рассмотрен. Откройте форму заново");
+    }
+
     void requireMatchingReport(long invoiceId, CommonManualPaymentAttributionRequest request) {
         Saved saved = pending(invoiceId);
+        if (saved == null) requireUnusedKey(invoiceId, request);
         if (saved != null && (!canDecide() || !saved.report().request().equals(request)))
             throw conflict("Сначала рассмотрите ожидающий запрос владельцу");
     }
@@ -124,7 +130,10 @@ public class CommonOwnerReceiptApprovals {
     void accept(CommonInvoice invoice, List<CommonInvoiceOrder> items, CommonManualPaymentAttributionRequest request, Principal actor) {
         Saved saved = pending(invoice.getId());
         if (includesOwner(request) && !canDecide()) throw conflict("Поступление владельцу ожидает его подтверждения");
-        if (saved == null) return;
+        if (saved == null) {
+            requireUnusedKey(invoice.getId(), request);
+            return;
+        }
         if (!canDecide() || !saved.report().request().equals(request) || !saved.fingerprint().equals(fingerprint(invoice, items)))
             throw conflict("Сначала рассмотрите запрос владельцу. Состав или маршрут счёта мог измениться");
         decide(invoice.getId(), saved.report().id(), "ACCEPTED", actor);

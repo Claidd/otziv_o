@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.common_billing.api.CommonOwnerReceiptConfirmation;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
@@ -26,16 +27,16 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
     private final UserService userService;
     private final TelegramService telegramService;
     private final ManualCardPaymentReviewNotificationService notificationService;
+    private final CommonOwnerReceiptConfirmation commonReceipts;
 
     public Optional<String> handle(CallbackQuery callbackQuery) {
-        OwnerManualCardPaymentApprovalCallbackData.Parsed parsed =
-                OwnerManualCardPaymentApprovalCallbackData.parse(
-                        callbackQuery == null ? null : callbackQuery.getData()
-                );
-        if (parsed == null) {
+        String data = callbackQuery == null ? null : callbackQuery.getData();
+        boolean common = data != null && data.startsWith(CommonOwnerReceiptConfirmation.PREFIX);
+        var parsed = OwnerManualCardPaymentApprovalCallbackData.parse(data);
+        if (!common && parsed == null) {
             return Optional.empty();
         }
-        if (parsed.approvalId() == null || parsed.token().isBlank()) {
+        if (!common && (parsed.approvalId() == null || parsed.token().isBlank())) {
             return Optional.of("Запрос подтверждения повреждён");
         }
         if (callbackQuery.getFrom() == null
@@ -46,7 +47,10 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
         }
         long telegramUserId = callbackQuery.getFrom().getId();
         long callbackChatId = callbackQuery.getMessage().getChatId();
-        if (callbackChatId >= 0) {
+        if (common && callbackChatId >= 0 && callbackChatId != telegramUserId) {
+            return Optional.of("Кнопка недоступна в этом чате");
+        }
+        if (!common && callbackChatId >= 0) {
             return Optional.of("Подтверждение доступно только в чате назначенного компании менеджера");
         }
         User actor = userService.findByChatId(telegramUserId)
@@ -66,6 +70,17 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
             SecurityContext callbackContext = SecurityContextHolder.createEmptyContext();
             callbackContext.setAuthentication(authentication);
             SecurityContextHolder.setContext(callbackContext);
+            if (common) {
+                var result = commonReceipts.confirm(data.substring(CommonOwnerReceiptConfirmation.PREFIX.length()),
+                        callbackChatId, authentication);
+                String text = "✅ Поступление владельцу по общему счёту №" + result.invoiceId() + " подтверждено";
+                try {
+                    telegramService.editMessageText(callbackChatId, callbackQuery.getMessage().getMessageId(), text, null, null);
+                } catch (RuntimeException editFailure) {
+                    log.warn("Не удалось обновить сообщение общего счёта №{}", result.invoiceId(), editFailure);
+                }
+                return Optional.of(result.alreadyConfirmed() ? "Поступление уже было подтверждено" : text);
+            }
             PaymentLinkService.OwnerManualCardPaymentApprovalOutcome outcome =
                     paymentLinkService.approveOwnerManualCardPayment(
                             parsed.approvalId(),
@@ -93,13 +108,13 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
                     : "Поступление владельцу подтверждено");
         } catch (ResponseStatusException exception) {
             String answer = limit(message(exception), 180);
-            if (exception.getStatusCode().value() == 400
-                    || exception.getStatusCode().value() == 409) {
+            if (!common && (exception.getStatusCode().value() == 400
+                    || exception.getStatusCode().value() == 409)) {
                 notifyGroupFailure(callbackChatId, parsed.approvalId(), answer);
             }
             return Optional.of(answer);
         } catch (RuntimeException exception) {
-            log.warn("Не удалось подтвердить оплату владельцу approvalId={}", parsed.approvalId(), exception);
+            log.warn("Не удалось подтвердить оплату владельцу, общий счёт={}", common, exception);
             return Optional.of("Не удалось безопасно подтвердить оплату. Повторите позже");
         } finally {
             SecurityContextHolder.setContext(originalContext);

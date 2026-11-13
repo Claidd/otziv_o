@@ -197,6 +197,8 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
     @Autowired com.hunt.otziv.contractor_payments.service.ContractorPaymentReconciliationDispatcher reserveReconciliation;
     @Autowired CommonInvoiceMessageWorker clientMessageWorker;
     @Autowired CommonInvoicePaymentNotificationDeliveryService paymentNotices;
+    @Autowired com.hunt.otziv.common_billing.service.CommonOwnerReceiptNoticeDelivery ownerNotices;
+    @Autowired com.hunt.otziv.common_billing.api.CommonOwnerReceiptConfirmation ownerButtons;
     @Autowired CommonInvoicePaymentDisputeService disputes;
     @Autowired CommonInvoiceOverdueEscalation overdue;
     @Autowired CommonInvoiceOverdueNotices overdueNotices;
@@ -742,6 +744,8 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
             assertThat(actualPaymentReserves(invoice)).isEmpty();
         } else {
             billing.rejectOwnerReport(invoice.invoiceId(), reportId, world.owner.auth());
+            assertRejected(409, "уже рассмотрен", () ->
+                    billing.markPaidWithAttributions(invoice.invoiceId(), waiting.request(), world.owner.auth()));
 
             assertThat(jdbc.queryForMap("SELECT * FROM common_owner_receipt_approval WHERE id = ?", reportId))
                     .containsEntry("decision", "REJECTED").containsEntry("decided_by", world.owner.username)
@@ -751,6 +755,60 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
         }
         // The decision is made: nobody is asked for it any more.
         assertThat(openReminders("COMMON_INVOICE_OWNER_RECEIPT_APPROVAL", reportId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Общий счёт: кнопка в группе владельца и в личном чате администратора закрывает один отчёт один раз")
+    void commonOwnerButtonsFollowTheOwnerAndShareOneDecision() {
+        Person specialist = world.specialist("Специалист");
+        world.payable(specialist, ContractorRole.SPECIALIST, 10_000_00);
+        long order = world.order(world.company("Школа"), specialist, 3_000_00, STATUS_PUBLISHED);
+        CommonInvoiceSeed invoice = world.commonInvoice("Школа", order);
+        issue(invoice);
+        login(world.manager);
+        var request = receipt("Перевод владельцу", row("r1", candidate(invoice, null), 3_000_00));
+        billing.markPaidWithAttributions(invoice.invoiceId(), request, world.manager.auth());
+        long id = jdbc.queryForObject("SELECT id FROM common_owner_receipt_approval WHERE pending_invoice_id=?",
+                Long.class, invoice.invoiceId());
+        // Select a different manager of the same owner as the designated group.
+        var groupManager = PaymentScenarioWorld.open(context).manager;
+        jdbc.update("INSERT INTO common_owner_receipt_chat_route VALUES(?,?,?)",
+                world.owner.username, groupManager.username, world.admin.username);
+        try {
+            when(staffTelegram.canSendDocuments()).thenReturn(false);
+            ownerNotices.deliverPending();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM common_owner_receipt_notice WHERE report_id=?", Long.class, id)).isZero();
+            when(staffTelegram.canSendDocuments()).thenReturn(true);
+            when(staffTelegram.sendPaymentReviewNoticeOnce(anyLong(), anyString(), anyString(), anyString())).thenReturn(true);
+            when(staffTelegram.sendPaymentReviewNoticeOnce(eq(world.admin.telegramChatId),
+                    org.mockito.ArgumentMatchers.contains("№" + invoice.invoiceId() + " ·"), anyString(), anyString()))
+                    .thenReturn(false, true);
+            ownerNotices.deliverPending();
+            assertThat(jdbc.queryForObject("SELECT state FROM common_owner_receipt_notice WHERE report_id=? AND chat_id=?",
+                    String.class, id, world.admin.telegramChatId)).isEqualTo("RETRY");
+            jdbc.update("UPDATE common_owner_receipt_notice SET attempted_at=NOW()-INTERVAL 6 MINUTE WHERE report_id=? AND state='RETRY'", id);
+            ownerNotices.deliverPending();
+            ownerNotices.deliverPending();
+            String tokenSql = "SELECT callback_token FROM common_owner_receipt_notice WHERE report_id=? AND chat_id=? AND state='SENT'";
+            String group = jdbc.queryForObject(tokenSql, String.class, id, groupManager.groupChatId);
+            String copy = jdbc.queryForObject(tokenSql, String.class, id, world.admin.telegramChatId);
+            for (var dest : java.util.Map.of(groupManager.groupChatId, group, world.admin.telegramChatId, copy).entrySet()) {
+                verify(staffTelegram, times(1)).sendPaymentReviewNoticeOnce(eq(dest.getKey()),
+                        org.mockito.ArgumentMatchers.contains("№" + invoice.invoiceId() + " ·"), anyString(), eq("common-owner:" + dest.getValue()));
+            }
+            assertUnpaidAndUntouched(invoice, order);
+            assertRejected(403, "недоступна", () -> ownerButtons.confirm(group, groupManager.groupChatId, world.manager.auth()));
+            login(world.admin);
+            assertRejected(403, "недоступна", () -> ownerButtons.confirm(group, world.manager.groupChatId, world.admin.auth()));
+            assertRejected(403, "недоступна", () -> ownerButtons.confirm(copy, groupManager.groupChatId, world.admin.auth()));
+            assertThat(ownerButtons.confirm(copy, world.admin.telegramChatId, world.admin.auth()).alreadyConfirmed()).isFalse();
+            login(world.owner);
+            assertThat(ownerButtons.confirm(group, groupManager.groupChatId, world.owner.auth()).alreadyConfirmed()).isTrue();
+            assertThat(receipts(invoice)).hasSize(1);
+            assertThat(invoice(invoice)).containsEntry("status", "PAID");
+        } finally {
+            jdbc.update("DELETE FROM common_owner_receipt_chat_route WHERE owner_login=?", world.owner.username);
+        }
     }
 
     @Test

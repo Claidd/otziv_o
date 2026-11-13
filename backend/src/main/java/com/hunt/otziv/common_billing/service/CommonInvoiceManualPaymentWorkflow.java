@@ -302,6 +302,7 @@ public class CommonInvoiceManualPaymentWorkflow {
         if (refs.stream().noneMatch(ref -> PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref))
                 && PAYMENT_REF_CURRENT.equals(paymentRefStatus(ref)))) return null;
         requireManualRecipientsAllowed(invoice,request);
+        ownerReceipts.requireMatchingReport(id, request);
         requireNoIntegratedPaperDocument(invoice);
         var ref = paymentRoutes.boundUnpaidBankRef(invoice,refs);
         if (ref == null || !PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref)))
@@ -442,6 +443,8 @@ public class CommonInvoiceManualPaymentWorkflow {
     /** The owner did not receive the money: the report is closed and the manager who sent it is told. */
     public void rejectOwnerReport(long invoiceId, long reportId, Principal principal) {
         writeTransaction(() -> {
+            CommonInvoice locked = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            ensureCommonInvoiceVisibleForCurrentUser(locked);
             var pending = ownerReceipts.pendingReport(invoiceId).filter(report -> report.id() == reportId);
             ownerReceipts.reject(invoiceId, reportId, principal);
             manualCardPaymentReviewNotificationService.closeCommonInvoiceOwnerApprovalReminders(reportId);
