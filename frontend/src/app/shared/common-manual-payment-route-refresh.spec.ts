@@ -4,17 +4,16 @@ import {
 } from './common-manual-payment-route-refresh';
 
 describe('common manual payment stale route refresh', () => {
-  it('preserves only reason and receipt while resetting rows and both acknowledgements', () => {
+  it('preserves the reason while resetting rows and both acknowledgements', () => {
     const refreshed = commonManualPaymentDraftAfterRouteRefresh({
       remainingKopecks: 250_000,
       defaultRecipientKey: 'TASK:12:4',
       candidates: [{ key: 'OWNER:' }, { key: 'TASK:12:4' }]
-    }, 'клиент попросил номер', 'https://example.test/receipt', () => 'new-row');
+    }, 'клиент попросил номер', () => 'new-row');
 
     expect(refreshed).toEqual({
       rows: [{ rowKey: 'new-row', recipientKey: '', amountRubles: '2500,00' }],
       reason: 'клиент попросил номер',
-      receiptUrl: 'https://example.test/receipt',
       paymentReceived: false,
       finalAcknowledged: false
     });
@@ -25,7 +24,7 @@ describe('common manual payment stale route refresh', () => {
       remainingKopecks: 100,
       defaultRecipientKey: 'TASK:missing',
       candidates: [{ key: 'OWNER:' }]
-    }, 'reason', '', () => 'row').rows[0].recipientKey).toBe('');
+    }, 'reason', () => 'row').rows[0].recipientKey).toBe('');
   });
 });
 

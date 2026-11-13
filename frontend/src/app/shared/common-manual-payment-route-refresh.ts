@@ -13,7 +13,6 @@ export interface CommonManualPaymentRouteRefreshDraftRow {
 export interface CommonManualPaymentRouteRefreshDraft {
   rows: CommonManualPaymentRouteRefreshDraftRow[];
   reason: string;
-  receiptUrl: string;
   paymentReceived: false;
   finalAcknowledged: false;
 }
@@ -21,7 +20,6 @@ export interface CommonManualPaymentRouteRefreshDraft {
 export function commonManualPaymentDraftAfterRouteRefresh(
   options: CommonManualPaymentRouteRefreshOptions,
   reason: string,
-  receiptUrl: string,
   newRowKey: () => string
 ): CommonManualPaymentRouteRefreshDraft {
   return {
@@ -31,7 +29,6 @@ export function commonManualPaymentDraftAfterRouteRefresh(
       amountRubles: (options.remainingKopecks / 100).toFixed(2).replace('.', ',')
     }] : [],
     reason,
-    receiptUrl,
     paymentReceived: false,
     finalAcknowledged: false
   };

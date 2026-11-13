@@ -1231,22 +1231,16 @@ export class ManagerBoardComponent implements OnDestroy {
       return null;
     }
     const comment = window.prompt(
-      'Комментарий к ручной оплате (например: «сверено по выписке»). Если есть только чек — оставьте пустым:'
+      'Комментарий к ручной оплате (например: «сверено по выписке»).'
     );
     if (comment === null) {
       return null;
     }
-    const receiptUrl = window.prompt(
-      'Ссылка на чек или платёжный документ (необязательно, если заполнен комментарий):'
-    );
-    if (receiptUrl === null) {
-      return null;
-    }
-    const evidence = { comment: comment.trim(), receiptUrl: receiptUrl.trim() };
-    if (!evidence.comment && !evidence.receiptUrl) {
+    const evidence = { comment: comment.trim(), receiptUrl: '' };
+    if (!evidence.comment) {
       this.toastService.error(
         'Оплата не подтверждена',
-        'Укажите комментарий или ссылку на чек.'
+        'Укажите комментарий по проверке.'
       );
       return null;
     }

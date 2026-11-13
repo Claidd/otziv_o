@@ -124,6 +124,7 @@ export const COMMON_INVOICE_GUIDE: readonly GuideSectionContent[] = [
     walkthroughs: [
       {
         title: 'Как отметить оплату переводом',
+        intro: 'Чек проверяют в рабочем чате. На снимке ещё видно прежнее поле для ссылки на чек. В текущей форме можно оставить комментарий.',
         figures: [
           {
             shot: 'ci-pay-button',

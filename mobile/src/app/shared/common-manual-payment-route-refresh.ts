@@ -7,12 +7,10 @@ export interface MobileCommonManualPaymentRouteRefreshOptions {
 export function mobileCommonManualPaymentDraftAfterRouteRefresh(
   options: MobileCommonManualPaymentRouteRefreshOptions,
   reason: string,
-  receiptUrl: string,
   newRowKey: () => string
 ): {
   rows: Array<{ rowKey: string; recipientKey: string; amountRubles: string }>;
   reason: string;
-  receiptUrl: string;
   paymentReceived: false;
   finalAcknowledged: false;
 } {
@@ -23,7 +21,6 @@ export function mobileCommonManualPaymentDraftAfterRouteRefresh(
       amountRubles: (options.remainingKopecks / 100).toFixed(2).replace('.', ',')
     }] : [],
     reason,
-    receiptUrl,
     paymentReceived: false,
     finalAcknowledged: false
   };
