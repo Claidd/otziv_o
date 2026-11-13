@@ -8,6 +8,7 @@ public record NotificationMediaAssetResponse(
         String originalFilename,
         String contentType,
         boolean active,
+        String contextLabel,
         int sortOrder,
         LocalDateTime createdAt,
         LocalDateTime updatedAt

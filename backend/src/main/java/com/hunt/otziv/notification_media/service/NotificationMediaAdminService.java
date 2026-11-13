@@ -216,7 +216,7 @@ public class NotificationMediaAdminService {
                 + "Событие: " + event.label() + "\n"
                 + "Получатель: " + (event.recipientType().name().equals("MANAGER")
                 ? "менеджер"
-                : "специалист");
+                : event.recipientType().name().equals("STAFF") ? "получатель перевода" : "специалист");
         boolean sent = deliveryService.send(
                 event.code(),
                 user.getTelegramChatId(),
@@ -257,6 +257,7 @@ public class NotificationMediaAdminService {
                                 asset.getOriginalFilename(),
                                 asset.getContentType(),
                                 asset.isActive(),
+                                asset.getContextCondition() == null ? null : asset.getContextCondition().label(),
                                 asset.getSortOrder(),
                                 asset.getCreatedAt(),
                                 asset.getUpdatedAt()

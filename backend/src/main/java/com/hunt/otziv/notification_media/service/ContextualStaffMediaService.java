@@ -1,5 +1,7 @@
 package com.hunt.otziv.notification_media.service;
 
+import java.util.Set;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import com.hunt.otziv.notification_media.api.StaffMediaSignal;
 
 import com.hunt.otziv.config.settings.api.ContextualMediaSettings;
@@ -31,6 +33,7 @@ public class ContextualStaffMediaService {
             var recipient = facts.recipient(signal.userId());
             if (recipient.isEmpty()) return;
             NotificationMediaEventCatalog event;
+            Set<StaffPictureContext> pictureFacts = Set.of();
             if ("SITE_ERROR".equals(signal.action())) {
                 event = NotificationMediaEventCatalog.WORKER_SITE_ERROR;
             } else if ("NETWORK_BLOCKED".equals(signal.action())) {
@@ -43,6 +46,7 @@ public class ContextualStaffMediaService {
                 var card = facts.ownedCard(signal.userId(), signal.entityType(), signal.entityId());
                 event = ContextualMediaPolicy.resolve(signal, card,
                         "REVIEW_PUBLISH".equals(signal.action()) ? facts.publicationsToday(signal.userId()) : 0);
+                if (event != null) pictureFacts = ContextualMediaPolicy.pictureFacts(event, card);
             }
             if (event == null) return;
             Long chat = number(recipient.get(event.recipientType() == NotificationRecipientType.MANAGER
@@ -53,7 +57,10 @@ public class ContextualStaffMediaService {
             int maximum = settings.maxPerDay();
             if (!dispatch.claim(event.code(), signal.userId(), date, maximum)) return;
             // An ambiguous transport failure remains claimed: never replay a possibly delivered photo.
-            boolean sent = delivery.sendMediaOnly(event.code(), chat, signal.userId(), caption(event, signal), null);
+            String message = caption(event, signal);
+            boolean sent = pictureFacts.isEmpty()
+                    ? delivery.sendMediaOnly(event.code(), chat, signal.userId(), message, null)
+                    : delivery.sendContextHint(event.code(), chat, signal.userId(), message, pictureFacts);
             if (sent) dispatch.markSent(event.code(), signal.userId(), date);
             else dispatch.release(event.code(), signal.userId(), date);
         } catch (RuntimeException exception) {
@@ -69,6 +76,7 @@ public class ContextualStaffMediaService {
             case WORKER_THREE_PUBLICATIONS -> "Сегодня отмечены три разные публикации ✅";
             case WORKER_TEXT_SAVED -> "Текст отзыва сохранён ✅" + reference;
             case WORKER_RATING_DONE -> "Задача по исправлению оценки закрыта ✅" + reference;
+            case WORKER_ACCOUNT_SHORTAGE -> "Для выгула пока не подобран рабочий аккаунт. Если получить его не удаётся, попросите менеджера перенести дату." + reference;
             case WORKER_FRESH_ACCOUNT_GUIDE -> "Свежий аккаунт: проверьте оформление профиля и выполните выгул перед публикацией." + reference;
             case WORKER_NAGUL_GUIDE -> "Памятка перед выгулом: работайте по карточке и соблюдайте порядок действий." + reference;
             case WORKER_TEXT_GUIDE -> "Памятка при подготовке текста: проверьте уникальность, конкретику и соответствие фото." + reference;

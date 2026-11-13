@@ -1,5 +1,7 @@
 package com.hunt.otziv.notification_media.service;
 
+import java.util.Set;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,6 +34,10 @@ class NotificationMediaSelectorTest {
     @Mock
     private NotificationMediaRandomizer randomizer;
 
+    @Mock
+    private ContextPictureCadence cadence;
+    @Mock
+    private com.hunt.otziv.config.settings.api.ContextualMediaSettings settings;
     private NotificationMediaSelector selector;
 
     @BeforeEach
@@ -40,7 +46,7 @@ class NotificationMediaSelectorTest {
                 ruleRepository,
                 assetRepository,
                 deliveryRepository,
-                randomizer
+                randomizer, cadence, settings
         );
     }
 
@@ -94,6 +100,28 @@ class NotificationMediaSelectorTest {
         when(ruleRepository.findByEventCode(eventCode)).thenReturn(Optional.of(rule));
 
         assertThat(selector.select(eventCode, -100L, LocalDateTime.now())).isEmpty();
+    }
+
+    @Test
+    void contextPictureOnlyConsumesSlotsForAMatchingFact() {
+        String code = NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code();
+        var rule = rule(code, 0);
+        var lastTask = asset(rule, 10L, "https://cdn/10.png");
+        lastTask.setContextCondition(StaffPictureContext.LAST_TASK);
+        when(ruleRepository.findByEventCode(code)).thenReturn(Optional.of(rule));
+        when(randomizer.shouldAttach(100)).thenReturn(true);
+        when(assetRepository.findByRuleIdAndActiveTrueOrderBySortOrderAscIdAsc(7L)).thenReturn(List.of(lastTask));
+        var now = LocalDateTime.now();
+        assertThat(selector.decide(code, -100, now, Set.of(StaffPictureContext.BEFORE_22)).textTurn()).isFalse();
+        assertThat(selector.select(code, -100, now)).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(cadence);
+        assertThat(selector.select(code, -100, now, Set.of(StaffPictureContext.LAST_TASK))).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(cadence);
+        when(settings.enabled()).thenReturn(true);
+        when(cadence.takeSlot(-100)).thenReturn(false, true);
+        var facts = Set.of(StaffPictureContext.LAST_TASK);
+        assertThat(selector.decide(code, -100, now, facts).textTurn()).isTrue();
+        assertThat(selector.select(code, -100, now, facts).orElseThrow().assetId()).isEqualTo(10L);
     }
 
     private NotificationMediaRule rule(String eventCode, int cooldownMinutes) {

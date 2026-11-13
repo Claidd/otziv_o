@@ -1,5 +1,8 @@
 package com.hunt.otziv.notification_media.service;
 
+import org.springframework.dao.DataAccessException;
+import java.util.EnumSet;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import com.hunt.otziv.notification_media.api.StaffMediaSignal;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
@@ -154,6 +157,14 @@ public class ThematicStaffNotificationJob {
                 )
                 : Map.of();
 
+        MandatoryAccountBlockers.WorkloadDay shift = null;
+        if (hour >= settingHour(PROGRESS_HOUR, 17)) {
+            try {
+                shift = accountBlockers.currentDay();
+            } catch (DataAccessException unavailable) {
+                log.warn("Shift hours unavailable for notification pictures", unavailable);
+            }
+        }
         int workerSent = 0;
         for (Worker worker : workers) {
             DailyWorkProgressResponse progress = progressByWorker.get(worker.getId());
@@ -161,7 +172,7 @@ public class ThematicStaffNotificationJob {
                 continue;
             }
             if (dispatchWorker(worker, progress, publicationCounts.getOrDefault(worker.getId(), 0L),
-                    now, maxPerDay)) {
+                    now, maxPerDay, shift)) {
                 workerSent++;
             }
         }
@@ -247,7 +258,7 @@ public class ThematicStaffNotificationJob {
         for (Worker worker : pendingWorkers) {
             List<BlockedTask> tasks = blocked.getOrDefault(worker.getId(), List.of());
             if (!tasks.isEmpty() && send(workerEvent, worker.getUser(), workerChatId(worker.getUser()), date,
-                    OPERATIONAL_NOTICE_CAP, AccountBlockerNoticeText.worker(date, tasks))) {
+                    OPERATIONAL_NOTICE_CAP, AccountBlockerNoticeText.worker(date, tasks), blockerFacts(tasks))) {
                 workerSent++;
             }
         }
@@ -322,7 +333,8 @@ public class ThematicStaffNotificationJob {
             DailyWorkProgressResponse progress,
             long activePublicationCount,
             LocalDateTime now,
-            int maxPerDay
+            int maxPerDay,
+            MandatoryAccountBlockers.WorkloadDay shift
     ) {
         User user = worker.getUser();
         long chatId = workerChatId(user);
@@ -398,7 +410,8 @@ public class ThematicStaffNotificationJob {
                     "📈 <b>До дневной цели ещё можно успеть</b>\n\n"
                             + "Выполнено: <b>" + progress.completed() + " из " + progress.total()
                             + " (" + progress.percent() + "%)</b>.\n"
-                            + "Жека предлагает выбрать один пункт и закрыть его сейчас."
+                            + "Жека предлагает выбрать один пункт и закрыть его сейчас.",
+                    progressFacts(progress, now, shift)
             )) {
                 return true;
             }
@@ -460,26 +473,46 @@ public class ThematicStaffNotificationJob {
         return sent;
     }
 
+    static Set<StaffPictureContext> blockerFacts(List<BlockedTask> tasks) {
+        // A conditional tip on requesting help is valid for a blocked card.
+        var facts = EnumSet.of(StaffPictureContext.ACCOUNT_ACCESS);
+        if (!tasks.isEmpty() && tasks.stream().noneMatch(BlockedTask::recoveryAccountMissing)) {
+            facts.add(StaffPictureContext.CHANGE_ACCOUNT_BUTTON);
+        }
+        return facts;
+    }
+
+    static Set<StaffPictureContext> progressFacts(DailyWorkProgressResponse progress, LocalDateTime now,
+                                                 MandatoryAccountBlockers.WorkloadDay day) {
+        var facts = EnumSet.noneOf(StaffPictureContext.class);
+        if (progress.total() - progress.completed() == 1 && progress.active() == 1) facts.add(StaffPictureContext.LAST_TASK);
+        if (day != null && day.shiftEnd().equals(LocalTime.of(22, 0))) {
+            var local = now.atZone(DEFAULT_ZONE).withZoneSameInstant(day.zone()).toLocalTime();
+            if (!local.isBefore(LocalTime.of(17, 0)) && local.isBefore(day.shiftEnd())) facts.add(StaffPictureContext.BEFORE_22);
+        }
+        return facts;
+    }
+
+    private boolean send(String eventCode, User recipient, long chatId, LocalDate date, int maxPerDay, String text) {
+        return send(eventCode, recipient, chatId, date, maxPerDay, text, Set.of());
+    }
+
     private boolean send(
             String eventCode,
             User recipient,
             long chatId,
             LocalDate date,
             int maxPerDay,
-            String text
+            String text,
+            Set<StaffPictureContext> facts
     ) {
         if (!dispatchStore.claim(eventCode, recipient.getId(), date, maxPerDay)) {
             return false;
         }
         try {
-            boolean sent = mediaDeliveryService.send(
-                    eventCode,
-                    chatId,
-                    recipient.getId(),
-                    text,
-                    "HTML",
-                    List.of()
-            );
+            boolean sent = facts.isEmpty()
+                    ? mediaDeliveryService.send(eventCode, chatId, recipient.getId(), text, "HTML", List.of())
+                    : mediaDeliveryService.send(eventCode, chatId, recipient.getId(), text, "HTML", List.of(), facts);
             if (sent) {
                 dispatchStore.markSent(eventCode, recipient.getId(), date);
                 return true;

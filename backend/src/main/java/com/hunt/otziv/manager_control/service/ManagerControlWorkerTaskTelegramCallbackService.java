@@ -1,5 +1,8 @@
 package com.hunt.otziv.manager_control.service;
 
+import java.util.Set;
+import java.util.regex.Pattern;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
@@ -242,11 +245,25 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         concreteItemRepository.save(item);
         personalReminderService.deleteSystemReminderBySource(groupWorker, SOURCE_WORKER_TASK_REQUEST, item.getId());
         String title = withoutFinancialInfo(item.getTitle());
-        afterCommit(() -> telegramService.sendMessage(chatId,
-                "🟢 ОТВЕТ ПОЛУЧЕН"
+        boolean reportedCorrection = reportsCorrection(messageText);
+        String confirmation = "🟢 ОТВЕТ ПОЛУЧЕН"
                         + "\nПояснение принято. Менеджер увидит его в карточке контроля."
-                        + "\nКарточка: " + title));
+                        + "\nКарточка: " + title;
+        afterCommit(() -> {
+            if (reportedCorrection) notificationMediaDeliveryService.send(
+                    NotificationMediaEventCatalog.WORKER_CORRECTION_REPORTED.code(), chatId, actor.getId(),
+                    confirmation, null, List.of(), Set.of(StaffPictureContext.CORRECTION_REPORTED));
+            else telegramService.sendMessage(chatId, confirmation);
+        });
         return true;
+    }
+
+    private static final Pattern CORRECTION_REPORT = Pattern.compile(
+            "(?iU)(?:^|[.!\\n]\\s*)\\s*(?:я\\s+)?(?:(?:уже|сам[а]?|вс[её]|ошибку|текст)\\s+)*"
+            + "(?:исправил[а]?|поправил[а]?|устранил[а]?)\\b[^.!?\\n]*(?:[.!\\n]|$)");
+
+    static boolean reportsCorrection(String message) {
+        return message != null && CORRECTION_REPORT.matcher(message).find();
     }
 
     /**
@@ -601,7 +618,9 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         boolean sent;
         try {
             sent = notificationMediaDeliveryService.send(claim.eventCode(), claim.chatId(), claim.workerUserId(),
-                    claim.text(), null, claim.keyboard());
+                    claim.text(), null, claim.keyboard(), claim.acknowledgedByWorker()
+                            ? Set.of(StaffPictureContext.TASK_ACKNOWLEDGED, StaffPictureContext.TASK_FOLLOWUP)
+                            : Set.of(StaffPictureContext.TASK_FOLLOWUP));
         } catch (RuntimeException failure) {
             log.warn("Worker explanation reminder was not sent: cardId={}", itemId, failure);
             sent = false;
@@ -616,7 +635,7 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
     }
 
     private record ReminderClaim(String eventCode, long chatId, Long workerUserId, String text,
-                                 List<List<InlineKeyboardButton>> keyboard, LocalDateTime claimedAt,
+                                 List<List<InlineKeyboardButton>> keyboard, boolean acknowledgedByWorker, LocalDateTime claimedAt,
                                  LocalDateTime previousReminderAt, int previousCount) {
     }
 
@@ -654,6 +673,9 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
             keyboard = List.of(List.of(isRiskTask(item) ? riskExplanationButton(item.getId()) : explanationButton(item.getId())));
         }
         ReminderClaim claim = new ReminderClaim(eventCode, worker.getWorkerTelegramGroupChatId(), worker.getId(), text, keyboard,
+                item.getWorkerNotificationAcceptedAt() != null
+                        && !item.getWorkerNotificationAcceptedAt().isBefore(sentAt)
+                        && Objects.equals(worker.getId(), item.getWorkerNotificationAcceptedByUserId()),
                 checkedAt, item.getWorkerReminderSentAt(), item.getWorkerReminderCount());
         item.setWorkerReminderSentAt(checkedAt);
         item.setWorkerReminderCount(item.getWorkerReminderCount() + 1);

@@ -38,6 +38,7 @@ import com.hunt.otziv.common_billing.service.CommonPaymentInitFailureClassifier;
 import com.hunt.otziv.common_billing.service.CommonInvoicePublicationBlockerService;
 import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.manager.service.ManagerPermissionService;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
@@ -628,7 +629,7 @@ class ManagerControlServiceTest {
                 eq(501L),
                 any(),
                 any(),
-                any()
+                any(), eq(java.util.Set.of(StaffPictureContext.TASK_GUIDANCE, StaffPictureContext.TASK_HANDOFF))
         )).thenReturn(true);
 
         LocalDateTime before = LocalDateTime.now();
@@ -658,7 +659,7 @@ class ManagerControlServiceTest {
                 eq(501L),
                 messageCaptor.capture(),
                 any(),
-                any()
+                any(), eq(java.util.Set.of(StaffPictureContext.TASK_GUIDANCE, StaffPictureContext.TASK_HANDOFF))
         );
         String message = messageCaptor.getValue();
         assertTrue(message.contains("Причина: Заказ ждет текст клиента, автонапоминание не ушло."));
@@ -694,7 +695,7 @@ class ManagerControlServiceTest {
             }
         }).when(managerControlTransactionRunner).required(any());
         java.util.List<String> statusAtSend = new java.util.ArrayList<>();
-        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(501L), any(), any(), any())).thenAnswer(call -> {
+        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(501L), any(), any(), any(), any())).thenAnswer(call -> {
             assertEquals(0, openTransactions.get(), "Telegram must not be called inside the card transaction");
             statusAtSend.add(concrete.getStatus().name());
             return true;

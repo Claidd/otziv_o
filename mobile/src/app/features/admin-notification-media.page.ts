@@ -45,6 +45,7 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
               <button type="button" [class.active]="audience() === 'ALL'" (click)="setAudience('ALL')">Все</button>
               <button type="button" [class.active]="audience() === 'MANAGER'" (click)="setAudience('MANAGER')">Менеджеры</button>
               <button type="button" [class.active]="audience() === 'WORKER'" (click)="setAudience('WORKER')">Специалисты</button>
+              <button type="button" [class.active]="audience() === 'STAFF'" (click)="setAudience('STAFF')">Получатели переводов</button>
             </div>
             <label class="field"><span>Добавить событие</span><select [ngModel]="newEventCode()" (ngModelChange)="newEventCode.set($event)"><option value="">Выберите функцию отправки</option>@for (event of availableEvents(); track event.code) { <option [value]="event.code">{{ roleLabel(event.recipientType) }} · {{ event.label }}</option> }</select></label>
             <button type="button" class="primary" (click)="createRule()" [disabled]="!newEventCode() || !!saving()">Добавить уведомление</button>
@@ -70,7 +71,7 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
                 @for (asset of rule.images; track asset.id) {
                   <figure [class.asset-off]="!asset.active">
                     @if (safeImage(asset.imageUrl); as url) { <button type="button" class="image-button" (click)="openImage(url)" aria-label="Открыть картинку"><img [src]="url" [alt]="asset.originalFilename || rule.eventLabel"></button> }
-                    <figcaption><strong>{{ asset.originalFilename || 'Картинка уведомления' }}</strong><small>{{ asset.active ? 'Участвует в выборе' : 'Временно отключена' }}</small></figcaption>
+                    <figcaption><strong>{{ asset.originalFilename || 'Картинка уведомления' }}</strong>@if (asset.contextLabel) { <small>{{ asset.contextLabel }} · через 1–2 подходящих сообщения</small> }<small>{{ asset.active ? 'Участвует в выборе' : 'Временно отключена' }}</small></figcaption>
                     <div class="actions"><button type="button" (click)="toggleAsset(asset)" [disabled]="!!saving()">{{ asset.active ? 'Отключить' : 'Включить' }}</button><label class="upload replace">Заменить<input type="file" accept="image/jpeg,image/png,image/webp" (change)="replaceFile(asset, $event)" [disabled]="!!saving()"></label>@if (media.nativePhotoPickerAvailable) { <button type="button" (click)="pickAndReplace(asset)" [disabled]="!!saving()">Фото из галереи</button> }<button type="button" class="danger" (click)="deleteAsset(asset)" [disabled]="!!saving()">Удалить фото</button></div>
                   </figure>
                 } @empty { <p class="empty">Картинок пока нет. Уведомление продолжит отправляться текстом.</p> }
@@ -130,7 +131,7 @@ export class AdminNotificationMediaPage implements OnInit {
   }
 
   setAudience(value: Audience): void { this.audience.set(value); this.newEventCode.set(''); }
-  roleLabel(role: NotificationRecipientType): string { return role === 'MANAGER' ? 'Менеджер' : 'Специалист'; }
+  roleLabel(role: NotificationRecipientType): string { return role === 'STAFF' ? 'Получатель перевода' : role === 'MANAGER' ? 'Менеджер' : 'Специалист'; }
   setRuleEnabled(id: number, enabled: boolean): void { this.updateDraft(id, { enabled }); }
   setRuleNumber(id: number, field: 'probability' | 'cooldown', value: number | string | null): void { this.updateDraft(id, { [field]: String(value ?? '') }); }
   safeImage(value: string | null | undefined): string | null { return safeHttpsExternalUrl(value); }

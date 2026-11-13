@@ -1,5 +1,7 @@
 package com.hunt.otziv.notification_media.service;
 
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -71,6 +73,8 @@ class ThematicStaffNotificationJobTest {
         lenient().when(appSettingService.getInt(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
         lenient().when(dispatchStore.claim(anyString(), anyLong(), any(), anyInt())).thenReturn(true);
+        lenient().when(mediaDeliveryService.send(anyString(), anyLong(), anyLong(), anyString(), anyString(), any(), any()))
+                .thenReturn(true);
         lenient().when(mediaDeliveryService.send(anyString(), anyLong(), anyLong(), anyString(), anyString(), any()))
                 .thenReturn(true);
     }
@@ -309,8 +313,7 @@ class ThematicStaffNotificationJobTest {
                         && text.contains("• Восстановление · «Цветы &lt;Опт&gt;», заказ №900 — нажмите «Получить аккаунт»")
                         && text.contains("• Публикация · «Цветы &lt;Опт&gt;», заказ №901 — нажмите «смена»")
                         && text.contains("напишите менеджеру")),
-                eq("HTML"),
-                eq(List.of())
+                eq("HTML"), eq(List.of()), eq(Set.of(StaffPictureContext.ACCOUNT_ACCESS))
         );
         verify(dispatchStore).markSent(NotificationMediaEventCatalog.WORKER_ACCOUNT_BLOCKED_TASKS.code(), 60L, date);
         // Before the midday hour the manager is not involved yet.
@@ -452,6 +455,17 @@ class ThematicStaffNotificationJobTest {
                 .lastLoginAt(lastLoginAt)
                 .build();
         return Worker.builder().id(workerId).user(user).build();
+    }
+
+    @Test
+    void lastTaskAndShiftPicturesRequireTheirOwnFacts() {
+        LocalDate day = LocalDate.of(2026, 11, 13);
+        var one = progress(day, 4, 5, day.atTime(11, 0));
+        var two = progress(day, 3, 5, day.atTime(11, 0));
+        assertEquals(Set.of(StaffPictureContext.LAST_TASK, StaffPictureContext.BEFORE_22),
+                ThematicStaffNotificationJob.progressFacts(one, day.atTime(20, 0), SHIFT));
+        assertEquals(Set.of(), ThematicStaffNotificationJob.progressFacts(two, day.atTime(22, 0), SHIFT));
+        assertEquals(Set.of(StaffPictureContext.LAST_TASK), ThematicStaffNotificationJob.progressFacts(one, day.atTime(12, 0), null));
     }
 
     private DailyWorkProgressResponse progress(

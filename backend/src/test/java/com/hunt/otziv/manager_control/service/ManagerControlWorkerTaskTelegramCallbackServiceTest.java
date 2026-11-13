@@ -1,5 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
+import java.util.Set;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
@@ -235,6 +237,15 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
     }
 
     @Test
+    void correctionPictureRequiresAnAffirmativeReportFromTheWorker() {
+        assertTrue(ManagerControlWorkerTaskTelegramCallbackService.reportsCorrection("Я уже исправила текст."));
+        assertFalse(ManagerControlWorkerTaskTelegramCallbackService.reportsCorrection("Пока не исправил"));
+        assertFalse(ManagerControlWorkerTaskTelegramCallbackService.reportsCorrection("Менеджер исправил."));
+        assertFalse(ManagerControlWorkerTaskTelegramCallbackService.reportsCorrection("Исправили?"));
+        assertFalse(ManagerControlWorkerTaskTelegramCallbackService.reportsCorrection("Я исправил?"));
+    }
+
+    @Test
     void pendingReminderIsYellowBeforeThreeHoursAndKeepsExplanationButton() {
         User worker = worker();
         WorkerRiskIncident incident = riskIncident();
@@ -252,7 +263,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
                 eq(2L),
                 any(),
                 eq(null),
-                any()
+                any(), eq(Set.of(StaffPictureContext.TASK_FOLLOWUP))
         )).thenReturn(true);
 
         boolean sent = service.remindPendingExplanation(item, sentAt.plusHours(1));
@@ -265,7 +276,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
                 eq(2L),
                 textCaptor.capture(),
                 eq(null),
-                any()
+                any(), eq(Set.of(StaffPictureContext.TASK_FOLLOWUP))
         );
         assertTrue(textCaptor.getValue().startsWith("🟡 ОЖИДАЕМ ОТВЕТ"));
         assertEquals(1, item.getWorkerReminderCount());
@@ -291,7 +302,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
                 eq(2L),
                 any(),
                 eq(null),
-                any()
+                any(), eq(Set.of(StaffPictureContext.TASK_FOLLOWUP))
         )).thenReturn(true);
 
         boolean sent = service.remindPendingExplanation(item, sentAt.plusHours(3));
@@ -304,11 +315,30 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
                 eq(2L),
                 textCaptor.capture(),
                 eq(null),
-                any()
+                any(), eq(Set.of(StaffPictureContext.TASK_FOLLOWUP))
         );
         assertTrue(textCaptor.getValue().startsWith("🔴 ПРОСРОЧЕНО"));
         assertTrue(textCaptor.getValue().contains("Код запроса: risk-77"));
         verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void overdueReadPictureRequiresCurrentRequestAcknowledgementByTheAssignedWorker() {
+        var sentAt = LocalDateTime.of(2026, 7, 15, 10, 0);
+        var item = riskConcreteItem();
+        item.setWorkerExplanationRequestedAt(sentAt);
+        item.setWorkerNotificationSentAt(sentAt);
+        item.setWorkerNotificationAcceptedAt(sentAt.plusMinutes(1));
+        item.setWorkerNotificationAcceptedByUserId(2L);
+        item.setWorkerReminderCount(1);
+        item.setWorkerReminderSentAt(sentAt.plusHours(1));
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
+        when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(riskIncident()));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(worker()));
+        var expected = Set.of(StaffPictureContext.TASK_FOLLOWUP, StaffPictureContext.TASK_ACKNOWLEDGED);
+        when(notificationMediaDeliveryService.send(eq(NotificationMediaEventCatalog.WORKER_TASK_OVERDUE.code()),
+                eq(-100123L), eq(2L), any(), eq(null), any(), eq(expected))).thenReturn(true);
+        assertTrue(service.remindPendingExplanation(item, sentAt.plusHours(5)));
     }
 
     @Test
@@ -325,7 +355,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         assertFalse(sent);
         verify(telegramService, never()).sendMessage(anyLong(), any());
         verify(telegramService, never()).sendMessageWithInlineKeyboard(anyLong(), any(), any(), any());
-        verify(notificationMediaDeliveryService, never()).send(any(), anyLong(), any(), any(), any(), any());
+        verify(notificationMediaDeliveryService, never()).send(any(), anyLong(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -341,13 +371,13 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
-        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(2L), any(), eq(null), any())).thenReturn(true);
+        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(2L), any(), eq(null), any(), eq(Set.of(StaffPictureContext.TASK_FOLLOWUP)))).thenReturn(true);
 
         assertTrue(service.remindPendingExplanation(30L, sentAt.plusHours(3)));
         // A second pass right after (another instance or the next tick) sees the claim and does not resend.
         assertFalse(service.remindPendingExplanation(30L, sentAt.plusHours(3).plusMinutes(5)));
 
-        verify(notificationMediaDeliveryService, org.mockito.Mockito.times(1)).send(any(), anyLong(), any(), any(), any(), any());
+        verify(notificationMediaDeliveryService, org.mockito.Mockito.times(1)).send(any(), anyLong(), any(), any(), any(), any(), any());
         assertEquals(1, item.getWorkerReminderCount());
         assertEquals(sentAt.plusHours(3), item.getWorkerReminderSentAt());
         assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, item.getStatus());
@@ -364,7 +394,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
-        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(2L), any(), eq(null), any())).thenReturn(false);
+        when(notificationMediaDeliveryService.send(any(), eq(-100123L), eq(2L), any(), eq(null), any(), eq(Set.of(StaffPictureContext.TASK_FOLLOWUP)))).thenReturn(false);
 
         assertFalse(service.remindPendingExplanation(30L, sentAt.plusHours(3)));
 

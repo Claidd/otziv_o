@@ -5,6 +5,12 @@ import java.util.Arrays;
 import java.util.Optional;
 
 public enum NotificationMediaEventCatalog {
+    STAFF_PAYMENT_DISPUTE(NotificationRecipientType.STAFF, "Оспоримое поступление",
+            "Получателю отправляется уведомление с действующей кнопкой «Оспорить поступление»", true),
+    WORKER_ACCOUNT_SHORTAGE(NotificationRecipientType.WORKER, "Не удалось выдать рабочий аккаунт",
+            "В карточке выгула после подбора указан системный аккаунт-заглушка", false),
+    WORKER_CORRECTION_REPORTED(NotificationRecipientType.WORKER, "Специалист сообщил об исправлении",
+            "Назначенный специалист прислал пояснение об исправлении в ответ на запрос", false),
     WORKER_STREAK_15(NotificationRecipientType.WORKER,
             "Серия от 15 дней",
             "Дневная цель выполнена, серия составляет не менее 15 рабочих дней", false),

@@ -30,6 +30,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class ManualPaymentRecipientTelegramNotificationService {
 
+    public static final String UNCERTAIN_DISPUTE_NOTICE = "recipient_telegram_delivery_uncertain";
+
     private static final DateTimeFormatter DATE_TIME_FORMAT =
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
     private static final DecimalFormat MONEY_FORMAT = new DecimalFormat(
@@ -163,6 +165,9 @@ public class ManualPaymentRecipientTelegramNotificationService {
                             "recipient_telegram_not_sent",
                             "Telegram не подтвердил отправку получателю"
                     );
+        } catch (com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice.DeliveryUncertain uncertain) {
+            return ClientMessageSendResult.failed(UNCERTAIN_DISPUTE_NOTICE,
+                    "Telegram не подтвердил доставку. Проверьте рабочую группу получателя перед повторной отправкой.");
         } catch (Exception exception) {
             String message = exception.getMessage();
             return ClientMessageSendResult.failed(

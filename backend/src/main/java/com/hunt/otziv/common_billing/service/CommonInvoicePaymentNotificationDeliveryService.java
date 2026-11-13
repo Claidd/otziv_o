@@ -124,6 +124,12 @@ public class CommonInvoicePaymentNotificationDeliveryService {
             }
             return finalized;
         }
+        if (result != null && ManualPaymentRecipientTelegramNotificationService.UNCERTAIN_DISPUTE_NOTICE.equals(result.errorCode())) {
+            if (!claimService.markSkipped(delivery, limit(resultError(result)))) {
+                log.warn("Uncertain receipt notice finalization was fenced: deliveryId={}", delivery.deliveryId());
+            }
+            return false;
+        }
         markFailed(delivery, resultError(result));
         return false;
     }

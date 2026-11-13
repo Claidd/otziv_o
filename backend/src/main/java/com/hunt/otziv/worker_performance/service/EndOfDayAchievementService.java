@@ -1,5 +1,9 @@
 package com.hunt.otziv.worker_performance.service;
 
+import org.springframework.dao.DataAccessException;
+import java.util.EnumSet;
+import java.util.Set;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import com.hunt.otziv.worker_performance.api.FinalWorkerDayResults;
 
 import com.hunt.otziv.gamification.service.GamificationEventService;
@@ -167,16 +171,52 @@ public class EndOfDayAchievementService implements FinalWorkerDayResults {
                 ? NotificationMediaEventCatalog.WORKER_STREAK.code()
                 : NotificationMediaEventCatalog.WORKER_PROGRESS_GROWING.code()
                 : NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code();
-        if (notificationMediaDeliveryService.send(
-                eventCode,
-                chatId,
-                user == null ? null : user.getId(),
-                text,
-                "HTML",
-                List.of()
-        )) {
-            markNotified(result);
+        var facts = achievementFacts(result, user.getId());
+        boolean sent = facts.isEmpty()
+                ? notificationMediaDeliveryService.send(eventCode, chatId, user.getId(), text, "HTML", List.of())
+                : notificationMediaDeliveryService.send(eventCode, chatId, user.getId(), text, "HTML", List.of(), facts);
+        if (sent) markNotified(result);
+    }
+
+    private Set<StaffPictureContext> achievementFacts(AchievementResult result, Long userId) {
+        var facts = EnumSet.noneOf(StaffPictureContext.class);
+        try {
+            if (result.reached100() && result.completedCount() >= result.eligibleCount()
+                    && result.eligibleCount() > 0 && completedBeforeReminders(result, userId)) {
+                facts.add(StaffPictureContext.BEFORE_REMINDERS);
+            } else if (!result.reached100() && result.eligibleCount() > 0 && previousWorkdayHadStreak(result)) {
+                facts.add(StaffPictureContext.BROKEN_STREAK);
+            }
+        } catch (DataAccessException unavailable) {
+            log.warn("Reminder history unavailable for workday picture", unavailable);
         }
+        return facts;
+    }
+
+    private boolean completedBeforeReminders(AchievementResult result, Long userId) {
+        Boolean clear = jdbc.queryForObject("""
+                SELECT NOT EXISTS (SELECT 1 FROM thematic_notification_dispatches
+                    WHERE recipient_user_id=:user AND dispatch_date=:day
+                      AND event_code IN ('WORKER_SITE_INACTIVE','WORKER_DAY_START','WORKER_PROGRESS_SLOWED',
+                          'WORKER_PUBLICATION_PENDING','WORKER_ACCOUNT_BLOCKED_TASKS'))
+                  AND NOT EXISTS (SELECT 1 FROM manager_daily_control_concrete_items
+                    WHERE worker_notification_user_id=:user AND
+                     ((worker_reminder_sent_at>=:start AND worker_reminder_sent_at<:end)
+                       OR (worker_notification_attempted_at>=:start AND worker_notification_attempted_at<:end)))
+                """, new MapSqlParameterSource("user", userId).addValue("day", result.date())
+                .addValue("start", result.date().atStartOfDay()).addValue("end", result.date().plusDays(1).atStartOfDay()),
+                Boolean.class);
+        return Boolean.TRUE.equals(clear);
+    }
+
+    private boolean previousWorkdayHadStreak(AchievementResult result) {
+        Integer streak = jdbc.queryForObject("""
+                SELECT COALESCE((SELECT streak_days FROM end_of_day_achievement_results
+                    WHERE actor_role=:role AND actor_id=:actor AND result_date<:day AND eligible_count>0
+                    ORDER BY result_date DESC LIMIT 1),0)
+                """, new MapSqlParameterSource("role", result.actorRole()).addValue("actor", result.actorId())
+                .addValue("day", result.date()), Integer.class);
+        return streak != null && streak >= 3;
     }
 
     public void notifyManager(Manager manager, AchievementResult result) {

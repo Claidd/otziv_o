@@ -1,5 +1,7 @@
 package com.hunt.otziv.notification_media.service;
 
+import com.hunt.otziv.config.settings.api.ContextualMediaSettings;
+import com.hunt.otziv.notification_media.api.StaffPictureContext;
 import com.hunt.otziv.notification_media.model.NotificationMediaAsset;
 import com.hunt.otziv.notification_media.model.NotificationMediaDelivery;
 import com.hunt.otziv.notification_media.model.NotificationMediaRule;
@@ -10,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,17 +25,33 @@ public class NotificationMediaSelector {
     private final NotificationMediaAssetRepository assetRepository;
     private final NotificationMediaDeliveryRepository deliveryRepository;
     private final NotificationMediaRandomizer randomizer;
+    private final ContextPictureCadence cadence;
+    private final ContextualMediaSettings settings;
 
     @Transactional(readOnly = true)
     public Optional<Selection> select(String eventCode, long chatId, LocalDateTime now) {
+        return select(eventCode, chatId, now, Set.of());
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Selection> select(String eventCode, long chatId, LocalDateTime now, Set<StaffPictureContext> facts) {
+        return decide(eventCode, chatId, now, facts).picture();
+    }
+
+    public record Decision(Optional<Selection> picture, boolean textTurn) {
+        static Decision unavailable() { return new Decision(Optional.empty(), false); }
+    }
+
+    @Transactional(readOnly = true)
+    public Decision decide(String eventCode, long chatId, LocalDateTime now, Set<StaffPictureContext> facts) {
         NotificationMediaEventCatalog event = NotificationMediaEventCatalog.find(eventCode).orElse(null);
         if (event == null) {
-            return Optional.empty();
+            return Decision.unavailable();
         }
         NotificationMediaRule rule = ruleRepository.findByEventCode(event.code()).orElse(null);
         if (rule == null || !rule.isEnabled()
                 || !randomizer.shouldAttach(rule.getImageProbabilityPercent())) {
-            return Optional.empty();
+            return Decision.unavailable();
         }
 
         Optional<NotificationMediaDelivery> lastDelivery =
@@ -45,23 +64,40 @@ public class NotificationMediaSelector {
                 && lastDelivery.map(NotificationMediaDelivery::getSentAt)
                 .filter(sentAt -> sentAt.isAfter(checkedAt.minusMinutes(rule.getCooldownMinutes())))
                 .isPresent()) {
-            return Optional.empty();
+            return Decision.unavailable();
         }
 
         List<NotificationMediaAsset> active =
                 assetRepository.findByRuleIdAndActiveTrueOrderBySortOrderAscIdAsc(rule.getId());
-        if (active.isEmpty()) {
-            return Optional.empty();
+        List<NotificationMediaAsset> ordinary = new ArrayList<>();
+        List<NotificationMediaAsset> contextual = new ArrayList<>();
+        for (NotificationMediaAsset asset : active) {
+            if (asset.getContextCondition() == null) ordinary.add(asset);
+            else if (facts.contains(asset.getContextCondition())) contextual.add(asset);
         }
-        List<NotificationMediaAsset> candidates = new ArrayList<>(active);
+        if (!contextual.isEmpty()) {
+            if (!settings.enabled()) {
+                contextual.clear();
+            } else if (!cadence.takeSlot(chatId)) {
+                return new Decision(Optional.empty(), true);
+            }
+        }
+        if (ordinary.isEmpty() && contextual.isEmpty()) return Decision.unavailable();
+        List<NotificationMediaAsset> candidates = new ArrayList<>(contextual);
+        candidates.addAll(ordinary);
         if (candidates.size() > 1) {
             Long lastAssetId = lastDelivery.map(NotificationMediaDelivery::getAssetId).orElse(null);
             if (lastAssetId != null) {
                 candidates.removeIf(asset -> lastAssetId.equals(asset.getId()));
             }
         }
+        // Keep the original collection in rotation even if a rule has many older images.
+        List<NotificationMediaAsset> matching = candidates.stream().filter(a -> a.getContextCondition() != null).toList();
+        if (!matching.isEmpty() && matching.size() < candidates.size() && randomizer.shouldAttach(50)) {
+            candidates = matching;
+        }
         NotificationMediaAsset selected = candidates.get(randomizer.index(candidates.size()));
-        return Optional.of(new Selection(
+        return new Decision(Optional.of(new Selection(
                 rule.getId(),
                 selected.getId(),
                 event.code(),
@@ -69,7 +105,7 @@ public class NotificationMediaSelector {
                 selected.getStorageKey(),
                 selected.getOriginalFilename(),
                 selected.getContentType()
-        ));
+        )), false);
     }
 
     public record Selection(

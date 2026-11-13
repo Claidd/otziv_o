@@ -1,6 +1,11 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaSelector.Selection;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.test.util.ReflectionTestUtils;
+import static org.mockito.Mockito.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
@@ -8,6 +13,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.ResponseParameters;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
@@ -62,6 +68,82 @@ class TelegramServiceSendRetryTest {
         assertFalse(service.sendPaymentReviewNoticeOnce(
                 123L, "Проверьте перевод", "Оспорить", "specialist-payment-dispute:101"));
         assertEquals(1, service.attempts);
+    }
+
+    @Test
+    void realDisputeButtonAndReceiptTextSurviveAnIllustratedDelivery() {
+        for (String prefix : List.of("specialist", "common")) {
+            var service = new IllustratedDisputeService(200);
+            var pictures = installPicture(service);
+            String callback = prefix + "-payment-dispute:71";
+            boolean sent = prefix.equals("common")
+                    ? service.sendMessageWithInlineButton(123, "Перевод получен", "Оспорить", callback)
+                    : service.sendPaymentReviewNoticeOnce(123, "Перевод получен", "Оспорить", callback);
+            assertTrue(sent);
+            assertEquals("Перевод получен", service.photo.getCaption());
+            var keyboard = (InlineKeyboardMarkup) service.photo.getReplyMarkup();
+            var button = keyboard.getKeyboard().get(0).get(0);
+            assertEquals(callback, button.getCallbackData());
+            assertEquals("Оспорить", button.getText());
+            assertEquals(0, service.textAttempts);
+            verify(pictures).recordDisputePicture(any(), eq(123L));
+        }
+    }
+
+    @Test
+    void onlyAnExplicitPhotoRejectionFallsBackToText() {
+        var rejected = new IllustratedDisputeService(400);
+        installPicture(rejected);
+        assertTrue(rejected.sendPaymentReviewNoticeOnce(123, "Перевод", "Оспорить", "specialist-payment-dispute:71"));
+        assertEquals(1, rejected.textAttempts);
+        var uncertain = new IllustratedDisputeService(500);
+        installPicture(uncertain);
+        assertThrows(TelegramService.DeliveryUncertain.class, () -> uncertain.sendMessageWithInlineButton(
+                123, "Перевод", "Оспорить", "common-payment-dispute:71"));
+        assertEquals(0, uncertain.textAttempts);
+        var ordinary = new IllustratedDisputeService(200);
+        var pictures = installPicture(ordinary);
+        assertTrue(ordinary.sendMessageWithInlineButton(123, "Перевод", "Подробнее", "details:71"));
+        verifyNoInteractions(pictures);
+    }
+
+    @SuppressWarnings("unchecked")
+    private NotificationMediaDeliveryService installPicture(TelegramService service) {
+        var pictures = mock(NotificationMediaDeliveryService.class);
+        var picture = new Selection(1L, 37L, "STAFF_PAYMENT_DISPUTE", "https://cdn/37.png", "37.png", "37.png", "image/png");
+        when(pictures.selectDisputePicture(123)).thenReturn(picture);
+        when(pictures.loadDisputePicture(picture)).thenReturn(new byte[]{1});
+        ObjectProvider<NotificationMediaDeliveryService> provider = mock(ObjectProvider.class);
+        when(provider.getObject()).thenReturn(pictures);
+        ReflectionTestUtils.setField(service, "paymentPictures", provider);
+        return pictures;
+    }
+
+    private static final class IllustratedDisputeService extends TelegramService {
+        private final int status;
+        private int textAttempts;
+        private SendPhoto photo;
+
+        IllustratedDisputeService(int status) {
+            super(new DefaultBotOptions(), "123456:abcdefghijklmnopqrstuvwxyz", "test_bot", true, "",
+                    null, null, null, null, null, null, null, null, null, null);
+            this.status = status;
+        }
+
+        @Override
+        Message executeTelegramMessage(SendMessage message) {
+            textAttempts++;
+            return new Message();
+        }
+
+        @Override
+        Message executeTelegramPhoto(SendPhoto photo) throws TelegramApiException {
+            this.photo = photo;
+            if (status == 200) return new Message();
+            throw new TelegramApiRequestException("rejected") {
+                @Override public Integer getErrorCode() { return status; }
+            };
+        }
     }
 
     @Test
