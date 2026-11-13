@@ -105,6 +105,7 @@ on:
           - c36-minio
           - c36-postgres
           - c51-postgres
+          - c54-postgres
           - c52-nginx
           - c53-phpmyadmin
           - c43-tempo
@@ -690,7 +691,7 @@ jobs:
           MYSQL_IMAGE="$(node infrastructure/runtime-security/ci-mysql-fixture.mjs)"
           docker pull --platform linux/amd64 "$MYSQL_IMAGE"
           docker tag "$MYSQL_IMAGE" otziv-mysql-ci
-          POSTGRES_IMAGE="$(node infrastructure/runtime-security/ci-postgres-c51-fixture.mjs)"
+          POSTGRES_IMAGE="$(node infrastructure/runtime-security/ci-postgres-c54-fixture.mjs)"
           docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
           docker tag "$POSTGRES_IMAGE" otziv-postgres-ci
           node infrastructure/runtime-security/scan.mjs image otziv-mysql-ci "$RUNNER_TEMP/mysql-vulnerabilities.json"
@@ -700,7 +701,7 @@ jobs:
         run: |
           docker pull postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
           node infrastructure/postgres/upgrade-proof.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-upgrade"
-          node infrastructure/runtime-security/proofs/c14-postgres/continuity.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-continuity"
+          node infrastructure/postgres/continuity.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-continuity"
           node infrastructure/runtime-security/proofs/c14-postgres/tcp-contract.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-tcp"
       - name: Load reviewed infrastructure for ordinary application changes
         if: ${{ needs.changes.outputs.issuer == 'true' && needs.changes.outputs.infrastructure != 'true' }}

@@ -1,0 +1,43 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c54-postgres",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "postgres",
+      "sourceBeforeRef": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 258,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 101,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 108,
+          "service": "keycloak-postgres"
+        }
+      ],
+      "context": "infrastructure/runtime-security/builds/postgres-17.12",
+      "dockerfile": "infrastructure/runtime-security/builds/postgres-17.12/Dockerfile",
+      "platform": "linux/amd64",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:13d2e1ba01b593f1f284d5d7869a9994f5251f036355e90064406ca4e7d809fc",
+      "buildImageRefs": [
+        "postgres:17.11@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
+      ],
+      "buildArgs": {},
+      "version": "PostgreSQL 17.12, Debian security source 17.12-0+deb13u1, MIT Kerberos 1.22.3",
+      "dockerfileSha256": "8393b07c77d3eb1e6202345dc0d787c0edc60dd8a0f2be13fda7b9bfe1fa2020",
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "REQUIRED"
+    }
+  ]
+}

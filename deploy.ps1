@@ -35,7 +35,7 @@ if ($Help) {
     Write-Host '-FullRollout recreates all application services; database continuity guards still apply.'
     Write-Host '-CoordinatedMysqlRefresh applies an exact reviewed MySQL OS-package transition on the existing volume, after a protected backup.'
     Write-Host '-CoordinatedSslRefresh explicitly changes C23 PostgreSQL to an accepted C36 image with active C35 Keycloak, after protected backups.'
-    Write-Host '-CoordinatedPostgresRefresh replaces the accepted C36 PostgreSQL with the zlib-only C51 image on the same volume, keeping active C48 Keycloak, after protected backups.'
+    Write-Host '-CoordinatedPostgresRefresh replaces the accepted PostgreSQL 17.11 with the reviewed 17.12 image on the same volume, keeping active C48 Keycloak, after protected backups.'
     Write-Host 'Production configuration and the existing mobile APK are retained unless an APK path is supplied.'
     Write-Host '-StandaloneMobileApkPath stages a separately signed APK before rollout, then verifies its public /android-new URL after deployment.'
     return

@@ -13,7 +13,8 @@ export function positive(value, code, maximum = Number.MAX_SAFE_INTEGER) {
 }
 // Keep the recovery runtime paired with the published PostgreSQL activation.
 // Other images in the shared GHCR repository are not PostgreSQL runtimes.
-export const REVIEWED_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:13d2e1ba01b593f1f284d5d7869a9994f5251f036355e90064406ca4e7d809fc';
+export const REVIEWED_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:32adf590dacac8d07c6dcd5bfbad27d527ae2ddf18e9822a404ba52ce69524a2';
+export const PRE_17_12_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:13d2e1ba01b593f1f284d5d7869a9994f5251f036355e90064406ca4e7d809fc';
 // Backups made before the coordinated C51 zlib refresh still require their C36 runtime.
 export const PRE_ZLIB_REFRESH_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5';
 // Backups made before the coordinated C36 refresh still require their original C23 runtime.
@@ -24,7 +25,7 @@ export const SSL_REFRESH_PARENT_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@
 export const PREVIOUS_REVIEWED_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf';
 export function assertPostgresImage(value) {
   if (typeof value !== 'string' || (!/^postgres(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[a-f0-9]{64}$/.test(value) &&
-      value !== REVIEWED_POSTGRES_IMAGE && value !== PRE_ZLIB_REFRESH_POSTGRES_IMAGE && value !== PRE_SSL_REFRESH_POSTGRES_IMAGE &&
+      value !== REVIEWED_POSTGRES_IMAGE && value !== PRE_17_12_POSTGRES_IMAGE && value !== PRE_ZLIB_REFRESH_POSTGRES_IMAGE && value !== PRE_SSL_REFRESH_POSTGRES_IMAGE &&
       value !== PREVIOUS_REVIEWED_POSTGRES_IMAGE && value !== SSL_REFRESH_PARENT_POSTGRES_IMAGE)) throw new Error('postgres_image_not_pinned');
 }
 export function validateConfig(config) {

@@ -15,6 +15,7 @@ import { C50_COMPONENTS } from './c50-refresh.mjs';
 import { validateActivation } from './reviewed-image-defaults.mjs';
 import { validatePostgresC36ActivationScan } from './postgres-c36-activation.mjs';
 import { validatePostgresC51ActivationScan } from './postgres-c51-activation.mjs';
+import { validateC54Scan } from './postgres-c54-activation.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
 import { overlayForSet } from './os-package-overlay-registry.mjs';
@@ -26,7 +27,7 @@ const LIBRARY_PATCH_SETS = new Set(['c43-tempo', 'c43-loki', 'c43-alloy', 'c43-g
   'c48-keycloak', 'c48-alloy', ...C50_COMPONENTS.map(component => 'c50-' + component)]);
 const MYSQL_REFRESH_SETS = new Set(['c37-mysql', 'c46-mysql']);
 // Official OS package refreshes of the accepted C36 PostgreSQL; the database cutover stays separate.
-const POSTGRES_REFRESH_SETS = new Set(['c51-postgres']);
+const POSTGRES_REFRESH_SETS = new Set(['c51-postgres','c54-postgres']);
 const REGISTRY_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;
 const PUBLICATION_FILE = /^(?:publication\.json|build-metadata\.json|known-runtime-dependencies\.json|vulnerabilities\.[A-Za-z0-9.-]+)$/;
 const ANONYMOUS_FILE = /^(?:anonymous-(?:download|image-inspect|job-failure)\.json|anonymous-pull\.(?:stdout|stderr)\.log|before-(?:image-ids|reference-inspect)\.txt|docker-client-isolation\.json)$/;
@@ -191,7 +192,9 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
       ? 'Official OS package overlay comparison and parent-issuer authentication/rollback acceptance'
       : 'Official OS package overlay comparison binding the unchanged Alloy binary review' };
   }
-  if (POSTGRES_REFRESH_SETS.has(manifestSet)) {
+  if (manifestSet === 'c54-postgres') {
+    await validateC54Scan(publication,entry.publication.path,read);
+  } else if (POSTGRES_REFRESH_SETS.has(manifestSet)) {
     await validatePostgresC51ActivationScan(publication, entry.publication.path, read);
   } else if (component === 'postgres') {
     await validatePostgresC36ActivationScan(publication, entry.publication.path, read);
@@ -203,7 +206,7 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
   }
   const activationReady = component !== 'postgres' && !MYSQL_REFRESH_SETS.has(manifestSet);
   return { entry, activationReady,
-    ...(component === 'postgres' ? { remaining: POSTGRES_REFRESH_SETS.has(manifestSet)
+    ...(component === 'postgres' ? { remaining: manifestSet === 'c54-postgres' ? 'PostgreSQL 17.11 to 17.12 same-volume upgrade and rollback with the active issuer' : POSTGRES_REFRESH_SETS.has(manifestSet)
       ? 'same-volume C36 -> C51 PostgreSQL acceptance and active Keycloak coupling'
       : 'same-volume PostgreSQL acceptance and C35 Keycloak coupling' } : {}),
     ...(MYSQL_REFRESH_SETS.has(manifestSet) ? { remaining: 'published-digest MySQL rehearsal and coordinated database cutover' } : {}) };

@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OwnerManualCardPaymentApprovalTelegramCallbackServiceTest {
 
+    @Mock private com.hunt.otziv.common_billing.api.CommonOwnerReceiptConfirmation commonReceipts;
     @Mock private PaymentLinkService paymentLinkService;
     @Mock private UserService userService;
     @Mock private TelegramService telegramService;
@@ -205,12 +206,28 @@ class OwnerManualCardPaymentApprovalTelegramCallbackServiceTest {
         verifyNoInteractions(telegramService, notificationService);
     }
 
+    @Test
+    void commonInvoiceCopyInTheAdminsOwnChatUsesTheLinkedActor() {
+        String token = "a".repeat(32);
+        User admin = user(7L, "alex", 100L, "ROLE_ADMIN");
+        when(userService.findByChatId(100L)).thenReturn(Optional.of(admin));
+        when(commonReceipts.confirm(eq(token), eq(100L), any())).thenAnswer(call -> {
+            assertEquals("alex", SecurityContextHolder.getContext().getAuthentication().getName());
+            return new com.hunt.otziv.common_billing.api.CommonOwnerReceiptConfirmation.Result(314, false);
+        });
+        assertTrue(service().handle(callback("common-owner:" + token, 100L, 100L)).orElseThrow().contains("№314"));
+        assertTrue(service().handle(callback("common-owner:" + token, 100L, 200L)).orElseThrow().contains("недоступна"));
+        assertTrue(SecurityContextHolder.getContext().getAuthentication() == null);
+        verifyNoInteractions(paymentLinkService);
+    }
+
     private OwnerManualCardPaymentApprovalTelegramCallbackService service() {
         return new OwnerManualCardPaymentApprovalTelegramCallbackService(
                 paymentLinkService,
                 userService,
                 telegramService,
-                notificationService
+                notificationService,
+                commonReceipts
         );
     }
 

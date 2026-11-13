@@ -155,24 +155,31 @@ export async function validatePostgresC51Acceptance(entry,read){
 
 // Capture reads the local prod-like C36/C48 pair; replay restores it, upgrades the
 // same volume to C51 under C48, then proves both rollback paths back to C36.
-export async function validatePostgresC51Rehearsal(value,read){
+const c51Transition = {generation:'c51', source:PARENT_REFERENCE, sourceConfig:PARENT_CONFIG_ID, targetVersion:'17.11', checks:C51_REQUIRED_CHECKS};
+
+export function validatePostgresC51Rehearsal(value,read){
+  return validatePostgresRehearsal(value,read,c51Transition);
+}
+
+export async function validatePostgresRehearsal(value,read,transition){
+  const {generation,source,sourceConfig,targetVersion,checks} = transition;
   const capture=JSON.parse(await read(value.capturePath)),replay=JSON.parse(await read(value.replayPath));
   for(const record of [capture,replay]){
-    assert.equal(record.schema,'otziv-postgres-c51-rehearsal-v1','postgres_c51_rehearsal_schema');
+    assert.equal(record.schema,'otziv-postgres-'+generation+'-rehearsal-v1','postgres_c51_rehearsal_schema');
     assert.equal(record.result,'PASS','postgres_c51_rehearsal_failed');
     assert.equal(record.productionWrites,false,'postgres_c51_rehearsal_production_write');
     assert.equal(record.privateRowsPublished,false,'postgres_c51_rehearsal_private_rows');
     assert.equal(record.publishedPorts,0,'postgres_c51_rehearsal_published_ports');
     assert.equal(record.sourceScope,'LOCAL_PROD_LIKE_KEYCLOAK','postgres_c51_rehearsal_scope');
-    assert.equal(record.sourcePostgres,PARENT_REFERENCE,'postgres_c51_rehearsal_parent');
-    assert.equal(record.sourcePostgresConfig,PARENT_CONFIG_ID,'postgres_c51_rehearsal_parent_config');
+    assert.equal(record.sourcePostgres,source,'postgres_c51_rehearsal_parent');
+    assert.equal(record.sourcePostgresConfig,sourceConfig,'postgres_c51_rehearsal_parent_config');
     assert.equal(record.keycloak,C48_KEYCLOAK_REFERENCE,'postgres_c51_rehearsal_issuer');
     assert.equal(record.keycloakConfig,C48_KEYCLOAK_CONFIG,'postgres_c51_rehearsal_issuer_config');
-    assert.equal(record.executedScriptSha256,value.executedSources?.[SOURCE+'postgres-c51-rehearsal.py'],
+    assert.equal(record.executedScriptSha256,value.executedSources?.[SOURCE+'postgres-'+generation+'-rehearsal.py'],
       'postgres_c51_rehearsal_script');
   }
   checksPassed(capture,CAPTURE_CHECKS,'postgres_c51_rehearsal');
-  checksPassed(replay,C51_REQUIRED_CHECKS,'postgres_c51_rehearsal');
+  checksPassed(replay,checks,'postgres_c51_rehearsal');
   assert.equal(replay.candidatePostgres,value.reference,'postgres_c51_rehearsal_candidate');
   sameId(replay.candidatePostgresLocalId,value.imageConfigId,value.reference);
   assert.equal(replay.candidate,C48_KEYCLOAK_REFERENCE,'postgres_c51_rehearsal_candidate_keycloak');
@@ -184,12 +191,15 @@ export async function validatePostgresC51Rehearsal(value,read){
   assert.equal(replay.tableCount,102,'postgres_c51_rehearsal_table_coverage');
   assert.equal(replay.stableTableCount,102,'postgres_c51_rehearsal_stable_coverage');
   assert.equal(replay.sourceDatabase?.serverVersion,'17.11','postgres_c51_rehearsal_server_version');
-  for(const field of DATABASE_FIELDS)
+  assert.equal(replay.sourceDatabase.serverVersionNumber,'170011');
+  assert.equal(replay.candidateDatabase?.serverVersion,targetVersion,'postgres_rehearsal_database_changed:serverVersion');
+  assert.equal(replay.candidateDatabase?.serverVersionNumber,targetVersion==='17.12'?'170012':'170011','postgres_rehearsal_database_changed:serverVersionNumber');
+  for(const field of DATABASE_FIELDS.filter(key=>!['serverVersion','serverVersionNumber'].includes(key)))
     assert.deepEqual(replay.candidateDatabase?.[field],replay.sourceDatabase?.[field],
       'postgres_c51_rehearsal_database_changed:'+field);
   const windowBytes=await read(value.captureWindowPath);
-  validatePostgresC51CaptureWindow(JSON.parse(windowBytes),capture,value.files?.[value.capturePath],
-    value.executedSources?.[SOURCE+'postgres-c51-capture-window.py']);
+  validateCaptureWindow(JSON.parse(windowBytes),capture,value.files?.[value.capturePath],
+    value.executedSources?.[SOURCE+'postgres-'+generation+'-capture-window.py'],transition);
   return replay;
 }
 
@@ -197,7 +207,12 @@ export async function validatePostgresC51Rehearsal(value,read){
 // database and C48 issuer were moved to a labelled temporary --internal network only
 // for the capture and restored to their Compose network, aliases and addresses.
 export function validatePostgresC51CaptureWindow(window,capture,captureSha256,sourceSha256){
-  assert.equal(window.schema,'otziv-postgres-c51-capture-window-v1','postgres_c51_window_schema');
+  return validateCaptureWindow(window,capture,captureSha256,sourceSha256,c51Transition);
+}
+
+function validateCaptureWindow(window,capture,captureSha256,sourceSha256,transition){
+  const {generation,source:databaseSource,sourceConfig} = transition;
+  assert.equal(window.schema,'otziv-postgres-'+generation+'-capture-window-v1','postgres_c51_window_schema');
   assert.equal(window.result,'PASS','postgres_c51_window_failed');
   assert.match(sourceSha256||'',/^[a-f0-9]{64}$/,'postgres_c51_window_source_missing');
   assert.equal(window.executedScriptSha256,sourceSha256,'postgres_c51_window_executed_script');
@@ -206,17 +221,17 @@ export function validatePostgresC51CaptureWindow(window,capture,captureSha256,so
   assert.ok(['npipe','unix'].includes(window.dockerEndpoint),'postgres_c51_window_local_docker');
   assert.equal(window.originalNetwork,'otziv-prod-local_internal_net','postgres_c51_window_original_network');
   const temporary=window.temporaryNetwork?.name;
-  assert.match(temporary||'',/^otziv-postgres-c51-capture-[a-f0-9]{12}$/,'postgres_c51_window_temporary_network');
-  assert.equal(window.temporaryNetwork.label,'com.otziv.postgres-c51-capture.owner='+temporary.slice(-12),
+  assert.match(temporary||'',new RegExp('^otziv-postgres-'+generation+'-capture-[a-f0-9]{12}$'),'postgres_c51_window_temporary_network');
+  assert.equal(window.temporaryNetwork.label,'com.otziv.postgres-'+generation+'-capture.owner='+temporary.slice(-12),
     'postgres_c51_window_ownership');
   assert.equal(window.temporaryNetwork.internal,true,'postgres_c51_window_not_internal');
   assert.equal(window.temporaryNetworkRemaining,0,'postgres_c51_window_network_leak');
-  const images={keycloak:C48_KEYCLOAK_REFERENCE,'keycloak-postgres':PARENT_REFERENCE};
+  const images={keycloak:C48_KEYCLOAK_REFERENCE,'keycloak-postgres':databaseSource};
   assert.deepEqual(Object.keys(window.before||{}).sort(),Object.keys(images).sort(),'postgres_c51_window_services');
   const keys=['id','imageId','startedAt','restarts','running','networks','portBindings'];
   for(const [service,reference]of Object.entries(images)){
     const before=window.before[service],after=window.after?.[service],isolated=window.isolated?.[service];
-    const config=service==='keycloak'?C48_KEYCLOAK_CONFIG:PARENT_CONFIG_ID;
+    const config=service==='keycloak'?C48_KEYCLOAK_CONFIG:sourceConfig;
     assert.ok([config,'sha256:'+reference.split('@sha256:')[1]].includes(before.imageId),'postgres_c51_window_image:'+service);
     assert.deepEqual([before.running,before.networks,before.portBindings],[true,[window.originalNetwork],{}],
       'postgres_c51_window_source_state:'+service);

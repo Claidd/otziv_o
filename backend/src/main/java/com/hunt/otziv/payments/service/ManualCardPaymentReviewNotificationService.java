@@ -257,7 +257,8 @@ public class ManualCardPaymentReviewNotificationService {
             log.warn("Не удалось создать напоминание source={}, sourceId={}, userId={}",
                     source, sourceId, recipient.getId(), exception);
         }
-        if (recipient.getTelegramChatId() == null) {
+        // Common owner reports have a separate, durable button delivery to the owner's group and admin copy.
+        if (COMMON_INVOICE_OWNER_APPROVAL_REMINDER_SOURCE.equals(source) || recipient.getTelegramChatId() == null) {
             return;
         }
         try {

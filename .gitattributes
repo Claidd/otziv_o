@@ -216,3 +216,8 @@ infrastructure/runtime-security/postgres-c51-capture-window.py text eol=lf
 infrastructure/runtime-security/c51-parent-postgres.json text eol=lf
 # C51 acceptance binds the scanner log byte for byte, including its trailing blank line.
 infrastructure/runtime-security/proofs/c51-postgres/publication/vulnerabilities.scanner.log -whitespace
+
+# PostgreSQL 17.12 publication and transition evidence.
+infrastructure/runtime-security/builds/postgres-17.12/** text eol=lf
+infrastructure/runtime-security/*c54* text eol=lf
+infrastructure/runtime-security/proofs/c54-postgres/publication/vulnerabilities.scanner.log -whitespace

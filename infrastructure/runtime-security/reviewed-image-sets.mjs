@@ -134,6 +134,7 @@ const EXPLICIT_RELEASE_SETS = {
   'c52-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c52-nginx.json', context: 'infrastructure/runtime-security/builds/c52-nginx', dockerfile: 'infrastructure/runtime-security/builds/c52-nginx/Dockerfile' },
   // C53 adds only the official Alpine apache2 2.4.71-r0 (CVE-2026-119618) to the accepted C50 phpMyAdmin.
   'c53-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c53-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c53-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c53-phpmyadmin/Dockerfile' },
+  'c54-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c54-postgres.json', context: 'infrastructure/runtime-security/builds/postgres-17.12', dockerfile: 'infrastructure/runtime-security/builds/postgres-17.12/Dockerfile' },
 };
 // Later official OS package overlays are registered data (os-package-overlays.json).
 const RELEASE_SETS = Object.freeze({ ...EXPLICIT_RELEASE_SETS, ...overlayReleaseSets(EXPLICIT_RELEASE_SETS) });
