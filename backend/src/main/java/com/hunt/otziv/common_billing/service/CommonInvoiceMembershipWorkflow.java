@@ -67,7 +67,8 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Slf4j
 @RequiredArgsConstructor
 public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_billing.api.PublicationInvoiceCompletion,
-        com.hunt.otziv.common_billing.api.CommonInvoiceOrderDeletion {
+        com.hunt.otziv.common_billing.api.CommonInvoiceOrderDeletion,
+        com.hunt.otziv.common_billing.api.RestoredOrderInvoiceMembership {
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
 
@@ -135,6 +136,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         return attachOrderByIdIfNeeded(order == null ? null : order.getId());
     }
 
+    @Override
     @Transactional
     public boolean attachOrderByIdIfNeeded(Long orderId) {
         if (orderId == null) {

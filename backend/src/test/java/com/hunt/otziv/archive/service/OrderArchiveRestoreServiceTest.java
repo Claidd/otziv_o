@@ -12,8 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class OrderArchiveRestoreServiceTest {
-    private final com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow membership =
-            mock(com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow.class);
+    private final com.hunt.otziv.common_billing.api.RestoredOrderInvoiceMembership membership =
+            mock(com.hunt.otziv.common_billing.api.RestoredOrderInvoiceMembership.class);
 
     @Test
     void publishedIsAnAllowedIntermediateStatusForArchivedPayment() {
