@@ -108,11 +108,11 @@ at process exit retains its fsynced claim and becomes UNKNOWN after restart.
 Configure container stop grace longer than the drain interval plus cleanup margin.
 Replace one gateway at a time; never start a duplicate live WhatsApp session.
 
-The reviewed dependency pair is whatsapp-web.js 1.34.7 / Puppeteer 25.10.0,
+The reviewed dependency pair is whatsapp-web.js 1.34.8 / Puppeteer 25.13.0,
 requiring Node >=22.12.0. `puppeteer-compatibility.js` adapts the removed
 `Browser.isConnected()` through the auth-strategy hook to `Browser.connected`.
 The explicit override replaces Puppeteer 24's vulnerable extract-zip dependency.
 `npm run smoke:compatibility` uses real local/remote Puppeteer and wwebjs lifecycle,
-request interception, injected fixture messaging/history and teardown; it contacts
+delayed socket initialization, request interception, fixture messaging/history and teardown; it contacts
 no real WhatsApp account. Live authentication/provider compatibility remains a
 separate rollout check. `npm test` uses fakes/local HTTP and no real messages.
