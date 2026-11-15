@@ -4,6 +4,7 @@ import com.hunt.otziv.archive.dto.ArchiveCandidateCounts;
 import com.hunt.otziv.archive.dto.ArchiveRestoreResult;
 import com.hunt.otziv.archive.exception.ArchiveRestoreConflictException;
 import com.hunt.otziv.archive.repository.OrderArchiveRestoreRepository;
+import com.hunt.otziv.common_billing.service.CommonInvoiceMembershipWorkflow;
 import java.time.LocalDateTime;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,16 @@ public class OrderArchiveRestoreService {
     );
 
     private final OrderArchiveRestoreRepository repository;
+    private final CommonInvoiceMembershipWorkflow membership;
+
+    @Transactional
+    public ArchiveRestoreResult restoreIndividualOrder(Long orderId, String targetStatus, String restoredBy, boolean confirm) {
+        ArchiveRestoreResult result = restoreOrder(orderId, targetStatus, restoredBy, confirm);
+        if (MANUAL_WORK_TARGETS.contains(result.targetStatus()) || "Публикация".equals(result.targetStatus())) {
+            membership.attachOrderByIdIfNeeded(orderId);
+        }
+        return result;
+    }
 
     @Transactional
     public ArchiveRestoreResult restoreOrder(
