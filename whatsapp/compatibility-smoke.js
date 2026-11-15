@@ -63,6 +63,29 @@ async function exercise(client) {
   assert.equal((await client.getMessageById(sent.id._serialized)).body, "local fixture message");
 }
 
+// The landing page can expose Debug.VERSION before it registers the socket module.
+async function exerciseDelayedSocket(browser) {
+  const page = await browser.newPage();
+  try {
+    await page.evaluate(() => {
+      window.Debug = { VERSION: "fixture" };
+      window.socketLookups = 0;
+      window.require = name => {
+        if (name !== "WAWebSocketModel" || ++window.socketLookups === 1) return null;
+        return { Socket: { state: "UNPAIRED" } };
+      };
+    });
+    const client = new Client({ authTimeoutMs: 5000 });
+    const pairingReached = new Error("Offline fixture reached pairing");
+    client.pupPage = page;
+    client.authStrategy.onAuthenticationNeeded = async () => { throw pairingReached; };
+    await assert.rejects(client.inject(), error => error === pairingReached);
+    assert.ok(await page.evaluate(() => window.socketLookups >= 2));
+  } finally {
+    await page.close();
+  }
+}
+
 async function main() {
   const launchOptions = { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium",
     headless: true, timeout: 30000, protocolTimeout: 30000, args: chromiumLaunchArgs("") };
@@ -72,6 +95,7 @@ async function main() {
   const owner = await puppeteer.launch(launchOptions);
   let remote;
   try {
+    await exerciseDelayedSocket(owner);
     remote = installRemoteBrowserLifecycle(fixtureClient({ browserWSEndpoint: owner.wsEndpoint(), timeout: 30000 }));
     await exercise(remote);
     await remote.destroy();

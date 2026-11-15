@@ -106,7 +106,7 @@ public class ReviewCheckArchiveService {
             );
         }
 
-        return restoreService.restoreOrder(candidate.orderId(), targetStatus, restoredBy, true);
+        return restoreService.restoreIndividualOrder(candidate.orderId(), targetStatus, restoredBy, true);
     }
 
     private Optional<ArchivedRestoreCandidate> findRestoreCandidate(UUID orderDetailId) {

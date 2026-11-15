@@ -12,6 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class OrderArchiveRestoreServiceTest {
+    private final com.hunt.otziv.common_billing.api.RestoredOrderInvoiceMembership membership =
+            mock(com.hunt.otziv.common_billing.api.RestoredOrderInvoiceMembership.class);
 
     @Test
     void publishedIsAnAllowedIntermediateStatusForArchivedPayment() {
@@ -32,7 +34,7 @@ class OrderArchiveRestoreServiceTest {
                 any()
         )).thenReturn(91L);
 
-        var result = new OrderArchiveRestoreService(repository)
+        var result = new OrderArchiveRestoreService(repository, membership)
                 .restoreOrder(22752L, "Опубликовано", "manager", true);
 
         assertThat(result.targetStatus()).isEqualTo("Опубликовано");
@@ -60,7 +62,7 @@ class OrderArchiveRestoreServiceTest {
         when(repository.findPaymentState(501L))
                 .thenReturn(new OrderArchiveRestoreRepository.ArchivePaymentState("Бан", false));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new OrderArchiveRestoreService(repository)
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new OrderArchiveRestoreService(repository, membership)
                         .restoreOrder(501L, "Оплачено", "manager", true))
                 .isInstanceOf(com.hunt.otziv.archive.exception.ArchiveRestoreConflictException.class);
         org.mockito.Mockito.verify(repository, org.mockito.Mockito.never()).restoreOrder(any(), any());
@@ -73,7 +75,7 @@ class OrderArchiveRestoreServiceTest {
         when(repository.findPaymentState(502L))
                 .thenReturn(new OrderArchiveRestoreRepository.ArchivePaymentState("Оплачено", true));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new OrderArchiveRestoreService(repository)
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new OrderArchiveRestoreService(repository, membership)
                         .restoreOrder(502L, "Новый", "admin", true))
                 .isInstanceOf(com.hunt.otziv.archive.exception.ArchiveRestoreConflictException.class);
         org.mockito.Mockito.verify(repository, org.mockito.Mockito.never()).restoreOrder(any(), any());
@@ -87,7 +89,8 @@ class OrderArchiveRestoreServiceTest {
                 .thenReturn(new OrderArchiveRestoreRepository.ArchivePaymentState("Архив", false));
         when(repository.restoreOrder(503L, 3L)).thenReturn(rows);
 
-        new OrderArchiveRestoreService(repository).restoreOrder(503L, "Коррекция", "manager", true);
+        new OrderArchiveRestoreService(repository, membership).restoreIndividualOrder(503L, "Коррекция", "manager", true);
+        verify(membership).attachOrderByIdIfNeeded(503L);
 
         verify(repository).clearCompletionMarkers(503L);
     }

@@ -321,6 +321,11 @@ public class OrderStatusTransitionService {
             };
             if (!changed) {
                 order.setClientMessageGeneration(previousMessageGeneration);
+            } else if (STATUS_ARCHIVE.equals(oldStatus) && COMPLETED_ORDER_REOPEN_STATUSES.contains(safeStatusTitle(order))) {
+                CommonBillingService billing = commonBillingServiceProvider.getIfAvailable();
+                if (billing != null) {
+                    billing.attachOrderIfNeeded(order);
+                }
             }
             recordStatusAudit(order, oldStatus, safeStatusTitle(order), title, changed,actor,explicitActor);
             return changed;

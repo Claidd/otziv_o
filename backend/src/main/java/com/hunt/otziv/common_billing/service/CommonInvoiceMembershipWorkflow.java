@@ -67,7 +67,8 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Slf4j
 @RequiredArgsConstructor
 public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_billing.api.PublicationInvoiceCompletion,
-        com.hunt.otziv.common_billing.api.CommonInvoiceOrderDeletion {
+        com.hunt.otziv.common_billing.api.CommonInvoiceOrderDeletion,
+        com.hunt.otziv.common_billing.api.RestoredOrderInvoiceMembership {
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
 
@@ -132,22 +133,28 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
 
     @Transactional
     public boolean attachOrderIfNeeded(Order order) {
-        if (order == null || order.getId() == null) {
+        return attachOrderByIdIfNeeded(order == null ? null : order.getId());
+    }
+
+    @Override
+    @Transactional
+    public boolean attachOrderByIdIfNeeded(Long orderId) {
+        if (orderId == null) {
             return false;
         }
-        Long companyId = orderRepository.findCompanyIdByOrderId(order.getId()).orElse(null);
+        Long companyId = orderRepository.findCompanyIdByOrderId(orderId).orElse(null);
         if (companyId == null) {
             return false;
         }
-        if (invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(order.getId()).isPresent()) {
+        if (invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId).isPresent()) {
             return true;
         }
         Optional<CommonBillingAccount> account = enabledAccountForCompany(companyId);
         if (account.isEmpty()) {
             return false;
         }
-        CommonInvoiceOrder item = attachOrderToCurrentInvoice(account.get(), order.getId(), companyId);
-        log.info("Order {} attached to common invoice {} for account {}", order.getId(), item.getInvoice().getId(), account.get().getId());
+        CommonInvoiceOrder item = attachOrderToCurrentInvoice(account.get(), orderId, companyId);
+        log.info("Order {} attached to common invoice {} for account {}", orderId, item.getInvoice().getId(), account.get().getId());
         return true;
     }
 

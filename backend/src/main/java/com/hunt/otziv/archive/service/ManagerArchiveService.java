@@ -132,7 +132,7 @@ public class ManagerArchiveService {
         }
 
         String restoredBy = principal == null ? null : principal.getName();
-        return restoreService.restoreOrder(orderId, targetStatus, restoredBy, confirm);
+        return restoreService.restoreIndividualOrder(orderId, targetStatus, restoredBy, confirm);
     }
 
     @Transactional
