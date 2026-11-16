@@ -1,11 +1,13 @@
 import { ChangeDetectionStrategy } from '@angular/core';
-import { Component, OnDestroy, signal } from '@angular/core';
+import { Component, DestroyRef, OnDestroy, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { IonContent } from '@ionic/angular';
 import { ApiService, WhatsAppClientStatus } from '../core/api.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { VisibilityAwarePoller, backoffDelayMs } from '../shared/visibility-aware-poller';
 
 const WHATSAPP_STATUS_POLL_MS = 6000;
+const WHATSAPP_CONNECTED_POLL_MS = 30_000;
 const WHATSAPP_STATUS_MAX_BACKOFF_MS = 60_000;
 
 @Component({
@@ -89,14 +91,14 @@ export class WhatsAppBindPage implements OnDestroy {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   private failedLoads = 0;
-  // The QR code rotates, so it is re-read every 6 s while waiting for a scan;
-  // nothing is requested while the app is in the background, and errors back off.
+  private requestPending = false;
+  private readonly destroyRef = inject(DestroyRef);
   private readonly poller = new VisibilityAwarePoller(() => {
-    const current = this.status();
-    if (!current?.ready && current?.configured !== false) {
+    if (this.status()?.configured !== false) {
       this.loadStatus(false);
     }
-  }, () => backoffDelayMs(WHATSAPP_STATUS_POLL_MS, this.failedLoads, WHATSAPP_STATUS_MAX_BACKOFF_MS));
+  }, () => backoffDelayMs(this.status()?.ready ? WHATSAPP_CONNECTED_POLL_MS : WHATSAPP_STATUS_POLL_MS,
+    this.failedLoads, WHATSAPP_STATUS_MAX_BACKOFF_MS));
 
   constructor(private readonly api: ApiService) {
     this.loadStatus();
@@ -108,17 +110,23 @@ export class WhatsAppBindPage implements OnDestroy {
   }
 
   loadStatus(showLoading = true): void {
+    if (this.requestPending) return;
+    this.requestPending = true;
     if (showLoading) {
       this.loading.set(true);
     }
     this.error.set(null);
-    this.api.getWhatsAppBindingStatus().subscribe({
+    this.api.getWhatsAppBindingStatus().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (status) => {
+        this.requestPending = false;
         this.failedLoads = 0;
         this.status.set(status);
+        this.poller.reschedule();
         this.loading.set(false);
       },
       error: (error) => {
+        this.requestPending = false;
+        this.status.set(null);
         this.failedLoads += 1;
         this.poller.reschedule();
         this.error.set(this.errorMessage(error));

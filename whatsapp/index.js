@@ -439,6 +439,7 @@ async function createClient() {
     const browserURL = await resolveRemoteBrowserUrl(WHATSAPP_BROWSER_URL);
     const generation = await remoteSessionFence.begin(browserURL);
     const instance = new Client({
+      authTimeoutMs: Math.min(WHATSAPP_PUPPETEER_TIMEOUT_MS, WHATSAPP_STARTUP_READY_TIMEOUT_MS),
       // Authentication lives in the persistent peoples profile. Disabling the
       // library UA override preserves the fingerprint already applied by peoples.
       userAgent: false,
@@ -466,6 +467,7 @@ async function createClient() {
   removeStaleChromiumLocks(AUTH_PATH, { exclusiveOwner: ownsAuthVolume(), log });
   const launchArgs = chromiumLaunchArgs(proxyServerArg());
   return installDocumentMediaCompatibility(installMessageIdentityCompatibility(installPuppeteerCompatibility(new Client({
+    authTimeoutMs: Math.min(WHATSAPP_PUPPETEER_TIMEOUT_MS, WHATSAPP_STARTUP_READY_TIMEOUT_MS),
     authStrategy: new LocalAuth({
       clientId: CLIENT_ID,
       dataPath: AUTH_PATH,
@@ -490,8 +492,10 @@ function wireClientEvents(instance, current, trackEvent) {
   instance.on("qr", async (qr) => {
     if (!current()) return;
     currentQr = qr;
+    currentQrDataUrl = null;
     lastQrAt = new Date().toISOString();
     lastState = "qr";
+    lastError = null;
     ready = false;
     authenticated = false;
     authenticatedAt = null;
@@ -513,6 +517,8 @@ function wireClientEvents(instance, current, trackEvent) {
 
   instance.on("authenticated", () => {
     if (!current()) return;
+    currentQr = null;
+    currentQrDataUrl = null;
     authenticated = true;
     authenticatedAt = new Date().toISOString();
     lastState = "authenticated";
@@ -521,6 +527,8 @@ function wireClientEvents(instance, current, trackEvent) {
 
   instance.on("auth_failure", (message) => {
     if (!current()) return;
+    currentQr = null;
+    currentQrDataUrl = null;
     authenticated = false;
     ready = false;
     authenticatedAt = null;
@@ -1022,17 +1030,19 @@ app.post("/internal/inbox-dead-letters/:key/retry", (req, res) => {
 });
 
 app.get("/qr", asyncRoute(async (req, res) => {
-  if (!currentQr) {
+  res.set("Cache-Control", "no-store");
+  const qr = currentQr;
+  if (qr && !currentQrDataUrl) {
+    const image = await QRCode.toDataURL(qr);
+    if (currentQr === qr) currentQrDataUrl = image;
+  }
+  if (!currentQr || !currentQrDataUrl) {
     res.status(404).json({
       ...statusPayload(),
       status: "qr_unavailable",
       message: ready ? "Client is already ready" : "QR has not been emitted yet",
     });
     return;
-  }
-
-  if (!currentQrDataUrl) {
-    currentQrDataUrl = await QRCode.toDataURL(currentQr);
   }
 
   res.json({
