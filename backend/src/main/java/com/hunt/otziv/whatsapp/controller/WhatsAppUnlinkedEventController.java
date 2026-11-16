@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController @RequiredArgsConstructor
 public class WhatsAppUnlinkedEventController {
@@ -19,5 +20,7 @@ public class WhatsAppUnlinkedEventController {
     /** The admin notice each group with open messages gets (or got), as Telegram HTML; sends nothing. */
     @GetMapping("/api/whatsapp/unlinked-events/notices")
     @PreAuthorize("hasAnyRole('OWNER','ADMIN')")
-    public List<WhatsAppUnlinkedGroupNotifier.Preview> notices() {return notices.previews();}
+    public List<WhatsAppUnlinkedGroupNotifier.Preview> notices(@RequestParam(defaultValue="0") int offset) {
+        return notices.previews(Math.max(0, offset));
+    }
 }

@@ -11,6 +11,9 @@ import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerServic
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
+import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
@@ -36,6 +39,7 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
     WhatsAppUnlinkedEventRecovery recovery;
     WhatsAppUnlinkedGroupNotifier notifier;
     TelegramService telegram;
+    WhatsAppService whatsApp;
     ClientChatParticipantClassifier participants;
     DriverManagerDataSource ds;
     WhatsAppGroupReplyDTO reply;
@@ -65,7 +69,8 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
         var transactions=new DataSourceTransactionManager(ds);
         receipts=new WhatsAppGroupWebhookDeduplicator(jdbc,transactions);
         telegram=mock(TelegramService.class);participants=mock(ClientChatParticipantClassifier.class);
-        notifier=new WhatsAppUnlinkedGroupNotifier(store,jdbc,participants,telegram);
+        whatsApp=mock(WhatsAppService.class);
+        notifier=new WhatsAppUnlinkedGroupNotifier(store,jdbc,participants,telegram,whatsApp);
         recovery=new WhatsAppUnlinkedEventRecovery(store,service,transactions,notifier);
         reply=new WhatsAppGroupReplyDTO("client","group@g.us","Company","sender@c.us","Client","external-message",1793635200L,false,false,"Нужен ответ");
     }
@@ -94,6 +99,9 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
         return html.getValue();
     }
     long noticeQueue() {return store.noticeQueueHealth().getFirst().jobs();}
+    void quietPeriodElapsed() {
+        jdbc.update("UPDATE whatsapp_unlinked_events SET created_at=NOW(6)-INTERVAL 3 MINUTE WHERE admin_notified_at IS NULL");
+    }
     long notified() {return jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_unlinked_events WHERE admin_notified_at IS NOT NULL",Long.class);}
     void bind() {
         var company=new Company();company.setGroupId(reply.getGroupId());
@@ -127,12 +135,13 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
         accept();
         noticeMigration();
         assertThat(jdbc.queryForObject("SELECT admin_notified_at=created_at FROM whatsapp_unlinked_events",Boolean.class)).isTrue();
-        assertThat(store.noticeDueGroups(10)).isEmpty();
+        assertThat(store.dueNotices()).isEmpty();
         assertThat(noticeQueue()).isZero();
     }
     @Test void aNoticeNamesTheGroupAuthorTextAndTheCompanyLinkedElsewhereAndIsMarkedOnlyAfterTelegramAcceptedIt() {
         seedMediafix();
         accept(mediafix("bill","Авто СПА, Mediafix - Mediafix,Полярная\n\nЗдравствуйте, ваш заказ выполнен. К оплате: 2400 руб."));
+        quietPeriodElapsed();
         assertThat(noticeQueue()).isEqualTo(1);
         when(telegram.sendHtmlAlertToAdmins(anyString())).thenReturn(false);
         recovery.recover();
@@ -147,7 +156,7 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
                 .contains("<b>Аккаунт:</b> whatsapp_vika (Вика Ц.)")
                 .contains("<b>Написал(а):</b> Мария — сотрудник, 08.11 20:59")
                 .contains("К оплате: 2400 руб.")
-                .contains("компания не найдена ни по этой группе")
+                .contains("не удалось определить компанию для этой группы")
                 // The same title first; inactive companies are left out.
                 .contains("• Mediafix — Бан, Анжелика Б. В статусе «Бан» группа к ней не привязывается.\n"
                         +"• Авто СПА, Mediafix — В работе, Вика Ц. Уже привязана к другой группе «АБ Авто СПА 2 гис».")
@@ -157,7 +166,7 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
 
         recovery.recover();
         verify(telegram,times(2)).sendHtmlAlertToAdmins(anyString());
-        assertThat(notifier.previews()).singleElement().satisfies(preview->{
+        assertThat(notifier.previews(0)).singleElement().satisfies(preview->{
             assertThat(preview.groupId()).isEqualTo("mediafix@g.us");
             assertThat(preview.html()).isEqualTo(html);
         });
@@ -166,13 +175,14 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
         seedMediafix();
         when(telegram.sendHtmlAlertToAdmins(anyString())).thenReturn(true);
         accept(mediafix("first","Первое"));
+        quietPeriodElapsed();
         recovery.recover();
         accept(mediafix("second","Второе"));
         accept(mediafix("third","Третье"));
         recovery.recover();
         verify(telegram,times(1)).sendHtmlAlertToAdmins(anyString());
         // Waiting out the pause is not a delayed notice.
-        assertThat(store.noticeDueGroups(10)).isEmpty();
+        assertThat(store.dueNotices()).isEmpty();
         assertThat(noticeQueue()).isZero();
 
         // The notice went out 5 hours ago and the two messages came 2 hours after it: due for an hour now.
@@ -180,7 +190,7 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
         jdbc.update("UPDATE whatsapp_unlinked_events SET created_at=created_at-INTERVAL 3 HOUR WHERE admin_notified_at IS NULL");
         var health=store.noticeQueueHealth().getFirst();
         assertThat(health.jobs()).isEqualTo(2);
-        assertThat(health.oldestSeconds()).isBetween(3500d,3700d);
+        assertThat(health.oldestSeconds()).isBetween(3450d,3550d);
         recovery.recover();
         assertThat(sentNotice()).contains("<b>Текст:</b> Третье").contains("<b>Новых сообщений:</b> 2, выше последнее");
         assertThat(notified()).isEqualTo(3);
@@ -189,7 +199,7 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
     @Test void aGroupLinkedBeforeTheNoticeIsNeverAnnounced() {
         seedMediafix();
         when(telegram.sendHtmlAlertToAdmins(anyString())).thenReturn(true);
-        accept();bind();
+        accept();quietPeriodElapsed();bind();
         recovery.recover();
         assertThat(store.unresolvedGroups()).isEmpty();
         verify(telegram,never()).sendHtmlAlertToAdmins(anyString());
@@ -197,10 +207,67 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
     }
     @Test void withSendingOffNothingIsAttemptedAndTheBacklogStaysVisible() {
         accept();
+        quietPeriodElapsed();
         recovery.recover();
         verify(telegram,never()).sendHtmlAlertToAdmins(anyString());
         assertThat(noticeQueue()).isEqualTo(1);
-        assertThat(notifier.previews()).singleElement().satisfies(preview->assertThat(preview.html())
+        assertThat(notifier.previews(0)).singleElement().satisfies(preview->assertThat(preview.html())
                 .contains("<b>Группа:</b> Company").contains("Похожих компаний</b> по названию группы нет"));
+    }
+
+    private WhatsAppGroupReplyDTO sticker(String client, int group, String messageId) {
+        return new WhatsAppGroupReplyDTO(client, group+"@g.us", "", "sender@c.us", "Мария",
+                messageId, 1794142749L, false, false, "[Вложение: sticker]");
+    }
+
+    @Test void aBurstAcrossTicksProducesOneBoundedDigestForEachAccountAndOnlyAcknowledgesItsSnapshot() {
+        when(telegram.canSendAdminAlerts()).thenReturn(true);
+        for (int i=0;i<56;i++) accept(sticker("whatsapp_vika", i, "m"+i));
+        accept(sticker("whatsapp_vika", 0, "second"));
+        accept(sticker("whatsapp_lika", 0, "other"));
+        when(whatsApp.groupsSnapshot("whatsapp_vika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo("0@g.us","Вика <Отзывы>",null)),true,false,null));
+        when(whatsApp.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(
+                List.of(new WhatsAppGroupInfo("0@g.us","Лика & Ко",null)),true,false,null));
+
+        assertThat(notifier.notifyDue()).isZero();
+        assertThat(noticeQueue()).isZero();
+        quietPeriodElapsed();
+        // Deterministic ordering puts group zero in the ten displayed examples.
+        jdbc.update("UPDATE whatsapp_unlinked_events SET created_at=created_at-INTERVAL 1 MINUTE WHERE group_id='0@g.us'");
+        when(telegram.sendHtmlAlertToAdmins(anyString())).thenAnswer(call -> {
+            if (call.getArgument(0,String.class).contains("whatsapp_vika")) {
+                accept(sticker("whatsapp_vika", 0, "arrived_during_send"));
+                assertThat(notifier.notifyDue()).isZero();
+            }
+            return true;
+        });
+        assertThat(notifier.notifyDue()).isEqualTo(57);
+        verify(telegram).sendHtmlAlertToAdmins(argThat(s -> s.contains("Групп:</b> 56") && s.contains("Сообщений:</b> 57")
+                && s.contains("стикеров:</b> 57") && s.contains("Вика &lt;Отзывы&gt;") && s.contains("Ещё групп: 46")
+                && !s.contains("Лика") && s.length()<4096));
+        verify(telegram).sendHtmlAlertToAdmins(argThat(s -> s.contains("Группа:</b> Лика &amp; Ко") && !s.contains("Вика")));
+        verify(whatsApp,times(1)).groupsSnapshot("whatsapp_vika");
+        assertThat(notified()).isEqualTo(58);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_unlinked_events WHERE admin_notified_at IS NULL",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_unlinked_events WHERE payload_json->>'$.groupName'<>'' OR completed_at IS NOT NULL",Integer.class)).isZero();
+        assertThat(notifier.notifyDue()).isZero();
+        verifyNoInteractions(tracker);
+        assertThat(notifier.previews(50)).hasSize(7);
+    }
+
+    @Test void continuousActivityFlushesAfterTenMinutesAndUnavailableDirectoryDoesNotBlockTheNotice() {
+        when(telegram.canSendAdminAlerts()).thenReturn(true);
+        accept(sticker("whatsapp_vika", 1, "first"));
+        jdbc.update("UPDATE whatsapp_unlinked_events SET created_at=NOW(6)-INTERVAL 11 MINUTE");
+        accept(sticker("whatsapp_vika", 2, "fresh"));
+        when(whatsApp.groupsSnapshot("whatsapp_vika")).thenReturn(WhatsAppService.GroupsSnapshot.unavailable());
+        assertThat(noticeQueue()).isEqualTo(2);
+        when(telegram.sendHtmlAlertToAdmins(anyString())).thenReturn(false,true);
+        assertThat(notifier.notifyDue()).isZero();
+        assertThat(notified()).isZero();
+        assertThat(notifier.notifyDue()).isEqualTo(2);
+        assertThat(sentNotice()).contains("1@g.us","2@g.us");
+        assertThat(noticeQueue()).isZero();
     }
 }

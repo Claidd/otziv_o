@@ -7,6 +7,8 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 import com.hunt.otziv.whatsapp.service.WhatsAppUnlinkedEventStore.NoticeBatch;
 import com.hunt.otziv.whatsapp.service.WhatsAppUnlinkedEventStore.NoticeGroup;
+import com.hunt.otziv.whatsapp.service.WhatsAppUnlinkedEventStore.AccountNotice;
+import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import com.hunt.otziv.whatsapp.service.WhatsAppUnlinkedGroupNotice.CompanyHint;
 import com.hunt.otziv.whatsapp.service.WhatsAppUnlinkedGroupNotice.LinkState;
 import com.hunt.otziv.whatsapp.service.WhatsAppUnlinkedGroupNotice.Sender;
@@ -15,10 +17,13 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.stereotype.Service;
 
 /**
@@ -32,7 +37,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @RequiredArgsConstructor
 public class WhatsAppUnlinkedGroupNotifier {
-    static final int GROUPS_PER_RUN = 10;
+    static final int PREVIEW_LIMIT = 10;
     static final int MAX_HINTS = 3;
     static final int MIN_CANDIDATE_LENGTH = 3;
     /** Unlinked messages are kept this long (see WhatsAppUnlinkedEventStore.expireStale). */
@@ -44,6 +49,7 @@ public class WhatsAppUnlinkedGroupNotifier {
     private final JdbcTemplate jdbc;
     private final ClientChatParticipantClassifier participants;
     private final TelegramService telegram;
+    private final WhatsAppService whatsApp;
 
     /** Sends the due notices; returns how many groups were announced. */
     public int notifyDue() {
@@ -51,54 +57,100 @@ public class WhatsAppUnlinkedGroupNotifier {
             // Sending is off (local stand) or not configured: the notice queue metric shows the backlog.
             return 0;
         }
+        // A second scheduler must not send the same snapshot while the first is talking to Telegram.
+        // This connection-scoped mutex does not lock inbound messages, companies or payment rows.
+        return jdbc.execute((ConnectionCallback<Integer>) connection -> {
+            try (var acquire = connection.prepareStatement("SELECT GET_LOCK('otziv.whatsapp.unlinked.notice',0)");
+                 var release = connection.prepareStatement("SELECT RELEASE_LOCK('otziv.whatsapp.unlinked.notice')")) {
+                try (var lock = acquire.executeQuery()) {
+                    if (!lock.next() || lock.getInt(1) != 1) return 0;
+                }
+                try {
+                    return sendDueAccounts();
+                } finally {
+                    release.execute();
+                }
+            }
+        });
+    }
+
+    private int sendDueAccounts() {
         int sent = 0;
-        for (NoticeGroup group : store.noticeDueGroups(GROUPS_PER_RUN)) {
+        for (AccountNotice account : store.dueNotices()) {
             try {
-                var batch = store.noticeBatch(group);
-                if (batch.isEmpty()) {
-                    continue;
-                }
-                if (!telegram.sendHtmlAlertToAdmins(notice(group, batch.get()).html())) {
-                    log.warn("Unlinked WhatsApp group notice was not accepted and stays pending: groupId={}", group.groupId());
-                    // Telegram refused: the other groups wait for the next run instead of failing one by one.
-                    break;
-                }
-                store.markNotified(group, batch.get().latestAt());
-                sent++;
+                var names = new GroupNames();
+                var html = account.singleGroup().map(batch -> {
+                    var group = new NoticeGroup(account.clientId(), batch.latest().getGroupId());
+                    return notice(group, batch, names.resolve(group, account.groupNames().get(group.groupId()))).html();
+                }).orElseGet(() -> digest(account, names));
+                if (!telegram.sendHtmlAlertToAdmins(html)) break;
+                store.markNotified(account.receipts());
+                sent += account.groupNames().size();
             } catch (RuntimeException failure) {
-                log.warn("Unlinked WhatsApp group notice failed: groupId={}, exceptionType={}",
-                        group.groupId(), failure.getClass().getSimpleName());
+                log.warn("Unlinked WhatsApp group notice failed: clientId={}, exceptionType={}",
+                        account.clientId(), failure.getClass().getSimpleName());
             }
         }
         return sent;
     }
 
     /** Previews the notice of every group with open messages, whether or not it was sent. */
-    public List<Preview> previews() {
+    public List<Preview> previews(int offset) {
         List<Preview> result = new ArrayList<>();
-        for (var row : store.unresolvedGroups()) {
-            var group = new NoticeGroup((String) row.get("client_id"), (String) row.get("group_id"));
-            if (result.stream().anyMatch(preview -> preview.clientId().equals(group.clientId())
-                    && preview.groupId().equals(group.groupId()))) {
-                continue;
-            }
+        var names = new GroupNames();
+        for (var group : store.previewGroups(offset, PREVIEW_LIMIT)) {
             store.latestBatch(group).ifPresent(batch ->
-                    result.add(new Preview(group.clientId(), group.groupId(), notice(group, batch).html())));
-            if (result.size() >= GROUPS_PER_RUN) {
-                break;
-            }
+                    result.add(new Preview(group.clientId(), group.groupId(),
+                            notice(group, batch, names.resolve(group, batch.latest().getGroupName())).html())));
         }
         return result;
     }
 
     public record Preview(String clientId, String groupId, String html) { }
 
-    WhatsAppUnlinkedGroupNotice notice(NoticeGroup group, NoticeBatch batch) {
+    /** One directory read per account per pass, only for display; never mutate the saved webhook. */
+    private class GroupNames {
+        private final Map<String,Map<String,String>> directories = new HashMap<>();
+
+        String resolve(NoticeGroup group, String reported) {
+            if (reported != null && !reported.isBlank()) return reported;
+            return directories.computeIfAbsent(group.clientId(), this::readDirectory).get(group.groupId());
+        }
+
+        private Map<String,String> readDirectory(String clientId) {
+            var names = new HashMap<String,String>();
+            try {
+                var snapshot = whatsApp.groupsSnapshot(clientId);
+                if (snapshot.available()) {
+                    for (var group : snapshot.groups()) {
+                        if (group.name() != null && !group.name().isBlank()) names.put(group.groupId(), group.name());
+                    }
+                }
+            } catch (RuntimeException failure) {
+                log.warn("WhatsApp group directory unavailable for admin notice: clientId={}, exceptionType={}",
+                        clientId, failure.getClass().getSimpleName());
+            }
+            return names;
+        }
+    }
+
+    private String digest(AccountNotice account, GroupNames names) {
+        var titles = account.groupNames().entrySet().stream().limit(PREVIEW_LIMIT)
+                .map(entry -> {
+                    var group = new NoticeGroup(account.clientId(), entry.getKey());
+                    var name = names.resolve(group, entry.getValue());
+                    return name == null ? group.groupId() : name;
+                }).toList();
+        return WhatsAppUnlinkedGroupNotice.digest(account.clientId(), account.groupNames().size(),
+                account.receipts().size(), account.stickers(), titles);
+    }
+
+    private WhatsAppUnlinkedGroupNotice notice(NoticeGroup group, NoticeBatch batch, String name) {
         WhatsAppGroupReplyDTO reply = batch.latest();
-        List<SimilarCompany> hints = similarCompanies(reply.getGroupName());
+        List<SimilarCompany> hints = similarCompanies(name);
         List<CompanyHint> shown = hints.stream().limit(MAX_HINTS).map(this::hint).toList();
         return new WhatsAppUnlinkedGroupNotice(
-                reply.getGroupName(),
+                name == null ? group.groupId() : name,
                 group.clientId(),
                 accountManagers(group.clientId()),
                 reply.getFromName(),

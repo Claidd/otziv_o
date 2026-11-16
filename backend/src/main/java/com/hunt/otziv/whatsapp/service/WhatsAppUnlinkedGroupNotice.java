@@ -34,6 +34,26 @@ public record WhatsAppUnlinkedGroupNotice(
 
     public record CompanyHint(String title, String status, String manager, LinkState state, String linkedGroupTitle) { }
 
+    static String digest(String account, int groups, int messages, long stickers, List<String> titles) {
+        var out = new StringBuilder("🔴 <b>Сообщения из WhatsApp-групп без привязки к компании</b>\n\n");
+        line(out, "Аккаунт", shortLabel(account));
+        line(out, "Групп", Integer.toString(groups));
+        line(out, "Сообщений", Integer.toString(messages));
+        if (stickers > 0) line(out, "Из них стикеров", Long.toString(stickers));
+        out.append('\n');
+        for (String title : titles) out.append("• ").append(shortLabel(title)).append('\n');
+        if (groups > titles.size()) out.append("Ещё групп: ").append(groups - titles.size()).append(".\n");
+        return out.append("\nЕсли это группа клиента, проверьте ссылку в карточке компании. "
+                + "После привязки система повторно обработает сохранённые сообщения.").toString();
+    }
+
+    private static String shortLabel(String value) {
+        String flat = value.replaceAll("\\s+", " ").strip();
+        // Ten labels, even if each contains only HTML markup, fit in one Telegram message.
+        return escape(flat.codePointCount(0, flat.length()) <= 60 ? flat
+                : flat.substring(0, flat.offsetByCodePoints(0, 60)) + "…");
+    }
+
     public String html() {
         var out = new StringBuilder("🔴 <b>Сообщение из WhatsApp-группы без привязки к компании</b>\n\n");
         line(out, "Группа", escape(orDash(groupName)));
@@ -86,7 +106,7 @@ public record WhatsAppUnlinkedGroupNotice(
 
     static String reasonText(String reason) {
         return switch (reason == null ? "" : reason) {
-            case "company_missing" -> "компания не найдена ни по этой группе, ни по телефону автора, ни по названию группы.";
+            case "company_missing" -> "при обработке сообщения не удалось определить компанию для этой группы.";
             case "invite_pending" -> "по телефону автора и названию найдена компания, у которой сменили ссылку на группу; "
                     + "бот ещё не подтвердил новую группу.";
             case "group_mismatch" -> "по телефону автора и названию найдена компания, но она уже привязана к другой группе.";
