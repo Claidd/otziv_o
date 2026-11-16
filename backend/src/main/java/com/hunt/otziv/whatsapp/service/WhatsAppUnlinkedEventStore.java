@@ -5,12 +5,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.client_messages.api.DeliveryQueueHealth;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Stored in the same transaction as the inbound receipt, before acknowledging the gateway. */
@@ -74,22 +77,69 @@ public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
      */
     public static final int NOTICE_PAUSE_HOURS=4;
     public record NoticeGroup(String clientId,String groupId) {}
+    public List<NoticeGroup> previewGroups(int offset, int limit) {
+        return jdbc.query("""
+            SELECT client_id,group_id FROM whatsapp_unlinked_events WHERE completed_at IS NULL
+            GROUP BY client_id,group_id ORDER BY MIN(created_at),client_id,group_id LIMIT ? OFFSET ?
+            """, (rs,n) -> new NoticeGroup(rs.getString(1), rs.getString(2)), limit, offset);
+    }
     /** The newest message not yet covered by a notice, how many such messages there are, the group's backlog. */
     public record NoticeBatch(WhatsAppGroupReplyDTO latest,String latestReason,LocalDateTime latestAt,long newEvents,
                               long openEvents,LocalDateTime firstSeenAt,LocalDateTime nextAttemptAt) {}
 
-    /** Groups with open messages that no notice covered yet and that are past the group's pause, oldest first. */
-    public List<NoticeGroup> noticeDueGroups(int limit) {
-        return jdbc.query("""
-            SELECT e.client_id,e.group_id FROM whatsapp_unlinked_events e
+    // Only groups past their own pause participate. Two quiet minutes coalesce a burst across
+    // scheduler ticks. A continuously active account cannot postpone its first notice past ten minutes.
+    private static final String NOTICE_SCHEDULE = """
+        WITH last_notice AS (
+            SELECT client_id,group_id,MAX(admin_notified_at) AS last_at FROM whatsapp_unlinked_events
+            WHERE admin_notified_at IS NOT NULL GROUP BY client_id,group_id
+        ), pending AS (
+            SELECT e.receipt_key,e.client_id,e.group_id,e.created_at,
+                   GREATEST(e.created_at,COALESCE(n.last_at + INTERVAL ? HOUR,e.created_at)) AS eligible_at
+            FROM whatsapp_unlinked_events e LEFT JOIN last_notice n
+              ON n.client_id=e.client_id AND n.group_id=e.group_id
             WHERE e.completed_at IS NULL AND e.admin_notified_at IS NULL
-              AND NOT EXISTS(SELECT 1 FROM whatsapp_unlinked_events n WHERE n.client_id=e.client_id AND n.group_id=e.group_id
-                             AND n.admin_notified_at>DATE_SUB(NOW(6),INTERVAL ? HOUR))
-            GROUP BY e.client_id,e.group_id ORDER BY MIN(e.created_at) LIMIT ?
-            """,(rs,n)->new NoticeGroup(rs.getString(1),rs.getString(2)),NOTICE_PAUSE_HOURS,limit);
+        ), due_accounts AS (
+            SELECT client_id,COUNT(*) AS events,
+                   LEAST(MAX(eligible_at) + INTERVAL 2 MINUTE, MIN(eligible_at) + INTERVAL 10 MINUTE) AS due_at
+            FROM pending WHERE eligible_at<=NOW(6) GROUP BY client_id
+            HAVING due_at<=NOW(6)
+        )
+        """;
+
+    public record AccountNotice(String clientId, List<String> receipts, Map<String,String> groupNames, long stickers,
+                                Optional<NoticeBatch> singleGroup) {}
+
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
+    public List<AccountNotice> dueNotices() {
+        record Event(String key, String client, String group, String title, boolean sticker) {}
+        var events = jdbc.query(NOTICE_SCHEDULE + """
+            SELECT p.receipt_key,p.client_id,p.group_id,JSON_VALUE(e.payload_json,'$.groupName'),
+                   e.payload_json->>'$.message'='[Вложение: sticker]'
+            FROM due_accounts a JOIN pending p ON p.client_id=a.client_id AND p.eligible_at<=NOW(6)
+            JOIN whatsapp_unlinked_events e ON e.receipt_key=p.receipt_key
+            ORDER BY a.due_at,p.client_id,p.created_at,p.receipt_key
+            """, (rs,n) -> new Event(rs.getString(1),rs.getString(2),rs.getString(3),rs.getString(4),rs.getBoolean(5)), NOTICE_PAUSE_HOURS);
+        Map<String,List<Event>> accounts = new LinkedHashMap<>();
+        for (var event : events) {
+            accounts.computeIfAbsent(event.client(), ignored -> new ArrayList<>()).add(event);
+        }
+        List<AccountNotice> result = new ArrayList<>();
+        accounts.forEach((client, rows) -> {
+            Map<String,String> names = new LinkedHashMap<>();
+            for (var event : rows) {
+                names.putIfAbsent(event.group(), "");
+                if (event.title() != null && !event.title().isBlank()) {
+                    names.put(event.group(), event.title());
+                }
+            }
+            var single = names.size()==1 ? batch(new NoticeGroup(client, names.keySet().iterator().next()), true)
+                    : Optional.<NoticeBatch>empty();
+            result.add(new AccountNotice(client, rows.stream().map(Event::key).toList(), names,
+                    rows.stream().filter(Event::sticker).count(), single));
+        });
+        return result;
     }
-    /** The batch the next notice of the group covers: its open messages that no notice covered yet. */
-    public Optional<NoticeBatch> noticeBatch(NoticeGroup group) {return batch(group,true);}
     /** The group's newest open message whether or not a notice covered it, for a preview. */
     public Optional<NoticeBatch> latestBatch(NoticeGroup group) {return batch(group,false);}
     private Optional<NoticeBatch> batch(NoticeGroup group,boolean onlyNew) {
@@ -109,10 +159,11 @@ public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
                 group.clientId(),group.groupId()).stream().findFirst();
     }
     private record Latest(WhatsAppGroupReplyDTO reply,String reason,LocalDateTime at) {}
-    /** After an admin chat accepted the notice: it covers the group's messages up to the one it showed. */
-    public int markNotified(NoticeGroup group,LocalDateTime through) {
-        return jdbc.update("UPDATE whatsapp_unlinked_events SET admin_notified_at=NOW(6) WHERE client_id=? AND group_id=? AND admin_notified_at IS NULL AND created_at<=?",
-                group.clientId(),group.groupId(),through);
+    /** Acknowledge exactly the snapshot accepted by Telegram. New arrivals belong to a later notice. */
+    @Transactional
+    public void markNotified(List<String> receipts) {
+        jdbc.batchUpdate("UPDATE whatsapp_unlinked_events SET admin_notified_at=NOW(6) WHERE receipt_key=? AND admin_notified_at IS NULL",
+                receipts, 256, (statement,key) -> statement.setString(1,key));
     }
     /**
      * Open messages whose notice is due (the group is past its pause) and not delivered: the age counts
@@ -120,15 +171,8 @@ public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
      */
     @Transactional(readOnly=true,timeout=3)
     public List<Row> noticeQueueHealth() {
-        return jdbc.query("""
-            SELECT COUNT(*),COALESCE(MAX(GREATEST(0,TIMESTAMPDIFF(SECOND,d.due_at,NOW(6)))),0) FROM (
-              SELECT GREATEST(e.created_at,COALESCE(DATE_ADD(g.last_at,INTERVAL ? HOUR),e.created_at)) AS due_at
-              FROM whatsapp_unlinked_events e
-              LEFT JOIN (SELECT client_id,group_id,MAX(admin_notified_at) AS last_at FROM whatsapp_unlinked_events
-                         WHERE admin_notified_at IS NOT NULL GROUP BY client_id,group_id) g
-                ON g.client_id=e.client_id AND g.group_id=e.group_id
-              WHERE e.completed_at IS NULL AND e.admin_notified_at IS NULL) d
-            WHERE d.due_at<=NOW(6)
+        return jdbc.query(NOTICE_SCHEDULE + """
+            SELECT COALESCE(SUM(events),0),COALESCE(MAX(TIMESTAMPDIFF(SECOND,due_at,NOW(6))),0) FROM due_accounts
             """,(rs,n)->new Row(State.QUEUED,rs.getLong(1),rs.getDouble(2),0),NOTICE_PAUSE_HOURS);
     }
     private WhatsAppGroupReplyDTO readSaved(String payload) {

@@ -15,6 +15,9 @@ import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
+import com.hunt.otziv.whatsapp.controller.WhatsAppUnlinkedEventController;
+import com.hunt.otziv.whatsapp.service.WhatsAppUnlinkedEventStore;
+import com.hunt.otziv.whatsapp.service.WhatsAppUnlinkedGroupNotifier;
 import com.hunt.otziv.webhook.security.WebhookClientIpResolver;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.service.UserServiceImpl;
@@ -330,6 +333,18 @@ class PublicCapabilitySecurityContractTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void onlyAdminsAndOwnersCanReadUnlinkedWhatsAppNoticeDetails() throws Exception {
+        String path = "/api/whatsapp/unlinked-events/notices";
+        mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
+        for (String role : List.of("ADMIN", "OWNER", "MANAGER", "WORKER")) {
+            stubJwt("notice-" + role, role);
+            var result = mockMvc.perform(get(path).param("offset","10").header("Authorization", "Bearer notice-" + role));
+            result.andExpect(role.equals("ADMIN") || role.equals("OWNER") ? status().isOk() : status().isForbidden());
+        }
+        mockMvc.perform(post(path).header("Authorization","Bearer notice-OWNER")).andExpect(status().isForbidden());
+    }
+
     private void stubJwt(String tokenValue, String role) {
         Instant now = Instant.now();
         Jwt jwt = Jwt.withTokenValue(tokenValue)
@@ -347,6 +362,12 @@ class PublicCapabilitySecurityContractTest {
     @EnableWebMvc
     @Import(SecurityConfig.class)
     static class TestConfiguration {
+
+        @Bean
+        WhatsAppUnlinkedEventController unlinkedWhatsAppEvents() {
+            return new WhatsAppUnlinkedEventController(mock(WhatsAppUnlinkedEventStore.class),
+                    mock(WhatsAppUnlinkedGroupNotifier.class));
+        }
 
         @Bean
         UserServiceImpl userService() {
