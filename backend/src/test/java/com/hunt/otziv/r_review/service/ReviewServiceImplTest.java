@@ -206,6 +206,65 @@ class ReviewServiceImplTest {
     }
 
     @Test
+    void approvalCanSaveTextAndScheduleExistingReviewsWithFrozenPaymentRoute() {
+        var shadow = org.mockito.Mockito.mock(
+                com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService.class);
+        var markers = org.mockito.Mockito.mock(
+                com.hunt.otziv.contractor_payments.repository.ContractorCompletionRewardMarkerRepository.class);
+        var documents = org.mockito.Mockito.mock(com.hunt.otziv.payments.api.BankPaperPaymentBindings.class);
+        var realGuard = new ContractorRouteAssignmentGuard(shadow, markers, documents);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                reviewService, "contractorRouteAssignmentGuard", realGuard);
+        when(shadow.hasFrozenLiveRoute(27760L)).thenReturn(true);
+        // The same prepared recipient must continue to protect the amount/composition.
+        assertThrows(ResponseStatusException.class, () -> realGuard.requirePayableMutationAllowed(27760L));
+
+        Review review = reviewWithOrder(27760L);
+        review.setPrice(java.math.BigDecimal.valueOf(200));
+        OrderDetails detail = review.getOrderDetails();
+        detail.setReviews(List.of(review));
+        Order order = detail.getOrder();
+        order.setSum(java.math.BigDecimal.valueOf(200));
+        order.setAmount(1);
+        OrderDetailsDTO update = OrderDetailsDTO.builder().id(detail.getId())
+                .reviews(List.of(ReviewDTO.builder().id(review.getId())
+                        .text("Уточнённый клиентом текст").answer("").url("").build())).build();
+        when(orderDetailsService.getOrderDetailById(detail.getId())).thenReturn(detail);
+        when(orderDetailsService.getOrderDetailsForReviewCheckByOrderId(27760L)).thenReturn(List.of(detail));
+
+        reviewService.updateOrderDetailAndReviews(update);
+        assertTrue(reviewService.updateOrderDetailsAndReviewsAndPublishDates(27760L, List.of(update)));
+
+        assertEquals("Уточнённый клиентом текст", review.getText());
+        org.junit.jupiter.api.Assertions.assertNotNull(review.getPublishedDate());
+        assertFalse(review.isPublish());
+        assertEquals(java.math.BigDecimal.valueOf(200), review.getPrice());
+        assertEquals(java.math.BigDecimal.valueOf(200), order.getSum());
+        assertEquals(1, order.getAmount());
+        assertEquals(List.of(review), detail.getReviews());
+        org.mockito.Mockito.verifyNoInteractions(payableRecalculationService);
+        verify(shadow).hasFrozenLiveRoute(27760L); // only the rejected commercial change above
+    }
+
+    @Test
+    void sharedFormExplicitDateEditStillRequiresFinancialMutationPermission() {
+        Review review = reviewWithOrder(27760L);
+        OrderDetails detail = review.getOrderDetails();
+        detail.setReviews(List.of(review));
+        when(orderDetailsService.getOrderDetailById(detail.getId())).thenReturn(detail);
+        org.mockito.Mockito.doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT))
+                .when(contractorRouteAssignmentGuard).requirePayableMutationAllowed(27760L);
+
+        assertThrows(ResponseStatusException.class, () -> reviewService.updateOrderDetailAndReviews(
+                OrderDetailsDTO.builder().id(detail.getId()).reviews(List.of(ReviewDTO.builder()
+                        .id(review.getId()).text(review.getText()).answer(review.getAnswer())
+                        .publishedDate(LocalDate.now().plusDays(3)).build())).build()));
+
+        assertEquals(null, review.getPublishedDate());
+        verify(reviewRepository, never()).saveAll(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void updateReviewAllowsWorkerToUnsetVigul() {
         Review review = reviewForVigulUpdate(true);
         ReviewDTO dto = reviewDtoForVigulUpdate(false);

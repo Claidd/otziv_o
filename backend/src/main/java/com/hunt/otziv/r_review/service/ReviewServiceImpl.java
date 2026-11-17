@@ -1044,7 +1044,6 @@ public class ReviewServiceImpl implements ReviewService {
 
         orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
         OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveOrderDetails));
         Map<Long, Review> reviewsById = safeReviews(saveOrderDetails).stream()
                 .filter(Objects::nonNull)
                 .filter(review -> review.getId() != null)
@@ -1083,6 +1082,9 @@ public class ReviewServiceImpl implements ReviewService {
                 log.info("Изменение флага публикации отзыва {} через сохранение формы проигнорировано", saveReview.getId());
             }
             if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
+                // Text approval leaves the commercial snapshot unchanged. Explicit date edits
+                // still use the financial guard, as does the single-review editor.
+                contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveOrderDetails));
                 requirePublicationDateIntegrity(saveReview, reviewDTO.getPublishedDate());
                 validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
                 saveReview.setPublishedDate(reviewDTO.getPublishedDate());
@@ -1115,7 +1117,7 @@ public class ReviewServiceImpl implements ReviewService {
         try {
             orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
             OrderDetails liveDetail = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-            contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(liveDetail));
+            contractorRouteAssignmentGuard.requirePublicationSchedulingAllowed(orderId(liveDetail));
             return applyPublicationDates(List.of(liveDetail), List.of(orderDetailsDTO), false);
         } catch (Exception exception) {
             return publicationDateFailure(exception);
@@ -1133,7 +1135,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
         try {
             orderAggregateMutationLockService.lock(orderId);
-            contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId);
+            contractorRouteAssignmentGuard.requirePublicationSchedulingAllowed(orderId);
             List<OrderDetails> liveDetails = orderDetailsService
                     .getOrderDetailsForReviewCheckByOrderId(orderId);
             return applyPublicationDates(liveDetails, orderDetails, true);
