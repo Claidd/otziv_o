@@ -58,7 +58,7 @@ const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
               <div class="actions document-actions">
               <button type="button" (click)="poll()">Обновить</button>
               @if (!d.stage.startsWith('CANCEL')) { <button type="button" (click)="checkPayment()" [disabled]="busy() || d.paidAt !== null">Проверить оплату</button> }
-              @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">Сменить способ оплаты</button> }
+              @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">Сменить способ оплаты или отменить счёт</button> }
               </div>
               @if (d.stage === 'CANCEL_REQUESTED') { <p class="hint">Проверяем поступления и удаляем оба документа в Точке. Напоминания остановлены. При поступлении денег отмена будет передана на сверку.</p> }
               @if (d.stage === 'CANCEL_REVIEW') { <p role="alert" class="error">Отмена требует ручной сверки. Новый счёт не выпускается, автоматическое закрытие оплаты остановлено.</p> }
@@ -75,17 +75,21 @@ const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
               }
               @if (cancelForm()) {
                 <form class="cancel-form" (ngSubmit)="cancel()">
-                  <h3>Замена бумажного счёта обычным</h3>
-                  <p>Система проверит поступления, отменит счёт и акт в Точке и уведомит заказчика. После сверки система подготовит выбранный способ оплаты. @if(isPartDocument()) { Способ оплаты изменится только у заказов этого комплекта. Остальные счета сохранятся, а оплаты всех заказов продолжат учитываться в общем счёте. } Если обнаружено поступление или нужна сверка, отмена остановится.</p>
-                  <label>После отмены выставить
-                    <select name="replacementMode" [(ngModel)]="replacementMode" [disabled]="busy()">
+                  <h3>Отмена счёта и акта Точки</h3>
+                  <p>Система проверит поступления в Точке и уведомит заказчика об отмене. Если банк обнаружит оплату или понадобится сверка, отмена остановится.</p>
+                  @if(isPartDocument()) { <p>Отмена затронет только заказы этого комплекта.</p> }
+                  <label>Действие после отмены
+                    <select name="replacementMode" [(ngModel)]="replacementMode" (ngModelChange)="cancelConfirmed = false" [disabled]="busy()">
                       <option value="AUTO_ROUTING">Подобрать способ автоматически</option>
                       <option value="EMPLOYEE_REQUISITES">Реквизиты без ссылки</option>
                       <option value="OWNER_TBANK">Банковскую ссылку владельца</option>
+                      <option value="NONE">Отменить без нового счёта</option>
                     </select>
                   </label>
                   <label>Причина отмены<textarea name="cancelReason" maxlength="500" [(ngModel)]="cancelReason" [disabled]="busy()"></textarea></label>
-                  <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" /> Подтверждаю отмену счёта и акта и отправку обычных реквизитов</label>
+                  <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" />
+                    {{ replacementMode === 'NONE' ? 'Подтверждаю отмену счёта и акта без выставления новых реквизитов' : 'Подтверждаю отмену счёта и акта и отправку обычных реквизитов' }}
+                  </label>
                   <div class="actions"><button type="button" (click)="cancelForm.set(false)" [disabled]="busy()">Вернуться</button><button type="submit" class="danger" [disabled]="busy() || !cancelConfirmed || !cancelReason.trim()">Подтвердить отмену</button></div>
                 </form>
               }
@@ -292,8 +296,13 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   cancel(): void {
     const d=this.context()?.document;if(!d || !this.canCancel() || !this.cancelConfirmed || !this.cancelReason.trim()) return;
     const ticket=this.beginMutation();if(ticket===null) return;++this.pollTicket;
-    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:true,
-      ...(this.replacementMode === 'AUTO_ROUTING' ? {} : {replacementMode:this.replacementMode})}).subscribe({
+    const replaceWithOrdinary = this.replacementMode !== 'NONE';
+    this.http.post<Document>(this.baseUrl + '/api/paper-invoices/documents/' + d.id + '/cancel', {
+      reason: this.cancelReason.trim(),
+      confirmed: true,
+      replaceWithOrdinary,
+      ...(replaceWithOrdinary && this.replacementMode !== 'AUTO_ROUTING' ? { replacementMode: this.replacementMode } : {})
+    }).subscribe({
       next: document => {if(!this.finishMutation(ticket)) return;++this.pollTicket;this.cancelForm.set(false);this.context.update(c=>c?{...c,document}:c);this.startPolling();},
       error: e => {if(ticket===this.ticket) this.failure(e);}
     });

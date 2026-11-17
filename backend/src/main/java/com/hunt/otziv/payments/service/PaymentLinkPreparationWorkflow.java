@@ -32,6 +32,7 @@ import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
@@ -170,6 +171,12 @@ public class PaymentLinkPreparationWorkflow {
     public ManagerPaymentLinkResponse createForOrderInCurrentTransaction(Long orderId) {
         requirePaymentLinksEnabled();
         return prepareForOrder(orderId, null, false).response();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void prepareAfterBadReviewRepricing(Long orderId) {
+        requirePaymentLinksEnabled();
+        prepareForOrder(orderId, null, false, true);
     }
 
     static <T> T retryDeadlockedPreparation(Long orderId, Supplier<T> transactionAttempt) {
@@ -319,6 +326,11 @@ public class PaymentLinkPreparationWorkflow {
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     private PaymentInstructionPreparation prepareForOrder(Long orderId, Authentication authentication, boolean requireAuthorization) {
+        return prepareForOrder(orderId, authentication, requireAuthorization, false);
+    }
+
+    private PaymentInstructionPreparation prepareForOrder(Long orderId, Authentication authentication,
+            boolean requireAuthorization, boolean repricing) {
         Optional<Order> lockedOrder = orderRepository.findByIdForCounterUpdate(orderId);
         if (lockedOrder.isPresent() && paymentLinkRepository.pendingBadReviewBankChecks(orderId) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сумма изменилась. Новые реквизиты появятся после закрытия прежней банковской ссылки");
@@ -425,10 +437,17 @@ public class PaymentLinkPreparationWorkflow {
         // Releasing capacity or expiring a link cannot revoke bank details already
         // copied by the client. A later transfer must still be attributable to that
         // recipient, even if today's routing would select somebody else.
+        List<PaymentLink> frozenAtRestoredAmount = new ArrayList<>();
         for (PaymentLink previous : lockedOrderLinks) {
             if (previous.getStatus() == PaymentLinkStatus.EXPIRED
                     || previous.getStatus() == PaymentLinkStatus.CANCELED) {
-                requireExplicitReplacementOfFrozenRecipient(previous, configuredMode, amountKopecks);
+                if (repricing && previous.getStatus() == PaymentLinkStatus.EXPIRED
+                        && configuredMode == InvoicePaymentMode.AUTO_ROUTING && isFrozenContractorRoute(previous)
+                        && previous.getAmountKopecks() == amountKopecks) {
+                    frozenAtRestoredAmount.add(previous);
+                } else {
+                    requireExplicitReplacementOfFrozenRecipient(previous, configuredMode, amountKopecks);
+                }
             }
         }
         if (lockedOrderLinks.stream().anyMatch(this::blocksCreationOfAnotherBankPayment)) {
@@ -494,6 +513,11 @@ public class PaymentLinkPreparationWorkflow {
                 applyPaymentProfile(link, profile);
                 routePaymentWithoutTask(link, profile, amountKopecks, now, null);
                 link = paymentLinkRepository.save(link);
+            }
+        }
+        for (PaymentLink previous : frozenAtRestoredAmount) {
+            if (!contractorPaymentLiveRoutingService.sameRecipientForRepricedLink(previous, link)) {
+                requireExplicitReplacementOfFrozenRecipient(previous, configuredMode, amountKopecks);
             }
         }
         return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), true);

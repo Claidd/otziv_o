@@ -95,6 +95,11 @@ public class PaymentLinkService implements com.hunt.otziv.payments.api.Standalon
         return preparationWorkflow.createForOrderInCurrentTransaction(orderId);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void prepareAfterBadReviewRepricing(Long orderId) {
+        preparationWorkflow.prepareAfterBadReviewRepricing(orderId);
+    }
+
     /**
      * Manager-facing entry point. The current order row is locked before the
      * object-scope check, so a concurrent reassignment cannot invalidate the

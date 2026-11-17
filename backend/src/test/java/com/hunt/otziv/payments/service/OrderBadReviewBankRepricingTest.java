@@ -15,7 +15,8 @@ class OrderBadReviewBankRepricingTest {
     final OrderPaymentLinkWorkflow orders = mock();
     final ManualPaymentAutomationControl messages = mock();
     final PaymentLinkSettlementService settlement = mock();
-    final OrderBadReviewBankRepricing worker = new OrderBadReviewBankRepricing(mock(PaymentLinkRepository.class), orders, messages, settlement);
+    final PaymentLinkPreparationWorkflow preparation = mock();
+    final OrderBadReviewBankRepricing worker = new OrderBadReviewBankRepricing(mock(PaymentLinkRepository.class), orders, messages, settlement, preparation);
     final PaymentLink link = new PaymentLink();
     final Order order = new Order();
 
@@ -42,7 +43,7 @@ class OrderBadReviewBankRepricingTest {
         assertThat(source).isNotNull();
         assertThat(worker.claim(13)).isNull();
         worker.finish(source, new Result(Outcome.WAITING, "FORM_SHOWED"));
-        verifyNoInteractions(messages);
+        verifyNoInteractions(messages, preparation);
         verify(orders, never()).releaseClosedPaymentLink(link);
         var closed = new Result(Outcome.CLOSED, "DEADLINE_EXPIRED");
         worker.finish(source, closed);
@@ -51,6 +52,7 @@ class OrderBadReviewBankRepricingTest {
         assertThat(link.getBadReviewBankCheckAt()).isNull();
         verify(messages).scheduleRepricedBadReviewInvoice(21L);
         verify(orders).releaseClosedPaymentLink(link);
+        verify(preparation).prepareAfterBadReviewRepricing(21L);
         verifyNoInteractions(settlement);
     }
 
@@ -58,7 +60,7 @@ class OrderBadReviewBankRepricingTest {
         var source = worker.claim(13);
         worker.finish(source, new Result(Outcome.FINANCIAL, "CONFIRMED"));
         verify(settlement).applyBankStatus(link, "CONFIRMED", true, "0");
-        verifyNoInteractions(messages);
+        verifyNoInteractions(messages, preparation);
         verify(orders, never()).releaseClosedPaymentLink(link);
     }
 
@@ -66,7 +68,7 @@ class OrderBadReviewBankRepricingTest {
         var source = worker.claim(13);
         link.setConfirmedAmountKopecks(120000L);
         worker.finish(source, new Result(Outcome.CLOSED, "REJECTED"));
-        verifyNoInteractions(messages, settlement);
+        verifyNoInteractions(messages, settlement, preparation);
         verify(orders, never()).releaseClosedPaymentLink(link);
     }
 }

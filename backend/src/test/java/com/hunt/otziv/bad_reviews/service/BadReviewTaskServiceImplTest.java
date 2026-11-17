@@ -1067,7 +1067,7 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
-    void cancelDoneTaskDoesNotSendUpdatedClientInvoiceAutomatically() {
+    void removingAnIssuedSupplementReplacesTheLinkAfterSavingWithoutSendingAnotherDemand() {
         Order order = order(16L);
         order.getManager().setClientId("client-16");
         order.getManager().setPayText("Оплатите по ссылке Альфа.");
@@ -1087,11 +1087,18 @@ class BadReviewTaskServiceImplTest {
                 new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
         ));
 
+        when(paymentLinkServiceProvider.getIfAvailable()).thenReturn(paymentLinkService);
+        when(paymentLinkServiceProvider.getObject()).thenReturn(paymentLinkService);
+        when(paymentLinkService.retireOpenLinksBeforePayableChange(eq(16L), anyString())).thenReturn(1);
         service.cancelTask(46L);
 
+        InOrder operations = inOrder(paymentLinkService, badReviewTaskRepository);
+        operations.verify(paymentLinkService).retireOpenLinksBeforePayableChange(eq(16L), anyString());
+        operations.verify(badReviewTaskRepository).save(task);
+        operations.verify(paymentLinkService).prepareAfterBadReviewRepricing(16L);
         verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
-        verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
+        verify(paymentInvoiceRetryScheduler, never()).scheduleRepricedBadReviewInvoice(16L);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
     }
 
@@ -1125,7 +1132,7 @@ class BadReviewTaskServiceImplTest {
 
         assertEquals(BadReviewTaskStatus.CANCELED, canceled.getStatus());
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
-        verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
+        verify(paymentInvoiceRetryScheduler, never()).scheduleRepricedBadReviewInvoice(19L);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
         verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
     }
@@ -1234,6 +1241,23 @@ class BadReviewTaskServiceImplTest {
         verify(paymentLinkService, never()).retireOpenLinksBeforePayableChange(any(), anyString());
         verify(commonBillingService, never()).refreshLinkedOrderAmount(any());
         verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
+    }
+
+    @Test
+    void cancellationWaitsForThePreviousBankOperationBeforePreparingAnotherInvoice() {
+        Order order = order(23L);
+        BadReviewTask task = BadReviewTask.builder().id(53L).order(order)
+                .status(BadReviewTaskStatus.DONE).price(BigDecimal.valueOf(200)).build();
+        stubPayableMutation(task);
+        when(paymentLinkServiceProvider.getIfAvailable()).thenReturn(paymentLinkService);
+        when(paymentLinkService.awaitBankForBadReview(23L)).thenReturn(true);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        assertEquals(BadReviewTaskStatus.CANCELED, service.cancelTask(53L).getStatus());
+        verify(paymentLinkService, never()).retireOpenLinksBeforePayableChange(any(), anyString());
+        verify(paymentLinkService, never()).prepareAfterBadReviewRepricing(23L);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleRepricedBadReviewInvoice(23L);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(eq(order), anyString());
     }
 
     @Test

@@ -232,7 +232,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
                 taskId,
                 expectedOrderId,
                 "Выполненная дополнительная задача изменила сумму счета",
-                authentication, true
+                authentication
         );
         Long orderId = preparedChange.orderId();
         BadReviewTask task = requireTask(taskId, authentication);
@@ -629,13 +629,23 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         Long orderId = order != null ? order.getId() : null;
         if (orderId != null) {
             BadReviewTaskSummary summary = getSummaryForOrder(orderId);
-            expireStalePaymentLinks(order);
-            paymentInvoiceRetryScheduler.cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
+            boolean standalone = preparedChange != null && !preparedChange.waitingForBank()
+                    && preparedChange.commonDisposition() == CommonPayableChangeDisposition.NOT_LINKED;
+            if (standalone && STATUS_NOT_PAID.equals(statusTitle(order))) {
+                paymentInvoiceRetryScheduler.scheduleRepricedBadReviewInvoice(orderId);
+            } else if (preparedChange != null && !standalone) {
+                paymentInvoiceRetryScheduler.cancelBadReviewInvoiceRetry(order, "Отправкой управляет общий счёт или ожидается ответ банка");
+            }
             paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
             if (summary.pending() == 0 && summary.done() > 0) {
                 createOrderReadyReminderIfNeeded(order, summary);
             } else {
                 deleteOrderReadyReminder(order);
+            }
+            if (standalone && preparedChange.replaceInstruction()) {
+                // Preparation reads the updated task total and may clear the persistence context.
+                // Keep it last so the order, task, reserve and new invoice commit together.
+                paymentLinkServiceProvider.getObject().prepareAfterBadReviewRepricing(orderId);
             }
         }
         return savedTask;
@@ -660,12 +670,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
     private PreparedTaskPayableChange prepareTaskPayableChangeLocked(Long taskId,
             Long expectedOrderId,
             String reason) {
-        return prepareTaskPayableChangeLocked(taskId, expectedOrderId, reason, null, false);
+        return prepareTaskPayableChangeLocked(taskId, expectedOrderId, reason, null);
     }
 
     private PreparedTaskPayableChange prepareTaskPayableChangeLocked(Long taskId,
             Long expectedOrderId,
-            String reason, Authentication authentication, boolean completing) {
+            String reason, Authentication authentication) {
         validateTaskIdAndAccess(taskId, authentication);
         Long orderId = badReviewTaskRepository.findOrderIdById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
@@ -686,19 +696,22 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
                 commonDisposition = CommonPayableChangeDisposition.NOT_LINKED;
             }
         }
-        orderRepository.findByIdForCounterUpdate(orderId)
+        Order lockedOrder = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
         // Fence the durable delivery state before touching a payment link.
         // Immediate delivery also follows Order -> state -> PaymentLink, which
         // keeps concurrent task mutations out of the PREPARED/send window.
         paymentInvoiceRetryScheduler.assertPaymentAutomationMutable(orderId);
         PaymentLinkService paymentLinkService = paymentLinkServiceProvider.getIfAvailable();
-        boolean waitingForBank = paymentLinkService != null && completing && commonDisposition == CommonPayableChangeDisposition.NOT_LINKED
+        boolean waitingForBank = paymentLinkService != null && commonDisposition == CommonPayableChangeDisposition.NOT_LINKED
                 && paymentLinkService.awaitBankForBadReview(orderId);
-        if (paymentLinkService != null && !waitingForBank) {
-            paymentLinkService.retireOpenLinksBeforePayableChange(orderId, reason);
-        }
-        return new PreparedTaskPayableChange(orderId, commonDisposition, waitingForBank);
+        int retiredLinks = paymentLinkService != null && !waitingForBank
+                ? paymentLinkService.retireOpenLinksBeforePayableChange(orderId, reason) : 0;
+        // An issued electronic instruction may have expired before the task was removed.
+        boolean previouslyIssued = !lockedOrder.isBankPaperInvoice() && !lockedOrder.isPaperInvoiceAutomationHold()
+                && Set.of("Выставлен счет", "Напоминание").contains(statusTitle(lockedOrder));
+        return new PreparedTaskPayableChange(orderId, commonDisposition, waitingForBank,
+                paymentLinkService != null && (retiredLinks > 0 || previouslyIssued));
     }
 
     private boolean applyLinkedCommonInvoiceChange(PreparedTaskPayableChange change, Long taskId) {
@@ -718,7 +731,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
 
     private record PreparedTaskPayableChange(
             Long orderId,
-            CommonPayableChangeDisposition commonDisposition, boolean waitingForBank
+            CommonPayableChangeDisposition commonDisposition, boolean waitingForBank, boolean replaceInstruction
     ) {
     }
 

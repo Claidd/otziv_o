@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.scenario;
 
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.common_billing.api.CommonInvoiceOverdueNotices;
@@ -193,6 +194,7 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
     @Autowired BankRecipientChanges recipientChanges;
     @Autowired OrderBankRecipientChange orderRecipientChanges;
     @Autowired PaymentLinkService payments;
+    @Autowired BadReviewTaskService badReviewTasks;
     @Autowired PaymentRouteChangeService orderRouteChanges;
     @Autowired com.hunt.otziv.contractor_payments.service.ContractorPaymentReconciliationDispatcher reserveReconciliation;
     @Autowired CommonInvoiceMessageWorker clientMessageWorker;
@@ -873,6 +875,79 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
     // ================================================================================================
 
     @Test
+    @DisplayName("Отмена двух выполненных задач уменьшает выставленный счёт и резерв с 7 800 до 7 400 ₽")
+    void s13a_cancelCompletedTasksRepricesTheCurrentInstructionAndManualPaymentWindow() {
+        Person specialist = world.specialist("Специалист");
+        long profile = world.payable(specialist, ContractorRole.SPECIALIST, 20_000_00);
+        long order = world.order(world.company("Заказ с доплатами"), specialist, 7_400_00, STATUS_INVOICED);
+        login(world.admin);
+        assertThat(payments.createForOrderAuthorized(order, world.admin.auth()).amountKopecks()).isEqualTo(7_400_00);
+        assertThat(payments.retireOpenLinksBeforePayableChange(order, "Две выполненные задачи изменили сумму")).isOne();
+        long first = world.completedBadReview(order, 200_00);
+        long second = world.completedBadReview(order, 200_00);
+        assertThat(payments.createForOrderAuthorized(order, world.admin.auth()).amountKopecks()).isEqualTo(7_800_00);
+        Map<String, Object> original = currentLink(order);
+
+        badReviewTasks.cancelTask(first);
+        Map<String, Object> reduced = currentLink(order);
+        assertThat(num(reduced, "amount_kopecks")).isEqualTo(7_600_00);
+        assertThat(link(num(original, "id"))).containsEntry("status", "EXPIRED");
+        assertThat(reserve(original.get("contractor_allocation_id")).get("status")).isNotEqualTo("RESERVED");
+        assertThat(payments.manualCardPaymentContextForOrder(order, world.admin.auth()).amountKopecks()).isEqualTo(7_600_00);
+
+        // At the original 7,400 ₽ a client may still have the specialist's copied requisites.
+        jdbc.update("UPDATE contractor_payment_profiles SET enabled=0 WHERE id=?", profile);
+        assertThatThrownBy(() -> badReviewTasks.cancelTask(second))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(num(currentLink(order), "id")).isEqualTo(num(reduced, "id"));
+        assertThat(reserve(reduced.get("contractor_allocation_id"))).containsEntry("status", "RESERVED");
+        jdbc.update("UPDATE contractor_payment_profiles SET enabled=1 WHERE id=?", profile);
+        badReviewTasks.cancelTask(second);
+        Map<String, Object> current = currentLink(order);
+        assertThat(num(current, "amount_kopecks")).isEqualTo(7_400_00);
+        assertThat(reserve(current.get("contractor_allocation_id"))).containsEntry("status", "RESERVED");
+        assertThat(num(reserve(current.get("contractor_allocation_id")), "recipient_profile_id")).isEqualTo(profile);
+        assertThat(num(reserve(current.get("contractor_allocation_id")), "amount_kopecks")).isEqualTo(7_400_00);
+        assertThat(reserve(reduced.get("contractor_allocation_id")).get("status")).isNotEqualTo("RESERVED");
+        assertThat(payments.manualCardPaymentContextForOrder(order, world.admin.auth()).amountKopecks()).isEqualTo(7_400_00);
+
+        badReviewTasks.cancelTask(second);
+        assertThat(num(currentLink(order), "id")).isEqualTo(num(current, "id"));
+        assertThat(orderStatus(order)).isEqualTo(STATUS_INVOICED);
+        assertThat(clientMessages).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Перевод по ранее выставленному бумажному счёту зачисляется владельцу один раз")
+    void s13b_ownerReceivedTheFullLegacyPaperInvoiceAtAnotherBank() {
+        Person specialist = world.specialist("Специалист");
+        long order = world.order(world.company("Бумажный счёт ИП"), specialist, 7_400_00, STATUS_PUBLISHED);
+        // This is the state left by a completed bank-document cancellation.
+        jdbc.update("UPDATE orders SET invoice_payment_mode='OWNER_PAPER_INVOICE', paper_invoice_automation_hold=1 WHERE order_id=?", order);
+        login(world.admin);
+        payments.createForOrderAuthorized(order, world.admin.auth());
+        payments.markPaperInvoiceIssuedAuthorized(order, world.admin.auth());
+        long linkId = num(currentLink(order), "id");
+        String reason = "7 400 ₽ поступили на расчётный счёт ИП владельца в Альфа-Банке";
+        assertThatThrownBy(() -> payments.confirmPaidByManualCardTransfer(linkId, true, true, 7_800_00L,
+                reason, null, ContractorRecipientType.OWNER, null, "OWNER", world.admin.username, world.admin.auth()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(orderStatus(order)).isNotEqualTo(STATUS_PAID);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            payments.confirmPaidByManualCardTransfer(linkId, true, true, 7_400_00L, reason, null,
+                    ContractorRecipientType.OWNER, null, "OWNER", world.admin.username, world.admin.auth());
+        }
+        assertThat(orderStatus(order)).isEqualTo(STATUS_PAID);
+        assertThat(link(linkId)).containsEntry("status", "CONFIRMED").containsEntry("payment_method", "OWNER_PAPER_INVOICE");
+        var receipts = jdbc.queryForList("SELECT actual_recipient_type, amount_kopecks FROM contractor_actual_payment_attributions WHERE order_id=?", order);
+        assertThat(receipts).singleElement().satisfies(receipt -> {
+            assertThat(receipt).containsEntry("actual_recipient_type", "OWNER");
+            assertThat(num(receipt, "amount_kopecks")).isEqualTo(7_400_00);
+        });
+        assertThat(clientMessages).isEmpty();
+    }
+
+    @Test
     @DisplayName("13 счёт заказа: специалист с резервом → его реквизиты, резерв RESERVED")
     void s13_orderInvoiceIsIssuedToTheSpecialist() {
         Person anna = world.specialist("Анна Специалист");
@@ -1120,6 +1195,33 @@ class PaymentScenarioMatrixMySqlIntegrationTest {
         assertThat(num(secondReserve, "amount_kopecks")).isEqualTo(3_200_00);
         assertThat(num(secondReserve, "recipient_profile_id")).isEqualTo(anna.specialistProfileId);
         assertThat(clientMessages).hasSize(1);
+    }
+
+    @Test
+    void s17c_cancelledSupplementUpdatesOnlyItsPositionOnTheSameCommonInvoice() {
+        Person specialist = world.specialist("Специалист");
+        world.payable(specialist, ContractorRole.SPECIALIST, 10_000_00);
+        long company = world.company("Общий счёт с доплатой");
+        long first = world.order(company, specialist, 2_000_00, STATUS_PUBLISHED);
+        long second = world.order(company, specialist, 1_000_00, STATUS_PUBLISHED);
+        long task = world.completedBadReview(first, 200_00);
+        CommonInvoiceSeed common = world.commonInvoice("Связь с доплатой", first, second);
+        // Start with the persisted, previously sent invoice. Delivery and overdue transitions
+        // are exercised separately; cancellation must work even when the sender is paused.
+        jdbc.update("UPDATE common_invoices SET status='COLLECTING' WHERE invoice_id=?", common.invoiceId());
+        assertThat(billing.refreshLinkedOrderAmount(first)).isTrue();
+        assertThat(num(invoice(common), "amount_kopecks")).isEqualTo(3_200_00);
+        jdbc.update("UPDATE common_invoices SET status='UNPAID', sent_at=NOW(6) WHERE invoice_id=?", common.invoiceId());
+        jdbc.update("UPDATE common_invoice_orders SET unpaid=1 WHERE invoice_id=?", common.invoiceId());
+        login(world.admin);
+        badReviewTasks.cancelTask(task);
+        badReviewTasks.cancelTask(task);
+        assertThat(num(invoice(common), "amount_kopecks")).isEqualTo(3_000_00);
+        assertThat(jdbc.queryForList("""
+                SELECT amount_kopecks FROM common_invoice_orders WHERE invoice_id = ? ORDER BY order_id
+                """, Long.class, common.invoiceId())).containsExactly(2_000_00L, 1_000_00L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_links WHERE order_id IN (?, ?)",
+                Integer.class, first, second)).isZero();
     }
 
     // ================================================================================================
