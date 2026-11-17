@@ -267,6 +267,9 @@
             <div>
               <strong>{{ invoiceProblemTitle() }}</strong>
               <p>{{ invoiceProblem() }}</p>
+              @if (invoiceDetails()?.repricingReview; as review) {
+                <p>{{ review.dispatchStartedAt ? 'Последняя попытка' : 'Сообщение подготовлено' }} {{ (review.dispatchStartedAt || review.preparedAt) | date:'dd.MM.yyyy HH:mm' }}.</p>
+              }
               @if (invoiceProblemSteps().length) {
                 <ol class="invoice-problem-steps" aria-label="Как исправить проблему">
                   @for (step of invoiceProblemSteps(); track step) {
@@ -337,6 +340,12 @@
               </button>
             </header>
             <div class="side-actions">
+              @if (invoiceDetails()?.repricingReview?.statementReviewAvailable) {
+                <button type="button" class="side-action success" (click)="replaceReviewedAmount()" [disabled]="!!mutating()">
+                  <span class="material-icons-sharp" aria-hidden="true">receipt_long</span>
+                  <span class="side-action-text"><strong>Обновить счёт после сверки</strong><small>После проверки выписки и чата отправить актуальную сумму.</small></span>
+                </button>
+              }
               @if (canRecordBadReviewReceipt()) {
                 <button type="button" class="side-action success" (click)="markInvoicePaid()" [disabled]="!!mutating()">
                   <span class="material-icons-sharp" aria-hidden="true">person_pin</span>

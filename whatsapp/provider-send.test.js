@@ -2,7 +2,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
-const { sendProviderMessage } = require("./provider-send");
+const { sendProviderMessage, OutboundBrowserHealth } = require("./provider-send");
 
 test("text and document sends bypass a stalled read acknowledgement", async () => {
   let readCalls = 0, sends = 0;
@@ -62,9 +62,31 @@ test("an ACK that never progresses returns the created message with its last ACK
   assert.ok(Date.now() - started >= 50); assert.ok(reads >= 1);
 });
 
-test("ACK waiting is disabled by default and for legacy message shapes", async () => {
+test("ACK waiting is disabled by default; enabled sends with a missing ACK use the provider ID", async () => {
   const client = { sendMessage: async () => created(0), getMessageById: assert.fail };
   assert.equal((await sendProviderMessage(client, "chat", "text")).ack, 0);
-  const legacy = { sendMessage: async () => ({ id: "legacy" }), getMessageById: assert.fail };
-  assert.equal((await sendProviderMessage(legacy, "chat", "text", {}, { ackTimeoutMs: 1000 })).id, "legacy");
+  const legacy = { sendMessage: async () => ({ id: "legacy" }), getMessageById: async () => ({ ack: 1 }) };
+  assert.equal((await sendProviderMessage(legacy, "chat", "text", {}, { ackTimeoutMs: 1000, pollMs: 1 })).ack, 1);
+});
+
+test("a timeout holds new sends until a fresh connected probe; concurrent checks share one probe", async () => {
+  let resolveProbe;
+  let now = 0, calls = 0;
+  const health = new OutboundBrowserHealth(() => { calls++; return new Promise(resolve => { resolveProbe = resolve; }); }, () => now);
+  assert.equal(health.available(), true);
+  health.timeout();
+  assert.equal(health.available(), false);
+  assert.equal(health.available(), false);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 1);
+  health.timeout();
+  resolveProbe("CONNECTED");
+  await new Promise(resolve => setImmediate(resolve));
+  now += 1000;
+  assert.equal(health.available(), false);
+  await new Promise(resolve => setImmediate(resolve));
+  resolveProbe("CONNECTED");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(health.available(), true);
+  assert.equal(calls, 2);
 });

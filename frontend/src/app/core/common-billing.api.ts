@@ -77,7 +77,17 @@ export interface CommonInvoicePaymentRefResponse {
   terminalKey?: string | null;
 }
 
+export interface CommonInvoiceRepricingReview {
+  operationId: string;
+  previousKopecks: number;
+  currentKopecks: number;
+  preparedAt: string;
+  dispatchStartedAt?: string | null;
+  statementReviewAvailable: boolean;
+}
+
 export interface CommonInvoiceDetailsResponse {
+  repricingReview?: CommonInvoiceRepricingReview | null;
   delivery?: import('@otziv/client-common/billing-payments').DeliveryOperation | null;
   summary: CommonInvoiceSummaryResponse;
   orders: CommonInvoiceOrderResponse[];
@@ -374,6 +384,14 @@ export class CommonBillingApi {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/contractor-confirmation`,
       request
+    );
+  }
+
+  replaceReviewedAmount(invoiceId: number, review: CommonInvoiceRepricingReview): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/attention/replace-reviewed-amount`,
+      { operationId: review.operationId, previousKopecks: review.previousKopecks,
+        currentKopecks: review.currentKopecks, statementChecked: true }
     );
   }
 

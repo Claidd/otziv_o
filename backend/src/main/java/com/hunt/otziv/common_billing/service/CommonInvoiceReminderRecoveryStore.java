@@ -38,7 +38,7 @@ public class CommonInvoiceReminderRecoveryStore {
     public List<Long> candidates(long afterInvoice, int limit) {
         return jdbc.queryForList("""
                 SELECT DISTINCT invoice_id FROM common_invoice_message_queue
-                WHERE invoice_id>? AND state='UNKNOWN' AND created_at<=?
+                WHERE invoice_id>? AND replacement_operation_id IS NULL AND state='UNKNOWN' AND created_at<=?
                   AND (lease_until IS NULL OR lease_until<?) ORDER BY invoice_id LIMIT ?
                 """, Long.class, afterInvoice, LocalDateTime.now().minusMinutes(5), LocalDateTime.now(), Math.max(1, Math.min(20, limit)));
     }
@@ -60,7 +60,7 @@ public class CommonInvoiceReminderRecoveryStore {
                 || invoice.getAccount() == null || !invoice.getAccount().isEnabled()) return Optional.empty();
         var pending = jdbc.query("""
                 SELECT operation_id,state,created_at,lease_until,SHA2(envelope_ciphertext,256) envelope_hash
-                FROM common_invoice_message_queue WHERE invoice_id=? AND state NOT IN ('SENT','SUPERSEDED')
+                FROM common_invoice_message_queue WHERE invoice_id=? AND replacement_operation_id IS NULL AND state NOT IN ('SENT','SUPERSEDED')
                 ORDER BY created_at LIMIT 2
                 """ + (lock ? " FOR UPDATE" : ""), (r,n) -> {
             var lease = r.getTimestamp("lease_until");

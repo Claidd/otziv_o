@@ -243,6 +243,14 @@ public class CommonBillingAdminController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/replace-reviewed-amount")
+    public CommonInvoiceDetailsResponse replaceReviewedAmount(@PathVariable Long invoiceId,
+            @Valid @RequestBody com.hunt.otziv.common_billing.dto.CommonInvoiceRepricingRequest request, Principal principal) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.replaceReviewedAmount(invoiceId, request, principal);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/retry")
     public CommonInvoiceDetailsResponse retryAttention(@PathVariable Long invoiceId) {
         requireCanMutateInvoice(invoiceId);

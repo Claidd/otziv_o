@@ -57,6 +57,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -1575,17 +1576,19 @@ class ScheduledClientMessageServiceTest {
         verify(stateRepository).save(state);
     }
 
-    @Test
-    void rolledBackStateIsQuarantinedUntilManualReview() {
+    @ParameterizedTest
+    @EnumSource(value = ClientMessageScenario.class, names = {"PAYMENT_REMINDER", "ARCHIVE_REORDER_OFFER"})
+    void rolledBackStateIsQuarantinedUntilManualReview(ClientMessageScenario scenario) {
         LocalDateTime now = LocalDateTime.of(2026, 8, 1, 16, 30);
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
                 .id(5819L)
-                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .scenario(scenario)
                 .targetType(ClientMessageTargetType.ORDER)
                 .targetKey("order:24753:2026-08-01T14:00")
                 .companyId(100L)
                 .orderId(24753L)
                 .status(ScheduledMessageStateStatus.ACTIVE)
+                .deliveryStatus("CLAIMED")
                 .lastErrorCode("state_transaction_in_progress")
                 .nextAttemptAt(now.minusMinutes(1))
                 .lockedUntil(now.plusMinutes(5))
@@ -1607,16 +1610,20 @@ class ScheduledClientMessageServiceTest {
         );
 
         assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
-        assertEquals("state_transaction_outcome_uncertain", state.getLastErrorCode());
+        boolean archiveOffer = scenario == ClientMessageScenario.ARCHIVE_REORDER_OFFER;
+        String expectedError = archiveOffer ? "rollback_receipt_only" : "state_transaction_outcome_uncertain";
+        assertEquals(expectedError, state.getLastErrorCode());
+        assertEquals(archiveOffer, ClientMessageStateSafety.onlyReconcileReceipt(state));
         assertTrue(state.getLastErrorMessage().contains("автоматический повтор остановлен"));
         assertEquals(1, state.getConsecutiveFailures());
+        assertEquals("UNKNOWN", state.getDeliveryStatus());
         assertNull(state.getNextAttemptAt());
         assertNull(state.getLockedUntil());
         ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
                 ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
         verify(attemptRepository).save(attemptCaptor.capture());
         assertEquals(ScheduledMessageAttemptStatus.FAILED, attemptCaptor.getValue().getStatus());
-        assertEquals("state_transaction_outcome_uncertain", attemptCaptor.getValue().getErrorCode());
+        assertEquals(expectedError, attemptCaptor.getValue().getErrorCode());
         verify(stateRepository).save(state);
     }
 

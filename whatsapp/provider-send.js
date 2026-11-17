@@ -22,9 +22,8 @@ async function sendProviderMessage(client, destination, content, options = {},
 
 function awaitServerAck(client, sent, { timeoutMs, pollMs = 1000, acks }) {
   const id = serializedId(sent.id);
-  let ack = Number(sent.ack);
-  // Without an ID or a numeric ACK there is nothing to wait for (legacy shape).
-  if (!id || !Number.isFinite(ack) || ack >= 1) return Promise.resolve(sent);
+  let ack = Number.isSafeInteger(sent.ack) ? sent.ack : undefined;
+  if (!id || ack >= 1) return Promise.resolve(sent);
   return new Promise(resolve => {
     let settled = false, poller = null;
     const finish = () => {
@@ -35,9 +34,8 @@ function awaitServerAck(client, sent, { timeoutMs, pollMs = 1000, acks }) {
       resolve(sent);
     };
     const observe = value => {
-      const next = Number(value);
-      if (!Number.isFinite(next)) return;
-      ack = next;
+      if (!Number.isSafeInteger(value)) return;
+      ack = value;
       if (ack >= 1) finish();
     };
     const onAck = (messageId, value) => { if (messageId === id) observe(value); };
@@ -52,4 +50,39 @@ function awaitServerAck(client, sent, { timeoutMs, pollMs = 1000, acks }) {
   });
 }
 
-module.exports = { sendProviderMessage, awaitServerAck };
+// A browser timeout quarantines only this client. A single read-only probe runs
+// in the background; a later timeout invalidates an older probe's result.
+class OutboundBrowserHealth {
+  constructor(getState, now = Date.now) {
+    this.getState = getState;
+    this.now = now;
+    this.generation = 0;
+    this.held = false;
+    this.probing = false;
+    this.retryAt = 0;
+  }
+  timeout() {
+    this.generation++;
+    this.held = true;
+    this.retryAt = 0;
+  }
+  available() {
+    if (!this.held) return true;
+    if (!this.probing && this.now() >= this.retryAt) {
+      const generation = this.generation;
+      this.probing = true;
+      Promise.resolve().then(() => this.getState()).then(state => {
+        if (generation === this.generation && state === "CONNECTED") this.held = false;
+      }).catch(() => {}).finally(() => {
+        this.probing = false;
+        this.retryAt = this.now() + 1000;
+      });
+    }
+    return false;
+  }
+}
+function providerFailureCode(error) {
+  if (/timeout|timed out/iu.test(String(error?.name || "") + " " + String(error?.message || ""))) return "provider_timeout";
+  return "provider_error";
+}
+module.exports = { sendProviderMessage, awaitServerAck, OutboundBrowserHealth, providerFailureCode };

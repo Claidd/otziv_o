@@ -38,6 +38,7 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
         manager = new DataSourceTransactionManager(ds); tx = new TransactionTemplate(manager); jdbc = new JdbcTemplate(ds);
         jdbc.execute("DROP TABLE IF EXISTS common_invoice_message_queue");
         jdbc.execute(Files.readString(Path.of("src/main/resources/db/migration/V1_10_311__common_invoice_message_queue.sql")));
+        jdbc.execute(Files.readString(Path.of("src/main/resources/db/migration/V1_10_401__reviewed_common_invoice_messages.sql")));
         var properties = new CredentialEncryptionProperties();
         properties.setActiveKeyId("queue-test");
         properties.setActiveKeyBase64(Base64.getEncoder().encodeToString(new byte[32]));
@@ -109,6 +110,37 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
             assertThat(retry.mayDispatch()).isFalse();
             assertThat(queue.status(retry.operationId()).attempts()).isEqualTo(1);
         }
+    }
+
+    @Test void reviewedReplacementKeepsPriorReceiptOnlyAndIssuesOneNewAmount() {
+        var old = draft("К оплате 1400");
+        var next = new PreparedCommonInvoiceMessage(10L, old.chatCompany(), old.managerClientId(), old.groupId(),
+                "К оплате 1800", "frozen-copy", false, false, false, "bad-review-invoice:10:2", false, null, 180000).asReviewedUpdate();
+        tx.executeWithoutResult(status -> queue.enqueue(old));
+        var claim = queue.claim().orElseThrow();
+        queue.markDispatchStarted(claim);
+        assertThat(queue.reviewRow(10L, old.operationId()).attempted()).isNotNull();
+        tx.executeWithoutResult(status -> queue.finish(claim, "UNKNOWN", "operation_unknown", 0));
+        tx.executeWithoutResult(status -> assertThat(queue.recordStatementReview(10L, old.operationId(), next.operationId(), "operator")).isFalse());
+        var checked = queue.claim().orElseThrow();
+        assertThat(checked.mayDispatch()).isFalse();
+        tx.executeWithoutResult(status -> queue.finish(checked, "UNKNOWN", "whatsapp_history_checked_no_receipt", 300));
+        tx.executeWithoutResult(status -> {
+            assertThat(queue.recordStatementReview(10L, old.operationId(), next.operationId(), "operator")).isTrue();
+            queue.enqueue(next);
+        });
+        tx.executeWithoutResult(status -> assertThat(queue.recordStatementReview(10L, old.operationId(), next.operationId(), "operator")).isFalse());
+        assertThat(queue.unresolved(10L)).contains(next);
+        assertThat(next.reviewedUpdate()).isTrue();
+        assertThat(next.telegramCopyTransferNumber()).isEqualTo(old.telegramCopyTransferNumber());
+        assertThat(queue.snapshot(old.operationId())).isEqualTo(old);
+        var current = queue.claim().orElseThrow();
+        assertThat(current.operationId()).isEqualTo(next.operationId());
+        assertThat(current.mayDispatch()).isTrue();
+        var late = queue.claimRecovery(10L, old.operationId()).orElseThrow();
+        assertThat(late.mayDispatch()).isFalse();
+        tx.executeWithoutResult(status -> queue.finish(late, "SENT", null, 0));
+        assertThat(queue.status(next.operationId()).status()).isEqualTo("SENDING");
     }
 
     @Test void pausedSwitchDoesNotSpendAttemptsOrReleaseFrozenEnvelope() {

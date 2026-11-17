@@ -335,6 +335,30 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
             markBadReviewSupplementAttention(invoice, orderId, taskId, "Результат предыдущей отправки требует проверки");
             return true;
         }
+        applyRepricedAmounts(invoice, items, amounts);
+        if (immediateClientMessagesEnabled() && appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true))
+            sendInvoiceAfterCommit(invoice.getId(), false);
+        return true;
+    }
+
+    void applyReviewedAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items, long expectedTotal) {
+        if (invoice.getBadReviewBankRefId() != null || !safeToReprice(invoice) || items.isEmpty()
+                || items.stream().anyMatch(i -> !i.isActiveMembership() || !i.isUnpaid() || hasBadReviewSuccessorPaymentEvidence(i)))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Проверьте поступления, документы и состав счёта");
+        Map<Long, Long> amounts = new LinkedHashMap<>();
+        long total = 0;
+        for (var item : items) {
+            long amount = amountKopecks(payableSum(item.getOrder()));
+            if (amount <= 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Сумма заказа изменилась");
+            total = Math.addExact(total, amount);
+            amounts.put(item.orderId(), amount);
+        }
+        if (total != expectedTotal || total == invoice.getAmountKopecks())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Обновите сумму и повторите сверку");
+        applyRepricedAmounts(invoice, items, amounts);
+    }
+
+    private void applyRepricedAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items, Map<Long, Long> amounts) {
         invoiceInitialization.releaseReservationForRepricing(invoice);
         CommonInvoiceRouteState.clearPaymentRoute(invoice);
         for (var item : items) {
@@ -354,9 +378,6 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         invoice.setPaymentMessageConfirmed(false);
         invoice.setPaymentMessageChannel(null);
         recalculateInvoice(invoice, items);
-        if (immediateClientMessagesEnabled() && appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true))
-            sendInvoiceAfterCommit(invoice.getId(), false);
-        return true;
     }
 
     @org.springframework.beans.factory.annotation.Autowired

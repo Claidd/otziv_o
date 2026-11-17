@@ -47,7 +47,7 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
     public List<Row> deliveryQueueHealth() {
         return jdbc.query("SELECT state,COUNT(*),GREATEST(0,TIMESTAMPDIFF(SECOND,MIN(created_at),CURRENT_TIMESTAMP(6))),"
                 + "SUM(CASE WHEN lease_until<CURRENT_TIMESTAMP(6) THEN 1 ELSE 0 END) FROM common_invoice_message_queue "
-                + "WHERE state IN ('QUEUED','SENDING','RETRYABLE','UNKNOWN','FAILED') GROUP BY state",
+                + "WHERE replacement_operation_id IS NULL AND state IN ('QUEUED','SENDING','RETRYABLE','UNKNOWN','FAILED') GROUP BY state",
                 (rs, n) -> new Row(State.valueOf(rs.getString(1)), rs.getLong(2), rs.getDouble(3), rs.getLong(4)));
     }
 
@@ -76,7 +76,7 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
     }
 
     Optional<PreparedCommonInvoiceMessage> unresolved(long invoiceId) {
-        return jdbc.query("SELECT operation_id FROM common_invoice_message_queue WHERE invoice_id=? AND state NOT IN ('SENT','SUPERSEDED') ORDER BY created_at LIMIT 1",
+        return jdbc.query("SELECT operation_id FROM common_invoice_message_queue WHERE invoice_id=? AND replacement_operation_id IS NULL AND state NOT IN ('SENT','SUPERSEDED') ORDER BY created_at LIMIT 1",
                 (rs, row) -> rs.getString(1), invoiceId).stream().findFirst().map(this::snapshot);
     }
 
@@ -90,6 +90,33 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
                 throw new IllegalStateException("Billing snapshot identity mismatch");
             return prepared;
         } catch (Exception invalid) { throw new IllegalStateException("Billing snapshot is unreadable; dispatch blocked", invalid); }
+    }
+
+    public void markDispatchStarted(Claim claim) {
+        int updated = jdbc.update("""
+                UPDATE common_invoice_message_queue SET dispatch_started_at=CURRENT_TIMESTAMP(6)
+                WHERE operation_id=? AND claim_token=? AND lease_until>CURRENT_TIMESTAMP(6)
+                  AND replacement_operation_id IS NULL
+                """, claim.operationId(), claim.token());
+        if (updated != 1) throw new IllegalStateException("Billing dispatch claim has expired");
+    }
+
+    record ReviewRow(java.time.LocalDateTime prepared, java.time.LocalDateTime attempted, String replacement) {}
+
+    ReviewRow reviewRow(long invoiceId, String operationId) {
+        return jdbc.query("SELECT created_at,dispatch_started_at,replacement_operation_id FROM common_invoice_message_queue WHERE invoice_id=? AND operation_id=?",
+                (rs, n) -> new ReviewRow(rs.getObject(1, java.time.LocalDateTime.class),
+                        rs.getObject(2, java.time.LocalDateTime.class), rs.getString(3)), invoiceId, operationId).stream().findFirst().orElse(null);
+    }
+
+    // Keep the original outcome and receipt-only reconciliation. Only its newer, different amount can be issued.
+    @Transactional(propagation = Propagation.MANDATORY)
+    boolean recordStatementReview(long invoiceId, String operationId, String replacement, String actor) {
+        return jdbc.update("""
+                UPDATE common_invoice_message_queue SET reviewed_at=CURRENT_TIMESTAMP(6),reviewed_by=?,replacement_operation_id=?
+                WHERE invoice_id=? AND operation_id=? AND replacement_operation_id IS NULL AND lease_until IS NULL
+                AND (state='SENT' OR (state='UNKNOWN' AND error_code='whatsapp_history_checked_no_receipt'))
+                """, actor, replacement, invoiceId, operationId) == 1;
     }
 
     public DeliveryOperation status(String operationId) {
@@ -160,7 +187,7 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
     public void finish(Claim claim, String state, String errorCode, int delaySeconds, boolean held) {
         jdbc.update("""
                 UPDATE common_invoice_message_queue SET state=?,error_code=?,claim_token=NULL,lease_until=NULL,
-                    next_attempt_at=TIMESTAMPADD(SECOND,?,CURRENT_TIMESTAMP(6)),updated_at=CURRENT_TIMESTAMP(6),
+                    next_attempt_at=TIMESTAMPADD(SECOND,IF(replacement_operation_id IS NULL,?,86400),CURRENT_TIMESTAMP(6)),updated_at=CURRENT_TIMESTAMP(6),
                     attempts=GREATEST(0,attempts-?)
                 WHERE operation_id=? AND claim_token=?
                 """, state, errorCode, delaySeconds, held && claim.mayDispatch() ? 1 : 0, claim.operationId(), claim.token());

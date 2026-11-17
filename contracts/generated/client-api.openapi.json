@@ -5873,6 +5873,73 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/common-billing/invoices/{invoiceId}/attention/replace-reviewed-amount" : {
+      "post" : {
+        "operationId" : "CommonBillingAdminController_replaceReviewedAmount",
+        "x-java-handler" : "com.hunt.otziv.common_billing.controller.CommonBillingAdminController#replaceReviewedAmount",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CommonInvoiceRepricingRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "invoiceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CommonInvoiceDetailsResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/common-billing/invoices/{invoiceId}/attention/resolve" : {
       "post" : {
         "operationId" : "CommonBillingAdminController_resolveAttention",
@@ -15807,6 +15874,13 @@
               "type" : "null"
             } ]
           },
+          "repricingReview" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/CommonInvoiceRepricingReviewOutput"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "summary" : {
             "anyOf" : [ {
               "$ref" : "#/components/schemas/CommonInvoiceSummaryResponseOutput"
@@ -15815,7 +15889,7 @@
             } ]
           }
         },
-        "required" : [ "delivery", "nextCycleOrders", "orderCards", "orders", "paymentEvidenceToken", "paymentRefs", "summary" ],
+        "required" : [ "delivery", "nextCycleOrders", "orderCards", "orders", "paymentEvidenceToken", "paymentRefs", "repricingReview", "summary" ],
         "additionalProperties" : true
       },
       "CommonInvoiceManualCardPaymentRequestInput" : {
@@ -16300,6 +16374,71 @@
         "x-java-type" : "com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeTarget",
         "type" : "string",
         "enum" : [ "EMPLOYEE_REQUISITES", "OWNER_TBANK", "OWNER_BANK_REISSUE" ]
+      },
+      "CommonInvoiceRepricingRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.common_billing.dto.CommonInvoiceRepricingRequest",
+        "type" : "object",
+        "properties" : {
+          "currentKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          },
+          "operationId" : {
+            "type" : "string",
+            "x-not-blank" : true
+          },
+          "previousKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          },
+          "statementChecked" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "operationId" ],
+        "additionalProperties" : true
+      },
+      "CommonInvoiceRepricingReviewOutput" : {
+        "x-java-type" : "com.hunt.otziv.common_billing.dto.CommonInvoiceRepricingReview",
+        "type" : "object",
+        "properties" : {
+          "currentKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          },
+          "dispatchStartedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "operationId" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "preparedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "previousKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          },
+          "statementReviewAvailable" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "currentKopecks", "dispatchStartedAt", "operationId", "preparedAt", "previousKopecks", "statementReviewAvailable" ],
+        "additionalProperties" : true
       },
       "CommonInvoiceReturnableOrdersResponseItemOutput" : {
         "x-java-type" : "com.hunt.otziv.common_billing.dto.CommonInvoiceReturnableOrdersResponse$Item",
@@ -29021,7 +29160,7 @@
     "sha256" : "05942b0d4f2864de138264dc5b85be9dd18c3b85b6b4760bdfa504f0f5089a3c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java",
-    "sha256" : "e95935f0d9de1fcfc19d346cfa62925eac541d074ab0130a076d379aef16f16e"
+    "sha256" : "f732e23d298c4b93961ee0969579616489fc63ef677531c3a90dabef007a6fd7"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonInvoiceArchiveController.java",
     "sha256" : "c641daee6dbb7b81406e67f3fb245c6e142dbadce839675e1d39711cae48382b"
@@ -29066,7 +29205,7 @@
     "sha256" : "32c6802e56d7f2c420b54f6be52f5f4ce559d62f9f2cdcc6fca75634c0f26e4f"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceDetailsResponse.java",
-    "sha256" : "03caad38037f5634b3fea4eb69e3ce1234f36bacf16b70101a33945f9d648516"
+    "sha256" : "7d3ec2befc476936c458df2ee1f8d958e9ca173d55f9601ec31559ec0062fabd"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceManualCardPaymentRequest.java",
     "sha256" : "dfb6cdb21eed5e890c80b506df0ca0d3760631bc187e983945bb6d6d95bafcaa"
@@ -29097,6 +29236,12 @@
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoicePaymentRouteChangeTarget.java",
     "sha256" : "9b0229da7a9574e7e9b974e355393f4e88c54839c9a8c491d10698162460aced"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceRepricingRequest.java",
+    "sha256" : "3d61d5a8006748a06c319885da072d1e070c85e8d36820bde265add087ac702b"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceRepricingReview.java",
+    "sha256" : "7604acd2b9565bb6ba706980217c51a9997fa6a66a0baee285f9ca4bec9bbec1"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceReturnableOrdersResponse.java",
     "sha256" : "172a5a1f96d96ef405538c6b7f72a7ac5f2a73b5889fb8b75c5671abcdd9b8f9"
@@ -29716,6 +29861,8 @@
     "CommonInvoicePaymentRouteChangeRequestInput" : "com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeRequest",
     "CommonInvoicePaymentRouteChangeTargetInput" : "com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeTarget",
     "CommonInvoicePaymentRouteChangeTargetOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeTarget",
+    "CommonInvoiceRepricingRequestInput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceRepricingRequest",
+    "CommonInvoiceRepricingReviewOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceRepricingReview",
     "CommonInvoiceReturnableOrdersResponseItemOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceReturnableOrdersResponse$Item",
     "CommonInvoiceReturnableOrdersResponseOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceReturnableOrdersResponse",
     "CommonInvoiceRouteRecipientsResponseOutput" : "com.hunt.otziv.common_billing.dto.CommonInvoiceRouteRecipientsResponse",

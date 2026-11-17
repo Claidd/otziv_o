@@ -848,6 +848,11 @@ public class ManagerControlInvoiceDiagnostics {
                     + (solution.isBlank() ? "проверьте заказы общего счета" : solution)
                     + ". После исправления нажмите «Починить», чтобы безопасно повторить одобрение.";
         }
+        if (error.startsWith("bad_review_supplement_required:")) {
+            return "После изменения задач сумма заказов отличается от суммы выставленного счёта или её пересчёт требует сверки. "
+                    + "Откройте счёт и проверьте последнюю отправку, чат и поступления у получателя. "
+                    + "Если оплата не поступила, используйте доступное в карточке действие после сверки.";
+        }
         if (error.startsWith("payable_change_requires_supplement")) {
             if (commonInvoiceArchivedCycleRevived(invoice)) {
                 return "Общий счёт был закрыт в архив, а его заказы позже вернули в работу без восстановления счёта; "

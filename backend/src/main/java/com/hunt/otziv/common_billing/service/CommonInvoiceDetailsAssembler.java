@@ -132,7 +132,48 @@ public class CommonInvoiceDetailsAssembler {
         List<CommonInvoicePaymentRef> paymentRefs = paymentRefEvidenceRows(invoice);
         Map<String, String> terminalLabels = paymentTerminalLabels(invoice, paymentRefs);
         String compositionBlock = compositionService.previewBlockReason(invoice);
-        return new CommonInvoiceDetailsResponse(toInvoiceSummary(invoice, items, terminalLabels.get(normalize(invoice == null ? null : invoice.getTbankTerminalKey()))), items.stream().map(item -> toOrderResponse(item, compositionBlock)).toList(), toOrderCards(items), toNextCycleOrders(items), toPaymentRefEvidence(paymentRefs, terminalLabels), paymentEvidenceToken(invoice, paymentRefs), messageQueue.status(invoice.getPaymentMessageOperationId()));
+        var delivery = messageQueue.status(invoice.getPaymentMessageOperationId());
+        return new CommonInvoiceDetailsResponse(toInvoiceSummary(invoice, items, terminalLabels.get(normalize(invoice == null ? null : invoice.getTbankTerminalKey()))), items.stream().map(item -> toOrderResponse(item, compositionBlock)).toList(), toOrderCards(items), toNextCycleOrders(items), toPaymentRefEvidence(paymentRefs, terminalLabels), paymentEvidenceToken(invoice, paymentRefs), delivery, repricingReview(invoice, items, delivery));
+    }
+
+    boolean needsRepricingReview(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        if (!invoice.isBadReviewPayable() || !normalize(invoice.getLastError()).startsWith(CommonInvoiceMembershipWorkflow.BAD_REVIEW_SUPPLEMENT_REQUIRED))
+            return false;
+        var review = repricingReview(invoice, items, messageQueue.status(invoice.getPaymentMessageOperationId()));
+        return review != null && review.previousKopecks() != review.currentKopecks()
+                && "MANUAL_MOBILE_BANK".equals(invoice.getPaymentRouteType());
+    }
+
+    com.hunt.otziv.common_billing.dto.CommonInvoiceRepricingReview repricingReview(CommonInvoice invoice,
+            List<CommonInvoiceOrder> items, com.hunt.otziv.client_messages.api.DeliveryOperation delivery) {
+        if (delivery == null || invoice.getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION
+                || !normalize(invoice.getLastError()).startsWith(CommonInvoiceMembershipWorkflow.BAD_REVIEW_SUPPLEMENT_REQUIRED)
+                || !invoice.isBadReviewPayable() || !delivery.operationId().equals("bad-review-invoice:" + invoice.getId() + ":" + invoice.getBadReviewRevision()))
+            return null;
+        var row = messageQueue.reviewRow(invoice.getId(), delivery.operationId());
+        if (row == null || row.replacement() != null) return null;
+        PreparedCommonInvoiceMessage previous;
+        try {
+            previous = messageQueue.snapshot(delivery.operationId());
+        } catch (IllegalStateException unreadable) {
+            // Older backups may reference a retired key. The invoice remains readable; dispatch still requires its snapshot.
+            log.warn("Common invoice {} has no readable delivery snapshot for repricing", invoice.getId());
+            previous = null;
+        }
+        long total = 0;
+        for (var item : items) {
+            if (!item.isActiveMembership()) return null;
+            long amount = returnableAmountKopecks(item.getOrder());
+            if (amount <= 0) return null;
+            total = Math.addExact(total, amount);
+        }
+        boolean checkedOutcome = "SENT".equals(delivery.status()) || ("UNKNOWN".equals(delivery.status())
+                && "whatsapp_history_checked_no_receipt".equals(delivery.errorCode()));
+        long previousAmount = previous == null ? invoice.getAmountKopecks() : previous.remainingKopecks();
+        return new com.hunt.otziv.common_billing.dto.CommonInvoiceRepricingReview(delivery.operationId(),
+                previousAmount, total, row.prepared(), row.attempted(),
+                previous != null && checkedOutcome && previousAmount != total && invoice.getPaidKopecks() == 0
+                        && "UNPAID".equals(invoice.getPreviousStatus()) && "MANUAL_MOBILE_BANK".equals(invoice.getPaymentRouteType()));
     }
 
     List<CommonInvoicePaymentRef> paymentRefEvidenceRows(CommonInvoice invoice) {

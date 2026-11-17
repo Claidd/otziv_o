@@ -202,6 +202,8 @@ const participantPhoneResolver = new ParticipantPhoneResolver({
   },
 });
 
+const { OutboundBrowserHealth, providerFailureCode } = require("./provider-send");
+const outboundHealth = new OutboundBrowserHealth(() => client.getState());
 const taskLimiter = new TaskLimiter(WHATSAPP_HTTP_MAX_CONCURRENCY);
 const operationLedger = new OperationLedger(
   process.env.WHATSAPP_OPERATION_LEDGER_PATH || path.join(AUTH_PATH, "outbound-operations"),
@@ -410,7 +412,7 @@ function minimalStatusPayload() {
 function gatewayReady() {
   // Readiness closes at the ledger utilization threshold, before admission does.
   return ready && authenticated && !shuttingDown && operationLedger.readiness().ready
-    && inboundInbox.isReadyForGateway();
+    && inboundInbox.isReadyForGateway() && outboundHealth.available();
 }
 
 function respondReady(_req, res) {
@@ -1053,7 +1055,7 @@ app.get("/qr", asyncRoute(async (req, res) => {
 }));
 
 function canStartOutbound() {
-  const allowed = ready && authenticated && client && !shuttingDown && operationLedger.admission().acceptingNew;
+  const allowed = ready && authenticated && client && !shuttingDown && operationLedger.admission().acceptingNew && outboundHealth.available();
   if (!allowed) taskLimiter.reject("not_ready");
   return allowed;
 }
@@ -1063,7 +1065,10 @@ async function observedSendMessage(destination, content, options) {
     return await require("./provider-send").sendProviderMessage(client, destination, content, options,
       { ackTimeoutMs: WHATSAPP_SEND_ACK_TIMEOUT_MS, acks: providerAcks });
   } catch (error) {
-    if (/timeout|timed out/iu.test(String(error?.message || ""))) taskLimiter.control().timeout();
+    if (providerFailureCode(error) === "provider_timeout") {
+      taskLimiter.control().timeout();
+      outboundHealth.timeout();
+    }
     throw error;
   }
 }
@@ -1074,7 +1079,8 @@ function providerResult(sent) {
   const messageId = serializedId(sent?.id) || null;
   if (!messageId) return null;
   const ack = Number(sent?.ack), sentAt = Number(sent?.timestamp) * 1000;
-  return { messageId, ack: WHATSAPP_SEND_ACK_TIMEOUT_MS > 0 && Number.isSafeInteger(ack) ? ack : undefined,
+  return { messageId, requireAck: WHATSAPP_SEND_ACK_TIMEOUT_MS > 0,
+    ack: WHATSAPP_SEND_ACK_TIMEOUT_MS > 0 && Number.isSafeInteger(sent?.ack) ? ack : undefined,
     sentAt: Number.isSafeInteger(sentAt) ? sentAt : undefined };
 }
 

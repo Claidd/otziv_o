@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -200,6 +201,17 @@ public class CommonInvoiceDeliveryService {
 
     void sendInvoiceMessage(Long invoiceId, boolean manual, boolean paymentRouteChanged, boolean checkVisibility) {
         queuePaymentMessage(invoiceId, false, manual, false, null, paymentRouteChanged, checkVisibility);
+    }
+
+    void enqueueReviewedRevision(Long invoiceId, LockedInvoicePaymentPrelude prelude, PreparedCommonInvoiceMessage old) {
+        if (messageQueue.unresolved(invoiceId).isPresent())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "По счёту осталась другая незавершённая отправка");
+        var prepared = preparePaymentMessage(invoiceId, false, false, false, null, true, prelude);
+        if (prepared == null || prepared.alreadyConfirmed() || !prepared.badReviewNotice()
+                || !Objects.equals(old.groupId(), prepared.groupId()) || !Objects.equals(old.managerClientId(), prepared.managerClientId())
+                || !Objects.equals(old.chatCompany(), prepared.chatCompany()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Проверьте доступность отправки и привязку чата");
+        messageQueue.enqueue(prepared.asReviewedUpdate());
     }
 
     boolean queuePaymentMessage(Long invoiceId, boolean reminder, boolean manual, boolean dueOnly,
@@ -467,7 +479,8 @@ public class CommonInvoiceDeliveryService {
     ClientMessageSendResult sendPreparedPaymentMessage(PreparedCommonInvoiceMessage prepared) {
         if (prepared.alreadyConfirmed()) return ClientMessageSendResult.sent(prepared.confirmedChannel());
         try {
-            TelegramTransferCopyButton copyButton = TelegramTransferCopyButton.fromFrozenTransferNumber(prepared.telegramCopyTransferNumber()).orElse(null);
+            TelegramTransferCopyButton copyButton = prepared.reviewedUpdate() ? null
+                    : TelegramTransferCopyButton.fromFrozenTransferNumber(prepared.telegramCopyTransferNumber()).orElse(null);
             return messageSender.deliverWithOperationId(prepared.chatCompany(), prepared.managerClientId(),
                     prepared.groupId(), prepared.message(), copyButton, prepared.operationId());
         } catch (RuntimeException e) {
@@ -507,6 +520,7 @@ public class CommonInvoiceDeliveryService {
             if (!messageQueue.owns(claim)) return null;
             String state;
             String code = result == null ? "operation_unknown" : result.errorCode();
+            boolean held = pausedBeforeDispatch || (claim.mayDispatch() && "gateway_not_ready".equals(code));
             if (result != null && result.sent() && result.messageId() != null && !result.messageId().isBlank() && result.messageId().length() <= 512) {
                 if (invoice != null && java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())) {
                     if (prepared.badReviewNotice() && invoice.isRepricedUnpaid() && remainingKopecks(invoice) == prepared.remainingKopecks()) {
@@ -535,7 +549,7 @@ public class CommonInvoiceDeliveryService {
             } else if (claim.mayDispatch() && "invoice_changed".equals(code)) {
                 state = "FAILED";
                 code = "context_changed";
-            } else if (pausedBeforeDispatch) {
+            } else if (held) {
                 state = "RETRYABLE";
             } else if (claim.mayDispatch() && com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result)) {
                 state = claim.previousAttempts() + (claim.mayDispatch() ? 1 : 0) < 5 ? "RETRYABLE" : "FAILED";
@@ -547,8 +561,8 @@ public class CommonInvoiceDeliveryService {
                 state = "UNKNOWN";
             }
             // A hold is not a send attempt: only real sends count towards the retry limit.
-            messageQueue.finish(claim, state, code, pausedBeforeDispatch || "UNKNOWN".equals(state) ? 300 : Math.min(300, 15 << Math.min(claim.previousAttempts(), 4)),
-                    pausedBeforeDispatch && "RETRYABLE".equals(state));
+            int delaySeconds = held || "UNKNOWN".equals(state) ? 300 : Math.min(300, 15 << Math.min(claim.previousAttempts(), 4));
+            messageQueue.finish(claim, state, code, delaySeconds, held && "RETRYABLE".equals(state));
             return null;
         });
     }

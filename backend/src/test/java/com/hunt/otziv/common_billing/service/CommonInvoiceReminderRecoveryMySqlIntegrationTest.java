@@ -52,6 +52,7 @@ class CommonInvoiceReminderRecoveryMySqlIntegrationTest {
         jdbc = new JdbcTemplate(ds); transactions = new DataSourceTransactionManager(ds); tx = new TransactionTemplate(transactions);
         jdbc.execute("DROP TABLE IF EXISTS common_invoice_message_queue");
         jdbc.execute(Files.readString(Path.of("src/main/resources/db/migration/V1_10_311__common_invoice_message_queue.sql")));
+        jdbc.execute(Files.readString(Path.of("src/main/resources/db/migration/V1_10_401__reviewed_common_invoice_messages.sql")));
         jdbc.execute("DROP TABLE IF EXISTS client_reminder_restart_audit");
         String audit = Files.readString(Path.of("src/main/resources/db/migration/V1_10_341__authorized_reminder_restart.sql"));
         jdbc.execute(audit.substring(audit.indexOf("CREATE TABLE")));

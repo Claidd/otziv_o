@@ -65,6 +65,7 @@ function providerOutcome(value) {
   if (typeof value === "string") return validMessageId(value) ? { messageId: value } : {};
   if (!value || typeof value !== "object" || !validMessageId(value.messageId)) return {};
   return { messageId: value.messageId,
+    ...(value.requireAck === true ? { requireAck: true } : {}),
     ack: Number.isSafeInteger(value.ack) && value.ack >= -1 && value.ack <= 10 ? value.ack : undefined,
     sentAt: Number.isSafeInteger(value.sentAt) ? value.sentAt : undefined };
 }
@@ -237,6 +238,7 @@ class OperationLedger {
     const value = { receiptBindingVersion: 1, historyReconciliationVersion: 1, state: record.state === "RUNNING" && !this.inFlight.has(record.key) ? "UNKNOWN" : record.state,
       messageId: record.state === "SUCCEEDED" ? record.messageId : null, envelopeHash: record.envelopeHash };
     if (record.providerAck !== undefined) value.providerAck = record.providerAck;
+    if (value.state === "UNKNOWN" && record.failureCode) value.failureCode = record.failureCode;
     return value;
   }
   missing() {
@@ -386,7 +388,7 @@ class OperationLedger {
   }
   completion(current, outcome) {
     const record = { ...current, completedAt: this.now() };
-    if (outcome.messageId && (outcome.ack === undefined || outcome.ack >= 1)) {
+    if (outcome.messageId && (outcome.ack >= 1 || (!outcome.requireAck && outcome.ack === undefined))) {
       record.state = "SUCCEEDED"; record.messageId = outcome.messageId;
       if (outcome.ack !== undefined) record.providerAck = outcome.ack;
       return record;
@@ -432,10 +434,16 @@ class OperationLedger {
     let durableResult = false, intended = null;
     try {
       let outcome;
-      try { outcome = await send(); } catch { /* A called provider may already have sent. */ }
+      let failureCode;
+      try { outcome = await send(); } catch (error) {
+        failureCode = require("./provider-send").providerFailureCode(error);
+      }
       // Provider events may have recorded an ID while the awaited send was
       // stalled. Preserve that durable observation when its response is lost.
       intended = this.completion(this.read(key), providerOutcome(outcome));
+      if (intended.state === "UNKNOWN") {
+        intended.failureCode = failureCode || (intended.providerMessageId ? "provider_ack_unconfirmed" : "provider_receipt_missing");
+      }
       this.replace(intended); durableResult = true;
       return { ...this.snapshot(intended), replayed: false };
     } catch (error) {

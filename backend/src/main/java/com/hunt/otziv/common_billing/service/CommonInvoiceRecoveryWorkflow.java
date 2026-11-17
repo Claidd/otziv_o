@@ -148,6 +148,8 @@ public class CommonInvoiceRecoveryWorkflow {
         ensureCommonInvoiceNeedsAttention(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         ensureNoUnresolvedPaymentRefsForGenericAttentionResolution(invoice);
+        if (invoiceDetailsAssembler.needsRepricingReview(invoice, items))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Сверьте выписку получателя перед изменением суммы");
         ensureAttentionCanBeResolved(invoice, items);
         resolveAttentionByCurrentItems(invoice, items);
         return invoiceAfterOrderPrelude(invoiceId);
