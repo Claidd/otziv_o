@@ -29811,7 +29811,7 @@
     "sha256" : "2df85404d4ed11d696f31578e63c233185f81391eaec3e21b4d40c570f510435"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "5418b911f273ef3b26d9136e6e7020bf05a701bea8eea297c7d4d0122768e261"
+    "sha256" : "1e88c18481543cea2e5fe57fab0b54a6c28e58db7908747c5a6d6ad8e09ccd13"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {

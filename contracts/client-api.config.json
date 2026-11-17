@@ -25,7 +25,7 @@
     "PaymentRouteRecipientsResponse": ["ownerCard"],
     "CommonInvoiceRouteRecipientsResponse": ["ownerCard"],
     "SpecialistManualPaymentReviewResponse": ["creditedAt", "confirmationBasis"],
-    "CommonInvoiceDetailsResponse": ["delivery"],
+    "CommonInvoiceDetailsResponse": ["delivery", "repricingReview"],
     "CommonManualPaymentOptionsResponse": ["ownerReport"],
     "CommonInvoiceOrderResponse": ["detachBlockedReason", "ordinaryAfterPaperCancel"],
     "CommonInvoicePaymentRouteChangeContextResponse": ["ownerManualRoute", "bankRecipientChangeAvailable"],
