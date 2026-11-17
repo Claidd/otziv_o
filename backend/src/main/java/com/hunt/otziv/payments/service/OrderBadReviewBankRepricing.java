@@ -18,6 +18,7 @@ public class OrderBadReviewBankRepricing implements BadReviewBankRepricing {
     private final OrderPaymentLinkWorkflow orderLinks;
     private final ManualPaymentAutomationControl messages;
     private final PaymentLinkSettlementService settlement;
+    private final PaymentLinkPreparationWorkflow preparation;
 
     public List<Long> due() { return links.dueBadReviewBankChecks(LocalDateTime.now()); }
 
@@ -47,6 +48,7 @@ public class OrderBadReviewBankRepricing implements BadReviewBankRepricing {
             link.setLastError(null);
             link.setBadReviewBankCheckAt(null);
             orderLinks.releaseClosedPaymentLink(link);
+            preparation.prepareAfterBadReviewRepricing(source.targetId());
             messages.scheduleRepricedBadReviewInvoice(source.targetId());
         } else if (result.outcome() == Outcome.FINANCIAL) {
             if (result.mappedStatus() != null && !"HISTORY".equals(result.status()))

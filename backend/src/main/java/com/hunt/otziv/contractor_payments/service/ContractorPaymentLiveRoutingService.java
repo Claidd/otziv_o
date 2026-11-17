@@ -246,6 +246,26 @@ public class ContractorPaymentLiveRoutingService {
                 || allocation.getStatus() == ContractorAllocationStatus.PARTIALLY_CONFIRMED);
     }
 
+    /** Both payment links belong to the locked order. Copied bank details still identify the old recipient. */
+    @Transactional(readOnly = true)
+    public boolean sameRecipientForRepricedLink(PaymentLink previous, PaymentLink replacement) {
+        if (previous.getContractorAllocationId() == null || replacement.getContractorAllocationId() == null) {
+            return false;
+        }
+        var old = allocationRepository.findById(previous.getContractorAllocationId()).orElse(null);
+        var current = allocationRepository.findById(replacement.getContractorAllocationId()).orElse(null);
+        return paymentLinkGenerationMatches(previous, old) && paymentLinkGenerationMatches(replacement, current)
+                && Set.of(ContractorAllocationStatus.RELEASED_UNPAID, ContractorAllocationStatus.EXPIRED,
+                        ContractorAllocationStatus.CANCELED).contains(old.getStatus())
+                && old.getConfirmedKopecks() == 0 && old.getClientReportedAt() == null
+                && previous.getManualReportedAt() == null && previous.getManualActualRecipientFrozenAt() == null
+                && current.getStatus() == ContractorAllocationStatus.RESERVED
+                && Objects.equals(old.getRecipientProfile().getId(), current.getRecipientProfile().getId())
+                && Objects.equals(old.getRecipientUserId(), current.getRecipientUserId())
+                && Objects.equals(old.getPaymentPhoneSnapshot(), current.getPaymentPhoneSnapshot())
+                && Objects.equals(old.getBankNameSnapshot(), current.getBankNameSnapshot());
+    }
+
     private boolean commonInvoiceGenerationStillMatches(
             CommonInvoice invoice,
             ContractorPaymentAllocation allocation,

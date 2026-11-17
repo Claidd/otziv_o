@@ -32,9 +32,15 @@ public interface ContractorActualPaymentAttributionRepository
     List<Long> findSourcesWithLegacyAttribution(@Param("kind") ContractorActualPaymentSourceKind kind,
                                                @Param("ids") Collection<Long> ids);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT a FROM ContractorActualPaymentAttribution a WHERE a.attributionKey = :key")
-    Optional<ContractorActualPaymentAttribution> findByAttributionKeyForUpdate(@Param("key") String key);
+    // Hibernate cannot upgrade an already loaded @Immutable entity to PESSIMISTIC_WRITE.
+    // Take the database lock on its unique key before reading the immutable receipt.
+    @Query(value = "SELECT id FROM contractor_actual_payment_attributions WHERE attribution_key = :key FOR UPDATE",
+            nativeQuery = true)
+    Optional<Long> lockIdByAttributionKey(@Param("key") String key);
+
+    default Optional<ContractorActualPaymentAttribution> findByAttributionKeyForUpdate(String key) {
+        return lockIdByAttributionKey(key).flatMap(this::findById);
+    }
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM ContractorActualPaymentAttribution a WHERE a.id = :id")

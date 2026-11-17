@@ -358,6 +358,16 @@ final class PaymentScenarioWorld {
         return orderId;
     }
 
+    long completedBadReview(long orderId, long priceKopecks) {
+        return insert("""
+                INSERT INTO bad_review_tasks(bad_review_task_order, bad_review_task_review, bad_review_task_worker,
+                    bad_review_task_price, bad_review_task_status, bad_review_task_completed_date)
+                SELECT d.order_detail_order, r.review_id, r.review_worker, ?, 'DONE', CURRENT_DATE
+                FROM reviews r JOIN order_details d ON r.review_order_details = d.order_detail_id
+                WHERE d.order_detail_order = ? ORDER BY r.review_id LIMIT 1
+                """, BigDecimal.valueOf(priceKopecks, 2), orderId);
+    }
+
     private long orderStatusId(String title) {
         List<Long> ids = jdbc.queryForList(
                 "SELECT order_status_id FROM order_statuses WHERE order_status_title = ? ORDER BY order_status_id LIMIT 1",

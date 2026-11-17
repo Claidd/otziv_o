@@ -10099,6 +10099,25 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void payableChangePreservesAnIssuedPaperInvoiceUntilItIsWithdrawn() {
+        PaymentLinkService service = service(properties());
+        Order order = order(603L, "Бумажный счёт", BigDecimal.valueOf(7400));
+        PaymentLink link = payableLink(order, "issued-paper", 740000L);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        link.setPaymentMethod(PaymentMethod.OWNER_PAPER_INVOICE);
+        link.setPaperInvoiceIssuedAt(LocalDateTime.now());
+        when(orderRepository.findByIdForCounterUpdate(603L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(603L)).thenReturn(List.of(link));
+
+        var refusal = assertThrows(ResponseStatusException.class,
+                () -> service.retireOpenLinksBeforePayableChange(603L, "Отмена выполненной задачи"));
+        assertEquals(HttpStatus.CONFLICT, refusal.getStatusCode());
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, link.getStatus());
+        verify(paymentLinkRepository, never()).save(link);
+        verify(contractorPaymentLiveRoutingService, never()).releaseClosedPaymentLink(link);
+    }
+
+    @Test
     void payableChangeExpiresUnstartedManualTaskLinkAndReleasesItsTaskReservation() {
         PaymentLinkService service = service(properties());
         Order order = order(603L, "ООО Пересчет задания", BigDecimal.valueOf(3400));

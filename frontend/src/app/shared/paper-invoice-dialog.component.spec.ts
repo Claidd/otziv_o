@@ -82,6 +82,35 @@ describe('Paper invoice asynchronous lifecycle', () => {
     expect(cancel.request.body).toEqual({reason:'Ошибка реквизитов',confirmed:true,replaceWithOrdinary:true});
     cancel.flush(doc('1','CANCEL_REQUESTED'));expect(c.context()?.document?.stage).toBe('CANCEL_REQUESTED');expect(c.canCancel()).toBe(false);
   });
+  it('cancels the documents without a replacement when the customer paid elsewhere', async () => {
+    open(1, doc('alpha', 'WAITING_PAYMENT'));
+    const c = fixture.componentInstance;
+    fixture.detectChanges();
+    const root: HTMLElement = fixture.nativeElement;
+    const openCancellation = Array.from(root.querySelectorAll('button'))
+      .find(button => button.textContent.includes('отменить счёт'));
+    expect(openCancellation).toBeDefined();
+    openCancellation!.click();
+    c.cancelReason = 'Поступление по ранее выставленному счёту';
+    c.cancelConfirmed = true;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const select = fixture.nativeElement.querySelector('select[name="replacementMode"]') as HTMLSelectElement;
+    select.value = 'NONE';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(c.cancelConfirmed).toBe(false);
+    c.cancel();
+    http.expectNone(r => r.method === 'POST');
+    c.cancelConfirmed = true;
+    c.cancel();
+    c.cancel();
+    const cancel = http.expectOne({method: 'POST', url: '/api/paper-invoices/documents/alpha/cancel'});
+    expect(cancel.request.body).toEqual({reason: c.cancelReason, confirmed: true, replaceWithOrdinary: false});
+    cancel.flush(doc('alpha', 'CANCEL_REQUESTED'));
+    expect(c.canCancel()).toBe(false);
+  });
+
   it('an old waiting poll cannot undo the cancellation response', () => {
     open(1,doc('1','WAITING_PAYMENT'));const c=fixture.componentInstance;c.poll();const stale=http.expectOne('/api/paper-invoices/documents/1');
     c.cancelReason='Ошибка';c.cancelConfirmed=true;c.cancel();http.expectOne('/api/paper-invoices/documents/1/cancel').flush(doc('1','CANCEL_REQUESTED'));

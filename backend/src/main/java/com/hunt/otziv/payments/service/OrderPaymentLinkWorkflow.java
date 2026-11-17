@@ -111,6 +111,10 @@ public class OrderPaymentLinkWorkflow {
             if (status == PaymentLinkStatus.REJECTED || status == PaymentLinkStatus.CANCELED || status == PaymentLinkStatus.REVERSED || status == PaymentLinkStatus.REFUNDED || status == PaymentLinkStatus.EXPIRED || status == PaymentLinkStatus.FAILED) {
                 continue;
             }
+            if (link.getPaperInvoiceIssuedAt() != null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Бумажный счёт уже выдан. Проверьте поступление и отзовите документ перед изменением суммы");
+            }
             if (canRetireStaleLink(link)) {
                 String retirementReason = limit(normalize(reason).isBlank() ? "Состав суммы заказа изменен до начала платежа" : normalize(reason), 512);
                 // Release the source-bound task ledger/reservation while the
