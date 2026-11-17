@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -79,6 +80,71 @@ for (const project of selected) {
         offset += 45 + length + zip.readUInt16LE(offset + 30) + zip.readUInt16LE(offset + 32);
       }
       assert.deepEqual(entries.sort(), ['alpha/a.txt', 'beta/b.txt']);
+    });
+  }
+
+  if (project === 'frontend' || project === 'mobile') {
+    test(`${project}: all picomatch consumers use the reviewed security release`, () => {
+      const lock = require('./package-lock.json');
+      const copies = Object.entries(lock.packages).filter(([name]) => name.endsWith('/picomatch'));
+      assert.ok(copies.length > 0);
+      for (const [name, metadata] of copies) {
+        assert.equal(metadata.name, '@ryotsu/picomatch', name);
+        assert.equal(metadata.version, '4.0.7-a', name);
+        assert.equal(metadata.integrity, 'sha512-JroBFEmaejC7szGSfqOhF1QZHLKvX2wTA1+fWyfkpy3BjzdQKNPLKa2FtgeKVUDy5/UPUNkXEeCHJ5ZRBMLTVA==', name);
+        assert.equal(require(`./${name}/package.json`).name, metadata.name);
+      }
+      for (const consumer of ['tinyglobby', '@angular/build', 'vite', 'vitest']) {
+        const consumerRequire = createRequire(require.resolve(`${consumer}/package.json`));
+        assert.equal(consumerRequire('picomatch/package.json').name, '@ryotsu/picomatch', consumer);
+      }
+    });
+
+    test(`${project}: repeated wildcard extglobs finish without exponential backtracking`, { timeout: 10000 }, () => {
+      // A subprocess deadline also catches a regression that blocks Node's event loop.
+      const script = `
+        const assert = require('node:assert/strict');
+        const pm = require(${JSON.stringify(require.resolve('picomatch'))});
+        const cases = [
+          ['+(*)', 'a'.repeat(80) + '/'], ['*(*)', 'a'.repeat(80) + '/'],
+          ['+(*a)', 'a'.repeat(80) + '!'], ['*(*a)', 'a'.repeat(80) + '!'],
+          ['+(a*)', 'a'.repeat(80) + '/'], ['*(a*)', 'a'.repeat(80) + '/'],
+          ['+(*)b', 'a'.repeat(80) + '!'], ['*(*)b', 'a'.repeat(80) + '!'],
+          ['+(a*b)', 'ab'.repeat(40) + '!'], ['+(**a)', 'a'.repeat(80) + '!'],
+          ['+(**)', 'a'.repeat(80) + '/.'], ['+(@(*a))', 'a'.repeat(80) + '!'],
+          ['+(?(*a))', 'a'.repeat(80) + '!'], ['+(a|aa)', 'a'.repeat(80) + '!']
+        ];
+        for (const options of [{}, { windows: true }, { capture: true }]) {
+          for (const [pattern, input] of cases) assert.equal(pm(pattern, options)(input), false, pattern);
+        }
+      `;
+      const result = spawnSync(process.execPath, ['-e', script], {
+        encoding: 'utf8', timeout: 5000, windowsHide: true
+      });
+      assert.ifError(result.error);
+      assert.equal(result.status, 0, result.stderr);
+    });
+
+    test(`${project}: Angular and test discovery retain glob matching and exclusions`, async () => {
+      const pm = require('picomatch');
+      const matches = pm(['**/*.{ts,html}', '!**/*.spec.ts'], { ignore: ['**/*.spec.ts'] });
+      assert.equal(matches('src/app/card.component.ts'), true);
+      assert.equal(matches('src/app/card.component.html'), true);
+      assert.equal(matches('src/app/card.component.spec.ts'), false);
+      assert.equal(pm('**/*.ts')('.cache/generated.ts'), false);
+      assert.equal(pm('**/*.ts', { dot: true })('.cache/generated.ts'), true);
+      assert.equal(pm('**/*.ts', { windows: true })('src\\app\\card.ts'), true);
+      assert.equal(pm.scan('src/**/*.spec.ts').base, 'src');
+      for (const [pattern, input, expected] of [
+        ['+(abc)', 'abcabc', true], ['*(foo|bar)', 'foobar', true],
+        ['+(*a)', 'ababa', true], ['+(a*b)', 'axbayb', true], ['+(a*b)', 'axbay', false],
+        ['+(a\\*b)', 'a*ba*b', true], ['+("*a")', '*a*a', true],
+        ['+(?(*a))', '+(?(*a))', true], ['+(?(*a))', 'aaaa', false]
+      ]) assert.equal(pm(pattern)(input), expected, pattern);
+      const { glob: discover } = require('tinyglobby');
+      assert.deepEqual(portableNames(await discover(['**/*.txt'], {
+        cwd: fixture, ignore: ['ignored/**']
+      })), ['alpha/a.txt', 'beta/b.txt']);
     });
   }
 }
