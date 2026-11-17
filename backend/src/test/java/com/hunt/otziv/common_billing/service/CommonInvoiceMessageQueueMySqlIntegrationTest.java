@@ -143,6 +143,30 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
         assertThat(queue.status(next.operationId()).status()).isEqualTo("SENDING");
     }
 
+    @Test void failedRepricingRollsBackReviewAndReplacementTogether() {
+        var old = draft("Previous amount");
+        var next = new PreparedCommonInvoiceMessage(10L, old.chatCompany(), old.managerClientId(), old.groupId(),
+                "Updated amount", old.telegramCopyTransferNumber(), false, false, false,
+                "bad-review-invoice:10:2", false, null, 180000L).asReviewedUpdate();
+        tx.executeWithoutResult(status -> queue.enqueue(old));
+        var claim = queue.claim().orElseThrow();
+        tx.executeWithoutResult(status -> queue.finish(claim, "SENT", null, 0));
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            assertThat(queue.recordStatementReview(10L, old.operationId(), next.operationId(), "test-manager")).isTrue();
+            queue.enqueue(next);
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Recipient changed");
+        })).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        assertThat(queue.reviewRow(10L, old.operationId()).replacement()).isNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM common_invoice_message_queue WHERE operation_id=?", Integer.class, next.operationId())).isZero();
+        assertThat(queue.status(old.operationId()).status()).isEqualTo("SENT");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM common_invoice_message_queue WHERE reviewed_at IS NOT NULL", Integer.class)).isZero();
+        tx.executeWithoutResult(status ->
+                assertThat(queue.recordStatementReview(10L, old.operationId(), next.operationId(), "test-manager")).isTrue());
+    }
+
     @Test void pausedSwitchDoesNotSpendAttemptsOrReleaseFrozenEnvelope() {
         tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
         var claim = queue.claim().orElseThrow();
