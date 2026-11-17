@@ -629,6 +629,14 @@
         "status" : "contract-example",
         "attempts" : 2,
         "errorCode" : "contract-example"
+      },
+      "repricingReview" : {
+        "operationId" : "contract-example",
+        "previousKopecks" : 2,
+        "currentKopecks" : 2,
+        "preparedAt" : "2026-09-07T08:00:00",
+        "dispatchStartedAt" : "2026-09-07T08:00:00",
+        "statementReviewAvailable" : false
       }
     },
     "CommonInvoiceNextCycleResponseOutput" : {
@@ -701,6 +709,14 @@
       "bankRecipientChangeAvailable" : false
     },
     "CommonInvoicePaymentRouteChangeTargetOutput" : "EMPLOYEE_REQUISITES",
+    "CommonInvoiceRepricingReviewOutput" : {
+      "operationId" : "contract-example",
+      "previousKopecks" : 2,
+      "currentKopecks" : 2,
+      "preparedAt" : "2026-09-07T08:00:00",
+      "dispatchStartedAt" : "2026-09-07T08:00:00",
+      "statementReviewAvailable" : false
+    },
     "CommonInvoiceReturnableOrdersResponseItemOutput" : {
       "orderId" : 2,
       "companyId" : 2,
@@ -4549,6 +4565,12 @@
       "target" : "EMPLOYEE_REQUISITES"
     },
     "CommonInvoicePaymentRouteChangeTargetInput" : "EMPLOYEE_REQUISITES",
+    "CommonInvoiceRepricingRequestInput" : {
+      "currentKopecks" : 2,
+      "operationId" : "contract-example",
+      "previousKopecks" : 2,
+      "statementChecked" : false
+    },
     "CommonManualPaymentAttributionRequestInput" : {
       "attributions" : [ {
         "amountKopecks" : 2,

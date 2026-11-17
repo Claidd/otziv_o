@@ -2787,7 +2787,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 && state.getScenario()==prepared.scenario() && Objects.equals(state.getTargetKey(),prepared.targetKey())
                 && Objects.equals(state.getOrderId(),prepared.orderId())
                 && Objects.equals(state.getDeliveryEnvelope(),envelope)
-                && !ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode());
+                && !ClientMessageStateSafety.onlyReconcileReceipt(state);
     }
 
     private ArchiveFollowupContext archiveFollowupContext(PreparedScheduledDelivery prepared, String envelope) {
@@ -2904,6 +2904,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                         : "Транзакция обработки откатилась. Результат внешней отправки не определен; "
                         + "автоматический повтор остановлен до ручной проверки. Причина: "
                         + readableException(failure);
+                // After this transaction releases the lease only receipt reconciliation may run.
+                if (!preparationFailure && "CLAIMED".equals(state.getDeliveryStatus())) {
+                    state.setDeliveryStatus(ClientMessageStateSafety.DELIVERY_OUTCOME_UNKNOWN);
+                    if (state.getScenario() == ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                        errorCode = ClientMessageStateSafety.ROLLBACK_RECEIPT_ONLY;
+                }
                 recordAttempt(
                         state,
                         ScheduledMessageAttemptStatus.FAILED,

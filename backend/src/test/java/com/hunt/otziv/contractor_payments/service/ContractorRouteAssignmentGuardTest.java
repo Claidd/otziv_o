@@ -63,4 +63,18 @@ class ContractorRouteAssignmentGuardTest {
         assertThat(error.getStatusCode().value()).isEqualTo(409);
         verify(paymentShadowService).hasFrozenLiveRoute(42L);
     }
+
+    @Test
+    void preparedRecipientDoesNotBlockSchedulingUnfinishedWork() {
+        guard.requirePublicationSchedulingAllowed(42L);
+        verify(markerRepository).existsByOrderId(42L);
+        org.mockito.Mockito.verifyNoInteractions(paymentShadowService, paperDocuments);
+    }
+
+    @Test
+    void completedWorkCannotBeRescheduledEvenWithoutPaymentRoute() {
+        when(markerRepository.existsByOrderId(42L)).thenReturn(true);
+        assertThrows(ResponseStatusException.class, () -> guard.requirePublicationSchedulingAllowed(42L));
+        org.mockito.Mockito.verifyNoInteractions(paymentShadowService, paperDocuments);
+    }
 }

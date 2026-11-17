@@ -51,6 +51,7 @@ public class CommonInvoiceMessageWorker {
                         paused = true;
                         result = ClientMessageSendResult.failed(admission.code(), admission.reason());
                     } else {
+                        queue.markDispatchStarted(claim);
                         result = invoices.sendPreparedPaymentMessage(prepared);
                     }
                 }

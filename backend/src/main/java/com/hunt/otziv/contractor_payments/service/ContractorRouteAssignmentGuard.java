@@ -40,16 +40,24 @@ public class ContractorRouteAssignmentGuard {
         if (orderId == null) {
             return;
         }
+        requirePublicationSchedulingAllowed(orderId);
+        requireRecipientMutationAllowed(
+                orderId,
+                "Сумму или состав заказа нельзя изменить: клиенту уже выданы реквизиты получателя"
+        );
+    }
+
+    /** Planning unfinished work does not change the issued amount or recipient. */
+    public void requirePublicationSchedulingAllowed(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
         if (completionRewardMarkerRepository.existsByOrderId(orderId)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Выполненная работа уже зафиксирована для расчетов. Изменение возможно только отдельной корректировкой."
             );
         }
-        requireRecipientMutationAllowed(
-                orderId,
-                "Сумму или состав заказа нельзя изменить: клиенту уже выданы реквизиты получателя"
-        );
     }
 
     private void requireRecipientMutationAllowed(Long orderId, String message) {

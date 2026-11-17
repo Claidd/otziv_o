@@ -113,6 +113,7 @@ public class CommonBillingService {
     private final CommonInvoiceDeliveryService invoiceDelivery;
 
     private final CommonInvoiceDetailsAssembler invoiceDetailsAssembler;
+    private final CommonInvoiceMessageQueue reviewedMessages;
 
     private final CommonInvoiceInitializationService invoiceInitialization;
 
@@ -448,6 +449,40 @@ public class CommonBillingService {
 
     public void rejectOwnerReport(long invoiceId, long reportId, Principal principal) {
         manualPaymentWorkflow.rejectOwnerReport(invoiceId, reportId, principal);
+    }
+
+    @Transactional
+    public CommonInvoiceDetailsResponse replaceReviewedAmount(Long invoiceId,
+            com.hunt.otziv.common_billing.dto.CommonInvoiceRepricingRequest request, Principal principal) {
+        var prelude = invoiceDelivery.lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        var invoice = prelude.invoice();
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        var items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        var row = reviewedMessages.reviewRow(invoiceId, request.operationId());
+        if (row != null && row.replacement() != null)
+            return invoiceDetailsAssembler.invoiceDetails(invoice, items);
+        var review = invoiceDetailsAssembler.repricingReview(invoice, items, reviewedMessages.status(invoice.getPaymentMessageOperationId()));
+        if (!request.statementChecked() || review == null || !review.statementReviewAvailable()
+                || !request.operationId().equals(review.operationId()) || review.previousKopecks() != request.previousKopecks()
+                || review.currentKopecks() != request.currentKopecks() || invoice.getAmountKopecks() != review.previousKopecks())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Состояние счёта изменилось. Обновите карточку и сверьте выписку");
+        var old = reviewedMessages.snapshot(review.operationId());
+        String replacement = "bad-review-invoice:" + invoiceId + ":" + Math.incrementExact(invoice.getBadReviewRevision());
+        if (!reviewedMessages.recordStatementReview(invoiceId, review.operationId(), replacement, principal.getName()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Идёт сверка прежней отправки. Обновите карточку");
+        Long previousProfile = invoiceInitialization.reviewedRecipientProfile(invoice);
+        String recipientNumber = old.telegramCopyTransferNumber();
+        String recipientName = invoice.getPaymentRouteManualRecipient();
+        var recipientSource = invoice.getPaymentRouteManualSource();
+        invoiceMembershipWorkflow.applyReviewedAmounts(invoice, items, review.currentKopecks());
+        if (previousProfile != null) invoiceInitialization.ensureCommonPaymentRouteSelected(invoice, review.currentKopecks(), previousProfile);
+        invoiceDelivery.enqueueReviewedRevision(invoiceId, prelude, old);
+        if (recipientNumber == null || recipientNumber.isBlank() || !Objects.equals(recipientNumber, invoiceDelivery.telegramCopyTransferNumber(invoice))
+                || !Objects.equals(recipientName, invoice.getPaymentRouteManualRecipient())
+                || recipientSource != invoice.getPaymentRouteManualSource() || !"MANUAL_MOBILE_BANK".equals(invoice.getPaymentRouteType())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Прежние реквизиты недоступны для новой суммы. Проверьте получателя.");
+        }
+        return invoiceDetailsAssembler.invoiceDetails(invoice, items);
     }
 
     public CommonInvoiceDetailsResponse retryAttention(Long invoiceId) {

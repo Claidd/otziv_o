@@ -55,6 +55,8 @@ class ScheduledClientMessageStateBatchRepositoryMySqlIntegrationTest {
                     state_status VARCHAR(32) NOT NULL,
                     next_attempt_at DATETIME(6) NULL,
                     locked_until DATETIME(6) NULL,
+                    delivery_status VARCHAR(24) NULL,
+                    INDEX idx_scheduled_message_due(state_status,next_attempt_at),
                     consecutive_failures INT NOT NULL,
                     sent_count INT NOT NULL,
                     last_error_code VARCHAR(128) NULL,
@@ -115,7 +117,7 @@ class ScheduledClientMessageStateBatchRepositoryMySqlIntegrationTest {
         jdbc.execute("DROP TABLE IF EXISTS scheduled_client_message_attempts");
         jdbc.execute("CREATE TABLE scheduled_client_message_attempts(state_id BIGINT,attempted_at DATETIME(6),attempt_status VARCHAR(32),error_code VARCHAR(128),INDEX(state_id,attempted_at))");
         LocalDateTime now=LocalDateTime.of(2026,9,11,12,0);
-        for (int id=1;id<=8;id++) jdbc.update("""
+        for (int id=1;id<=13;id++) jdbc.update("""
                 INSERT INTO scheduled_client_message_state(scenario,target_type,target_key,state_status,next_attempt_at,
                     consecutive_failures,sent_count,created_at,updated_at)
                 VALUES ('PAYMENT_REMINDER','ORDER',?,?,?,0,0,?,?)
@@ -123,9 +125,28 @@ class ScheduledClientMessageStateBatchRepositoryMySqlIntegrationTest {
         for (int id=1;id<=7;id++) jdbc.update("INSERT INTO scheduled_client_message_attempts VALUES (?,?,'SKIPPED',?)",
                 id,now.minusMinutes(5),id==6?"other":"client_messages_dry_run");
         jdbc.update("INSERT INTO scheduled_client_message_attempts VALUES (2,?,'SENT',NULL),(3,?,'SENT',NULL)",now.minusMinutes(1),now.minusMinutes(5));
-        String query=ScheduledClientMessageStateRepository.class.getMethod("releaseDryRunStates",LocalDateTime.class)
+        for (int id=9;id<=13;id++)
+            jdbc.update("INSERT INTO scheduled_client_message_attempts VALUES (?,?,'SKIPPED','client_messages_dry_run')", id, now);
+        jdbc.update("UPDATE scheduled_client_message_state SET locked_until=? WHERE state_id=9", now.plusMinutes(5));
+        jdbc.update("UPDATE scheduled_client_message_state SET delivery_status='UNKNOWN' WHERE state_id=10");
+        jdbc.update("UPDATE scheduled_client_message_state SET last_error_code='state_transaction_outcome_uncertain' WHERE state_id=11");
+        String candidates=ScheduledClientMessageStateRepository.class.getMethod("findDryRunReleaseCandidates",LocalDateTime.class)
                 .getAnnotation(org.springframework.data.jpa.repository.Query.class).value();
-        int changed=new NamedParameterJdbcTemplate(jdbc).update(query,java.util.Map.of("now",now));
+        String query=ScheduledClientMessageStateRepository.class.getMethod("releaseDryRunState",Long.class,LocalDateTime.class)
+                .getAnnotation(org.springframework.data.jpa.repository.Query.class).value();
+        var params = new NamedParameterJdbcTemplate(jdbc);
+        List<Long> eligible = params.queryForList(candidates, java.util.Map.of("now",now), Long.class);
+        assertThat(eligible).containsExactly(1L,3L,12L,13L);
+        // Another processor acquires a lease or completes delivery after the nonlocking candidate read.
+        jdbc.update("UPDATE scheduled_client_message_state SET locked_until=?,delivery_status='CLAIMED' WHERE state_id=12", now.plusMinutes(5));
+        jdbc.update("INSERT INTO scheduled_client_message_attempts VALUES (13,?,'SENT',NULL)",now.plusSeconds(1));
+        List<java.util.Map<String,Object>> plan=params.queryForList("EXPLAIN " + query,java.util.Map.of("stateId",1L,"now",now));
+        assertThat(plan.stream().filter(row -> "state".equals(row.get("table"))).findFirst().orElseThrow().get("key"))
+                .isEqualTo("PRIMARY");
+        int changed=0;
+        for (Long stateId : eligible) changed+=params.update(query,java.util.Map.of("stateId",stateId,"now",now));
+        assertThat(jdbc.queryForObject("SELECT locked_until FROM scheduled_client_message_state WHERE state_id=12",LocalDateTime.class))
+                .isEqualTo(now.plusMinutes(5));
         assertThat(changed).isEqualTo(2);
         assertThat(jdbc.queryForList("SELECT state_id FROM scheduled_client_message_state WHERE next_attempt_at=? ORDER BY state_id",Long.class,now))
                 .containsExactly(1L,3L);

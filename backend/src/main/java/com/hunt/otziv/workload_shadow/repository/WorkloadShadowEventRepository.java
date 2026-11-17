@@ -775,7 +775,7 @@ public interface WorkloadShadowEventRepository
                            WHEN active = 1
                             AND delivery_status IN ('PENDING', 'RETRY')
                             AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
-                           THEN first_seen_at
+                           THEN COALESCE(next_attempt_at, first_seen_at)
                        END) AS oldest_due_event_at
                 FROM workload_shadow_events
                 WHERE event_type <> 'MISSING_MANAGER_GROUP'

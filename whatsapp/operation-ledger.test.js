@@ -120,3 +120,18 @@ test("operation header/body validation rejects conflicts and filesystem-shaped I
   }
   assert.throws(() => operationIdFromRequest({ get: () => "operation-1", body: { operationId: "operation-2" } }));
 });
+
+test("timeout and missing server ACK retain separate evidence across restart, without replay", async t => {
+  const ledger = fixture(t);
+  const timedOut = await ledger.execute("timeout-op", envelope, async () => { throw Error("Runtime.callFunctionOn timed out"); });
+  assert.equal(timedOut.failureCode, "provider_timeout");
+  const unconfirmed = await ledger.execute("missing-ack", envelope, async () => ({ messageId: "ack-later", requireAck: true }));
+  assert.equal(unconfirmed.state, "UNKNOWN");
+  assert.equal(unconfirmed.failureCode, "provider_ack_unconfirmed");
+  await ledger.close();
+  const reopened = new OperationLedger(ledger.directory);
+  assert.equal((await reopened.execute("timeout-op", envelope, assert.fail)).state, "UNKNOWN");
+  assert.equal(reopened.confirmProviderAck("ack-later", 1), true);
+  assert.equal((await reopened.execute("missing-ack", envelope, assert.fail)).messageId, "ack-later");
+  await reopened.close();
+});

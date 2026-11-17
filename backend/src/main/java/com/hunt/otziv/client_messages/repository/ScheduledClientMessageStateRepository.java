@@ -564,30 +564,51 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     List<ScheduledClientMessageState> findMonitorQueue(@Param("status") ScheduledMessageStateStatus status,
                                                        Pageable pageable);
 
+    // Read candidates without range locks, then update by primary key in a stable order.
+    default int releaseDryRunStates(LocalDateTime now) {
+        int released = 0;
+        for (Long stateId : findDryRunReleaseCandidates(now)) {
+            released += releaseDryRunState(stateId, now);
+        }
+        return released;
+    }
+
+    @Query(value = """
+        SELECT state.state_id FROM scheduled_client_message_state state
+        WHERE state.state_status = 'ACTIVE' AND state.next_attempt_at > :now
+          AND state.locked_until IS NULL AND state.delivery_status IS NULL
+          AND COALESCE(state.last_error_code, '') NOT IN
+              ('state_transaction_in_progress','state_transaction_outcome_uncertain',
+               'legacy_operation_unverified','rollback_receipt_only','manual_delivery_handoff_pending')
+          AND EXISTS (
+              SELECT 1 FROM scheduled_client_message_attempts attempt
+              WHERE attempt.state_id = state.state_id AND attempt.attempt_status = 'SKIPPED'
+                AND attempt.error_code = 'client_messages_dry_run'
+                AND attempt.attempted_at = (
+                    SELECT MAX(history.attempted_at) FROM scheduled_client_message_attempts history
+                    WHERE history.state_id = state.state_id))
+        ORDER BY state.state_id LIMIT 100
+        """, nativeQuery = true)
+    List<Long> findDryRunReleaseCandidates(@Param("now") LocalDateTime now);
+
     @Modifying
     @Query(value = """
-        UPDATE scheduled_client_message_state state
-        JOIN (
-            SELECT history.state_id, MAX(history.attempted_at) AS latest_attempted_at
-            FROM scheduled_client_message_attempts history
-            JOIN scheduled_client_message_state eligible ON eligible.state_id = history.state_id
-            WHERE eligible.state_status = 'ACTIVE'
-              AND eligible.next_attempt_at > :now
-            GROUP BY history.state_id
-        ) latest_attempt ON latest_attempt.state_id = state.state_id
-        JOIN scheduled_client_message_attempts attempt
-          ON attempt.state_id = state.state_id
-         AND attempt.attempted_at = latest_attempt.latest_attempted_at
-        SET state.next_attempt_at = :now,
-            state.locked_until = NULL,
-            state.updated_at = :now
-        WHERE state.state_status = 'ACTIVE'
-          AND state.next_attempt_at IS NOT NULL
-          AND state.next_attempt_at > :now
-          AND attempt.attempt_status = 'SKIPPED'
-          AND attempt.error_code = 'client_messages_dry_run'
+        UPDATE scheduled_client_message_state state FORCE INDEX (PRIMARY)
+        SET state.next_attempt_at = :now, state.updated_at = :now
+        WHERE state.state_id = :stateId AND state.state_status = 'ACTIVE' AND state.next_attempt_at > :now
+          AND state.locked_until IS NULL AND state.delivery_status IS NULL
+          AND COALESCE(state.last_error_code, '') NOT IN
+              ('state_transaction_in_progress','state_transaction_outcome_uncertain',
+               'legacy_operation_unverified','rollback_receipt_only','manual_delivery_handoff_pending')
+          AND EXISTS (
+              SELECT 1 FROM scheduled_client_message_attempts attempt
+              WHERE attempt.state_id = state.state_id AND attempt.attempt_status = 'SKIPPED'
+                AND attempt.error_code = 'client_messages_dry_run'
+                AND attempt.attempted_at = (
+                    SELECT MAX(history.attempted_at) FROM scheduled_client_message_attempts history
+                    WHERE history.state_id = state.state_id))
         """, nativeQuery = true)
-    int releaseDryRunStates(@Param("now") LocalDateTime now);
+    int releaseDryRunState(@Param("stateId") Long stateId, @Param("now") LocalDateTime now);
 
     @Modifying
     @Query(value = """

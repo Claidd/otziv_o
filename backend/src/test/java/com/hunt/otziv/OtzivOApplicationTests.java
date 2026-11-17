@@ -179,6 +179,30 @@ class OtzivOApplicationTests {
 	@Autowired
 	private WorkerNetworkViolationRepository workerNetworkViolationRepository;
 
+    @Test
+    @Transactional
+    void workloadNotificationAgeStartsAtCurrentDeliveryDueTime() {
+        LocalDateTime now = LocalDateTime.of(2026, 11, 17, 23, 14);
+        jdbcTemplate.update("UPDATE workload_shadow_events SET active = 0");
+        jdbcTemplate.update("""
+                INSERT INTO workload_shadow_events
+                    (deduplication_key,severity,event_type,title,message,target_group_type,
+                     delivery_status,first_seen_at,last_seen_at,next_attempt_at,active)
+                VALUES (?, 'WARNING', 'LATE_INCOMING_LOAD', 'Test', 'Test', 'ADMIN_OWNER_MONITORING',
+                        'PENDING', ?, ?, ?, 1)
+                """, "current-delivery-" + UUID.randomUUID(), now.minusMinutes(71), now, now.minusSeconds(2));
+        var current = workloadShadowNotificationStore.healthData(now, now.minusMinutes(30));
+        assertThat(current.dueEvents()).isEqualTo(1);
+        assertThat(current.oldestDueEventAt()).isEqualTo(now.minusSeconds(2));
+
+        jdbcTemplate.update("UPDATE workload_shadow_events SET next_attempt_at = ? WHERE active = 1", now.plusMinutes(5));
+        assertThat(workloadShadowNotificationStore.healthData(now, now.minusMinutes(30)).dueEvents()).isZero();
+
+        jdbcTemplate.update("UPDATE workload_shadow_events SET next_attempt_at = NULL WHERE active = 1");
+        assertThat(workloadShadowNotificationStore.healthData(now, now.minusMinutes(30)).oldestDueEventAt())
+                .isEqualTo(now.minusMinutes(71));
+    }
+
 	@Test
 	void contextLoads() {
 	}

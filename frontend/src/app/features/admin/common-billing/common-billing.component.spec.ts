@@ -48,6 +48,56 @@ describe('ordinary payment after cancelling only one paper part', () => {
   });
 });
 
+describe('reviewed invoice replacement', () => {
+  it.each(['busy', 'unavailable', 'differentInvoice', 'missingInvoice'])(
+    'keeps the confirmation closed when %s',
+    reason => {
+      const replace = vi.fn();
+      const context = {
+        currentInvoice: () => reason === 'missingInvoice' ? null : { id: 272 },
+        invoiceDetails: () => ({
+          summary: { id: reason === 'differentInvoice' ? 406 : 272 },
+          repricingReview: {
+            operationId: 'bad-review-invoice:272:1',
+            previousKopecks: 140000,
+            currentKopecks: 180000,
+            statementReviewAvailable: reason !== 'unavailable'
+          }
+        }),
+        mutating: () => reason === 'busy' ? 'replace-reviewed-amount' : '',
+        commonBillingApi: { replaceReviewedAmount: replace }
+      } as unknown as CommonBillingComponent;
+      const dialog = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      try {
+        CommonBillingComponent.prototype.replaceReviewedAmount.call(context);
+        expect(dialog).not.toHaveBeenCalled();
+        expect(replace).not.toHaveBeenCalled();
+      } finally {
+        dialog.mockRestore();
+      }
+    }
+  );
+
+  for (const accepted of [false, true]) {
+    it(accepted ? 'submits one replacement for the reviewed amounts' : 'cancelling leaves the invoice untouched', () => {
+      const review = { operationId: 'bad-review-invoice:272:1', previousKopecks: 140000, currentKopecks: 180000, statementReviewAvailable: true };
+      const replace = vi.fn();
+      const context = {
+        currentInvoice: () => ({id: 272}), invoiceDetails: () => ({summary: {id: 272}, repricingReview: review}),
+        mutating: () => '', formatKopecks: () => '1 800 ₽',
+        invoiceAction: (_id: number, _kind: string, execute: () => unknown) => execute(),
+        commonBillingApi: {replaceReviewedAmount: replace}
+      } as unknown as CommonBillingComponent;
+      const dialog = vi.spyOn(window, 'confirm').mockReturnValue(accepted);
+      try {
+        CommonBillingComponent.prototype.replaceReviewedAmount.call(context);
+        expect(replace).toHaveBeenCalledTimes(accepted ? 1 : 0);
+        if (accepted) expect(replace).toHaveBeenCalledWith(272, review);
+      } finally { dialog.mockRestore(); }
+    });
+  }
+});
+
 describe('invoice composition confirmation', () => {
   for (const action of ['detachOrder', 'archiveDisputedOrder'] as const) {
     it(`${action} asks before submitting and cancellation keeps the invoice untouched`, () => {

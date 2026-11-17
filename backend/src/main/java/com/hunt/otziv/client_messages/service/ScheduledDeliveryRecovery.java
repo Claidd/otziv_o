@@ -46,7 +46,7 @@ public class ScheduledDeliveryRecovery {
                     // Rotate even corrupt/old snapshots, preventing starvation in bounded batches.
                     state.setDeliveryRecoveryCheckedAt(now);
                     if (state.getStatus() == ScheduledMessageStateStatus.ACTIVE) {
-                        if (!ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode()))
+                        if (!ClientMessageStateSafety.onlyReconcileReceipt(state))
                             state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
                         state.setNextAttemptAt(null);
                         state.setLockedUntil(null);
@@ -54,7 +54,7 @@ public class ScheduledDeliveryRecovery {
                     states.save(state);
                     return new RecoverySnapshot(state.getDeliveryEnvelope(), state.getDeliveryPreparedAt(),
                             state.getStatus()==ScheduledMessageStateStatus.ACTIVE
-                            && !ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode()));
+                            && !ClientMessageStateSafety.onlyReconcileReceipt(state));
                 });
                 if (snapshot == null) continue;
                 ClientMessageSendResult receipt = delivery.recoverRecordedOutcomeFromChat(

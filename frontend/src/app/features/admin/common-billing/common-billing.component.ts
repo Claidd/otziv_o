@@ -526,6 +526,13 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice) {
       return '';
     }
+    const details = this.invoiceDetails();
+    const review = details?.summary.id === invoice.id ? details.repricingReview : null;
+    if (review) {
+      const amount = this.formatKopecks(review.previousKopecks);
+      const text = details?.delivery?.status === 'SENT' ? `Отправка на ${amount} подтверждена.` : `Отправка на ${amount} не подтверждена.`;
+      return `${text} По текущим заказам — ${this.formatKopecks(review.currentKopecks)}.`;
+    }
     const error = this.invoiceProblemRaw();
     if (error) {
       return this.humanCommonInvoiceError(error);
@@ -686,7 +693,11 @@ export class CommonBillingComponent implements OnDestroy {
     && !this.attentionHasManualTbankPaymentDetected()
     && !this.invoiceProblemRaw().toLowerCase().startsWith('paper_invoice_mode_switch_'));
   readonly attentionResolveEnabled = computed(() => {
-    return this.invoiceNeedsAttention()
+    const details = this.invoiceDetails();
+    const review = details?.summary.id === this.currentInvoice()?.id ? details?.repricingReview : null;
+    const needsStatement = review && review.previousKopecks !== review.currentKopecks
+      && details?.summary.paymentRouteType === 'MANUAL_MOBILE_BANK';
+    return this.invoiceNeedsAttention() && !needsStatement
       && !this.attentionRequiresManualCheck()
       && !this.attentionHasStandaloneRouteConflict()
       && !this.attentionHasManualTbankReconciliationRetry()
@@ -1596,6 +1607,17 @@ export class CommonBillingComponent implements OnDestroy {
         }
       }
     });
+  }
+
+  replaceReviewedAmount(): void {
+    const invoice = this.currentInvoice();
+    const details = this.invoiceDetails();
+    const review = details?.repricingReview;
+    if (!invoice || details?.summary.id !== invoice.id || !review?.statementReviewAvailable || this.mutating()) return;
+    const amount = this.formatKopecks(review.currentKopecks);
+    if (!window.confirm(`Вы сверили чат клиента и выписку получателя по счёту №${invoice.id} за весь период и подтвердили отсутствие оплаты? Обновить этот счёт до ${amount} и отправить клиенту одно сообщение?`)) return;
+    this.invoiceAction(invoice.id, 'replace-reviewed-amount', () => this.commonBillingApi.replaceReviewedAmount(invoice.id, review),
+      'Обновлённый счёт поставлен в очередь');
   }
 
   retryAttention(): void {

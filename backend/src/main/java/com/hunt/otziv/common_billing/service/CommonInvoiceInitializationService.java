@@ -1147,7 +1147,16 @@ public class CommonInvoiceInitializationService {
         }
     }
 
+    Long reviewedRecipientProfile(CommonInvoice invoice) {
+        if (invoice.getPaymentRouteManualSource() != ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE) return null;
+        return contractorPaymentLiveRoutingService.reviewedRecipientProfile(invoice);
+    }
+
     void ensureCommonPaymentRouteSelected(CommonInvoice invoice, long remainingKopecks) {
+        ensureCommonPaymentRouteSelected(invoice, remainingKopecks, null);
+    }
+
+    void ensureCommonPaymentRouteSelected(CommonInvoice invoice, long remainingKopecks, Long reviewedProfileId) {
         if (invoice == null || invoice.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден");
         }
@@ -1173,11 +1182,18 @@ public class CommonInvoiceInitializationService {
         ContractorPaymentAllocation liveAllocation = null;
         boolean bankOnly = invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_TBANK;
         boolean numberOnly = invoice.getInvoicePaymentMode() == InvoicePaymentMode.EMPLOYEE_REQUISITES;
-        Optional<PaymentRouteSelection> taskRoute = hasCurrentCommonPaymentRoute(invoice) || bankOnly ? Optional.empty()
+        Optional<PaymentRouteSelection> taskRoute = reviewedProfileId != null || hasCurrentCommonPaymentRoute(invoice) || bankOnly ? Optional.empty()
                 : numberOnly ? invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remainingKopecks,
                         com.hunt.otziv.payments.service.ManualPaymentTaskRoutingFilter.NUMBER)
                 : invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, remainingKopecks);
-        if (hasCurrentCommonPaymentRoute(invoice)) {
+        if (reviewedProfileId != null) {
+            liveAllocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService
+                    .reserveChosenContractorForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks, reviewedProfileId));
+            if (!isContractorRecipient(liveAllocation) || liveAllocation.getAvailableBeforeKopecks() == null
+                    || liveAllocation.getAvailableBeforeKopecks() < remainingKopecks)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Лимита прежнего получателя не хватает на новую сумму");
+            route = contractorCommonPaymentRoute(invoice, liveAllocation);
+        } else if (hasCurrentCommonPaymentRoute(invoice)) {
             route = legacyTbankRoute(invoice, remainingKopecks);
         } else if (taskRoute.isPresent()) {
             route = taskRoute.get();

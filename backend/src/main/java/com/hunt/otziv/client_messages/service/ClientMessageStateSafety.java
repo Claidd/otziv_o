@@ -6,12 +6,18 @@ public final class ClientMessageStateSafety {
 
     public static final String TRANSACTION_IN_PROGRESS = "state_transaction_in_progress";
     public static final String TRANSACTION_OUTCOME_UNCERTAIN = "state_transaction_outcome_uncertain";
+    public static final String ROLLBACK_RECEIPT_ONLY = "rollback_receipt_only";
     public static final String MANUAL_DELIVERY_HANDOFF_PENDING = "manual_delivery_handoff_pending";
     public static final String LEGACY_PREPARATION_UNVERIFIED = "legacy_operation_unverified";
     public static final String DELIVERY_PREPARED = "PREPARED";
     public static final String DELIVERY_OUTCOME_UNKNOWN = "UNKNOWN";
 
     private ClientMessageStateSafety() {
+    }
+
+    public static boolean onlyReconcileReceipt(ScheduledClientMessageState state) {
+        return state != null && (ROLLBACK_RECEIPT_ONLY.equals(state.getLastErrorCode())
+                || MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode()));
     }
 
     public static boolean blocksAutomaticRearm(ScheduledClientMessageState state) {

@@ -22,7 +22,7 @@ function createOutboundHandler({ ledger, clientId, kind, normalizeDestination, m
       // exception as ambiguous rather than claiming the message was not sent.
       let outcome = {};
       try { outcome = providerOutcome(await send(destination, message)); } catch { /* UNKNOWN */ }
-      const confirmed = Boolean(outcome.messageId) && (outcome.ack === undefined || outcome.ack >= 1);
+      const confirmed = Boolean(outcome.messageId) && (outcome.ack >= 1 || (!outcome.requireAck && outcome.ack === undefined));
       result = { state: confirmed ? "SUCCEEDED" : "UNKNOWN", messageId: confirmed ? outcome.messageId : null, replayed: false };
       if (outcome.ack !== undefined) result.providerAck = outcome.ack;
     }
@@ -34,6 +34,7 @@ function createOutboundHandler({ ledger, clientId, kind, normalizeDestination, m
         status: result.state === "RUNNING" ? "pending" : "unknown",
         code: result.state === "RUNNING" ? "operation_running" : "operation_unknown",
         operationId, state: result.state, envelopeHash: result.envelopeHash ?? null, ...ack,
+        ...(result.failureCode ? { failureCode: result.failureCode } : {}),
       });
       return;
     }

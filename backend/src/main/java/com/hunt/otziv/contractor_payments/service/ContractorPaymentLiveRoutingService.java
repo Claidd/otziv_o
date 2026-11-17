@@ -631,6 +631,18 @@ public class ContractorPaymentLiveRoutingService {
     }
 
     @Transactional
+    public Long reviewedRecipientProfile(CommonInvoice invoice) {
+        var allocation = lockAllocationProfileFirst(invoice.getContractorAllocationId()).orElseThrow();
+        if (allocation.getMode() != ContractorAllocationMode.LIVE || allocation.getStatus() != ContractorAllocationStatus.RESERVED
+                || allocation.getSourceType() != ContractorAllocationSourceType.COMMON_INVOICE
+                || !Objects.equals(allocation.getCommonInvoiceId(), invoice.getId()) || !Objects.equals(allocation.getSourceId(), invoice.getId())
+                || allocation.getAmountKopecks() != invoice.getAmountKopecks() || allocation.getConfirmedKopecks() != 0
+                || allocation.getClientReportedAt() != null || allocation.getRecipientProfile() == null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Резерв прежнего получателя требует сверки");
+        return allocation.getRecipientProfile().getId();
+    }
+
+    @Transactional
     public void releaseCommonInvoiceForRepricing(CommonInvoice invoice) {
         if (invoice.getContractorAllocationId() == null) return;
         var allocation = lockAllocationProfileFirst(invoice.getContractorAllocationId()).orElseThrow();
