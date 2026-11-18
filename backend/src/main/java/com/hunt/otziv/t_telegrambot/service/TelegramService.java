@@ -1301,8 +1301,9 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
                     .map(Message::getMessageId)
                     .filter(id -> id > 0);
         } catch (TelegramApiException e) {
-            log.warn("Telegram delivery attempt has no confirmed result; automatic resend suppressed ({})",
-                    e.getClass().getSimpleName());
+            var diagnostic = TelegramDeliveryFailure.describe(e);
+            log.warn("Telegram delivery attempt has no confirmed result; automatic resend suppressed: chatId={}, apiCode={}, reason={}, errorType={}",
+                    chatId, diagnostic.apiCode(), diagnostic.reason(), e.getClass().getSimpleName());
             return Optional.empty();
         }
     }

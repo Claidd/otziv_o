@@ -3,6 +3,9 @@ export type { DeliveryOperation } from './billing-payments.generated';
 
 export function deliveryOperationMessage(operation: DeliveryOperation | null | undefined): string | null {
   if (!operation) return null;
+  if (operation.status === 'SUPERSEDED') return operation.errorCode === 'invoice_paid_before_dispatch'
+    ? 'Отправка отменена до отправки клиенту: счёт уже оплачен.'
+    : 'Отправка отменена: подготовлена новая версия сообщения.';
   if (operation.errorCode === 'finalization_required') return operation.status === 'SENT'
     ? 'Отправка подтверждена. Карточка требует сверки.' : 'Отправка остановлена. Карточка требует сверки.';
   if (operation.errorCode === 'context_changed') return 'Отправка остановлена: изменились карточка или права доступа. Требуется сверка.';

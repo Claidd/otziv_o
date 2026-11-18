@@ -57,6 +57,37 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
                 "original-client", "original-group", text, "frozen-copy", false, true, false, "invoice-message:test", false, null, 120000);
     }
 
+    @Test void migrationRetiresOnlyProvenUnstartedFullyPaidCommands() throws Exception {
+        jdbc.execute("CREATE TABLE common_invoices(invoice_id BIGINT PRIMARY KEY,status VARCHAR(30),amount_kopecks BIGINT,paid_kopecks BIGINT)");
+        jdbc.execute("CREATE TABLE whatsapp_business_send_operations(operation_id VARCHAR(160) PRIMARY KEY)");
+        jdbc.execute("CREATE TABLE client_message_operations(operation_id VARCHAR(160) PRIMARY KEY)");
+        try {
+            jdbc.update("INSERT INTO common_invoices VALUES(10,'PAID',120000,120000),(11,'READY',120000,0),(12,'PARTIALLY_PAID',120000,60000)");
+            for (String key : java.util.List.of("cancel", "unknown", "sent", "dispatched", "whatsapp", "telegram", "unpaid", "partial", "leased", "other-error")) {
+                jdbc.update("INSERT INTO common_invoice_message_queue(operation_id,invoice_id,envelope_ciphertext,state,error_code) VALUES(?,?,'fixture','FAILED','context_changed')",
+                        key, "unpaid".equals(key) ? 11 : "partial".equals(key) ? 12 : 10);
+            }
+            jdbc.update("UPDATE common_invoice_message_queue SET state='UNKNOWN' WHERE operation_id='unknown'");
+            jdbc.update("UPDATE common_invoice_message_queue SET state='SENT' WHERE operation_id='sent'");
+            jdbc.update("UPDATE common_invoice_message_queue SET dispatch_started_at=NOW(6) WHERE operation_id='dispatched'");
+            jdbc.update("UPDATE common_invoice_message_queue SET lease_until=NOW(6) WHERE operation_id='leased'");
+            jdbc.update("UPDATE common_invoice_message_queue SET error_code='gateway_not_ready' WHERE operation_id='other-error'");
+            jdbc.update("INSERT INTO whatsapp_business_send_operations VALUES('whatsapp')");
+            jdbc.update("INSERT INTO client_message_operations VALUES('telegram')");
+            String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_10_405__retire_unstarted_paid_invoice_notices.sql"));
+            jdbc.execute(migration); jdbc.execute(migration);
+            assertThat(jdbc.queryForList("SELECT operation_id FROM common_invoice_message_queue WHERE state='SUPERSEDED'", String.class)).containsExactly("cancel");
+            assertThat(queue.status("cancel").errorCode()).isEqualTo("invoice_paid_before_dispatch");
+            assertThat(queue.status("unknown").status()).isEqualTo("UNKNOWN");
+            assertThat(queue.status("sent").status()).isEqualTo("SENT");
+            assertThat(jdbc.queryForObject("SELECT paid_kopecks FROM common_invoices WHERE invoice_id=10", Long.class)).isEqualTo(120000);
+        } finally {
+            jdbc.execute("DROP TABLE client_message_operations");
+            jdbc.execute("DROP TABLE whatsapp_business_send_operations");
+            jdbc.execute("DROP TABLE common_invoices");
+        }
+    }
+
     @Test void intentAndCiphertextRollbackWithTheBusinessTransaction() {
         tx.executeWithoutResult(status -> { queue.enqueue(draft("К оплате 1200")); status.setRollbackOnly(); });
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM common_invoice_message_queue", Integer.class)).isZero();
