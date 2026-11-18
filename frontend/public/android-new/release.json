@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 90,
-  "versionName": "1.0.90",
+  "versionCode": 91,
+  "versionName": "1.0.91",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "При ручной отметке оплаты чек проверяют в рабочем чате. Ввод ссылки на чек убран.",
-  "fileSize": 4426200,
-  "sha256": "AA6C9CDCBC8012CF6F2C88F3349A7B511A267582C021F25330DCBBE9ABA3FB73",
-  "publishedAt": "2026-11-13T10:03:53Z",
-  "downloadUrl": "/android-new/otziv-v1.0.90.apk"
+  "notes": "Исправлена тёмная тема справочников. Добавлен импорт аккаунтов из файла с выбором города.",
+  "fileSize": 4428524,
+  "sha256": "1451FBA24879EA3475867B952E6F2A19BEF426574652744B1F18CEFE98B59210",
+  "publishedAt": "2026-11-18T10:57:18Z",
+  "downloadUrl": "/android-new/otziv-v1.0.91.apk"
 }

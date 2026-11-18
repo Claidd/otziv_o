@@ -146,10 +146,11 @@ export class DictionariesApi {
     return this.http.delete<void>(this.apiUrl(`/api/admin/bots/${id}`));
   }
 
-  importAdminBots(file: File): Observable<BotImportResponse> {
+  importAdminBots(file: File, cityId?: number | null): Observable<BotImportResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<BotImportResponse>(this.apiUrl('/api/admin/bots/import'), formData);
+    const params = cityId == null ? undefined : new HttpParams().set('cityId', String(cityId));
+    return this.http.post<BotImportResponse>(this.apiUrl('/api/admin/bots/import'), formData, { params });
   }
 
   getAdminPromoTextManagement(keyword = ''): Observable<PromoTextManagementResponse> {
