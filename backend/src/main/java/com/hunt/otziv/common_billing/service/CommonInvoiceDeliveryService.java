@@ -547,8 +547,12 @@ public class CommonInvoiceDeliveryService {
                 }
                 state = "SENT";
             } else if (claim.mayDispatch() && "invoice_changed".equals(code)) {
-                state = "FAILED";
-                code = "context_changed";
+                // This claim was refused before dispatch. Payment makes this notice obsolete,
+                // not an unpaid/delivery incident. An UNKNOWN claim never enters this branch.
+                boolean paid = invoice.getStatus() == CommonInvoiceStatus.PAID
+                        && invoice.getAmountKopecks() > 0 && remainingKopecks(invoice) == 0;
+                state = paid ? "SUPERSEDED" : "FAILED";
+                code = paid ? "invoice_paid_before_dispatch" : "context_changed";
             } else if (held) {
                 state = "RETRYABLE";
             } else if (claim.mayDispatch() && com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result)) {

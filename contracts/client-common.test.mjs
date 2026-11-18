@@ -7,6 +7,15 @@ const fixture = name => JSON.parse(fs.readFileSync(new URL(`fixtures/${name}.jso
 const shared = loadTsModule('../shared/client-common/src/order-editor.ts');
 const current = fixture('order-editor-current');
 
+test('paid before dispatch is cancellation, while an unknown delivery stays blocked', () => {
+  const { deliveryOperationMessage, deliveryOperationPending } = loadTsModule('../shared/client-common/src/delivery-operations.ts');
+  const cancelled = { operationId: 'paid', attempts: 1, status: 'SUPERSEDED', errorCode: 'invoice_paid_before_dispatch' };
+  assert.match(deliveryOperationMessage(cancelled), /счёт уже оплачен/);
+  assert.equal(deliveryOperationPending(cancelled), false);
+  assert.match(deliveryOperationMessage({ ...cancelled, status: 'UNKNOWN' }), /Повторная рассылка заблокирована/);
+  assert.match(deliveryOperationMessage({ ...cancelled, status: 'FAILED', errorCode: 'context_changed' }), /Требуется сверка/);
+});
+
 test('routing behavior table preserves common rules and the deliberate legacy empty-route adapter difference', () => {
   const web = loadTsModule('../frontend/src/app/shared/manual-payment-routing.ts');
   const mobile = loadTsModule('src/app/shared/manual-payment-routing.ts');
