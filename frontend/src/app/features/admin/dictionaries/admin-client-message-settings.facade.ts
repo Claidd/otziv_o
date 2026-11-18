@@ -459,7 +459,7 @@ export class AdminClientMessageSettingsFacade {
 
       publicationProgressReportText:
         settings?.publicationProgressReportText ??
-        '{companyAndFilial}. Опубликован новый отзыв {progress}.',
+        '{companyAndFilial}. Опубликован новый текст {progress}.',
 
       paymentInstructionSource: settings?.paymentInstructionSource ?? 'MANAGER_TEXT',
 

@@ -148,7 +148,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
   reviewReminderText: '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, проверьте шаблоны отзывов и внесите правки, если они нужны.\n\nСсылка на проверку отзывов: {reviewLink}',
   clientTextReminderText: '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, пришлите текст или пожелания для отзывов по заказу №{orderId}, чтобы мы могли продолжить работу.',
   publicationStartedText: '{companyAndFilial}\n\nСпасибо, правки получили. Отзывы переданы в публикацию. Будем присылать короткие отчёты по мере публикации.',
-  publicationProgressReportText: '{companyAndFilial}. Опубликован новый отзыв {progress}.',
+  publicationProgressReportText: '{companyAndFilial}. Опубликован новый текст {progress}.',
   paymentInstructionSource: 'MANAGER_TEXT',
   paymentReminderText: '{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.',
   paymentLinkCopyText: '{companyAndFilial}\n\nЗдравствуйте, ваш заказ выполнен. К оплате: {sum} руб.\n\n{paymentInstruction}\n\n{paymentAfterword}',

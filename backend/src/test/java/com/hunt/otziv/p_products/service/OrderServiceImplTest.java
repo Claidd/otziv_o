@@ -175,7 +175,7 @@ class OrderServiceImplTest {
                 eq(order),
                 eq(null),
                 eq(null),
-                eq("Company - Main filial. Опубликован новый отзыв 2 / 5."),
+                eq("Company - Main filial. Опубликован новый текст 2 / 5."),
                 eq(false),
                 org.mockito.ArgumentMatchers.startsWith("review:")
         );
@@ -213,7 +213,7 @@ class OrderServiceImplTest {
                 eq(order),
                 eq(null),
                 eq(null),
-                eq("Company - Main filial. Опубликован новый отзыв 1 / 5."),
+                eq("Company - Main filial. Опубликован новый текст 1 / 5."),
                 eq(true),
                 org.mockito.ArgumentMatchers.startsWith("review:")
         );

@@ -33,13 +33,13 @@ public class PublicationProgressPreferenceService {
 
     public String appendPlainOptOutHint(String message) {
         return trimToEmpty(message)
-                + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?"
+                + "\n\nНе хотите получать сообщение о каждом опубликованном тексте?"
                 + "\nОтправьте команду: отключить уведомления";
     }
 
     public String appendTelegramOptOutHint(String message) {
         return trimToEmpty(message)
-                + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?"
+                + "\n\nНе хотите получать сообщение о каждом опубликованном тексте?"
                 + "\nНажмите кнопку ниже.";
     }
 

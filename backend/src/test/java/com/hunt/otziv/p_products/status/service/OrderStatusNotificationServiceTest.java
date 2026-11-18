@@ -404,18 +404,18 @@ class OrderStatusNotificationServiceTest {
         OrderStatus currentStatus = status("Публикация");
         order.setStatus(currentStatus);
 
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Компания. Опубликован новый отзыв 3 / 10."),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
+        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Компания. Опубликован новый текст 3 / 10."),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
 
         boolean result = service.sendProgressMessageToClientChat(
                 order,
                 "client",
                 "group",
-                "Компания. Опубликован новый отзыв 3 / 10."
+                "Компания. Опубликован новый текст 3 / 10."
         );
 
         assertTrue(result);
         assertSame(currentStatus, order.getStatus());
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Компания. Опубликован новый отзыв 3 / 10."),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
+        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Компания. Опубликован новый текст 3 / 10."),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(maxBotClient);
         verifyNoInteractions(orderRepository);
@@ -425,8 +425,8 @@ class OrderStatusNotificationServiceTest {
     void sendProgressMessageToClientChatAddsOptOutHintForWhatsApp() {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
-        String message = "Компания. Опубликован новый отзыв 3 / 10.";
-        String messageWithHint = message + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nОтправьте команду: отключить уведомления";
+        String message = "Компания. Опубликован новый текст 3 / 10.";
+        String messageWithHint = message + "\n\nНе хотите получать сообщение о каждом опубликованном тексте?\nОтправьте команду: отключить уведомления";
 
         when(publicationProgressPreferenceService.appendPlainOptOutHint(message)).thenReturn(messageWithHint);
         when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq(messageWithHint), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> "{\"status\":\"ok\",\"state\":\"SUCCEEDED\",\"operationId\":\""+call.getArgument(3)+"\",\"messageId\":\"fixture-receipt\"}");
@@ -444,7 +444,7 @@ class OrderStatusNotificationServiceTest {
     void sendProgressMessageToClientChatKeepsWhatsAppPlainAfterFirstReview() {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
-        String message = "Компания. Опубликован новый отзыв 3 / 10.";
+        String message = "Компания. Опубликован новый текст 3 / 10.";
 
         when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq(message), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> "{\"status\":\"ok\",\"state\":\"SUCCEEDED\",\"operationId\":\""+call.getArgument(3)+"\",\"messageId\":\"fixture-receipt\"}");
 
@@ -464,8 +464,8 @@ class OrderStatusNotificationServiceTest {
         Order order = orderWithManager(10L, "Компания", 123L);
         order.getCompany().setUrlChat("https://max.ru/join/SharedToken123");
         order.getCompany().setMaxGroupChatId(-200L);
-        String message = "Компания. Опубликован новый отзыв 3 / 10.";
-        String messageWithHint = message + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nОтправьте команду: отключить уведомления";
+        String message = "Компания. Опубликован новый текст 3 / 10.";
+        String messageWithHint = message + "\n\nНе хотите получать сообщение о каждом опубликованном тексте?\nОтправьте команду: отключить уведомления";
 
         when(publicationProgressPreferenceService.appendPlainOptOutHint(message)).thenReturn(messageWithHint);
         when(maxBotClient.sendMessageToChatOnce(-200L, messageWithHint)).thenReturn(new MaxBotClient.SendOnceResult("max-fixture",null));
@@ -485,7 +485,7 @@ class OrderStatusNotificationServiceTest {
         Order order = orderWithManager(10L, "Компания", 123L);
         order.getCompany().setUrlChat("https://t.me/shared_owner");
         order.getCompany().setTelegramGroupChatId(-100L);
-        String message = "Компания. Опубликован новый отзыв 3 / 10.";
+        String message = "Компания. Опубликован новый текст 3 / 10.";
 
         when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq(message),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
 

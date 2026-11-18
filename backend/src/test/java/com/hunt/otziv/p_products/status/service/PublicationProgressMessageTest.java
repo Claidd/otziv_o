@@ -55,7 +55,7 @@ class PublicationProgressMessageTest {
         when(settings.immediatePublicationMessagesEnabled()).thenReturn(true);
         when(settings.publicationProgressReportsEnabled()).thenReturn(true);
         assertThat(messages.prepare(0, 1, () -> new PublicationProgressMessage.Context(true, null, " ")))
-                .isEqualTo("Компания. Опубликован новый отзыв 1 / 1.");
+                .isEqualTo("Компания. Опубликован новый текст 1 / 1.");
     }
 
     @Test void failedFreshSettingsReadAbortsPreparationBeforeLoadingRelations() {
