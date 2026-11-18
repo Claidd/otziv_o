@@ -17,8 +17,8 @@ export default defineConfig({
     video: 'off'
   },
   projects: [
-    { name: 'web', testIgnore: '**/mobile-journal.spec.mjs', use: { baseURL: 'http://127.0.0.1:43171', viewport: { width: 1440, height: 1100 } } },
-    { name: 'mobile-web', testMatch: ['**/public-payment.spec.mjs', '**/mobile-journal.spec.mjs'], use: { baseURL: 'http://127.0.0.1:43172', viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true } }
+    { name: 'web', testIgnore: ['**/mobile-journal.spec.mjs', '**/mobile-dictionaries.spec.mjs'], use: { baseURL: 'http://127.0.0.1:43171', viewport: { width: 1440, height: 1100 } } },
+    { name: 'mobile-web', testMatch: ['**/public-payment.spec.mjs', '**/mobile-journal.spec.mjs', '**/mobile-dictionaries.spec.mjs'], use: { baseURL: 'http://127.0.0.1:43172', viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true } }
   ],
   webServer: { command: 'node server.mjs', url: 'http://127.0.0.1:43171', reuseExistingServer: false, timeout: 20_000 }
 });

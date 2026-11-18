@@ -21,6 +21,8 @@ On the disposable Ubuntu GitHub runner, `hosted-sandbox.mjs prepare` installs a 
 
 ## Coverage
 
+- Mobile dictionaries: light/dark switching updates cards and controls relocated into Ionic modals; city import requires an explicit city selection, cancellation sends no import, and a pending submission cannot be repeated.
+
 - Desktop and mobile web: unknown payment status cannot grant payment capability; all three consents are required; a pending request cannot submit twice; HTTP 503 with an unknown outcome and a transport timeout do not replay a write or claim success; malformed capabilities on a return refresh clear previously actionable data; receipt edits survive status reads; only a confirmed status read renders success.
 - Desktop and mobile web: a late payment response after navigation through the real consent link cannot open a bank from the previous page, including after browser Back returns to the payment form. This scenario caught an Ionic cached-page lifecycle regression that component-only tests missed.
 - Desktop and mobile web: protected routes lead an anonymous visitor to a local OIDC sign-in fixture with PKCE.
