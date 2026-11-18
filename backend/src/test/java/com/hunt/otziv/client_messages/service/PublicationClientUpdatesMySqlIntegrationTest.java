@@ -162,7 +162,7 @@ class PublicationClientUpdatesMySqlIntegrationTest {
         when(telegram.sendMessageOnceWithInlineKeyboardMessageId(anyLong(),anyString(),isNull(),anyList())).thenAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             assertThat(call.getArgument(0,Long.class)).isEqualTo(-10017L);
-            assertThat(call.getArgument(1,String.class)).isEqualTo("Fixture. Опубликован новый отзыв 1 / 3.\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nНажмите кнопку ниже.");
+            assertThat(call.getArgument(1,String.class)).isEqualTo("Fixture. Опубликован новый текст 1 / 3.\n\nНе хотите получать сообщение о каждом опубликованном тексте?\nНажмите кнопку ниже.");
             List<List<InlineKeyboardButton>> keys=call.getArgument(3);
             assertThat(keys).hasSize(1); assertThat(keys.getFirst().getFirst().getCallbackData()).isEqualTo("publication_progress:disable:17");
             assertThat(keys.getFirst().getFirst().getText()).isEqualTo("Отключить уведомления");
