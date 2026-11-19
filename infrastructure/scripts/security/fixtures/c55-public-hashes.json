@@ -44,7 +44,7 @@
         "$.vulnerabilities[].advisories[].url",
         "$.vulnerabilities[].description"
       ],
-      "publicValueCount": 44
+      "publicValueCount": 45
     }
   ],
   "sourceCommitPrefix": "2b13dcbb"

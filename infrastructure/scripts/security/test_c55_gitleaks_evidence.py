@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import tomllib
 import unittest
+from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -31,7 +32,7 @@ def public_values(item):
                 walk(child, path + "[]")
         elif isinstance(value, str) and path in item["verifiedJsonContexts"]:
             # Match the pinned rule's bare-hash delimiter, not embedded URL path segments.
-            values.update(re.findall(r"\b[a-f0-9]{40}\b(?=[`'\"\s;]|\\[nr]|$)", value))
+            values.update(re.findall(r"\b[a-f0-9]{40}\b(?=[`'\"\s;]|\\[nr]|$)", unquote(value)))
 
     walk(json.loads(evidence))
     if len(values) != item["publicValueCount"]:
@@ -69,12 +70,12 @@ class C55PublicHashGuardTest(unittest.TestCase):
                     for child in value:
                         walk(child, path + "[]")
                 elif isinstance(value, str):
-                    strings.append((path, value))
+                    strings.append((path, unquote(value)))
 
             walk(json.loads(evidence))
             for value in item["publicValues"]:
                 self.assertRegex(value, r"^[a-f0-9]{40}$")
-                self.assertTrue(any(value in text and path in item["verifiedJsonContexts"]
+                self.assertTrue(any(value in unquote(text) and path in item["verifiedJsonContexts"]
                                     for path, text in strings), item["path"])
 
     def test_allowlists_require_exact_rule_path_and_complete_value(self):
@@ -87,7 +88,7 @@ class C55PublicHashGuardTest(unittest.TestCase):
             self.assertEqual(1, len(block["paths"]))
             for value in block["regexes"]:
                 self.assertRegex(value, r"^\^[a-f0-9]{40}\$$")
-                actual.add((block["paths"][0], value))
+                actual.add((block["paths"][0], unquote(value)))
         expected = {("(^|/)" + re.escape(item["path"]) + "$", "^" + value + "$")
                     for item in self.fixture["files"] for value in item["publicValues"]}
         self.assertEqual(expected, actual)
@@ -95,10 +96,10 @@ class C55PublicHashGuardTest(unittest.TestCase):
     def test_changed_values_paths_rules_and_token_prefixes_remain_blocked(self):
         for item in self.fixture["files"]:
             value = item["publicValues"][0]
-            self.assertTrue(self.allowed(item["path"], value))
+            self.assertTrue(self.allowed(item["path"], unquote(value)))
             for wrong_path in [item["path"] + ".copy", item["path"].replace("/c55-", "/c41-"),
                                "application/settings.json"]:
-                self.assertFalse(self.allowed(wrong_path, value))
+                self.assertFalse(self.allowed(wrong_path, unquote(value)))
             for wrong_value in ["0123456789abcdef" * 2 + "01234567", "sgp_" + value,
                                 "sgp_local_" + value, value + "0", "0" + value]:
                 self.assertFalse(self.allowed(item["path"], wrong_value))
