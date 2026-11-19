@@ -6,7 +6,7 @@ import unittest
 
 DEPLOY_SCRIPT = Path(__file__).with_name('deploy-prod.ps1')
 FRONT_SCRIPT = Path(__file__).resolve().parents[3] / 'deploy.ps1'
-INVOCATION = 'python3 infrastructure/scripts/prod/coordinated_postgres_zlib_refresh.py'
+INVOCATION = 'python3 infrastructure/scripts/prod/coordinated_postgres_cutover.py'
 
 
 class CoordinatedPostgresDeployOrderTest(unittest.TestCase):

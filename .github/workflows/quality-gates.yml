@@ -373,6 +373,7 @@ jobs:
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c42-mysql
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c46-mysql
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c56-mysql
+          ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c57-mysql
       - name: Verify the reviewed C51 PostgreSQL deployment bundle
         shell: pwsh
         run: ./infrastructure/scripts/security/test-coordinated-postgres-deploy-bundle.ps1

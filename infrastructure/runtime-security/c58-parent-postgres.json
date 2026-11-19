@@ -1,0 +1,27 @@
+{
+  "component": "postgres",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:32adf590dacac8d07c6dcd5bfbad27d527ae2ddf18e9822a404ba52ce69524a2",
+  "commit": "5ef63bd110f094e8cd3c036448e7e8ff6e34079b",
+  "run": "43461755432",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c54-postgres.json",
+    "sha256": "760be0e8b37e582614228dba09bea1629c7e5f5104d59709ecfe918409770bb8"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c54-postgres/publication/publication.json",
+    "sha256": "9740fc3564bd71f285d99bae2b5bf026cf465fd10410f2597b342fc3035171b0"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c54-postgres/anonymous/anonymous-download.json",
+    "sha256": "1cb37c6436facf1d17b4b9f9b84fc77c3713bd7fe97b2b9fee8b0b5394761548"
+  },
+  "postgresC54Acceptance": {
+    "path": "infrastructure/runtime-security/proofs/c54-postgres/acceptance.json",
+    "sha256": "4518d5aef01a1a2ea268bba350cfb9ead996c68b7123757f59be5385e536cb15"
+  },
+  "databaseTransition": {
+    "path": "infrastructure/runtime-security/proofs/c54-postgres/acceptance.json",
+    "sha256": "4518d5aef01a1a2ea268bba350cfb9ead996c68b7123757f59be5385e536cb15"
+  }
+}

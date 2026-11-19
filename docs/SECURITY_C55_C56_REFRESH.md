@@ -1,4 +1,40 @@
-# C55 Go toolchain and C56 MySQL libraries
+# C55 Go toolchain and C57/C58/C59 runtime refresh
+
+## Final release candidates
+
+The fresh CI scan also identified Oracle Kerberos libraries in MySQL, the Go
+compiler used for PostgreSQL's gosu helper, and Nginx. C57 supersedes the prepared
+C56 candidate; production did not receive C56. C58 and C59 replace the active
+C54 PostgreSQL and C52 Nginx images. No scanner gate or secret rule is disabled.
+
+C57 starts from the actual production C46 MySQL image, retaining MySQL 9.7.3 and
+its byte-identical server. It updates the four util-linux libraries listed below
+and krb5-libs to 1.21.1-10.0.1.el9_9.2; every other RPM must remain identical.
+The published digest passed 28 isolated checks against the fresh VPS dump,
+including all data/schema/account checks, restart, rollback and fresh restore.
+Its raw scan has zero HIGH/CRITICAL findings and no adjudications.
+
+C58 changes only `/usr/local/bin/gosu`, rebuilt from the same gosu 1.19 commit
+with Go 1.27.4. PostgreSQL remains 17.12. CI compares the complete filesystem,
+packages and runtime configuration against C54 and binds the actual Go build
+metadata. The previous exact-source PostgreSQL reviews remain mandatory; new
+findings are not covered. The active Keycloak image is unchanged. A real local
+capture and replay passed 55 checks, including existing-user login, all table
+fingerprints, index validity, restart, rollback with new writes and fresh restore.
+Only hashes and counts are release evidence; private captures are removed.
+
+C59 installs signed Nginx 1.30.7-r1 and its matching acme, geoip, njs and xslt
+modules. All other packages remain unchanged. Both the default configuration
+and loading every installed dynamic module are tested; raw HIGH/CRITICAL is zero.
+
+The exact-image dispatchers select `coordinated_mysql_kerberos_refresh.py` and
+`coordinated_postgres_gosu_refresh.py`. Both retain the deploy lock, writer
+fences, verified encrypted backups, exact proof hashes, data comparison and
+rollback. Deploy uses `-ImageTransport Direct -CoordinatedMysqlRefresh
+-CoordinatedPostgresRefresh`, without a full rollout. Recovery defaults move to
+C58 while older backups retain their exact earlier runtime identities.
+
+## C55 and the superseded C56 preparation
 
 C55 rebuilds Prometheus/promtool, Loki, Tempo, Alloy, Grafana, Dozzle, MC and
 the local S3 gateway with Go 1.27.4 (CVE-2026-97054). The reviewed upstream
@@ -32,12 +68,12 @@ only for the exact accepted C56 digest. It requires the deploy lock, paused
 self-heal service, exact rehearsal/source hashes, stopped writers, a verified
 encrypted backup and unchanged data checksums. Failure rolls back on the same
 volume while retaining any valid new writes. Ordinary database-image replacement
-remains rejected. PostgreSQL stays on its accepted C54 image.
+remains rejected. This C56 preparation is superseded by the candidates above.
 
 Publication, anonymous downloads, OCI provenance/SBOM, raw security evidence,
 application and monitoring compatibility tests and exact-main CI remain required.
 Deploy from the main checkout using `deploy.ps1 -ImageTransport Direct` with
-`-CoordinatedMysqlRefresh`; the standard selective rollout and backup remain active.
+both coordinated database switches above; selective rollout and backup remain active.
 The contact-health UI must also pass on the fresh prod-like database with external
 messages and real payments disabled, followed by read-only production verification.
 

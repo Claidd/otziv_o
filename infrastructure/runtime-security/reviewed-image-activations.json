@@ -163,44 +163,44 @@
     },
     {
       "component": "mysql",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:445e15dc40f18a25990558d95e8918b66938c87a7b6a27626f88f7d1e74f83d4",
-      "commit": "725608d30b3d11064ef27d6045418ad765134e72",
-      "run": "44529344342",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:52be6ed6c0039196dca88202ffd9714520d509bdde9b2f575238d1ea2d81028a",
+      "commit": "a8cd9bdf6f921fae0423a0d6799c18e473124b6f",
+      "run": "44540041622",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c56-mysql.json",
-        "sha256": "06dc38c8e53c8468d2840552c9d21a0ba0ded61d33c65d410f9001e83b4f8325"
+        "path": "infrastructure/runtime-security/reviewed-images-c57-mysql.json",
+        "sha256": "5b5b7448de61815867510a396825ba496ccd229f9bad8c6b46a3bd829b9a0ca9"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c56-mysql/publication/publication.json",
-        "sha256": "69750d44f35372250029f4dd11b4a7be9d1bc126bf9205933bb6d6ae4caabefe"
+        "path": "infrastructure/runtime-security/proofs/c57-mysql/publication/publication.json",
+        "sha256": "ba56f06effdc16697884b19406349acd4c0a39c84424915b1c5c6b01b2375ad6"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c56-mysql/anonymous/anonymous-download.json",
-        "sha256": "cc30df54deceab95c4db657fb279352cb904a7d9c3f8d8769896b264c9106bb8"
+        "path": "infrastructure/runtime-security/proofs/c57-mysql/anonymous/anonymous-download.json",
+        "sha256": "37bc5934e2670cf6d7a8a36f48c1558e6f20172548ab744228ae181c7bf20465"
       },
       "databaseTransition": {
-        "path": "infrastructure/runtime-security/proofs/c56-mysql/rehearsal.json",
-        "sha256": "283e32d4c947753c5f3144758847c344fa4a7ef1408caeeb3e72eb2a1f8f4228"
+        "path": "infrastructure/runtime-security/proofs/c57-mysql/rehearsal.json",
+        "sha256": "de3caa72360f065886ddb645372229dfab7adae45bf05cd6468ea1e570c1f076"
       }
     },
     {
       "component": "nginx",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:a873be5016237d2c08591bb1582a0535992466ef8744cb73d2c940b6c84abc23",
-      "commit": "671e4c3f76f414dfe73dc3e66fa8ddd82c042c69",
-      "run": "42991345815",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:a0168e8b87c0ecfeb2584b62827a0f7ec1690bb1aa26c762f6368636a5936416",
+      "commit": "a8cd9bdf6f921fae0423a0d6799c18e473124b6f",
+      "run": "44540075105",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c52-nginx.json",
-        "sha256": "339564ab64b6d777dd0917c948cfc2df116edbeacca5b6b8ae765880e9256099"
+        "path": "infrastructure/runtime-security/reviewed-images-c59-nginx.json",
+        "sha256": "e2004f4284984da2fba98414565126c16cb86ea3dd136614e2b0795d02fae97e"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c52-nginx/publication/publication.json",
-        "sha256": "46a43659811e59275a0ad3bd3daabc133e1eb9e3d746f2f8f6e91309833f8e27"
+        "path": "infrastructure/runtime-security/proofs/c59-nginx/publication/publication.json",
+        "sha256": "8572f002972b7ad03497ed48cc81233d166f20d272b10b10655c9ef8ec40a7c7"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c52-nginx/anonymous/anonymous-download.json",
-        "sha256": "ed0c5284f60b4e43b9ef832038db1ce5f6db5345c235cd537a180a74b81e0906"
+        "path": "infrastructure/runtime-security/proofs/c59-nginx/anonymous/anonymous-download.json",
+        "sha256": "5bb7561535d982523ded0ae6538bf7e812a9d9fc015b4fac96601c7c220d37dc"
       }
     },
     {
@@ -243,29 +243,29 @@
     },
     {
       "component": "postgres",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:32adf590dacac8d07c6dcd5bfbad27d527ae2ddf18e9822a404ba52ce69524a2",
-      "commit": "5ef63bd110f094e8cd3c036448e7e8ff6e34079b",
-      "run": "43461755432",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:b3eb812fca1c3e2d09a033f0059a5b8b66bf3d6567c5ad09d12c4e4d7bd4a21c",
+      "commit": "a8cd9bdf6f921fae0423a0d6799c18e473124b6f",
+      "run": "44540059120",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c54-postgres.json",
-        "sha256": "760be0e8b37e582614228dba09bea1629c7e5f5104d59709ecfe918409770bb8"
+        "path": "infrastructure/runtime-security/reviewed-images-c58-postgres.json",
+        "sha256": "a35798ab106ffa912ef925784ac50074ad1956899ad431e64d41365a71e08dd6"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c54-postgres/publication/publication.json",
-        "sha256": "9740fc3564bd71f285d99bae2b5bf026cf465fd10410f2597b342fc3035171b0"
+        "path": "infrastructure/runtime-security/proofs/c58-postgres/publication/publication.json",
+        "sha256": "3d7a407670080425b3eb53526359a13a582fd78fda97cd7f457cc95844fcb795"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c54-postgres/anonymous/anonymous-download.json",
-        "sha256": "1cb37c6436facf1d17b4b9f9b84fc77c3713bd7fe97b2b9fee8b0b5394761548"
+        "path": "infrastructure/runtime-security/proofs/c58-postgres/anonymous/anonymous-download.json",
+        "sha256": "72319915a823485bcac627599b7ad0c12739b4968d79d0d9350db767bf0bd6a2"
       },
-      "postgresC54Acceptance": {
-        "path": "infrastructure/runtime-security/proofs/c54-postgres/acceptance.json",
-        "sha256": "4518d5aef01a1a2ea268bba350cfb9ead996c68b7123757f59be5385e536cb15"
+      "postgresC58Acceptance": {
+        "path": "infrastructure/runtime-security/proofs/c58-postgres/acceptance.json",
+        "sha256": "43ed408e12ccd1c6e69cd257fb522bb0a5affc6e4e1783aa165683b3e582517d"
       },
       "databaseTransition": {
-        "path": "infrastructure/runtime-security/proofs/c54-postgres/acceptance.json",
-        "sha256": "4518d5aef01a1a2ea268bba350cfb9ead996c68b7123757f59be5385e536cb15"
+        "path": "infrastructure/runtime-security/proofs/c58-postgres/acceptance.json",
+        "sha256": "43ed408e12ccd1c6e69cd257fb522bb0a5affc6e4e1783aa165683b3e582517d"
       }
     },
     {

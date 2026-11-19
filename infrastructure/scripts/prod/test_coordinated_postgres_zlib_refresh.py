@@ -175,13 +175,12 @@ class CoordinatedPostgresMinorRefreshTest(unittest.TestCase):
         self.assertNotIn("b" * 32, result.stderr)
 
     def test_repository_plan_binds_the_exact_c54_c48_evidence(self):
-        entries = {entry["component"]: entry for entry in json.loads(
-            (ROOT / PREFIX / "reviewed-image-activations.json").read_bytes())["images"]}
-        publication = json.loads((ROOT / entries["postgres"]["publication"]["path"]).read_bytes())
+        root, entries = self.copied_evidence()
+        publication = json.loads((root / entries["postgres"]["publication"]["path"]).read_bytes())
         self.assertEqual((publication["reference"], publication["imageId"]), (refresh.TARGET, refresh.TARGET_CONFIG))
-        self.assertEqual(digest((ROOT / refresh.PARENT_PATH).read_bytes()), refresh.PARENT_SHA256)
+        self.assertEqual(digest((root / refresh.PARENT_PATH).read_bytes()), refresh.PARENT_SHA256)
         with patch.object(refresh, "run") as docker:
-            pg, kc, accepted, parent = refresh.reviewed_plan(ROOT, resolved_config())
+            pg, kc, accepted, parent = refresh.reviewed_plan(root, resolved_config())
             docker.assert_not_called()
         self.assertEqual((pg["reference"], kc["reference"], parent["reference"]),
                          (refresh.TARGET, refresh.ISSUER, refresh.SOURCE))
@@ -192,6 +191,7 @@ class CoordinatedPostgresMinorRefreshTest(unittest.TestCase):
         paths = {PREFIX + "reviewed-image-activations.json", refresh.PARENT_PATH}
         entries = {entry["component"]: entry for entry in json.loads(
             (ROOT / PREFIX / "reviewed-image-activations.json").read_bytes())["images"]}
+        entries["postgres"] = json.loads((ROOT / PREFIX / "c58-parent-postgres.json").read_bytes())
         for entry, key in ((entries["postgres"], "postgresC54Acceptance"), (entries["keycloak"], "aptRefreshAcceptance")):
             paths |= {entry["manifest"]["path"], entry[key]["path"]}
             record = json.loads((ROOT / entry[key]["path"]).read_bytes())
@@ -199,6 +199,7 @@ class CoordinatedPostgresMinorRefreshTest(unittest.TestCase):
         for path in paths:
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / path, root / path)
+        (root / PREFIX / "reviewed-image-activations.json").write_text(json.dumps({"images": list(entries.values())}))
         self.assertEqual(refresh.reviewed_plan(root, resolved_config())[0]["reference"], refresh.TARGET)
         return root, entries
 

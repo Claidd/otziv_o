@@ -18,10 +18,11 @@ import {validateBrotliC45Activation,couplePostgresC36WithKeycloakC45} from './br
 import {validateAptC48Activation,couplePostgresC36WithKeycloakC48} from './apt-c48-activation.mjs';
 import {overlayForSet, overlayForManifest, overlayCompressedProofs} from './os-package-overlay-registry.mjs';
 import {validateOverlayActivation, coupleOverlayKeycloak} from './os-package-overlay.mjs';
+import {validateC59ActivationScan} from './c59-refresh.mjs';
 import {validateC55ActivationScan} from './c55-refresh.mjs';
 import {validateC50ActivationScan} from './c50-refresh.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
-import { validateDatabaseTransitionReadiness } from './mysql-c56-readiness.mjs';
+import { validateDatabaseTransitionReadiness } from './mysql-c57-readiness.mjs';
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
 import { validatePublishedKeycloakMigrationAcceptance,
   assertPostgresKeycloakCoupling } from './postgres-transition-readiness.mjs';
@@ -36,6 +37,7 @@ import {validatePostgresC36Acceptance,validatePostgresC36Transition,
 import {validatePostgresC51Acceptance,validatePostgresC51Transition,
   couplePostgresC51WithKeycloakC48} from './postgres-c51-activation.mjs';
 import {validateC54Acceptance,validateC54Transition} from './postgres-c54-activation.mjs';
+import {validateC58Acceptance,validateC58Transition} from './postgres-c58-activation.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -255,7 +257,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   const anonymous = await proof(entry.anonymous);
   const identity = { commit: entry.commit, run: entry.run, attempt: entry.attempt };
   const digest = validatePublication(publication.value, identity, publicationImage, sha256(selected.manifestBytes), selected.manifestSet);
-  if (selected.manifestSet === 'c54-postgres') {
+  if (selected.manifestSet === 'c58-postgres') {
+    await validateC58Acceptance(entry,read);
+  } else if (selected.manifestSet === 'c54-postgres') {
     await validateC54Acceptance(entry,read);
   } else if (selected.manifestSet === 'c51-postgres') {
     await validatePostgresC51Acceptance(entry, read);
@@ -287,6 +291,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if (selected.manifestSet === 'c55-alloy') {
     await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read, 'c55');
+  }
+  if (selected.manifestSet === 'c59-nginx') {
+    await validateC59ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet.startsWith('c55-')) {
     await validateC55ActivationScan(publication.value, entry.publication.path, read);
@@ -414,6 +421,8 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
         ? validateDatabaseTransitionReadiness(entry, image, read)
         : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c23-postgres.json'
           ? validateSslRefreshTransition(entry, image, read)
+          : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c58-postgres.json'
+            ? validateC58Transition(entry,image,read)
           : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c54-postgres.json'
             ? validateC54Transition(entry,image,read)
           : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c51-postgres.json'

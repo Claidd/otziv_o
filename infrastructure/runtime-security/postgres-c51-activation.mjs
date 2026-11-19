@@ -162,7 +162,8 @@ export function validatePostgresC51Rehearsal(value,read){
 }
 
 export async function validatePostgresRehearsal(value,read,transition){
-  const {generation,source,sourceConfig,targetVersion,checks} = transition;
+  const {generation,source,sourceConfig,sourceVersion='17.11',targetVersion,checks} = transition;
+  assert.ok(['17.11','17.12'].includes(sourceVersion),'postgres_rehearsal_source_version_unsupported');
   const capture=JSON.parse(await read(value.capturePath)),replay=JSON.parse(await read(value.replayPath));
   for(const record of [capture,replay]){
     assert.equal(record.schema,'otziv-postgres-'+generation+'-rehearsal-v1','postgres_c51_rehearsal_schema');
@@ -190,8 +191,8 @@ export async function validatePostgresRehearsal(value,read,transition){
   assert.ok(!replay.cleanupErrors?.length,'postgres_c51_rehearsal_cleanup_errors');
   assert.equal(replay.tableCount,102,'postgres_c51_rehearsal_table_coverage');
   assert.equal(replay.stableTableCount,102,'postgres_c51_rehearsal_stable_coverage');
-  assert.equal(replay.sourceDatabase?.serverVersion,'17.11','postgres_c51_rehearsal_server_version');
-  assert.equal(replay.sourceDatabase.serverVersionNumber,'170011');
+  assert.equal(replay.sourceDatabase?.serverVersion,sourceVersion,'postgres_c51_rehearsal_server_version');
+  assert.equal(replay.sourceDatabase.serverVersionNumber,sourceVersion==='17.12'?'170012':'170011');
   assert.equal(replay.candidateDatabase?.serverVersion,targetVersion,'postgres_rehearsal_database_changed:serverVersion');
   assert.equal(replay.candidateDatabase?.serverVersionNumber,targetVersion==='17.12'?'170012':'170011','postgres_rehearsal_database_changed:serverVersionNumber');
   for(const field of DATABASE_FIELDS.filter(key=>!['serverVersion','serverVersionNumber'].includes(key)))

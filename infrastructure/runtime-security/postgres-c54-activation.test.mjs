@@ -10,8 +10,7 @@ const read = path => readFile(new URL('../../'+path,import.meta.url));
 const json = async path => JSON.parse(await read(path));
 
 test('the activated 17.12 credential database is the published and rehearsed image',async()=>{
-  const index = await json('infrastructure/runtime-security/reviewed-image-activations.json');
-  const entry = index.images.find(item=>item.component==='postgres');
+  const entry = await json('infrastructure/runtime-security/c58-parent-postgres.json');
   const accepted = await validateC54Acceptance(entry,read);
   const replay = await json(accepted.replayPath);
   assert.equal(replay.candidatePostgres,entry.reference);

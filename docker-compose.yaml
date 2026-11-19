@@ -55,7 +55,7 @@ services:
   mysql:
     # A different running DB image is blocked by the ordinary deployment guard.
     # Upgrade the retained volume only through the reviewed coordinated cutover.
-    image: ghcr.io/claidd/otziv-security@sha256:445e15dc40f18a25990558d95e8918b66938c87a7b6a27626f88f7d1e74f83d4
+    image: ghcr.io/claidd/otziv-security@sha256:52be6ed6c0039196dca88202ffd9714520d509bdde9b2f575238d1ea2d81028a
     user: "999:999"
     container_name: my-mysql
     restart: unless-stopped
@@ -131,7 +131,7 @@ services:
       start_period: 20s
 
   keycloak-postgres:
-    image: ghcr.io/claidd/otziv-security@sha256:32adf590dacac8d07c6dcd5bfbad27d527ae2ddf18e9822a404ba52ce69524a2
+    image: ghcr.io/claidd/otziv-security@sha256:b3eb812fca1c3e2d09a033f0059a5b8b66bf3d6567c5ad09d12c4e4d7bd4a21c
     container_name: keycloak-postgres
     restart: unless-stopped
     logging: *default-logging

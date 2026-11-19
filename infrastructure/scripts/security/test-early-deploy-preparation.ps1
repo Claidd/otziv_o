@@ -69,17 +69,17 @@ try {
         }
         if (-not $rejected) { throw 'Unaccepted PostgreSQL generation entered the cutover archive.' }
     }
-    $mysqlApproved = $mysql[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c56-mysql.json' -and
+    $mysqlApproved = $mysql[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c57-mysql.json' -and
         [bool]$mysql[0].PSObject.Properties['databaseTransition'] -and
-        $mysql[0].databaseTransition.path -eq 'infrastructure/runtime-security/proofs/c56-mysql/rehearsal.json'
+        $mysql[0].databaseTransition.path -eq 'infrastructure/runtime-security/proofs/c57-mysql/rehearsal.json'
     $mysqlPaths = @()
     if ($mysqlApproved) {
         $mysqlPaths = @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $repository)
         $combinedMysqlPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedMysqlRefresh)
         if ($mysqlPaths.Count -lt 7 -or
             @($mysqlPaths | Where-Object { $_ -notin $combinedMysqlPaths }).Count -gt 0 -or
-            'infrastructure/runtime-security/proofs/c56-mysql/rehearsal.json' -in $ordinaryPaths) {
-            throw 'Reviewed MySQL C56 evidence entered the wrong deployment inventory.'
+            'infrastructure/runtime-security/proofs/c57-mysql/rehearsal.json' -in $ordinaryPaths) {
+            throw 'Reviewed MySQL C57 evidence entered the wrong deployment inventory.'
         }
         $tamperedRoot = Join-Path $fixture 'mysql-evidence'
         foreach ($path in $mysqlPaths) {
@@ -87,7 +87,7 @@ try {
             New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
             Copy-Item -LiteralPath (Join-Path $repository $path) -Destination $destination
         }
-        $proof = Join-Path $tamperedRoot 'infrastructure/runtime-security/proofs/c56-mysql/rehearsal.json'
+        $proof = Join-Path $tamperedRoot 'infrastructure/runtime-security/proofs/c57-mysql/rehearsal.json'
         [IO.File]::AppendAllText($proof, 'tampered')
         $rejectedMysql = $false
         try { $null = Get-OtzivCoordinatedMysqlBundlePaths -Repository $tamperedRoot }
@@ -95,7 +95,7 @@ try {
             if ($_.Exception.Message -ne 'Accepted MySQL cutover evidence changed.') { throw }
             $rejectedMysql = $true
         }
-        if (-not $rejectedMysql) { throw 'Changed MySQL C56 rehearsal entered the deployment archive.' }
+        if (-not $rejectedMysql) { throw 'Changed MySQL C57 rehearsal entered the deployment archive.' }
     } else {
         $rejectedMysql = $false
         try { $null = Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedMysqlRefresh }
@@ -105,19 +105,19 @@ try {
         }
         if (-not $rejectedMysql) { throw 'Unaccepted MySQL image entered the coordinated archive.' }
     }
-    $postgresApproved = $postgres[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c54-postgres.json' -and
-        [bool]$postgres[0].PSObject.Properties['postgresC54Acceptance'] -and
+    $postgresApproved = $postgres[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c58-postgres.json' -and
+        [bool]$postgres[0].PSObject.Properties['postgresC58Acceptance'] -and
         $keycloak[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c48-keycloak.json'
     $postgresPaths = @()
     if ($postgresApproved) {
         $postgresPaths = @(Get-OtzivCoordinatedPostgresBundlePaths -Repository $repository)
         $combinedPostgresPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedPostgresRefresh)
-        $acceptancePath = 'infrastructure/runtime-security/proofs/c54-postgres/acceptance.json'
+        $acceptancePath = 'infrastructure/runtime-security/proofs/c58-postgres/acceptance.json'
         if ($postgresPaths.Count -lt 20 -or $acceptancePath -notin $postgresPaths -or
-            'infrastructure/runtime-security/c54-parent-postgres.json' -notin $postgresPaths -or
+            'infrastructure/runtime-security/c58-parent-postgres.json' -notin $postgresPaths -or
             @($postgresPaths | Where-Object { $_ -notin $combinedPostgresPaths }).Count -gt 0 -or
             $acceptancePath -in $ordinaryPaths) {
-            throw 'Reviewed C54 PostgreSQL evidence entered the wrong deployment inventory.'
+            throw 'Reviewed C58 PostgreSQL evidence entered the wrong deployment inventory.'
         }
         $tamperedPostgres = Join-Path $fixture 'postgres-evidence'
         foreach ($path in $postgresPaths) {
@@ -126,7 +126,7 @@ try {
             Copy-Item -LiteralPath (Join-Path $repository $path) -Destination $destination
         }
         $null = Get-OtzivCoordinatedPostgresBundlePaths -Repository $tamperedPostgres
-        $replay = Join-Path $tamperedPostgres 'infrastructure/runtime-security/proofs/c54-postgres/rehearsal/replay.json'
+        $replay = Join-Path $tamperedPostgres 'infrastructure/runtime-security/proofs/c58-postgres/rehearsal/replay.json'
         [IO.File]::AppendAllText($replay, 'tampered')
         $rejectedPostgres = $false
         try { $null = Get-OtzivCoordinatedPostgresBundlePaths -Repository $tamperedPostgres }
@@ -134,12 +134,12 @@ try {
             if ($_.Exception.Message -ne 'Accepted PostgreSQL refresh evidence changed.') { throw }
             $rejectedPostgres = $true
         }
-        if (-not $rejectedPostgres) { throw 'Changed C54 PostgreSQL rehearsal entered the deployment archive.' }
+        if (-not $rejectedPostgres) { throw 'Changed C58 PostgreSQL rehearsal entered the deployment archive.' }
     } else {
         $rejectedPostgres = $false
         try { $null = Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedPostgresRefresh }
         catch {
-            if ($_.Exception.Message -ne 'Only the accepted C54 PostgreSQL and active C48 Keycloak pair permits this refresh.') { throw }
+            if ($_.Exception.Message -ne 'Only the exact accepted PostgreSQL and active C48 Keycloak pair permits this refresh.') { throw }
             $rejectedPostgres = $true
         }
         if (-not $rejectedPostgres) { throw 'Unaccepted PostgreSQL generation entered the refresh archive.' }

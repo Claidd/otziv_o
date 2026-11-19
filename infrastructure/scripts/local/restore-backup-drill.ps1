@@ -39,7 +39,7 @@ param(
 
     # Same pinned PostgreSQL 17.12 image as the production keycloak-postgres service.
     [ValidateNotNullOrEmpty()]
-    [string]$PostgresImage = "ghcr.io/claidd/otziv-security@sha256:32adf590dacac8d07c6dcd5bfbad27d527ae2ddf18e9822a404ba52ce69524a2",
+    [string]$PostgresImage = "ghcr.io/claidd/otziv-security@sha256:b3eb812fca1c3e2d09a033f0059a5b8b66bf3d6567c5ad09d12c4e4d7bd4a21c",
 
     [ValidatePattern("^[a-z_][a-z0-9_]{0,62}$")]
     [string]$KeycloakDatabaseName = "keycloak_restore_drill",
