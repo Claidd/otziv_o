@@ -44,6 +44,8 @@ class CoordinatedPostgresDeployOrderTest(unittest.TestCase):
         self.assertIn('if (($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh -or $CoordinatedPostgresRefresh) '
                       '-and -not $RequireMainCi) {', self.source)
         self.assertIn('"infrastructure\\scripts\\prod\\coordinated_postgres_zlib_refresh.py",', self.source)
+        self.assertIn('"infrastructure\\scripts\\prod\\coordinated_postgres_gosu_refresh.py",', self.source)
+        self.assertIn('"infrastructure\\scripts\\prod\\coordinated_postgres_cutover.py",', self.source)
         self.assertIn('-CoordinatedPostgresRefresh:$CoordinatedPostgresRefresh', self.source)
         front = FRONT_SCRIPT.read_text(encoding='utf-8')
         self.assertIn('[switch]$CoordinatedPostgresRefresh', front)
