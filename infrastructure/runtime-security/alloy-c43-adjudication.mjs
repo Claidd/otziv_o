@@ -8,6 +8,7 @@ import { inspectAlloyC29Closure, inspectAlloyC29Functions } from './alloy-c29-ad
 
 export const C43_ALLOY_PROOF_LABEL = 'alloy-daemon-c43';
 export const C43_ALLOY_BUILD_INFO_READER = 'golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132';
+export const C55_ALLOY_BUILD_INFO_READER = 'golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea';
 const SOURCE = 'https://github.com/grafana/alloy';
 const REVISION = 'becfd489a7bb459c0496893b555fb87a003296b1';
 const VERSION = '1.19.2-otziv.4';
@@ -21,7 +22,9 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export async function adjudicateAlloyC43Image(report, reportBytes, immutableImageId, scratch) {
   const base = { schema: 'otziv-alloy-c43-adjudication-v1', rawReportSha256: sha256(reportBytes),
     imageConfigId: report.Metadata?.ImageID, immutableImageId, rawReportModified: false, decisions: [] };
-  if (labelsOf(report)['com.otziv.security.proof'] !== C43_ALLOY_PROOF_LABEL)
+  const c55 = labelsOf(report)['com.otziv.security.proof'] === 'alloy-daemon-c55';
+  const reader = c55 ? C55_ALLOY_BUILD_INFO_READER : C43_ALLOY_BUILD_INFO_READER;
+  if (!c55 && labelsOf(report)['com.otziv.security.proof'] !== C43_ALLOY_PROOF_LABEL)
     return { ...base, status: 'NOT_APPLICABLE' };
   try {
     const labels = labelsOf(report);
@@ -66,12 +69,12 @@ export async function adjudicateAlloyC43Image(report, reportBytes, immutableImag
       const buildInfo = await run('docker', ['run', '--rm', '--network', 'none', '--read-only',
         '--cap-drop=ALL', '--security-opt=no-new-privileges:true', '--memory', '512m', '--pids-limit', '64',
         '-e', 'GOTOOLCHAIN=local', '--mount', `type=bind,source=${directory},target=/input,readonly`,
-        C43_ALLOY_BUILD_INFO_READER, 'go', 'version', '-m', '/input/alloy'], { timeoutMs: 120_000 });
-      assert.ok(buildInfo.split(/\r?\n/)[0].endsWith(': go1.27.3') &&
+        reader, 'go', 'version', '-m', '/input/alloy'], { timeoutMs: 120_000 });
+      assert.ok(buildInfo.split(/\r?\n/)[0].endsWith(c55 ? ': go1.27.4' : ': go1.27.3') &&
         buildInfo.includes(`\tdep\t${MODULE}\t${MODULE_VERSION}\t`) &&
         buildInfo.includes('\tdep\tgithub.com/go-jose/go-jose/v4\tv4.1.6\t'), 'alloy_c43_build_info');
       return { ...base, status: 'EXACT_BINARY_AFFECTED_CODE_ABSENT', binarySha256: sha256(binaryBytes),
-        buildInfoSha256: sha256(Buffer.from(buildInfo)), goJoseVersion: 'v4.1.6', buildInfoReader: C43_ALLOY_BUILD_INFO_READER,
+        buildInfoSha256: sha256(Buffer.from(buildInfo)), goJoseVersion: 'v4.1.6', buildInfoReader: reader,
         inspectedBinaryExecuted: false, ...functions, ...packages, decisions };
     } finally {
       if (container) await run('docker', ['rm', '-f', container]).catch(() => {});

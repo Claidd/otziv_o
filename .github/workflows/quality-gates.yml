@@ -106,6 +106,15 @@ on:
           - c36-postgres
           - c51-postgres
           - c54-postgres
+          - c55-prometheus
+          - c55-loki
+          - c55-tempo
+          - c55-alloy
+          - c55-grafana
+          - c55-dozzle
+          - c55-mc
+          - c55-minio
+          - c56-mysql
           - c52-nginx
           - c53-phpmyadmin
           - c43-tempo
