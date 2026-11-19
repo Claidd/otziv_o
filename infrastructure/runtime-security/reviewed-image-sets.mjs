@@ -145,6 +145,9 @@ const EXPLICIT_RELEASE_SETS = {
   'c55-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c55-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-mc/Dockerfile' },
   'c55-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c55-minio.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-minio/Dockerfile' },
   'c56-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c56-mysql.json', context: 'infrastructure/runtime-security/builds/c56-mysql', dockerfile: 'infrastructure/runtime-security/builds/c56-mysql/Dockerfile' },
+  'c57-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c57-mysql.json', context: 'infrastructure/runtime-security/builds/c57-mysql', dockerfile: 'infrastructure/runtime-security/builds/c57-mysql/Dockerfile' },
+  'c59-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c59-nginx.json', context: 'infrastructure/runtime-security/builds/c59-nginx', dockerfile: 'infrastructure/runtime-security/builds/c59-nginx/Dockerfile' },
+  'c58-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c58-postgres.json', context: 'infrastructure/runtime-security/builds/c58-postgres', dockerfile: 'infrastructure/runtime-security/builds/c58-postgres/Dockerfile' },
 };
 // Later official OS package overlays are registered data (os-package-overlays.json).
 const RELEASE_SETS = Object.freeze({ ...EXPLICIT_RELEASE_SETS, ...overlayReleaseSets(EXPLICIT_RELEASE_SETS) });
