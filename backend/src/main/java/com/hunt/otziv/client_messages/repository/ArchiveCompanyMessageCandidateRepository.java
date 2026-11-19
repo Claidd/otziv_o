@@ -18,6 +18,20 @@ public class ArchiveCompanyMessageCandidateRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
+    /** Same eligibility as hasArchiveReorderBlocker, batched for control panels. */
+    public java.util.Set<Long> companiesWithArchiveReorderBlocker(Collection<Long> companyIds,
+            Collection<String> inactiveOrderStatuses, Collection<String> openNextOrderStatuses) {
+        if (companyIds.isEmpty()) return java.util.Set.of();
+        var params = new MapSqlParameterSource("ids",companyIds)
+                .addValue("inactiveStatuses",inactiveOrderStatuses).addValue("openStatuses",openNextOrderStatuses);
+        return new java.util.HashSet<>(jdbc.queryForList("""
+                SELECT c.company_id FROM companies c WHERE c.company_id IN (:ids) AND (
+                    EXISTS (SELECT 1 FROM orders o JOIN order_statuses s ON s.order_status_id=o.order_status
+                            WHERE o.order_company=c.company_id AND COALESCE(s.order_status_title,'') NOT IN (:inactiveStatuses))
+                    OR EXISTS (SELECT 1 FROM next_order_requests r WHERE r.company_id=c.company_id AND r.request_status IN (:openStatuses)))
+                """,params,Long.class));
+    }
+
     public List<ArchiveCompanyMessageCandidate> findCandidates(
             LocalDateTime cutoff,
             int limit,

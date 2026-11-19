@@ -1882,6 +1882,11 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         return Optional.empty();
     }
 
+    org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember executeGetChatMember(
+            org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember request) throws TelegramApiException {
+        return execute(request);
+    }
+
     Chat executeGetChat(GetChat request) throws TelegramApiException {
         return execute(request);
     }

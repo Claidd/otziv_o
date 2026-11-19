@@ -184,8 +184,7 @@ public class ManagerControlDailySnapshotWorkflow {
         long commonInvoiceActionCount = invoiceDiagnostics.countActions(manager, automationInvoiceIds);
         long publicationDateIssueCount = reviewRepository.countPublicationDateIssuesByManager(manager);
         // Unbound chats plus bound WhatsApp groups whose stored invite no longer opens them (disjoint sets).
-        long chatBindingIssueCount = companyRepository.countChatBindingIssuesByManager(manager)
-                + problemExamples.staleWhatsAppInviteCount(manager);
+        long chatBindingIssueCount = problemExamples.chatBindingIssueCount(manager,today);
         long paymentIntegrityIssueCount = orderRepository.countPaymentIntegrityIssuesByManager(manager, PAYMENT_AUTOMATION_STATUSES);
         long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
         long unansweredClientMessages = clientChatMessageTrackerService.countDue(manager);

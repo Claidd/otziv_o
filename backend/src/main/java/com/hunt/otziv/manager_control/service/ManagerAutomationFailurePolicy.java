@@ -81,6 +81,17 @@ public class ManagerAutomationFailurePolicy {
         return state != null && TRANSIENT_ERROR_CODES.contains(normalize(state.getLastErrorCode()));
     }
 
+    /** Actual failures for live work need attention on the first attempt, not after the retry threshold. */
+    boolean isImmediateActiveOrderFailure(ScheduledClientMessageState state, LocalDateTime now) {
+        if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) return false;
+        String code = normalize(state.getLastErrorCode());
+        if ((!code.isBlank() && isExpectedControlState(code)) || isTransientWait(state)) return false;
+        if (ClientMessageStateSafety.TRANSACTION_IN_PROGRESS.equals(code))
+            return state.getLockedUntil() == null || !state.getLockedUntil().isAfter(now);
+        return state.getConsecutiveFailures() > 0 || requiresDeliveryReceipt(state)
+                || IMMEDIATE_ERROR_CODES.contains(code);
+    }
+
     boolean isLegacyPreparationFailure(ScheduledClientMessageState state) {
         return recoveryAdvice(state) == ClientMessageRecoveryAdvice.VERIFY_PREPARATION;
     }
@@ -97,6 +108,7 @@ public class ManagerAutomationFailurePolicy {
     private boolean isExpectedControlState(String code) {
         // The manager's own message covers this cycle; the reminder waits on purpose and the order card owns it.
         return code.isBlank()
+                || com.hunt.otziv.client_messages.api.ClientContactHealth.HELD_CODE.equals(code)
                 || MANUAL_CONTACT_RESERVED.equals(code)
                 || code.contains("dry_run")
                 || code.contains("review_recovery_active")

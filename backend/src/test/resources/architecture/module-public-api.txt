@@ -34,6 +34,7 @@ com.hunt.otziv.bad_reviews.api.PaidBadReviewReminders
 com.hunt.otziv.t_telegrambot.api.TelegramNotifications
 # BOT_IMPORT_DUPLICATES: admin-only scalar recipients and confirmed document delivery outside DB transactions.
 com.hunt.otziv.t_telegrambot.api.TelegramAdminDocuments
+com.hunt.otziv.t_telegrambot.api.TelegramChatAccess
 com.hunt.otziv.client_messages.dto.ClientMessageSendResult
 com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton
 # Platform encryption capability; no business persistence or transport methods.

@@ -146,6 +146,16 @@ public class ManagerControlChatRepairWorkflow {
         if (!CompanyChatBindingPolicy.isRequired(company)) {
             return resolveRepairedConcreteItem(concreteItem, control, "Компания в статусе «Бан»: привязка группы не требуется, карточка скрыта из контроля", principal, "Закрыта лишняя карточка привязки соцсети");
         }
+        if (problemExamples.adminContactOnly(company)) {
+            return resolveRepairedConcreteItem(concreteItem, control,
+                    "Компания на стопе без действующих заказов: контакт передан администратору, рассылка приостановлена",
+                    principal,"Контакт передан администратору");
+        }
+        if (safe(concreteItem.getReason()).contains(ManagerControlProblemExamples.CONTACT_ACCESS_REASON)) {
+            problemExamples.requireContactAccess(company);
+            return resolveRepairedConcreteItem(concreteItem,control,"Доступ к клиентскому чату подтверждён",
+                    principal,"Проверен доступ к чату без отправки сообщений");
+        }
         String before = clientTextChatBindingProblem(company);
         String replacedInvite = "";
         if (before.isBlank() && "COMPANY_CHAT_BINDING".equals(concreteItem.getEntityType())
@@ -156,6 +166,7 @@ public class ManagerControlChatRepairWorkflow {
             return resolveRepairedConcreteItem(concreteItem, control, replacedInvite, principal, "Ссылка WhatsApp заменена актуальной ссылкой группы");
         }
         if (before.isBlank()) {
+            problemExamples.requireKnownContactAccess(company);
             return resolveRepairedConcreteItem(concreteItem, control, "Группа уже привязана, карточка скрыта из контроля", principal, "Проверена привязка соцсети");
         }
         String chat = safe(company.getUrlChat()).toLowerCase(Locale.ROOT);

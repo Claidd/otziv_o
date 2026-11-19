@@ -41,6 +41,20 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks groupDeliveryBlocks;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hunt.otziv.client_messages.api.ClientContactHealth contactHealth;
+
+    private boolean inactiveContactHeld(Company company, String clientId, String groupId) {
+        return contactHealth != null && contactHealth.holdNewMessage(
+                new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(company.getId(), company.getTitle(),
+                        company.getUrlChat(), company.getTelegramGroupChatId(), company.getMaxGroupChatId()),clientId,groupId);
+    }
+
+    private ClientMessageSendResult contactHeld() {
+        return ClientMessageSendResult.failed(com.hunt.otziv.client_messages.api.ClientContactHealth.HELD_CODE,
+                "Компания на стопе без действующих заказов: недоступный чат передан администратору, рассылка приостановлена");
+    }
+
     void useGroupDeliveryBlocks(com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks blocks) {
         this.groupDeliveryBlocks = blocks;
     }
@@ -238,6 +252,8 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
             try {
                 var nonIdempotentAttempt = operationFence.lookup(operationId);
                 if (nonIdempotentAttempt.isPresent()) {
+                    if ("FAILED_KNOWN".equals(nonIdempotentAttempt.get().state()) && inactiveContactHeld(company,clientId,groupId))
+                        return contactHeld();
                     return sendWithPersistentFence(ChatPlatform.valueOf(nonIdempotentAttempt.orElseThrow().platform()),
                             company, clientId, groupId, message, telegramCopyButton, operationId);
                 }
@@ -261,6 +277,10 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
             } catch (RuntimeException unavailable) {
                 return ClientMessageSendResult.failed("operation_unknown", "Не удалось проверить сохранённую операцию");
             }
+        }
+        if (inactiveContactHeld(company,clientId,groupId)) {
+            // An old receipt/UNKNOWN is never replaced by a new exclusion result or replayed as a test.
+            return frozenReplay ? recordedOutcome(operationId) : contactHeld();
         }
         if (operationId != null && (activePlatform == ChatPlatform.TELEGRAM || activePlatform == ChatPlatform.MAX)) {
             return sendWithPersistentFence(activePlatform, company, clientId, groupId, message, telegramCopyButton, operationId);
@@ -350,6 +370,8 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
                 String plain=includePreferenceControls?progressPreferences.appendPlainOptOutHint(message):message;
                 return sendWithOperationId(company,clientId,groupId,plain,null,operationId);
             }
+            if ((previous.isEmpty() || "FAILED_KNOWN".equals(previous.get().state()))
+                    && inactiveContactHeld(company,clientId,groupId)) return contactHeld();
             Long destination=company.getTelegramGroupChatId();
             String text=includePreferenceControls&&company.getId()!=null?progressPreferences.appendTelegramOptOutHint(message):message;
             String callback=includePreferenceControls&&company.getId()!=null?progressPreferences.disableCallbackData(company.getId()):null;

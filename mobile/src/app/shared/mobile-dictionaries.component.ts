@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy } from '@angular/core';
+import { InactiveCompanyContactsComponent } from './inactive-company-contacts.component';
 import { DictionariesApi } from '../core/dictionaries.api';
 import { inject, Component, Input, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -160,7 +161,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-dictionaries',
-  imports: [FormsModule, IonModal, MobileSearchBarComponent, MobileStatusSliderComponent],
+  imports: [FormsModule, IonModal, MobileSearchBarComponent, MobileStatusSliderComponent, InactiveCompanyContactsComponent],
   template: `
     <section class="mobile-dictionaries">
       <app-mobile-status-slider
@@ -602,6 +603,10 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
             }
 
             @case ('autoresponderMonitor') {
+              <details class="dict-card">
+                <summary>Недоступные чаты компаний на стопе</summary>
+                <app-inactive-company-contacts />
+              </details>
               <section class="settings-stack monitor-stack">
                 <article class="dict-card settings-card tone-blue monitor-head-card">
                   <header>

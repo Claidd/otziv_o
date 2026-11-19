@@ -452,6 +452,12 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'admin/company-contacts',
+    loadComponent: () => import('./features/admin/company-contacts/company-contacts.component').then(m => m.CompanyContactsComponent),
+    canActivate: [roleGuard],
+    data: { roles: ['ADMIN', 'OWNER'] }
+  },
+  {
     path: 'admin/dictionaries',
     loadComponent: () => import('./features/admin/dictionaries/admin-dictionaries.component')
       .then((m) => m.AdminDictionariesComponent),
