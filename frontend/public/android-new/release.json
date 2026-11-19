@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 91,
-  "versionName": "1.0.91",
+  "versionCode": 93,
+  "versionName": "1.0.93",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Исправлена тёмная тема справочников. Добавлен импорт аккаунтов из файла с выбором города.",
-  "fileSize": 4428524,
-  "sha256": "1451FBA24879EA3475867B952E6F2A19BEF426574652744B1F18CEFE98B59210",
-  "publishedAt": "2026-11-18T10:57:18Z",
-  "downloadUrl": "/android-new/otziv-v1.0.91.apk"
+  "notes": "Новый раздел администратора: недоступные чаты компаний на стопе. Проверка без отправки сообщений.",
+  "fileSize": 4430872,
+  "sha256": "45B59FCF90B0D69FEA45523A85CA380069B27444C9A71546BDC49139D44D99A1",
+  "publishedAt": "2026-11-19T01:18:48Z",
+  "downloadUrl": "/android-new/otziv-v1.0.93.apk"
 }

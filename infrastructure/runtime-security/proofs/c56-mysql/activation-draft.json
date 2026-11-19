@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-reviewed-image-activation-draft-v1",
+  "activationReady": false,
+  "remaining": "published-digest MySQL rehearsal and coordinated database cutover",
+  "entry": {
+    "component": "mysql",
+    "reference": "ghcr.io/claidd/otziv-security@sha256:445e15dc40f18a25990558d95e8918b66938c87a7b6a27626f88f7d1e74f83d4",
+    "commit": "725608d30b3d11064ef27d6045418ad765134e72",
+    "run": "44529344342",
+    "attempt": "1",
+    "manifest": {
+      "path": "infrastructure/runtime-security/reviewed-images-c56-mysql.json",
+      "sha256": "06dc38c8e53c8468d2840552c9d21a0ba0ded61d33c65d410f9001e83b4f8325"
+    },
+    "publication": {
+      "path": "infrastructure/runtime-security/proofs/c56-mysql/publication/publication.json",
+      "sha256": "69750d44f35372250029f4dd11b4a7be9d1bc126bf9205933bb6d6ae4caabefe"
+    },
+    "anonymous": {
+      "path": "infrastructure/runtime-security/proofs/c56-mysql/anonymous/anonymous-download.json",
+      "sha256": "cc30df54deceab95c4db657fb279352cb904a7d9c3f8d8769896b264c9106bb8"
+    }
+  }
+}

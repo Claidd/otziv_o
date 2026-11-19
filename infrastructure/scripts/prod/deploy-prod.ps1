@@ -79,7 +79,7 @@ Useful options:
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
   -CoordinatedMysqlRefresh       Exact reviewed MySQL OS-package cutover after the protected backup.
   -CoordinatedSslRefresh         Reviewed C23-to-C36 PostgreSQL cutover after protected backups.
-  -CoordinatedPostgresRefresh    Reviewed PostgreSQL 17.11 to 17.12 refresh on the same volume after protected backups.
+  -CoordinatedPostgresRefresh    Exact reviewed PostgreSQL refresh on the same volume after protected backups.
   -NoBuildCache                  Build images without Docker cache.
   -AllowDirtyWorktree            Emergency only: bypass the clean automatic snapshot.
   -SkipAutoSnapshotValidation    Emergency only: skip local gates for an automatic snapshot.
@@ -1099,9 +1099,13 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\database_image_guard.py",
     "infrastructure\scripts\prod\coordinated_mysql_brotli_refresh.py",
     "infrastructure\scripts\prod\coordinated_mysql_curl_refresh.py",
+    "infrastructure\scripts\prod\coordinated_mysql_util_linux_refresh.py",
+    "infrastructure\scripts\prod\coordinated_mysql_kerberos_refresh.py",
     "infrastructure\scripts\prod\coordinated_mysql_cutover.py",
     "infrastructure\scripts\prod\coordinated_ssl_refresh.py",
     "infrastructure\scripts\prod\coordinated_postgres_zlib_refresh.py",
+    "infrastructure\scripts\prod\coordinated_postgres_gosu_refresh.py",
+    "infrastructure\scripts\prod\coordinated_postgres_cutover.py",
     "infrastructure\scripts\prod\deployment_capacity.py",
     "infrastructure\scripts\prod\whatsapp_deploy_state.py",
     "infrastructure\scripts\prod\image_layer_capacity.py",
@@ -3253,12 +3257,12 @@ if [ "`$coordinated_ssl_enabled" = "1" ]; then
     --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
     --explicit-reviewed-ssl-cutover
 fi
-# The reviewed PostgreSQL 17.11 to 17.12 refresh keeps the active C48 Keycloak.
+# The exact reviewed PostgreSQL refresh keeps the active C48 Keycloak.
 # It follows the verified main DB backup and both earlier cutovers, writes its own
 # encrypted PostgreSQL backup, recreates only keycloak-postgres on the same volume
-# and restores C36 through its checked override on any failed check.
+# and restores its reviewed source image through a checked override on any failed check.
 if [ "`$coordinated_postgres_enabled" = "1" ]; then
-  python3 infrastructure/scripts/prod/coordinated_postgres_zlib_refresh.py \
+  python3 infrastructure/scripts/prod/coordinated_postgres_cutover.py \
     --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
     --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
     --explicit-reviewed-postgres-refresh

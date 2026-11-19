@@ -30,7 +30,7 @@ services:
 
   mysql:
     # A fresh development volume retains older engine data separately.
-    image: ghcr.io/claidd/otziv-security@sha256:0ad40a668c292ebe70297cd4df66b2e9c5067fad3bfdb54179347a597e1ac48f
+    image: ghcr.io/claidd/otziv-security@sha256:52be6ed6c0039196dca88202ffd9714520d509bdde9b2f575238d1ea2d81028a
     container_name: my-mysql
     command:
       - mysqld
@@ -57,7 +57,7 @@ services:
       internal_net:
 
   nginx:
-    image: ghcr.io/claidd/otziv-security@sha256:a873be5016237d2c08591bb1582a0535992466ef8744cb73d2c940b6c84abc23
+    image: ghcr.io/claidd/otziv-security@sha256:a0168e8b87c0ecfeb2584b62827a0f7ec1690bb1aa26c762f6368636a5936416
     ports:
       - '127.0.0.1:80:80'
       - '127.0.0.1:443:443'
@@ -253,7 +253,7 @@ services:
       internal_net:
 
   log-viewer:
-    image: ghcr.io/claidd/otziv-security@sha256:200bb7e67947397b154106e962fcb7e73883624229ee876a9ef644a5a0090cc7
+    image: ghcr.io/claidd/otziv-security@sha256:1fb7570b8599b45320a1699033d6120e2308247c4ca663a704598d76a79b4d22
     profiles: ["observability"]
     container_name: log-viewer
     ports:
@@ -267,7 +267,7 @@ services:
       - internal_net
 
   keycloak-postgres:
-    image: ghcr.io/claidd/otziv-security@sha256:32adf590dacac8d07c6dcd5bfbad27d527ae2ddf18e9822a404ba52ce69524a2
+    image: ghcr.io/claidd/otziv-security@sha256:b3eb812fca1c3e2d09a033f0059a5b8b66bf3d6567c5ad09d12c4e4d7bd4a21c
     container_name: otziv-keycloak-postgres
     environment:
       POSTGRES_USER: keycloak
@@ -315,7 +315,7 @@ services:
       - internal_net
 
   prometheus:
-    image: ghcr.io/claidd/otziv-security@sha256:3631f3ba94633e919ffdd1f581d6a4164b9057259bfcdc09a2e00b773c42fe8c
+    image: ghcr.io/claidd/otziv-security@sha256:76960ff4e1ba986d0931bbcfff4582e8dd7f60d7ee9a5f52b39ce1e1d2d6105f
     profiles: ["observability"]
     container_name: otziv-prometheus
     ports:
@@ -327,7 +327,7 @@ services:
       - internal_net
 
   loki:
-    image: ghcr.io/claidd/otziv-security@sha256:9a0dcfd9845f89e1bbc282b32eb9b62122fbe7f43d01a633fe88690f8e86a531
+    image: ghcr.io/claidd/otziv-security@sha256:c203823da14ba5df9c78bbd3dae4637ec3c9c468ae14269fa9edd9f0cf49e0f2
     profiles: ["observability"]
     container_name: otziv-loki
     command: -config.file=/etc/loki/loki-config.yaml
@@ -347,7 +347,7 @@ services:
       start_period: 40s
 
   tempo:
-    image: ghcr.io/claidd/otziv-security@sha256:32eb442b4b2f0cb86c7bc2d4254d46011e472eed228232ae6404d39c67a0e974
+    image: ghcr.io/claidd/otziv-security@sha256:0f78ae6a2adb786b21bfdc57a3670cf2fee5c892eebf6315b7076f089f64c980
     stop_grace_period: 30s
     profiles: ["observability"]
     container_name: otziv-tempo
@@ -370,7 +370,7 @@ services:
       start_period: 40s
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:c706f8a2e448bef0ec1cd92749967ed7accccb2b53fe21de9b5ca53694ce12f3
+    image: ghcr.io/claidd/otziv-security@sha256:f98e02b5b97e5c7102f25432208c3aded46ce545ad259abda1ca227222ed751f
     profiles: ["observability"]
     container_name: otziv-alloy
     command:
@@ -393,7 +393,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:b6b50b514ad8af7881deb8d0f0a764be651bb95f155900fd6f57324e1e2c6892
+    image: ghcr.io/claidd/otziv-security@sha256:538ab28d4bba432a78c763946efde2901bc45ce06e7d24f573c6ca0afdf78738
     profiles: ["observability"]
     container_name: otziv-grafana
     ports:

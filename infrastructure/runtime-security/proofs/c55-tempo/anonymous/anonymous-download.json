@@ -1,0 +1,76 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "tempo",
+  "commit": "725608d30b3d11064ef27d6045418ad765134e72",
+  "run": "44529296152",
+  "attempt": "1",
+  "manifestSet": "c55-tempo",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c55-tempo.json",
+  "runner": "GitHub Actions 1000036973",
+  "startedAt": "2026-11-19T13:11:01.047Z",
+  "sourcePublicationSha256": "7179800b8bd57c923ef4c5a37614884ceec3bf156436d1c7b040df9e693af94b",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:0f78ae6a2adb786b21bfdc57a3670cf2fee5c892eebf6315b7076f089f64c980",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:a9a9d1427e6e349281f91592ef5c177a999af5611c8b856a3cb1224e0dd5373e",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:0f78ae6a2adb786b21bfdc57a3670cf2fee5c892eebf6315b7076f089f64c980",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:a9a9d1427e6e349281f91592ef5c177a999af5611c8b856a3cb1224e0dd5373e",
+        "size": 4655
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:33637670d6dc689680308e7682cae3b28531f93b22cfc842944aeab78a8d3be4",
+        "size": 7372
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:b9cf9a935967ea24f1390f49490eae95d64bdd85a2eb9fe8ee9c6f50ec92f465",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:2836d99a451ba942211e74014274832cd9165ae4fb6ad949ddf0611c53cad5d8",
+        "size": 1268519
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:84592a44fa606c8863113468b702b1a680af5a88e64eebc134903b6b26588792",
+        "size": 48253
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:33637670d6dc689680308e7682cae3b28531f93b22cfc842944aeab78a8d3be4",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "725608d30b3d11064ef27d6045418ad765134e72",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "tempo",
+    "com.otziv.security.c50": "C50: golang.org/x/net v0.62.0; required x/* dependency closure",
+    "com.otziv.security.c55": "C55: Go 1.27.4; CVE-2026-97054; unchanged upstream source and dependency closure",
+    "com.otziv.security.patch": "go-jose/v4 4.1.6; Go1.27.4; grpc1.83.2; thrift0.24.0; xcrypto0.58.0; x/net0.62.0; exact required transitive versions; request queue drain patch; loopback HTTP200 readiness",
+    "org.opencontainers.image.revision": "f0f3ed59197bfe9f54f3b0f8015ccca112f9e544",
+    "org.opencontainers.image.source": "https://github.com/grafana/tempo",
+    "org.opencontainers.image.version": "2.10.8-otziv.5"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-19T13:11:10.855Z"
+}

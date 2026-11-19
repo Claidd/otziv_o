@@ -151,6 +151,13 @@ public class ManagerControlProblemExamples {
 
     private final WhatsAppInviteLinkHealth whatsAppInviteLinkHealth;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hunt.otziv.client_messages.api.ClientContactHealth contactHealth;
+
+    boolean adminContactOnly(Company company) {
+        return company != null && contactHealth != null && contactHealth.adminOnly(company.getId());
+    }
+
     List<ManagerControlConcreteItemResponse> detailExamples(Manager manager, ManagerDailyControlItem item, LocalDate today) {
         if (item == null || item.getCount() <= 0) {
             return List.of();
@@ -375,12 +382,55 @@ public class ManagerControlProblemExamples {
     }
 
     List<ManagerControlConcreteItemResponse> chatBindingIssueExamples(Manager manager, LocalDate today, int limit) {
-        List<ManagerControlConcreteItemResponse> examples = new ArrayList<>(companyRepository.findChatBindingIssuesByManager(manager).stream().limit(Math.max(1, limit)).map(company -> companyChatBindingIssueExample(company, today, manager)).toList());
+        var contactRouting = contactHealth == null || manager == null ? null : contactHealth.routing(manager.getId());
+        List<ManagerControlConcreteItemResponse> examples = new ArrayList<>(companyRepository.findChatBindingIssuesByManager(manager).stream()
+                .filter(company -> contactRouting == null || !contactRouting.excluded().contains(company.getId())).limit(Math.max(1, limit))
+                .map(company -> companyChatBindingIssueExample(company, today, manager)).toList());
         // A bound group whose stored invite no longer opens it is repaired the same way: by the manager.
         staleWhatsAppInvites(manager).stream().limit(Math.max(0, Math.max(1, limit) - examples.size()))
                 .map(stale -> staleWhatsAppInviteExample(stale.company(), stale.invite(), today, manager))
                 .forEach(examples::add);
+        if (contactHealth != null && manager != null) {
+            contactHealth.managerIssues(manager.getId()).stream()
+                    .filter(contact -> examples.stream().noneMatch(row -> java.util.Objects.equals(row.entityId(),contact.companyId())))
+                    .limit(Math.max(0, Math.max(1,limit)-examples.size()))
+                    .forEach(contact -> companyRepository.findById(contact.companyId()).ifPresent(company ->
+                            examples.add(contactAccessExample(company,contact,today,manager))));
+        }
         return List.copyOf(examples);
+    }
+
+    long chatBindingIssueCount(Manager manager, LocalDate today) {
+        return chatBindingIssueExamples(manager,today,Integer.MAX_VALUE).size();
+    }
+
+    static final String CONTACT_ACCESS_REASON = "клиентский чат недоступен аккаунту отправки";
+
+    void requireKnownContactAccess(Company company) {
+        if (contactHealth != null && company.getManager() != null
+                && contactHealth.managerIssues(company.getManager().getId()).stream()
+                    .anyMatch(contact -> company.getId().equals(contact.companyId()))) requireContactAccess(company);
+    }
+
+    private ManagerControlConcreteItemResponse contactAccessExample(Company company,
+            com.hunt.otziv.client_messages.api.ClientContactHealth.Contact contact, LocalDate today, Manager manager) {
+        String specialistName = concretePresenter.companySpecialistName(company);
+        String reason = "Почему в контроле: " + CONTACT_ACCESS_REASON + ". " + contact.description()
+                + ". Проверьте ссылку и доступ аккаунта, затем нажмите «Починить». Проверка не отправляет сообщений. "
+                + "Исход старых отправок проверяется отдельно; недоступность чата не разрешает их повтор.";
+        return new ManagerControlConcreteItemResponse(null,"COMPANY_CHAT_BINDING",company.getId(),company.getTitle(),
+                specialistName.isBlank()?"Специалист не назначен":specialistName,contact.companyStatus(),
+                company.getUpdateStatus()==null?null:daysSince(company.getUpdateStatus(),today),reason,
+                companyTargetUrl(manager,company),null,company.getUrlChat(),null,null,ManagerDailyControlItemStatus.OPEN.name(),
+                null,null,null,null,null,null,null,null,null,null,null,null,specialistName);
+    }
+
+    void requireContactAccess(Company company) {
+        if (contactHealth == null) throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT,"Проверка чата временно недоступна");
+        var result = contactHealth.recheck(company.getId());
+        if (!"AVAILABLE".equals(result.checkStatus())) throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT,result.description());
     }
 
     record StaleCompanyInvite(Company company, WhatsAppInviteLinkHealth.StaleInvite invite) {
@@ -410,6 +460,7 @@ public class ManagerControlProblemExamples {
         return java.util.stream.StreamSupport.stream(companyRepository.findAllById(byCompany.keySet()).spliterator(), false)
                 .filter(company -> company.getManager() != null && manager.getId().equals(company.getManager().getId()))
                 .filter(Company::isActive)
+                .filter(company -> !adminContactOnly(company))
                 .filter(company -> company.getStatus() == null || !"бан".equalsIgnoreCase(safe(company.getStatus().getTitle())))
                 .filter(company -> safe(company.getGroupId()).length() > 0)
                 .filter(company -> sameWhatsAppInviteCode(company.getUrlChat(), byCompany.get(company.getId()).storedInviteCode()))
@@ -824,7 +875,7 @@ public class ManagerControlProblemExamples {
     }
 
     void addTelegramIssueCompany(Map<Long, Company> companies, Company company) {
-        if (company == null || company.getId() == null || company.getTelegramGroupChatId() == null) {
+        if (company == null || company.getId() == null || company.getTelegramGroupChatId() == null || adminContactOnly(company)) {
             return;
         }
         companies.putIfAbsent(company.getId(), company);

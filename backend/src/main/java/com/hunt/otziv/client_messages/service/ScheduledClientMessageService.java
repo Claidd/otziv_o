@@ -3430,6 +3430,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hunt.otziv.client_messages.api.ClientContactHealth contactHealth;
+
     private PreparedScheduledDelivery sendArchiveOffer(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
         String expectedStatus = archiveCompanyStatus();
         if (!expectedStatus.equals(companyStatusTitle(company))) {
@@ -3449,6 +3452,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             return null;
         }
 
+        if (contactHealth != null && contactHealth.adminOnly(company.getId())) {
+            postpone(state, nowStorage.plusHours(24), com.hunt.otziv.client_messages.api.ClientContactHealth.HELD_CODE,
+                    "Рассылка приостановлена: недоступный чат компании на стопе передан администратору");
+            return null;
+        }
         String message = archiveOfferText(company);
         return sendMessage(state, company, company.getManager(), message, nowStorage, null);
     }

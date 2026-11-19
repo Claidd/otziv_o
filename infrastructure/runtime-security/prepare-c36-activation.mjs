@@ -11,10 +11,12 @@ import { validateManifest } from './publish-reviewed-images.mjs';
 import { validatePublication, assertPulledImage } from './verify-anonymous-download.mjs';
 import { checkedJson, SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
 import { validateReviewedImageSet, reviewedImageSet, supplementalReviewedSources } from './reviewed-image-sets.mjs';
+import { C55_COMPONENTS } from './c55-refresh.mjs';
 import { C50_COMPONENTS } from './c50-refresh.mjs';
 import { validateActivation } from './reviewed-image-defaults.mjs';
 import { validatePostgresC36ActivationScan } from './postgres-c36-activation.mjs';
 import { validatePostgresC51ActivationScan } from './postgres-c51-activation.mjs';
+import { validateC58Scan } from './postgres-c58-activation.mjs';
 import { validateC54Scan } from './postgres-c54-activation.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
@@ -24,10 +26,10 @@ const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const PREFIX = 'infrastructure/runtime-security/';
 const COMPONENTS = new Set(['dozzle', 'prometheus', 'loki', 'alloy', 'tempo', 'grafana', 'mc', 'minio', 'postgres']);
 const LIBRARY_PATCH_SETS = new Set(['c43-tempo', 'c43-loki', 'c43-alloy', 'c43-grafana', 'c43-keycloak', 'c44-grafana', 'c45-keycloak',
-  'c48-keycloak', 'c48-alloy', ...C50_COMPONENTS.map(component => 'c50-' + component)]);
-const MYSQL_REFRESH_SETS = new Set(['c37-mysql', 'c46-mysql']);
+  'c48-keycloak', 'c48-alloy', 'c59-nginx', ...C50_COMPONENTS.map(component => 'c50-' + component), ...C55_COMPONENTS.map(component => 'c55-' + component)]);
+const MYSQL_REFRESH_SETS = new Set(['c37-mysql', 'c46-mysql', 'c56-mysql', 'c57-mysql']);
 // Official OS package refreshes of the accepted C36 PostgreSQL; the database cutover stays separate.
-const POSTGRES_REFRESH_SETS = new Set(['c51-postgres','c54-postgres']);
+const POSTGRES_REFRESH_SETS = new Set(['c51-postgres','c54-postgres','c58-postgres']);
 const REGISTRY_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;
 const PUBLICATION_FILE = /^(?:publication\.json|build-metadata\.json|known-runtime-dependencies\.json|vulnerabilities\.[A-Za-z0-9.-]+)$/;
 const ANONYMOUS_FILE = /^(?:anonymous-(?:download|image-inspect|job-failure)\.json|anonymous-pull\.(?:stdout|stderr)\.log|before-(?:image-ids|reference-inspect)\.txt|docker-client-isolation\.json)$/;
@@ -192,7 +194,9 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
       ? 'Official OS package overlay comparison and parent-issuer authentication/rollback acceptance'
       : 'Official OS package overlay comparison binding the unchanged Alloy binary review' };
   }
-  if (manifestSet === 'c54-postgres') {
+  if (manifestSet === 'c58-postgres') {
+    await validateC58Scan(publication,entry.publication.path,read);
+  } else if (manifestSet === 'c54-postgres') {
     await validateC54Scan(publication,entry.publication.path,read);
   } else if (POSTGRES_REFRESH_SETS.has(manifestSet)) {
     await validatePostgresC51ActivationScan(publication, entry.publication.path, read);
@@ -206,7 +210,7 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
   }
   const activationReady = component !== 'postgres' && !MYSQL_REFRESH_SETS.has(manifestSet);
   return { entry, activationReady,
-    ...(component === 'postgres' ? { remaining: manifestSet === 'c54-postgres' ? 'PostgreSQL 17.11 to 17.12 same-volume upgrade and rollback with the active issuer' : POSTGRES_REFRESH_SETS.has(manifestSet)
+    ...(component === 'postgres' ? { remaining: manifestSet === 'c58-postgres' ? 'PostgreSQL 17.12 gosu refresh, same-volume rollback and active issuer acceptance' : manifestSet === 'c54-postgres' ? 'PostgreSQL 17.11 to 17.12 same-volume upgrade and rollback with the active issuer' : POSTGRES_REFRESH_SETS.has(manifestSet)
       ? 'same-volume C36 -> C51 PostgreSQL acceptance and active Keycloak coupling'
       : 'same-volume PostgreSQL acceptance and C35 Keycloak coupling' } : {}),
     ...(MYSQL_REFRESH_SETS.has(manifestSet) ? { remaining: 'published-digest MySQL rehearsal and coordinated database cutover' } : {}) };

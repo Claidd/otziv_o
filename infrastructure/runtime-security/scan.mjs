@@ -12,6 +12,7 @@ import { adjudicatePostgresGosu } from './postgres-gosu-adjudication.mjs';
 import { adjudicatePostgresC36Image } from './postgres-c36-adjudication.mjs';
 import { adjudicatePostgresC51Image, C51_POSTGRES_PROOF_LABEL } from './postgres-c51-adjudication.mjs';
 import { adjudicateC54 } from './postgres-c54-adjudication.mjs';
+import { adjudicateC58 } from './postgres-c58-adjudication.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
@@ -101,20 +102,23 @@ export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
     // unresolved vendor findings remain explicit release risks, never implicit exemptions.
     const adjudication = kind === 'image' ? await adjudicateGrafanaImage(report, reportBytes, immutableImageId, scratch) : null;
     const alloyProofLabel = report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'];
-    const alloy = kind === 'image' ? await (alloyProofLabel === C43_ALLOY_PROOF_LABEL
+    const alloy = kind === 'image' ? await ([C43_ALLOY_PROOF_LABEL, 'alloy-daemon-c55'].includes(alloyProofLabel)
       ? adjudicateAlloyC43Image(report, reportBytes, immutableImageId, scratch)
       : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
     const postgresC36 = alloyProofLabel === 'postgres-c36-gosu-go1273';
     const postgresC51 = alloyProofLabel === C51_POSTGRES_PROOF_LABEL;
+    const postgresC58 = alloyProofLabel === 'postgres-c58-gosu-go1274';
     const postgresC54 = alloyProofLabel === 'postgres-17.12';
-    const postgres = kind === 'image' ? await (postgresC54
+    const postgres = kind === 'image' ? await (postgresC58
+      ? adjudicateC58(report, reportBytes, immutableImageId, scratch)
+      : postgresC54
       ? adjudicateC54(report, reportBytes, immutableImageId, scratch)
       : postgresC51
       ? adjudicatePostgresC51Image(report, reportBytes, immutableImageId, scratch)
       : postgresC36
         ? adjudicatePostgresC36Image(report, reportBytes, immutableImageId, scratch)
         : adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch)) : null;
-    const gosu = kind === 'image' && !postgresC36 && !postgresC51 && !postgresC54
+    const gosu = kind === 'image' && !postgresC36 && !postgresC51 && !postgresC54 && !postgresC58
       ? await adjudicatePostgresGosu(report, reportBytes, immutableImageId, scratch, postgres) : null;
     for (const receipt of [alloy, postgres]) if (receipt?.sslRefresh) {
       await copyFile(join(scratch, receipt.sslRefresh.component + '-runtime-refresh.json.gz'),
@@ -123,6 +127,10 @@ export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
     if (postgresC36 && postgres?.runtimeProofSha256) {
       await copyFile(join(scratch, 'postgres-runtime-c36.json.gz'),
         destination.replace(/\.json$/, '') + '.runtime-c36.json.gz');
+    }
+    if (postgresC58 && postgres?.runtimeProofSha256) {
+      await copyFile(join(scratch, 'postgres-runtime-c58.json.gz'),
+        destination.replace(/\.json$/, '') + '.runtime-c58.json.gz');
     }
     if (postgresC54 && postgres?.runtimeProofSha256) {
       await copyFile(join(scratch, 'postgres-runtime-c54.json.gz'),

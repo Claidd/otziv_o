@@ -2661,3 +2661,147 @@ regexes = [
   '''^f482d0e3f6ec36fd4910358472c6b48be6388584$''',
   '''^f509c801d070f8ea9f7400d5093c888ff1fee02e$''',
 ]
+
+# C55 immutable public SBOM/advisory hashes; exact rule, path and full value only.
+# Verified against original publication bytes and negative scanner controls.
+
+[[allowlists]]
+description = "C55 reviewed public c55-grafana/anonymous/registry-attestation-0-payload-0.json"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c55\-grafana/anonymous/registry\-attestation\-0\-payload\-0\.json$''']
+regexes = [
+  '''^da39a3ee5e6b4b0d3255bfef95601890afd80709$''',
+]
+
+[[allowlists]]
+description = "C55 reviewed public c55-grafana/publication/registry-attestation-0-payload-0.json"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c55\-grafana/publication/registry\-attestation\-0\-payload\-0\.json$''']
+regexes = [
+  '''^da39a3ee5e6b4b0d3255bfef95601890afd80709$''',
+]
+
+[[allowlists]]
+description = "C55 reviewed public c55-grafana/publication/vulnerabilities.json"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c55\-grafana/publication/vulnerabilities\.json$''']
+regexes = [
+  '''^013f903d0ba219673aebbdd04f74bb5ed82b01f0$''',
+  '''^017b08c7f1018b619991aaf6b2299d4beb9da1d3$''',
+  '''^043333589798a1f52e09ae63f026c6c8fa676d34$''',
+  '''^14cceb8bfa740fe92dea951e90ed4b05216aaefc$''',
+  '''^159e1de0c448d7b9f09ad768c8e141def4aa1eb4$''',
+  '''^171806c93b86bca29e0212ceb8b6ee9c48eb9ac3$''',
+  '''^1a73dc590cbad62d6f0329ea4779eadaa8d8fd75$''',
+  '''^1c0dee9734cf22fc97cdd181913bbd710e6dfb08$''',
+  '''^20c4c90ea9d20a9dd3a04deadf2c6c4f64233643$''',
+  '''^257a3427aa0ef8d9dd2ef5b3e2d1c021a221b116$''',
+  '''^2ce9606f1c31438297b40df5875dbceb66afb675$''',
+  '''^2f5fc833ff9b5bfe00b32f8b5c74f73c5773c682$''',
+  '''^36e15b618decdff1b116eead6747718e6e729ad2$''',
+  '''^3a1412d2b3bc4e4231fbeac2ed42117ae541bb38$''',
+  '''^4f525c8cc204f84b8b4ca40db3be389958f056c6$''',
+  '''^510872388f5d145cf870868b3d288a23822cb776$''',
+  '''^51372daafb234646960eca4d7a13f706324f24d6$''',
+  '''^523a8f58104589f74f743d501c81bf6517155378$''',
+  '''^5331b8c641f7a9091ce2f43dad2a99851c4f4b12$''',
+  '''^562df2f0a917a52d97b05ad7bed33414ada2cd4b$''',
+  '''^5800d14ce89e16148f4ccc2df74235ce7aedf800$''',
+  '''^5cbd14acc6f1804c5bac6c77dc2c492f010b0fc7$''',
+  '''^61f7544ecd8dd63eac23fe3e645702fda92ef02a$''',
+  '''^640a28ff6245f701d464fba53a05b1bc657c37a7$''',
+  '''^650eb1985a0776789c8564122990f588a742356f$''',
+  '''^6747b1a278816dd7db46438040a70b0b5e5e0a90$''',
+  '''^70a47ac78b6f3be1b22fb1551bd0bfcff4f29613$''',
+  '''^770e8304d958dced98d76997df9e8fa1db5ca32f$''',
+  '''^7adaabffb7d1facb5cd3de9a522b43bc63373bd4$''',
+  '''^7b4f5344aa0401e7b777640050b5257ed2a70e88$''',
+  '''^81407c71e96e8351b4600164c1b4d30c8baf41d6$''',
+  '''^8f2a04abeb54b331e2970a0a0dffb7bd6bdde567$''',
+  '''^911eee8eb7550b95a206f1ad8cbdb986098982f3$''',
+  '''^9379b89d9475ec26adbf463deff410d01a5a7d80$''',
+  '''^945b16e378bc00e44d89d4de8124bba7647fdf4d$''',
+  '''^9569ce3a97c4109e8e53ddde9f3e1bd272613540$''',
+  '''^9d551d828e9c8ee52c5801c1d6046828ebf15752$''',
+  '''^9f318e6e324d6827274829194cf6ac6afbaded12$''',
+  '''^a0051cfe699bf5a047bc1c4faef65f80f7987366$''',
+  '''^a551ddd5d6cb3913e1a1f47b02f21ae068b5e90a$''',
+  '''^a8531368ddb1f86d2a2782a8b693926bb67b59e7$''',
+  '''^ab28105c4a0197da24f8bfc414bc116055249e1e$''',
+  '''^b5405ebc02f7dd8be95b6265c54b243d5456ab8f$''',
+  '''^ba71b09e6ed272e93a669aeaec1e98b1df4cc582$''',
+  '''^bb8ca663db34a0980c9758b40d918fda3b4dbec3$''',
+  '''^bc6912a25cdc7733e0035ed509eceaa4026946e3$''',
+  '''^c220f4a5125a313af733e98def94132bb1e9d40d$''',
+  '''^c400b8921da6a7ffbfde8b7a9acef1f27ade906c$''',
+  '''^c65d435b43e5e6b82310e6b18dd4cdcb8ac63a0c$''',
+  '''^c6f9bded17d844b6f1b0bb5766d2c35c0d5c8508$''',
+  '''^c9534a03750bdfae341f10969016090fc11febbd$''',
+  '''^d8d6b80e53c059a77e4915da78ba964f3ffea240$''',
+  '''^dd90ceb99a3c2ddba336bb4a00be9ebabd84c2a1$''',
+  '''^ec9d4de9d03989b29db5a3d7efdb4c285deaf386$''',
+  '''^f0fcfdc2f4da058af6473bc45c4eab62916225b2$''',
+  '''^f482d0e3f6ec36fd4910358472c6b48be6388584$''',
+  '''^f509c801d070f8ea9f7400d5093c888ff1fee02e$''',
+  '''^f6244675833e097c2429a40d1b206d95385bd42f$''',
+]
+
+[[allowlists]]
+description = "C55 reviewed public c55-alloy/publication/vulnerabilities.sbom.cdx.json"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c55\-alloy/publication/vulnerabilities\.sbom\.cdx\.json$''']
+regexes = [
+  '''^017b08c7f1018b619991aaf6b2299d4beb9da1d3$''',
+  '''^05c2dbadf34cc74192287f377904afaaf4061623$''',
+  '''^0b010025a0e429bc80355c94db86a843395d49e2$''',
+  '''^0d3d55975aa3492c62fd345eac38f41cd166c0b0$''',
+  '''^1d14676ea70003e9f5b2a6a76af0cadb1190411a$''',
+  '''^1dcd0cf42a6a7cb62cc9a7c024196733abcfda95$''',
+  '''^1e9a0039f07471ddfe6816e5df04875bec409f92$''',
+  '''^24da33905c7115c4cbccd0afb2a469804e96467a$''',
+  '''^2c773f336134acf016e639abb6f12ba7341fe4b8$''',
+  '''^31e37c1c7dcf25b76ccf41391fe934a75644c661$''',
+  '''^35d122a3df8b0cc4082a4d89fdc6ee99f375fe67$''',
+  '''^39fef62bf3226abb6bb018fa8750afa0327e84b4$''',
+  '''^3a1412d2b3bc4e4231fbeac2ed42117ae541bb38$''',
+  '''^472cc3fb2d4d47cca7aab2e0b59eb3fb8a9359ec$''',
+  '''^49f79e947270f06940b9100fa638f85dddc4aa7f$''',
+  '''^506ea57086bfb9ce3daff1c14246a1cb532aba0a$''',
+  '''^53ff0fcdab12d69c60c971c69a3d0d173fa46ca9$''',
+  '''^5e390467b26a3cf3fecc04e1a0d482dff3162fc4$''',
+  '''^646fb66603d10a7ac337e14f566f1af48e3107c9$''',
+  '''^708d1b3c51932dc5ba8082c7368187715e6a8d78$''',
+  '''^722c96974dd4009a334e4aee556eedaab5fb94b4$''',
+  '''^73ed7ce85cc78effb94daf028c9af6b4e5252e50$''',
+  '''^78a860982e036f38fe9c0b3344998df5ac2c2ff5$''',
+  '''^7a2692fe5e580ae3bbb2a47abc4baaf1af65aa88$''',
+  '''^85d16b341f7232c9dbb4884b632e1e956584bee9$''',
+  '''^897a08c2b11dfa66975c3d24d63c7bf5f5be1a7c$''',
+  '''^8c9602e3a145e9596dc1a63c6ed67865814b6633$''',
+  '''^9cbfb823500f510b34767edabd3ffd5b436987b4$''',
+  '''^9ff04d5b84743e331e80b589335a52c5480d1815$''',
+  '''^a15c00a9e545aa8b9cf6ec0f888ff6c7b3eaeedc$''',
+  '''^a2d858176b609ab5b8535021a3af9cd302d23d31$''',
+  '''^a9508d216eb8977979102782672e0470cc9bf2a2$''',
+  '''^ba71b09e6ed272e93a669aeaec1e98b1df4cc582$''',
+  '''^becfd489a7bb459c0496893b555fb87a003296b1$''',
+  '''^c0186f14fbdb02f64c8e0ba701ce727ea764ff4c$''',
+  '''^c400b8921da6a7ffbfde8b7a9acef1f27ade906c$''',
+  '''^c440855d6b33446edf4b5eb1a2d892281f15a99b$''',
+  '''^c65d435b43e5e6b82310e6b18dd4cdcb8ac63a0c$''',
+  '''^cc81bbcec598cb91f0eb8456282f33eed820ed5f$''',
+  '''^d0c5adaeb3a3d823aba1377794de8f009b8152cc$''',
+  '''^df84af25dc1942490e1d1c899a07619152a46148$''',
+  '''^e9d544d013267ea86b70ee8ff78abd280e6641af$''',
+  '''^f4d6f25bf0c3fa12d4968320a45685947756a22a$''',
+  '''^f57cea130839c0af8dc0525274267ae4cfd66bbf$''',
+  '''^fd6b4d94ff013dc7ed680d4e864610da5b9751f1$''',
+]

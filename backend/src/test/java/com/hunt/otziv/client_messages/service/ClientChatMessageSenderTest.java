@@ -56,6 +56,29 @@ class ClientChatMessageSenderTest {
         copyButton = TelegramTransferCopyButton.fromFrozenTransferNumber("2202208238396676").orElseThrow();
     }
 
+    @Test void stoppedInaccessibleContactBlocksNewMessageBeforeAnyProviderIntent() {
+        var contacts=mock(com.hunt.otziv.client_messages.api.ClientContactHealth.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(sender,"contactHealth",contacts);
+        when(contacts.holdNewMessage(any(),any(),any())).thenReturn(true);
+        var company=company("https://t.me/example",12345L,null);company.setId(7L);
+        var result=sender.sendWithOperationId(company,"vika","group","new offer",null,"offer:7");
+        assertEquals(com.hunt.otziv.client_messages.api.ClientContactHealth.HELD_CODE,result.errorCode());
+        assertTrue(ClientChatMessageSender.isKnownUnsent(result));
+        verify(operationFence,never()).execute(any(),any(),any(),any(),any());
+        org.mockito.Mockito.verifyNoInteractions(telegramService,whatsAppService,maxBotClient);
+    }
+
+    @Test void oldUnknownRemainsUnknownWhenContactIsExcludedAndNeverDispatches() {
+        var contacts=mock(com.hunt.otziv.client_messages.api.ClientContactHealth.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(sender,"contactHealth",contacts);
+        var saved=new ClientMessageOperationFence.Snapshot("old:7","TELEGRAM","UNKNOWN","d","e","claim",null);
+        when(operationFence.lookup("old:7")).thenReturn(java.util.Optional.of(saved));
+        when(operationFence.execute(eq("old:7"),any(),any(),any(),any())).thenReturn(ClientMessageOperationFence.unknown());
+        var result=sender.sendWithOperationId(company("https://t.me/example",12345L,null),"vika","group","offer",null,"old:7");
+        assertEquals("operation_unknown",result.errorCode());
+        org.mockito.Mockito.verifyNoInteractions(telegramService,whatsAppService,maxBotClient,contacts);
+    }
+
     @Test
     void publicationProgressFencesExactTextAndKeyboardAndRequiresPositiveReceipt() {
         Company company = company("https://t.me/example", 12345L, null);

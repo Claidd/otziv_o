@@ -409,6 +409,32 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
+    void unavailableStoppedContactPausesOfferWithoutResettingItsQuarterlyCycle() {
+        var now = LocalDateTime.of(2026, 5, 25, 10, 20);
+        var state = ScheduledClientMessageState.builder().id(180L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .targetType(ClientMessageTargetType.ARCHIVE_COMPANY)
+                .targetKey("archive-company:20:2026-02-20T10:00").companyId(20L)
+                .archiveOrderId(2L).status(ScheduledMessageStateStatus.ACTIVE).build();
+        CompanyStatus stop = new CompanyStatus();stop.setTitle("На стопе");
+        Company company = new Company();company.setId(20L);company.setStatus(stop);
+        company.setStatusChangedAt(LocalDateTime.of(2026, 2, 20, 10, 0));
+        when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_COMPANY_STATUS,
+                ScheduledClientMessageService.DEFAULT_ARCHIVE_COMPANY_STATUS)).thenReturn("На стопе");
+        var health = org.mockito.Mockito.mock(com.hunt.otziv.client_messages.api.ClientContactHealth.class);
+        ReflectionTestUtils.setField(service, "contactHealth", health);
+        when(health.adminOnly(20L)).thenReturn(true);
+
+        runDeliveryScenario("sendArchiveOffer", state, company, now);
+
+        assertEquals("inactive_company_chat_unavailable", state.getLastErrorCode());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("archive-company:20:2026-02-20T10:00", state.getTargetKey());
+        assertEquals(now.plusHours(24), state.getNextAttemptAt());
+        verifyNoInteractions(messageSender);
+    }
+
+    @Test
     void archiveReorderAttemptAddsStableForwardJitter() {
         LocalDateTime baseAt = LocalDateTime.of(2026, 8, 29, 10, 20);
 

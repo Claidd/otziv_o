@@ -1,0 +1,100 @@
+[
+    {
+        "Id": "sha256:e614296c0aa832afcb857e7180039aa7f5b46705e68713d0e6c906ff71785f1a",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:76960ff4e1ba986d0931bbcfff4582e8dd7f60d7ee9a5f52b39ce1e1d2d6105f"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-19T13:05:24.112203764Z",
+        "DockerVersion": "",
+        "Author": "The Prometheus Authors <prometheus-developers@googlegroups.com>",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "nobody",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "9090/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Cmd": [
+                "--config.file=/etc/prometheus/prometheus.yml",
+                "--storage.tsdb.path=/prometheus"
+            ],
+            "ArgsEscaped": true,
+            "Image": "",
+            "Volumes": {
+                "/prometheus": {}
+            },
+            "WorkingDir": "/prometheus",
+            "Entrypoint": [
+                "/bin/prometheus"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "725608d30b3d11064ef27d6045418ad765134e72",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "prometheus",
+                "com.otziv.security.c50": "C50: golang.org/x/net v0.62.0; required x/* dependency closure",
+                "com.otziv.security.c55": "C55: Go 1.27.4; CVE-2026-97054; unchanged upstream source and dependency closure",
+                "com.otziv.security.patch": "Go1.27.4; grpc1.83.2; x/net0.62.0; unmodified official web assets",
+                "io.prometheus.image.variant": "busybox",
+                "maintainer": "The Prometheus Authors <prometheus-developers@googlegroups.com>",
+                "org.opencontainers.image.authors": "The Prometheus Authors",
+                "org.opencontainers.image.description": "The Prometheus monitoring system and time series database",
+                "org.opencontainers.image.documentation": "https://prometheus.io/docs",
+                "org.opencontainers.image.licenses": "Apache License 2.0",
+                "org.opencontainers.image.revision": "b273ae3adeb64ad630d65ef7f16440df95658410",
+                "org.opencontainers.image.source": "https://github.com/prometheus/prometheus",
+                "org.opencontainers.image.title": "Prometheus",
+                "org.opencontainers.image.url": "https://github.com/prometheus/prometheus",
+                "org.opencontainers.image.vendor": "Prometheus",
+                "org.opencontainers.image.version": "3.13.3-otziv.3"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 609423687,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/961b3fdfc461d8f34ffa9b1d95fdb1225e0d2b448d4512892bf25cb79e0e5ca8/diff:/var/lib/docker/overlay2/a2d5167bf8ed1c685a70726a692654fc090e02c637799ef7cff0de55c8d0ddfe/diff:/var/lib/docker/overlay2/96ea9903fe4af4fe99dd62cbb8001d696300e0765444ed766c28ee5f5869dd27/diff:/var/lib/docker/overlay2/d516e28116c32a2f2e14c8e95f3b3603554bbf1fd5eb8e406912f49ede726c51/diff:/var/lib/docker/overlay2/8408d6ba2e3541dae20b89db4d17d68c34feef671fcfda569a9b5632f7f60fa8/diff:/var/lib/docker/overlay2/82017a89ac5595845ae30d50da930af857a83b22b00b7ce9546a704337eab02a/diff:/var/lib/docker/overlay2/b7a65260400a120537e0901371f320522640949b346b1194ada930236b9de768/diff:/var/lib/docker/overlay2/4cf4c54fa0ddcb9ffb9b28a8a08b11360fe11cb2f2fbd8f6d986027b598b0a1d/diff:/var/lib/docker/overlay2/b6c178de6639ff853045d715f7a22a6a2007ba2df664a3e0be2275a3fe82a774/diff:/var/lib/docker/overlay2/d31971edccaf24cc32101a6a498ba93ba2dc7d113a6a70b2e9829c18286f3cf2/diff:/var/lib/docker/overlay2/6c561b511a8516fb659d4d5185ff4a85f3ba5f8718e9ec9bf34f7a73a7beaaa5/diff:/var/lib/docker/overlay2/bc43b6c586cc5aadb86697ff6080644b3cb9b80ce6d6393fc802b58782171d48/diff:/var/lib/docker/overlay2/93eb1a5475f7b2b6b8d0a346784391aa659d5c7b34dad58f291e5be9811d6f0f/diff:/var/lib/docker/overlay2/a0eae3e77dd54e3427b5ba9e4a9e1e9e227bc178c4daa908c2808d0ce146e4e4/diff",
+                "MergedDir": "/var/lib/docker/overlay2/0f7190c650cb34ec408cb4c9f161b0f6ebd208a84a4a903900f8a811f63d873e/merged",
+                "UpperDir": "/var/lib/docker/overlay2/0f7190c650cb34ec408cb4c9f161b0f6ebd208a84a4a903900f8a811f63d873e/diff",
+                "WorkDir": "/var/lib/docker/overlay2/0f7190c650cb34ec408cb4c9f161b0f6ebd208a84a4a903900f8a811f63d873e/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:53cd0c2915c2f208cd5e51dc3e268522034b42e563c6b8367be4d367a52497ce",
+                "sha256:44ac8141419e79d213b1066d4c10e03366816f698b2e83c4a421ddc93ed67b63",
+                "sha256:3d11f428e470e8911b31c4d319bafd0ed6901dff8e86a8e4b518c76de9e12ffd",
+                "sha256:6482a4d51d24f37416ba51332ca11538defd2070c0db2acfbbb068d57f28ee73",
+                "sha256:df8e747c44e0d9bf71c71ad29ae172bf52cc8492ecbe90887cb5f2619b8b1f84",
+                "sha256:e8a654e55b8a7cca85a0d4e243951a61eed30f58ee668e39d1b019f7821ec157",
+                "sha256:716142784202d2ce94889bf56f638b6cabe68cf9ff310074e4172a5b8cdd7f46",
+                "sha256:c33857a3dd0916bf4246d975f627eb6b287edc5ff11a94279922c7c1dc08370c",
+                "sha256:a7028e0aa95589ffb0f1f789043f6473d2968a61dc703dade90528cf9fe6cf67",
+                "sha256:c534533c302805a974d2c969f4edf0039221638bc63d7457fb5d4b6a003536b6",
+                "sha256:816144528dbf15e8a00189b2c274ba46aea9efd5ed41195d093599975942b257",
+                "sha256:f45f6894f83f0c32371439e2366d2f7455f7ef4ca8fb2839938a1ac9f7b7c404",
+                "sha256:b68b24ef11c5bea769aa95139f0cd0c5ce51f9c26dfb9886cffe2277e0cf724c",
+                "sha256:74818ab8c466a44f65a0dda6a6a4526a77509c07182ccae2b3959740c6d6238e",
+                "sha256:1de962fce0e14c6dc04e542a632e527d6125e5e18ce1a8d539b12d6bf93915fb"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

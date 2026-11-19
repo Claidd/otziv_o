@@ -1,0 +1,86 @@
+[
+    {
+        "Id": "sha256:1baed98e1985fac938355424219a2e85a34f0ed1ed7fd650c657b2eada202179",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:445e15dc40f18a25990558d95e8918b66938c87a7b6a27626f88f7d1e74f83d4"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-19T13:05:12.179235213Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "3306/tcp": {},
+                "33060/tcp": {},
+                "33061/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "MYSQL_UNIX_PORT=/var/lib/mysql/mysql.sock"
+            ],
+            "Cmd": [
+                "mysqld"
+            ],
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "725608d30b3d11064ef27d6045418ad765134e72",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "mysql",
+                "io.buildah.version": "1.33.7"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 1122356778,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/ed1341b3cf25aa15748fadae04f953486ba792d45c9fe2c7194eeb6a4a0167bd/diff:/var/lib/docker/overlay2/2a1cd986eec7a68bef8aaec070431e227aab568014125548f56e7dcba8dd11d8/diff:/var/lib/docker/overlay2/eb5f33c2067f2bca3b63a44cd463d5fe186e4304063a016692f5ab0a458c5a85/diff:/var/lib/docker/overlay2/5d8b2fcfbb8e393825866a52b364d93fba054fc3fee38ae169587aabd819248a/diff:/var/lib/docker/overlay2/945dadcda6193a8ae6f2f2bdb1e342ae724c92af82ad70f825db308ae3001926/diff:/var/lib/docker/overlay2/04971029b3d30085991112e6afa38474394237b2368722ee25b432564dcfb787/diff:/var/lib/docker/overlay2/f9991d68f5a04115f21555cc3f4a56da68429c58ff8379d8cb760efb6adb4272/diff:/var/lib/docker/overlay2/b8464b9317aa6676be54fc602b2360983af682c1efb7c8daa3f74bbb06459b59/diff:/var/lib/docker/overlay2/88fdcb6b2591123766398bd2e556bde05565fcb656596875c75e21c42d8db98b/diff:/var/lib/docker/overlay2/9702a1a5df5f1157ea9c9e7d3626467c8bf422c9f35dc9321d76000e77826f6d/diff:/var/lib/docker/overlay2/73f743b8b3334ce8a250a7e2316f441b5695a2ffda22979fa382e72f44907476/diff:/var/lib/docker/overlay2/a9b811ecaee3e2fca8145b10c9104e6618d4db0d0061469a2393c3c7f8dedafc/diff:/var/lib/docker/overlay2/13fd347c4ec3081ac03b2357b55113dd0d726874efc27f43f790ce17b02731a6/diff:/var/lib/docker/overlay2/0b331a2b7b364fb2ccf642cde1d0d8424d7eee3088a0dbcfbb9ac486c666a1d7/diff:/var/lib/docker/overlay2/8afb6db7dee8a3a1a358d4049c28316560ded2f96f0e9d3b892534ab96e59aa4/diff",
+                "MergedDir": "/var/lib/docker/overlay2/4f0f5a6961f29b602cd8e138f49a2dcbe47d8211c1af83d27436e4006ca79fef/merged",
+                "UpperDir": "/var/lib/docker/overlay2/4f0f5a6961f29b602cd8e138f49a2dcbe47d8211c1af83d27436e4006ca79fef/diff",
+                "WorkDir": "/var/lib/docker/overlay2/4f0f5a6961f29b602cd8e138f49a2dcbe47d8211c1af83d27436e4006ca79fef/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:13c0c862a81f774a58331b5142a12c4d950d7771cf6b77ebd34a610e0026dbf9",
+                "sha256:a4ef66189b2f92063802f44c4868a590b76cae11a3433c7aa744af1a062e26fc",
+                "sha256:30f06ac3ad73d41f8a06b0e7f78f23ebc8164223e8b19afeab9324369e3e4f96",
+                "sha256:f7e0e0c91ffe13c3be8a3ddb535ffe7493570cf7ea37dc7505c204effb574eb4",
+                "sha256:430d43e983d1d1063d0a8e54901e16f5bb188864faa20d4091ca389c51e8deac",
+                "sha256:2f371d47cd5cfa5bb4b6e39852a0d9bf2c5d39f3d935aec1684bf10b9a1cdb45",
+                "sha256:238edd8d38ec1d5e5c16c0b2d49d2052d98b3081e689d9287c24be2c2018c86b",
+                "sha256:a8f9af6e37d164d95921d3f1a011e66417a9055676f9459f1ea0966a056dcfcc",
+                "sha256:3396a65b2f690cce482a00f36d3304d00f56f3863bc5242c7125b53cf61aa8e4",
+                "sha256:421c01eeb411a03f5e2c315a265ae1613cd276452c7a45918d070ccf455e7da1",
+                "sha256:14579904d7f71e36e2f8bc03e235641221a7418b88033d3cff3341990a8702a7",
+                "sha256:2f5cc4b6113cf99c2183974a19f808cb442346a03001ea36a1f4270e47471400",
+                "sha256:44cf11aab20c33869cbc8e8affcfeba86dececdd8cc357fb84115a70600620ff",
+                "sha256:6d309d94823de96145c83eadcb68107f338a5f247655c83508ca262b8131ab80",
+                "sha256:f3bd8cabe080914c98428b980a342cf4b83939d58bb3f5ad38b2cd64e0095db2",
+                "sha256:c9da8a5fad82407f9c27a097c4f0ec931ed4f4eab7c10075089390d9e588ebf3"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

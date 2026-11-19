@@ -15,6 +15,16 @@ class ManagerAutomationFailurePolicyTest {
     private final ManagerAutomationFailurePolicy policy = new ManagerAutomationFailurePolicy();
     private final LocalDateTime now = LocalDateTime.of(2026, 7, 26, 12, 0);
 
+    @Test void activeWorkFailuresAreImmediateButIntentionalPausesAndLeasesAreNot() {
+        assertTrue(policy.isImmediateActiveOrderFailure(state("remote_service_unavailable",1,now),now));
+        assertTrue(policy.isImmediateActiveOrderFailure(state("operation_unknown",1,now),now));
+        for(String code:ListOfWaits()) assertFalse(policy.isImmediateActiveOrderFailure(state(code,3,now.minusDays(2)),now),code);
+        var inFlight=state("state_transaction_in_progress",1,now);inFlight.setLockedUntil(now.plusMinutes(5));
+        assertFalse(policy.isImmediateActiveOrderFailure(inFlight,now));
+    }
+    private String[] ListOfWaits() { return new String[]{"rate_limited","daily_limit","outside_messaging_window","manual_contact_reserved",
+            "review_recovery_active","dry_run",com.hunt.otziv.client_messages.api.ClientContactHealth.HELD_CODE}; }
+
     @Test
     void exposesPaymentInstructionFailureImmediately() {
         ScheduledClientMessageState state = state("payment_instruction_failed", 1, now.minusMinutes(2));
@@ -110,6 +120,14 @@ class ManagerAutomationFailurePolicyTest {
         state.setDeliveryStatus("UNKNOWN");
         assertFalse(policy.isLegacyPreparationFailure(state));
         assertTrue(policy.requiresDeliveryReceipt(state));
+    }
+
+    @Test void unknownForActiveWorkIsVisibleEvenWithoutAnErrorCode() {
+        var state = state(null, 0, now);
+        state.setDeliveryStatus("UNKNOWN");
+        assertTrue(policy.isImmediateActiveOrderFailure(state, now));
+        state.setDeliveryStatus("READY");
+        assertFalse(policy.isImmediateActiveOrderFailure(state, now));
     }
 
     private ScheduledClientMessageState state(String code, int failures, LocalDateTime attemptedAt) {

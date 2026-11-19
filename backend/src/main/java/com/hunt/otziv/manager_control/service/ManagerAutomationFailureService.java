@@ -58,6 +58,9 @@ public class ManagerAutomationFailureService {
     private final CompanyRepository companyRepository;
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hunt.otziv.client_messages.api.ClientContactHealth contactHealth;
+
     @Transactional(readOnly = true)
     public List<AutomationFailureIssue> issues(Manager manager, int limit) {
         if (manager == null
@@ -82,9 +85,18 @@ public class ManagerAutomationFailureService {
                 PageRequest.of(0, MAX_CANDIDATES)
         );
         Map<String, AutomationFailureIssue> unique = new LinkedHashMap<>();
+        var contactRouting = contactHealth == null ? null : contactHealth.routing(manager.getId());
         stateRepository.findAllById(candidateIds).forEach(state -> {
+            Long companyId = state.getCompanyId();
+            if (companyId == null && state.getOrderId() != null) {
+                companyId = orderRepository.findByIdForOrderDto(state.getOrderId())
+                        .map(Order::getCompany).map(Company::getId).orElse(null);
+            }
+            if (contactRouting != null && companyId != null && contactRouting.excluded().contains(companyId)) return;
             boolean transientWait = policy.isTransientWait(state);
-            if (!policy.isActionable(state, now, threshold, afterMinutes) && !transientWait) {
+            boolean liveFailure = contactRouting != null && companyId != null && contactRouting.active().contains(companyId)
+                    && policy.isImmediateActiveOrderFailure(state, now);
+            if (!liveFailure && !policy.isActionable(state, now, threshold, afterMinutes) && !transientWait) {
                 return;
             }
             resolveIssue(manager, state, now).ifPresent(issue -> {

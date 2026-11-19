@@ -1,0 +1,19 @@
+{
+  "component": "nginx",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:a0168e8b87c0ecfeb2584b62827a0f7ec1690bb1aa26c762f6368636a5936416",
+  "commit": "a8cd9bdf6f921fae0423a0d6799c18e473124b6f",
+  "run": "44540075105",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c59-nginx.json",
+    "sha256": "e2004f4284984da2fba98414565126c16cb86ea3dd136614e2b0795d02fae97e"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c59-nginx/publication/publication.json",
+    "sha256": "8572f002972b7ad03497ed48cc81233d166f20d272b10b10655c9ef8ec40a7c7"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c59-nginx/anonymous/anonymous-download.json",
+    "sha256": "5bb7561535d982523ded0ae6538bf7e812a9d9fc015b4fac96601c7c220d37dc"
+  }
+}

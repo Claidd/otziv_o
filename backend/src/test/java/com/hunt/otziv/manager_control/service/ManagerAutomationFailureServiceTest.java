@@ -90,6 +90,23 @@ class ManagerAutomationFailureServiceTest {
         assertFalse(service.systemOwnsIssue(issue));
     }
 
+    @Test void stoppedContactMovesToAdminButFirstFailureForNewWorkAppearsImmediately() {
+        Manager manager=Manager.builder().id(7L).build();
+        Company company=Company.builder().id(20L).title("Pervoцвет").manager(manager).build();
+        Order order=Order.builder().id(100L).company(company).manager(manager).build();
+        var state=state(11L,100L,ClientMessageScenario.ARCHIVE_REORDER_OFFER,1);
+        state.setCompanyId(20L);state.setLastErrorCode("gateway_not_ready");state.setLastAttemptAt(LocalDateTime.now());
+        var contacts=org.mockito.Mockito.mock(com.hunt.otziv.client_messages.api.ClientContactHealth.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"contactHealth",contacts);
+        when(stateRepository.findManagerControlCandidateIds(eq(7L),any(Pageable.class))).thenReturn(List.of(11L));
+        when(stateRepository.findAllById(List.of(11L))).thenReturn(List.of(state));
+        when(contacts.routing(7L)).thenReturn(new com.hunt.otziv.client_messages.api.ClientContactHealth.Routing(java.util.Set.of(20L),java.util.Set.of()));
+        assertTrue(service.issues(manager,10).isEmpty());
+        when(contacts.routing(7L)).thenReturn(new com.hunt.otziv.client_messages.api.ClientContactHealth.Routing(java.util.Set.of(),java.util.Set.of(20L)));
+        when(orderRepository.findByIdForOrderDto(100L)).thenReturn(Optional.of(order));
+        assertEquals(1,service.issues(manager,10).size());
+    }
+
     @Test
     void exposesPaymentFailureForOwningManager() {
         Manager manager = Manager.builder().id(7L).build();

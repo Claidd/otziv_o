@@ -1,0 +1,84 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "minio",
+  "commit": "725608d30b3d11064ef27d6045418ad765134e72",
+  "run": "44529336659",
+  "attempt": "1",
+  "manifestSet": "c55-minio",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c55-minio.json",
+  "runner": "GitHub Actions 1000036961",
+  "startedAt": "2026-11-19T13:06:04.418Z",
+  "sourcePublicationSha256": "3b1c637dde42343077f4a451f99a61295fe2381226e4bbd56e08c1f721d0d957",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:9de7f07409fc3aa2b3cb67405f6d13beb0859a0fb7ac013596d80bd82697f338",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:a0bf73bdcd3e6b5492155d9558ae09e2715df904ee147d6c642033b5288a5878",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:9de7f07409fc3aa2b3cb67405f6d13beb0859a0fb7ac013596d80bd82697f338",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:a0bf73bdcd3e6b5492155d9558ae09e2715df904ee147d6c642033b5288a5878",
+        "size": 2953
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:5043233a2fc6cc704148402151b7cb4203ad27f62c1b1180db4cb58e324652d5",
+        "size": 10376
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:c20c6ccf0e859211e97f27b304a142538e9a58301a491f310be865911070d331",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:4aa6b7830462b0fef6a0e63870811e7001762c69a149a8a122c5010ac2cd65b8",
+        "size": 211908
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:658cbca6a8d25f95d316131837c2a1f61c1c3a1927b9680dd7f96f00dfff57be",
+        "size": 31930
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:5043233a2fc6cc704148402151b7cb4203ad27f62c1b1180db4cb58e324652d5",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.derivative": "Alpine vendor libssl3/libcrypto3 package update only; Versity v1.8.0 binary unchanged",
+    "com.otziv.publication.revision": "725608d30b3d11064ef27d6045418ad765134e72",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "minio",
+    "com.otziv.security.c50": "C50: official musl security package; golang.org/x/net v0.62.0; required x/* dependency closure",
+    "com.otziv.security.c55": "C55: Go 1.27.4; CVE-2026-97054; unchanged upstream source and dependency closure",
+    "com.otziv.security.patch": "Go1.27.4; x/net0.62.0; parent Alpine security packages preserved",
+    "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; C36 versitygw executable and unrelated packages unchanged",
+    "com.otziv.upstream.image": "ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499",
+    "org.opencontainers.image.created": "2026-09-04T23:12:05.588Z",
+    "org.opencontainers.image.description": "A simple to deploy but feature rich S3 object storage server for your filesystem",
+    "org.opencontainers.image.licenses": "Apache-2.0",
+    "org.opencontainers.image.revision": "fd04bc1df2656298577b82667a4195c77f8c7563",
+    "org.opencontainers.image.source": "https://github.com/versity/versitygw",
+    "org.opencontainers.image.title": "versitygw",
+    "org.opencontainers.image.url": "https://github.com/versity/versitygw",
+    "org.opencontainers.image.version": "v1.8.0-otziv.c36"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-19T13:06:13.473Z"
+}
