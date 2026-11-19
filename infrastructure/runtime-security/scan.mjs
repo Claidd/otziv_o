@@ -101,7 +101,7 @@ export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
     // unresolved vendor findings remain explicit release risks, never implicit exemptions.
     const adjudication = kind === 'image' ? await adjudicateGrafanaImage(report, reportBytes, immutableImageId, scratch) : null;
     const alloyProofLabel = report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'];
-    const alloy = kind === 'image' ? await (alloyProofLabel === C43_ALLOY_PROOF_LABEL
+    const alloy = kind === 'image' ? await ([C43_ALLOY_PROOF_LABEL, 'alloy-daemon-c55'].includes(alloyProofLabel)
       ? adjudicateAlloyC43Image(report, reportBytes, immutableImageId, scratch)
       : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
     const postgresC36 = alloyProofLabel === 'postgres-c36-gosu-go1273';

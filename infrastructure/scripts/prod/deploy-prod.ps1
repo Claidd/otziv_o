@@ -1099,6 +1099,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\database_image_guard.py",
     "infrastructure\scripts\prod\coordinated_mysql_brotli_refresh.py",
     "infrastructure\scripts\prod\coordinated_mysql_curl_refresh.py",
+    "infrastructure\scripts\prod\coordinated_mysql_util_linux_refresh.py",
     "infrastructure\scripts\prod\coordinated_mysql_cutover.py",
     "infrastructure\scripts\prod\coordinated_ssl_refresh.py",
     "infrastructure\scripts\prod\coordinated_postgres_zlib_refresh.py",

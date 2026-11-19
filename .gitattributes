@@ -221,3 +221,13 @@ infrastructure/runtime-security/proofs/c51-postgres/publication/vulnerabilities.
 infrastructure/runtime-security/builds/postgres-17.12/** text eol=lf
 infrastructure/runtime-security/*c54* text eol=lf
 infrastructure/runtime-security/proofs/c54-postgres/publication/vulnerabilities.scanner.log -whitespace
+
+# C55 Go rebuilds and C56 MySQL OS-only transition bind exact evidence bytes.
+infrastructure/runtime-security/builds/c55-*/** text eol=lf
+infrastructure/runtime-security/builds/c56-mysql/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c55-*.json text eol=lf
+infrastructure/runtime-security/reviewed-images-c56-mysql.json text eol=lf
+infrastructure/runtime-security/adjudications/grafana-tempo-c55/** -text
+infrastructure/runtime-security/proofs/c55-*/** -text
+infrastructure/runtime-security/proofs/c56-mysql/** -text
+infrastructure/runtime-security/mysql-c56-rehearsal.py -text

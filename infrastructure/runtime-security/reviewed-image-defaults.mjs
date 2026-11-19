@@ -12,15 +12,16 @@ import { checkKeycloakRuntimeDependencies, requiresKeycloakDependencyProof } fro
 import { loadReviewedProof, matchingFindings } from './grafana-tempo-adjudication.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
-import { C43_ALLOY_PROOF_LABEL, C43_ALLOY_BUILD_INFO_READER } from './alloy-c43-adjudication.mjs';
+import { C43_ALLOY_PROOF_LABEL, C43_ALLOY_BUILD_INFO_READER, C55_ALLOY_BUILD_INFO_READER } from './alloy-c43-adjudication.mjs';
 import {validateGuavaC43Activation,couplePostgresC36WithKeycloakC43} from './guava-c43-activation.mjs';
 import {validateBrotliC45Activation,couplePostgresC36WithKeycloakC45} from './brotli-c45-activation.mjs';
 import {validateAptC48Activation,couplePostgresC36WithKeycloakC48} from './apt-c48-activation.mjs';
 import {overlayForSet, overlayForManifest, overlayCompressedProofs} from './os-package-overlay-registry.mjs';
 import {validateOverlayActivation, coupleOverlayKeycloak} from './os-package-overlay.mjs';
+import {validateC55ActivationScan} from './c55-refresh.mjs';
 import {validateC50ActivationScan} from './c50-refresh.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
-import { validateDatabaseTransitionReadiness } from './mysql-c46-readiness.mjs';
+import { validateDatabaseTransitionReadiness } from './mysql-c56-readiness.mjs';
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
 import { validatePublishedKeycloakMigrationAcceptance,
   assertPostgresKeycloakCoupling } from './postgres-transition-readiness.mjs';
@@ -130,7 +131,8 @@ export async function validateUnadjudicatedActivationScan(publication, publicati
   assert.equal(summary.scannerImage, TRIVY_IMAGE, 'activation_raw_scan_scanner');
 }
 
-export async function validateAlloyC43ActivationScan(publication, publicationPath, read) {
+export async function validateAlloyC43ActivationScan(publication, publicationPath, read, generation = 'c43') {
+  assert.ok(['c43', 'c55'].includes(generation), 'activation_alloy_generation');
   assert.equal(publication.component, 'alloy', 'activation_alloy_c43_component');
   const directory = dirname(publicationPath).replaceAll('\\', '/');
   const [rawBytes, receiptBytes] = await Promise.all([
@@ -138,7 +140,7 @@ export async function validateAlloyC43ActivationScan(publication, publicationPat
   const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes).alloy;
   assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_alloy_c43_report_image');
   const labels = raw.Metadata?.ImageConfig?.config?.Labels;
-  assert.equal(labels?.['com.otziv.security.proof'], C43_ALLOY_PROOF_LABEL, 'activation_alloy_c43_proof_label');
+  assert.equal(labels?.['com.otziv.security.proof'], generation === 'c55' ? 'alloy-daemon-c55' : C43_ALLOY_PROOF_LABEL, 'activation_alloy_c43_proof_label');
   assert.equal(labels?.['org.opencontainers.image.source'], 'https://github.com/grafana/alloy', 'activation_alloy_c43_source');
   assert.equal(labels?.['org.opencontainers.image.revision'], 'becfd489a7bb459c0496893b555fb87a003296b1', 'activation_alloy_c43_revision');
   assert.equal(labels?.['org.opencontainers.image.version'], '1.19.2-otziv.4', 'activation_alloy_c43_version');
@@ -150,7 +152,7 @@ export async function validateAlloyC43ActivationScan(publication, publicationPat
     'activation_alloy_c43_inspected_image');
   assert.equal(receipt.rawReportModified, false, 'activation_alloy_c43_raw_modified');
   assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_alloy_c43_binary_executed');
-  assert.equal(receipt.buildInfoReader, C43_ALLOY_BUILD_INFO_READER, 'activation_alloy_c43_reader');
+  assert.equal(receipt.buildInfoReader, generation === 'c55' ? C55_ALLOY_BUILD_INFO_READER : C43_ALLOY_BUILD_INFO_READER, 'activation_alloy_c43_reader');
   assert.equal(receipt.goJoseVersion, 'v4.1.6', 'activation_alloy_c43_go_jose');
   for (const key of ['binarySha256', 'functionNamesSha256', 'closureSha256', 'buildInfoSha256'])
     assert.match(receipt[key] || '', /^[a-f0-9]{64}$/, 'activation_alloy_c43_' + key);
@@ -196,7 +198,7 @@ export function assertGrafanaC30KinOpenApi(raw) {
 }
 
 export async function validateGrafanaC43ActivationScan(publication, publicationPath, read, generation = 'c43') {
-  assert.ok(['c43', 'c50'].includes(generation), 'activation_grafana_review_generation');
+  assert.ok(['c43', 'c50', 'c55'].includes(generation), 'activation_grafana_review_generation');
   assert.equal(publication.component, 'grafana', 'activation_grafana_c43_component');
   const directory = dirname(publicationPath).replaceAll('\\', '/');
   const [rawBytes, receiptBytes] = await Promise.all([
@@ -275,6 +277,15 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if (selected.manifestSet.startsWith('c50-')) {
     await validateC50ActivationScan(publication.value, entry.publication.path, read);
+  }
+  if (selected.manifestSet === 'c55-grafana') {
+    await validateGrafanaC43ActivationScan(publication.value, entry.publication.path, read, 'c55');
+  }
+  if (selected.manifestSet === 'c55-alloy') {
+    await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read, 'c55');
+  }
+  if (selected.manifestSet.startsWith('c55-')) {
+    await validateC55ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet === 'c43-keycloak') {
     await validateGuavaC43Activation(publication.value, entry, read, validateActivation);

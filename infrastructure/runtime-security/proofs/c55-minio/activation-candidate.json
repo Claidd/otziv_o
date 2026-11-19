@@ -1,0 +1,19 @@
+{
+  "component": "minio",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:9de7f07409fc3aa2b3cb67405f6d13beb0859a0fb7ac013596d80bd82697f338",
+  "commit": "725608d30b3d11064ef27d6045418ad765134e72",
+  "run": "44529336659",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c55-minio.json",
+    "sha256": "c89a7646122f3c2632f3b4bfd86fca0209935e487e465a552087e7c16443b2ac"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c55-minio/publication/publication.json",
+    "sha256": "3b1c637dde42343077f4a451f99a61295fe2381226e4bbd56e08c1f721d0d957"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c55-minio/anonymous/anonymous-download.json",
+    "sha256": "fffac94e822c503a52e346e87b5d2c553fcfa7099d5bfcb6cf70b71edba0eea2"
+  }
+}

@@ -55,7 +55,7 @@ services:
   mysql:
     # A different running DB image is blocked by the ordinary deployment guard.
     # Upgrade the retained volume only through the reviewed coordinated cutover.
-    image: ghcr.io/claidd/otziv-security@sha256:0ad40a668c292ebe70297cd4df66b2e9c5067fad3bfdb54179347a597e1ac48f
+    image: ghcr.io/claidd/otziv-security@sha256:445e15dc40f18a25990558d95e8918b66938c87a7b6a27626f88f7d1e74f83d4
     user: "999:999"
     container_name: my-mysql
     restart: unless-stopped
@@ -916,7 +916,7 @@ services:
       - internal_net
 
   dozzle:
-    image: ghcr.io/claidd/otziv-security@sha256:200bb7e67947397b154106e962fcb7e73883624229ee876a9ef644a5a0090cc7
+    image: ghcr.io/claidd/otziv-security@sha256:1fb7570b8599b45320a1699033d6120e2308247c4ca663a704598d76a79b4d22
     oom_score_adj: 500
     container_name: log-viewer
     restart: unless-stopped
@@ -943,7 +943,7 @@ services:
       start_period: 10s
 
   prometheus:
-    image: ghcr.io/claidd/otziv-security@sha256:3631f3ba94633e919ffdd1f581d6a4164b9057259bfcdc09a2e00b773c42fe8c
+    image: ghcr.io/claidd/otziv-security@sha256:76960ff4e1ba986d0931bbcfff4582e8dd7f60d7ee9a5f52b39ce1e1d2d6105f
     oom_score_adj: 300
     container_name: prometheus
     restart: unless-stopped
@@ -977,7 +977,7 @@ services:
       - observer_metrics_net
 
   loki:
-    image: ghcr.io/claidd/otziv-security@sha256:9a0dcfd9845f89e1bbc282b32eb9b62122fbe7f43d01a633fe88690f8e86a531
+    image: ghcr.io/claidd/otziv-security@sha256:c203823da14ba5df9c78bbd3dae4637ec3c9c468ae14269fa9edd9f0cf49e0f2
     oom_score_adj: 500
     container_name: loki
     restart: unless-stopped
@@ -999,7 +999,7 @@ services:
       - internal_net
 
   tempo:
-    image: ghcr.io/claidd/otziv-security@sha256:32eb442b4b2f0cb86c7bc2d4254d46011e472eed228232ae6404d39c67a0e974
+    image: ghcr.io/claidd/otziv-security@sha256:0f78ae6a2adb786b21bfdc57a3670cf2fee5c892eebf6315b7076f089f64c980
     oom_score_adj: 500
     stop_grace_period: 30s
     container_name: tempo

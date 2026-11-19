@@ -1,0 +1,89 @@
+[
+    {
+        "Id": "sha256:5043233a2fc6cc704148402151b7cb4203ad27f62c1b1180db4cb58e324652d5",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:9de7f07409fc3aa2b3cb67405f6d13beb0859a0fb7ac013596d80bd82697f338"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-19T13:05:11.104868814Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/usr/local/bin/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.derivative": "Alpine vendor libssl3/libcrypto3 package update only; Versity v1.8.0 binary unchanged",
+                "com.otziv.publication.revision": "725608d30b3d11064ef27d6045418ad765134e72",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "minio",
+                "com.otziv.security.c50": "C50: official musl security package; golang.org/x/net v0.62.0; required x/* dependency closure",
+                "com.otziv.security.c55": "C55: Go 1.27.4; CVE-2026-97054; unchanged upstream source and dependency closure",
+                "com.otziv.security.patch": "Go1.27.4; x/net0.62.0; parent Alpine security packages preserved",
+                "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; C36 versitygw executable and unrelated packages unchanged",
+                "com.otziv.upstream.image": "ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499",
+                "org.opencontainers.image.created": "2026-09-04T23:12:05.588Z",
+                "org.opencontainers.image.description": "A simple to deploy but feature rich S3 object storage server for your filesystem",
+                "org.opencontainers.image.licenses": "Apache-2.0",
+                "org.opencontainers.image.revision": "fd04bc1df2656298577b82667a4195c77f8c7563",
+                "org.opencontainers.image.source": "https://github.com/versity/versitygw",
+                "org.opencontainers.image.title": "versitygw",
+                "org.opencontainers.image.url": "https://github.com/versity/versitygw",
+                "org.opencontainers.image.version": "v1.8.0-otziv.c36"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 162628325,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/46dbf962d12e66d266bc13984d1a0788548f33ffb6b181d33173394b486ed5d4/diff:/var/lib/docker/overlay2/c263987d67f7b681501ac1690cc32deaae6a03abed9879e7d02965369e88b1d5/diff:/var/lib/docker/overlay2/d45a5e2e00da61d8e02e12eeb114e65f299da04bad6ac7bd31d6798a550834e6/diff:/var/lib/docker/overlay2/b8ebb0e9e38f9d4f3155fdfcef442da203a514f0a70d7ccfc89ba5aadbc1bec8/diff:/var/lib/docker/overlay2/0107b2a6bb47b27fae59ad69f90883986a4db837d1b0909674b85c0c356d6990/diff:/var/lib/docker/overlay2/e08361c197811956dd19fa9c7f3f7114322546842ed9dd7474f080b0830a2abd/diff:/var/lib/docker/overlay2/1af8e93850ae48622eeb7064efe256e30e2482dd5ee288cf068a0cfdcafb75f8/diff:/var/lib/docker/overlay2/a0acdd497e5c87fe748fa8e894527306f8964aaf181c3b1d22878ba3559fccdf/diff:/var/lib/docker/overlay2/e0c38252d46f02abb8c923ef16687782cd957e86bb8e40072ed4f82ef2f9a434/diff:/var/lib/docker/overlay2/2407764242f5953d5b66a538d44a17358ccb8bce98eadbc28c59d0d78ad61c66/diff:/var/lib/docker/overlay2/7fd0255e7954b480c0212844157ef27c76db4e2490ebc04b6cb206f19842c78f/diff:/var/lib/docker/overlay2/e48f209c5d242b65e8c775aa6826dd9482737b74744d7a51c7da39dfa9c87fd1/diff:/var/lib/docker/overlay2/2a6946c5563912a6fd42783e2b77fb09d27be8c8d0160d44fa88b5979051f4b5/diff",
+                "MergedDir": "/var/lib/docker/overlay2/a1a3a7a5404699cfca680fe0e7294d791e61b5bbc681d4eb2056c7e5a1079376/merged",
+                "UpperDir": "/var/lib/docker/overlay2/a1a3a7a5404699cfca680fe0e7294d791e61b5bbc681d4eb2056c7e5a1079376/diff",
+                "WorkDir": "/var/lib/docker/overlay2/a1a3a7a5404699cfca680fe0e7294d791e61b5bbc681d4eb2056c7e5a1079376/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:cc015d1a2a543af8a6d773a6e9262d8ad65af4374900c83691bf60c13c85c588",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:b6a352de45b1318fde6932192304a4d9919bd9c4d9a6ce728aeb582f5cb6e384",
+                "sha256:9c46e264a8e898ced678db4b4c9f881c98ae974f02b7f69578aba3ad8b7c530f",
+                "sha256:d1f3a415814c1f0b22a146c25b2be676c19aa364ae16df3a3ba338fb75a84b3d",
+                "sha256:7c26790ef261d25af40cb01517ad675f7d59028303d79548f2d4edac03a0679b",
+                "sha256:c8570ba2591e17b97ab54e82175eb283a834c7b6ef2990809e483acc0a09ec44",
+                "sha256:607c7415e72c29f92629483eb971e3f8999ac9d9623f93ae5a7b9fd6428258e3",
+                "sha256:52b93e6addcc4972831a85a1207a258cc3f70b043a06fedfe19ee50d30a39239",
+                "sha256:04249ab947c65706169cff9fddf75a8fc50afccffe5304a2f65bc5d6b097c25a",
+                "sha256:6b17e58817cfe7791c4fda0213c3f207c6aebe0ee98b4ded3b80a0e474c9f271",
+                "sha256:c96e2f15a66b94bbb571f60007e71ea3c932faaeb40c7240349397be26c46063",
+                "sha256:322f57f327138843698be0d8ef2f4bab55a7cdcad790289e7166c288ef1c1918"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]
