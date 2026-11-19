@@ -80,4 +80,9 @@ messages and real payments disabled, followed by read-only production verificati
 Four unmodified public CI scan/SPDX payloads are retained as gzip under the
 existing evidence reader: their commit URLs and SBOM digests match the secret
 scanner pattern. Each decoded file is bounded and bound to its exact SHA-256
-before validation. No source-code scanner rule or secret allowlist is changed.
+before validation. The complete new-commit history scan remains blocking.
+For four original C55 public reports already present in that history, Gitleaks
+exceptions require the exact rule, path and complete reviewed public hash.
+A SHA-256-bound JSON-context inventory includes percent-decoded advisory URLs;
+real-scanner negative controls still reject changed values, token prefixes and
+other paths. No directory, commit or scanner rule is excluded.

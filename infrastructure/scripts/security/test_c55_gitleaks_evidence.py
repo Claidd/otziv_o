@@ -70,7 +70,7 @@ class C55PublicHashGuardTest(unittest.TestCase):
                     for child in value:
                         walk(child, path + "[]")
                 elif isinstance(value, str):
-                    strings.append((path, unquote(value)))
+                    strings.append((path, value))
 
             walk(json.loads(evidence))
             for value in item["publicValues"]:
@@ -88,7 +88,7 @@ class C55PublicHashGuardTest(unittest.TestCase):
             self.assertEqual(1, len(block["paths"]))
             for value in block["regexes"]:
                 self.assertRegex(value, r"^\^[a-f0-9]{40}\$$")
-                actual.add((block["paths"][0], unquote(value)))
+                actual.add((block["paths"][0], value))
         expected = {("(^|/)" + re.escape(item["path"]) + "$", "^" + value + "$")
                     for item in self.fixture["files"] for value in item["publicValues"]}
         self.assertEqual(expected, actual)
@@ -96,10 +96,10 @@ class C55PublicHashGuardTest(unittest.TestCase):
     def test_changed_values_paths_rules_and_token_prefixes_remain_blocked(self):
         for item in self.fixture["files"]:
             value = item["publicValues"][0]
-            self.assertTrue(self.allowed(item["path"], unquote(value)))
+            self.assertTrue(self.allowed(item["path"], value))
             for wrong_path in [item["path"] + ".copy", item["path"].replace("/c55-", "/c41-"),
                                "application/settings.json"]:
-                self.assertFalse(self.allowed(wrong_path, unquote(value)))
+                self.assertFalse(self.allowed(wrong_path, value))
             for wrong_value in ["0123456789abcdef" * 2 + "01234567", "sgp_" + value,
                                 "sgp_local_" + value, value + "0", "0" + value]:
                 self.assertFalse(self.allowed(item["path"], wrong_value))
