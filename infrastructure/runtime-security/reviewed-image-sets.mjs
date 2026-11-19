@@ -10,15 +10,6 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const EXPLICIT_RELEASE_SETS = {
-  'c55-prometheus': { component: 'prometheus', path: 'infrastructure/runtime-security/reviewed-images-c55-prometheus.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-prometheus/Dockerfile' },
-  'c55-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c55-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-loki/Dockerfile' },
-  'c55-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c55-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-tempo/Dockerfile' },
-  'c55-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c55-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-alloy/Dockerfile' },
-  'c55-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c55-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-grafana/Dockerfile' },
-  'c55-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c55-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-dozzle/Dockerfile' },
-  'c55-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c55-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-mc/Dockerfile' },
-  'c55-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c55-minio.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-minio/Dockerfile' },
-  'c56-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c56-mysql.json', context: 'infrastructure/runtime-security/builds/c56-mysql', dockerfile: 'infrastructure/runtime-security/builds/c56-mysql/Dockerfile' },
   'c42-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c42-mysql.json', context: 'infrastructure/runtime-security/builds/c42-mysql', dockerfile: 'infrastructure/runtime-security/builds/c42-mysql/Dockerfile' },
   'c46-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c46-mysql.json', context: 'infrastructure/runtime-security/builds/c46-mysql', dockerfile: 'infrastructure/runtime-security/builds/c46-mysql/Dockerfile' },
   'c41-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c41-nginx.json', context: 'infrastructure/runtime-security/builds/c41-nginx', dockerfile: 'infrastructure/runtime-security/builds/c41-nginx/Dockerfile' },
@@ -144,6 +135,16 @@ const EXPLICIT_RELEASE_SETS = {
   // C53 adds only the official Alpine apache2 2.4.71-r0 (CVE-2026-119618) to the accepted C50 phpMyAdmin.
   'c53-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c53-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c53-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c53-phpmyadmin/Dockerfile' },
   'c54-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c54-postgres.json', context: 'infrastructure/runtime-security/builds/postgres-17.12', dockerfile: 'infrastructure/runtime-security/builds/postgres-17.12/Dockerfile' },
+  // New candidates use explicit manifests; historical implicit lookup remains stable.
+  'c55-prometheus': { component: 'prometheus', path: 'infrastructure/runtime-security/reviewed-images-c55-prometheus.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-prometheus/Dockerfile' },
+  'c55-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c55-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-loki/Dockerfile' },
+  'c55-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c55-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-tempo/Dockerfile' },
+  'c55-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c55-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-alloy/Dockerfile' },
+  'c55-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c55-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-grafana/Dockerfile' },
+  'c55-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c55-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-dozzle/Dockerfile' },
+  'c55-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c55-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-mc/Dockerfile' },
+  'c55-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c55-minio.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c55-minio/Dockerfile' },
+  'c56-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c56-mysql.json', context: 'infrastructure/runtime-security/builds/c56-mysql', dockerfile: 'infrastructure/runtime-security/builds/c56-mysql/Dockerfile' },
 };
 // Later official OS package overlays are registered data (os-package-overlays.json).
 const RELEASE_SETS = Object.freeze({ ...EXPLICIT_RELEASE_SETS, ...overlayReleaseSets(EXPLICIT_RELEASE_SETS) });

@@ -40,3 +40,8 @@ Deploy from the main checkout using `deploy.ps1 -ImageTransport Direct` with
 `-CoordinatedMysqlRefresh`; the standard selective rollout and backup remain active.
 The contact-health UI must also pass on the fresh prod-like database with external
 messages and real payments disabled, followed by read-only production verification.
+
+Four unmodified public CI scan/SPDX payloads are retained as gzip under the
+existing evidence reader: their commit URLs and SBOM digests match the secret
+scanner pattern. Each decoded file is bounded and bound to its exact SHA-256
+before validation. No source-code scanner rule or secret allowlist is changed.

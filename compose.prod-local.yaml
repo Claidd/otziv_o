@@ -837,7 +837,7 @@ services:
       - internal_net
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:c706f8a2e448bef0ec1cd92749967ed7accccb2b53fe21de9b5ca53694ce12f3
+    image: ghcr.io/claidd/otziv-security@sha256:f98e02b5b97e5c7102f25432208c3aded46ce545ad259abda1ca227222ed751f
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -864,7 +864,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:b6b50b514ad8af7881deb8d0f0a764be651bb95f155900fd6f57324e1e2c6892
+    image: ghcr.io/claidd/otziv-security@sha256:538ab28d4bba432a78c763946efde2901bc45ce06e7d24f573c6ca0afdf78738
     # Builds the Telegram contact point for the alert rules, then runs the image entrypoint.
     entrypoint: ["/bin/sh", "/etc/otziv/grafana-alerting-entrypoint.sh"]
     profiles: ["observability"]

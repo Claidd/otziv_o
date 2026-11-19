@@ -52,6 +52,10 @@ const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-
 // that resemble credentials. Retain their exact bytes compressed and verify them
 // before any publication or registry checks consume them.
 const COMPRESSED_PROOFS = new Map([
+  ["infrastructure/runtime-security/proofs/c55-alloy/anonymous/registry-attestation-0-payload-0.json", "5b180e666e43498271534b6f9787ae30b6d59714a36412c1a9d942884cfd4964"],
+  ["infrastructure/runtime-security/proofs/c55-alloy/publication/registry-attestation-0-payload-0.json", "5b180e666e43498271534b6f9787ae30b6d59714a36412c1a9d942884cfd4964"],
+  ["infrastructure/runtime-security/proofs/c55-alloy/publication/vulnerabilities.json", "f3c369c9c4c7149eb99524142d43b57e26a06d75e23e3d0683d5825baecb6a44"],
+  ["infrastructure/runtime-security/proofs/c55-grafana/publication/vulnerabilities.sbom.cdx.json", "b247c5a5ddc5f671f4d751a6ca5c14121a2bfeddc1a44d11832072720bd83197"],
   ["infrastructure/runtime-security/proofs/c50-grafana/publication/vulnerabilities.json", "db4eb2d77e518dd32795896baccbcc963b106c9dfcbe5cfec5ee8642c2b42f21"],
   ["infrastructure/runtime-security/proofs/c50-alloy/publication/vulnerabilities.sbom.cdx.json", "78eac3613dc4bd4278e928549a6ecfd639494ffbb6a3489f60d4dd598c774c8f"],
   ["infrastructure/runtime-security/proofs/c50-alloy/publication/vulnerabilities.json", "51a2a9b6d518ac81ccb0625b0648bee6cbec4f3d9f847fb2da12d2c9ad084dba"],

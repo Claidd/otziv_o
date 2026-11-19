@@ -1,0 +1,81 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "grafana",
+  "commit": "c400b8921da6a7ffbfde8b7a9acef1f27ade906c",
+  "run": "44533339943",
+  "attempt": "1",
+  "manifestSet": "c55-grafana",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c55-grafana.json",
+  "runner": "GitHub Actions 1000037048",
+  "startedAt": "2026-11-19T13:41:02.438Z",
+  "sourcePublicationSha256": "d53baca4a73c9d6b4173ca46bf10f85a86b72a2a0448ce01f28cba609c1e39ad",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:538ab28d4bba432a78c763946efde2901bc45ce06e7d24f573c6ca0afdf78738",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:ead4757ec35b253025255d00ae78a678b7bd92962e41fd100eb8bfe6e8570ada",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:538ab28d4bba432a78c763946efde2901bc45ce06e7d24f573c6ca0afdf78738",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:ead4757ec35b253025255d00ae78a678b7bd92962e41fd100eb8bfe6e8570ada",
+        "size": 5437
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:69a0b2c8b1db7036dedb05a44ed5052d7bf0db1c881846e3984f76ccadbee8a8",
+        "size": 21407
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:d9130343c7af29d758001d64761dd95cce63e8cee641b9540c1929f11944fc9d",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:5b696992ff9c279a691fc5663fc81da1f108a0a57ff4d85809b89c05bd79ecf0",
+        "size": 1602062
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:cd01dd9a9fc24360f748cb98d50175548b18c9dd46b83b22e81977de7b0463d1",
+        "size": 63519
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:69a0b2c8b1db7036dedb05a44ed5052d7bf0db1c881846e3984f76ccadbee8a8",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "c400b8921da6a7ffbfde8b7a9acef1f27ade906c",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "grafana",
+    "com.otziv.security.brotli-refresh": "C40: official Alpine3.24 brotli-libs1.2.1-r0; exact C36 Grafana executable/config/assets and unrelated packages unchanged",
+    "com.otziv.security.c50": "C50: official musl security package; golang.org/x/net v0.62.0; required x/* dependency closure",
+    "com.otziv.security.c55": "C55: Go 1.27.4; CVE-2026-97054; unchanged upstream source and dependency closure",
+    "com.otziv.security.curl-refresh": "C41: official Alpine3.24 curl/libcurl8.23.0-r0; C40 application/config/assets, exact C36 Grafana executable and unrelated packages unchanged",
+    "com.otziv.security.patch": "go-jose/v4 4.1.6; Go1.27.4; grpc1.83.2; thrift0.24.0; x/net0.62.0; kin-openapi0.149.0; jsonschema/v6 6.0.3; exact required MVS; OpenSSL3.5.9; official CGO0 modernc SQLite",
+    "com.otziv.security.review": "C44: exact C43 Grafana executable retained; go-jose/v4 4.1.6; independent binary identity and fixed Tempo source ancestry",
+    "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; exact C44 Grafana executable, configuration and unrelated packages unchanged",
+    "maintainer": "Grafana Labs <hello@grafana.com>",
+    "org.opencontainers.image.revision": "81407c71e96e8351b4600164c1b4d30c8baf41d6",
+    "org.opencontainers.image.source": "https://github.com/grafana/grafana",
+    "org.opencontainers.image.version": "12.4.10+otziv.7"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-19T13:41:26.666Z"
+}
