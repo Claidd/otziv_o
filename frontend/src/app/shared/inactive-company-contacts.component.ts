@@ -49,16 +49,16 @@ interface Contact {
     </section>
   `,
   styles: [`
-    :host { display:block; color:var(--color-dark,#363949); }
+    :host { display:block; color:var(--otziv-dark,#363949); }
     .contacts { padding:1rem; max-width:72rem; margin:auto; }
-    h2,h3,strong { color:var(--color-dark,#363949); } h3 { margin:0; } small { font-weight:normal; }
-    p { line-height:1.55; margin:.7rem 0; } article { padding:1.2rem; margin:1rem 0; border:1px solid var(--color-info-light,#dce1eb); border-radius:1rem; background:var(--color-white,#fff); }
+    h2,h3,strong { color:var(--otziv-dark,#363949); } h3 { margin:0; } small { font-weight:normal; }
+    p { line-height:1.55; margin:.7rem 0; } article { padding:1.2rem; margin:1rem 0; border:1px solid var(--otziv-surface-border-neutral,#dce1eb); border-radius:1rem; background:var(--otziv-white,#fff); }
     .toolbar,.actions { display:flex; gap:1rem; flex-wrap:wrap; align-items:center; }
     label { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-    input,button,a { color:inherit; border:1px solid var(--color-info-dark,#7380a1); border-radius:.65rem; padding:.65rem .9rem; background:var(--color-white,#fff); font:inherit; }
+    input,button,a { color:inherit; border:1px solid var(--otziv-info,#7380a1); border-radius:.65rem; padding:.65rem .9rem; background:var(--otziv-white,#fff); font:inherit; }
     input { max-width:100%; box-sizing:border-box; } button,a { cursor:pointer; } button:disabled { opacity:.6; cursor:wait; }
-    .confirmation { margin-top:1rem; padding:1rem; border:1px solid var(--color-primary,#7380ec); border-radius:.8rem; }
-    .confirmation button { margin-right:.5rem; } [role=alert] { color:var(--color-danger,#d52757); }
+    .confirmation { margin-top:1rem; padding:1rem; border:1px solid var(--otziv-primary,#7380ec); border-radius:.8rem; }
+    .confirmation button { margin-right:.5rem; } [role=alert] { color:var(--otziv-danger,#d52757); }
   `]
 })
 export class InactiveCompanyContactsComponent {

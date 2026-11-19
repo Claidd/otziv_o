@@ -270,7 +270,18 @@ public class ManagerAutomationFailureService {
     public boolean systemOwnsIssue(AutomationFailureIssue issue) {
         return issue != null && ENTITY_AUTOMATION_FAILURE.equals(issue.entityType()) && issue.commonInvoiceId() == null
                 && issue.stateId() != null
-                && stateRepository.findById(issue.stateId()).map(policy::requiresDeliveryReceipt).orElse(false);
+                && stateRepository.findById(issue.stateId())
+                .filter(policy::requiresDeliveryReceipt)
+                .map(state -> {
+                    Long companyId = state.getCompanyId();
+                    if (companyId == null && state.getOrderId() != null) {
+                        companyId = orderRepository.findByIdForOrderDto(state.getOrderId())
+                                .map(Order::getCompany).map(Company::getId).orElse(null);
+                    }
+                    // Receipt reconciliation still owns the retry, but live work must remain visible
+                    // as a manager problem. Moving it to WORKLOAD hides the concrete order card.
+                    return contactHealth == null || companyId == null || !contactHealth.hasActiveWork(companyId);
+                }).orElse(false);
     }
 
     private CommonInvoice activeCommonInvoice(Order order) {
