@@ -18,7 +18,9 @@ class MavenDependencyPreflightTest(unittest.TestCase):
         result, run, sleep = self.execute([(0, "BUILD SUCCESS")])
         self.assertEqual(result, 0)
         command = run.call_args.args[0]
-        self.assertEqual(command[-1], "validate")
+        self.assertIn("validate", command)
+        self.assertEqual(command[-1], "org.apache.maven.plugins:maven-dependency-plugin:3.11.0:go-offline")
+        self.assertIn("-Daether.connector.basic.threads=1", command)
         self.assertIn("-U", command)
         self.assertFalse(any("skip" in value.lower() or "ignore" in value.lower() for value in command))
         self.assertEqual(run.call_count, 1)

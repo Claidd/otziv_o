@@ -1,4 +1,4 @@
-"""Resolve pinned Maven models before tests; retry only dependency resolution failures."""
+"""Resolve pinned Maven dependencies before tests; retry only resolution failures."""
 from __future__ import annotations
 
 import argparse
@@ -20,7 +20,9 @@ def preflight(pom: Path, *, run=subprocess.run, sleep=time.sleep, output=sys.std
     wrapper = [str(ROOT / "backend" / "mvnw.cmd")] if os.name == "nt" else ["bash", "./mvnw"]
     # -U rechecks missing releases cached by an earlier HTTP 429/404. Versions,
     # repositories, validation rules and the subsequent verify remain unchanged.
-    command = [*wrapper, "-B", "-ntp", "-U", "-f", str(pom.resolve()), "validate"]
+    command = [*wrapper, "-B", "-ntp", "-U", "-Daether.connector.basic.threads=1",
+               "-f", str(pom.resolve()), "validate",
+               "org.apache.maven.plugins:maven-dependency-plugin:3.11.0:go-offline"]
     for attempt in range(1, 4):
         result = run(command, cwd=ROOT / "backend", stdout=subprocess.PIPE,
                      stderr=subprocess.STDOUT, text=True, check=False, timeout=300)
