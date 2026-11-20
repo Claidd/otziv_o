@@ -636,6 +636,7 @@ export class ManagerControlComponent implements OnInit {
       case 'COMPLETED':
         if (review.answerQuality === 'AUDIT_RESET') return 'закрыт при запуске обновлённого аудита';
         if (review.answerQuality === 'AUDIT_DISABLED') return 'закрыт: аудит отключён';
+        if (review.answerQuality === 'REPORT_WITHDRAWN') return 'проверка закрыта · замечания сняты';
         if (review.autoCompleted) return 'принят автоматически · обязательных вопросов нет';
         return 'отчёт принят';
       case 'DISPUTE_PENDING':
@@ -661,6 +662,8 @@ export class ManagerControlComponent implements OnInit {
     const withdrawnIssues = review.issues?.filter((issue) => issue.status === 'WITHDRAWN').length ?? 0;
     const questions = validIssues.length > 0
       ? `${answeredIssues}/${validIssues.length} действующих вопросов`
+      : withdrawnIssues > 0
+        ? 'действующих вопросов нет'
       : review.questionCount > 0
         ? `${review.acceptedAnswerCount}/${review.questionCount} ответов`
       : 'вопросы ещё не начаты';
