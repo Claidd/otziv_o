@@ -969,6 +969,59 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/admin/manager-control/delivery-reviews" : {
+      "get" : {
+        "operationId" : "AdminDeliveryReviewController_list",
+        "x-java-handler" : "com.hunt.otziv.manager_control.controller.AdminDeliveryReviewController#list",
+        "parameters" : [ ],
+        "x-preauthorize" : "hasAnyRole('ADMIN','OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ManagerAutomationFailureServiceSystemDeliveryReviewOutput"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/admin/manager-control/items/{itemId}/action" : {
       "post" : {
         "operationId" : "ApiManagerControlController_actionItem",
@@ -20011,6 +20064,64 @@
         "required" : [ "amount", "archiveBatchId", "archiveReason", "archivedAt", "changed", "companyCity", "companyId", "companyTelephone", "companyTitle", "companyUrlChat", "counter", "created", "filialTitle", "filialUrl", "id", "managerName", "orderDetailsCount", "orderDetailsId", "payDay", "paymentCheckSum", "restoreBatchId", "restoredAt", "restoredBy", "reviewsCount", "source", "status", "sum", "waitingForClient", "workerName", "zpSum" ],
         "additionalProperties" : true
       },
+      "ManagerAutomationFailureServiceSystemDeliveryReviewOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.service.ManagerAutomationFailureService$SystemDeliveryReview",
+        "type" : "object",
+        "properties" : {
+          "companyId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "managerId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "preparedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "scenario" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "stateId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "targetUrl" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "title" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "companyId", "managerId", "preparedAt", "scenario", "stateId", "targetUrl", "title" ],
+        "additionalProperties" : true
+      },
       "ManagerBoardResponseOutput" : {
         "x-java-type" : "com.hunt.otziv.manager.dto.api.ManagerBoardResponse",
         "type" : "object",
@@ -29438,6 +29549,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/manager/dto/api/StatusChangeRequest.java",
     "sha256" : "796cc452d2006e0d1028523fd004b3d668364553be7e0d6a7acb7278d7c7c62d"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/AdminDeliveryReviewController.java",
+    "sha256" : "1dc33d2db0c2ae06fa49ea1d9b1328cd8a47d8ad30f28f1b442e1a4625fdfc03"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ApiManagerControlController.java",
     "sha256" : "c189b0026939e49f97d24a5317b2fa08576512f552822810b58136c81c8fa5a5"
   }, {
@@ -29509,6 +29623,9 @@
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerReviewCommitmentView.java",
     "sha256" : "f5c93d6fb354ea4f786eb117ac0cec8e274c04c7d7fabcee10e9c1f01141d126"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerAutomationFailureService.java",
+    "sha256" : "0f592b87343d0763fe889832102e146aa70bfba496efde1e6e7bb17708eb0af5"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerControlManualDeliveryHandoffWorkflow.java",
     "sha256" : "ef85cfcf4b5075d99299e2745e2b2fd63dd84e5eebce73a5f86b3c1db58e258e"
@@ -29918,6 +30035,7 @@
     "InvoicePaymentModeInput" : "com.hunt.otziv.payments.model.InvoicePaymentMode",
     "ManagerArchiveOrderDetailsResponseOutput" : "com.hunt.otziv.archive.dto.ManagerArchiveOrderDetailsResponse",
     "ManagerArchiveOrderListItemOutput" : "com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem",
+    "ManagerAutomationFailureServiceSystemDeliveryReviewOutput" : "com.hunt.otziv.manager_control.service.ManagerAutomationFailureService$SystemDeliveryReview",
     "ManagerBoardResponseOutput" : "com.hunt.otziv.manager.dto.api.ManagerBoardResponse",
     "ManagerClientReplyResolutionRequestInput" : "com.hunt.otziv.manager_control.dto.ManagerClientReplyResolutionRequest",
     "ManagerClientReplyResolutionResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerClientReplyResolutionResponse",
