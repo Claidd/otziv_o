@@ -15,6 +15,7 @@ public interface BackgroundDispatchBudget {
          *  shared daily limit and per-channel interval. */
         PAYMENT_REMINDER,
         BAD_REVIEW_INVOICE,
+        INVOICE_RECOVERY,
         /** Offer campaign message: master switch, pause and the shared per-channel interval;
          *  the campaign keeps its own schedule and daily quota. */
         OFFER_CAMPAIGN
@@ -27,6 +28,11 @@ public interface BackgroundDispatchBudget {
     }
 
     Admission reserve(Purpose purpose, String sourceKind, long sourceId, ClientMessageDelivery.Target target);
+
+    /** Checks the same gates before repairing business state, without spending a dispatch slot. */
+    default Admission previewForSender(Purpose purpose, ClientMessageDelivery.Target target, String senderClientId) {
+        return new Admission(false, "automation_paused", "Правила автоответчика недоступны", null);
+    }
 
     /** Same admission when the caller knows only the destination platform: WHATSAPP, TELEGRAM or MAX. */
     Admission reserveOnPlatform(Purpose purpose, String sourceKind, long sourceId, String platform);

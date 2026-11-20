@@ -82,6 +82,30 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
         }
     }
 
+    /** Local ledgers only. Absence is not sufficient without a locked, never-started queue command. */
+    @Override public boolean hasNoRecordedOperation(String operationId) {
+        if (operationId == null || operationId.isBlank()) return false;
+        try {
+            return operationFence.lookup(operationId).isEmpty() && businessOperations.findFrozen(operationId).isEmpty();
+        } catch (RuntimeException unavailable) {
+            return false;
+        }
+    }
+
+    @Override public boolean confirmsUnsentGatewayRejection(String operationId) {
+        if (operationId == null || operationId.isBlank()) return false;
+        try {
+            if (operationFence.lookup(operationId).isPresent()) return false;
+            var frozen = businessOperations.findFrozen(operationId).orElse(null);
+            if (frozen == null || !"send-group".equals(frozen.kind())) return false;
+            var receipt = whatsAppService.getOperationStatus(frozen.clientId(), operationId);
+            // NOT_FOUND is insufficient alone: the owner must also lock a FAILED command with
+            // gateway_not_ready (the transport proved dispatched=false), no lease and no dispatch marker.
+            return receipt != null && operationId.equals(receipt.operationId())
+                    && "NOT_FOUND".equals(receipt.state()) && receipt.messageId() == null;
+        } catch (RuntimeException unavailable) { return false; }
+    }
+
     /** Receipt-only recovery. Neither absence nor UNKNOWN authorizes a provider call. */
     @Override public ClientMessageSendResult recordedOutcome(String operationId) {
         try {

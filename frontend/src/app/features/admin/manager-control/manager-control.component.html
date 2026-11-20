@@ -1537,7 +1537,7 @@
                           @if (concreteRepairResult(example); as result) {
                             <div class="detail-example-text" role="status">
                               <strong>Результат проверки</strong>
-                              <em class="manager-action-note">{{ result.message }}</em>
+                              <em class="manager-action-note unconfirmed">{{ result.message }}</em>
                               <small>{{ result.deliveryCheck
                                 ? 'Повторное сообщение заблокировано. Карточка изменится только по подтверждённому результату.'
                                 : 'Карточка остаётся на контроле до устранения причины.' }}</small>

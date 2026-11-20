@@ -176,8 +176,8 @@ public class ManagerAutomationFailureService {
         List<String> reasonParts = new ArrayList<>();
         if (policy.requiresDeliveryReceipt(state)) {
             reasonParts.add("Результат предыдущей отправки клиенту не подтверждён. Нажмите «Проверить отправку»: "
-                    + "система сверит существующую отправку с историей нужного чата и восстановит подтверждение при надёжном совпадении. "
-                    + "Повторное сообщение для проверки не отправляется");
+                    + "система проверит журнал операции и доступную историю исходного чата. "
+                    + "Рабочая текущая ссылка сама по себе не подтверждает старую отправку. Повторное сообщение для проверки не отправляется");
         } else if (existingPaymentConflict) {
             reasonParts.add("Почему в замечаниях: действующая платежная ссылка уже существует, но автоматика "
                     + "не смогла повторно использовать ее для напоминания; новое сообщение клиенту не отправилось");
@@ -208,7 +208,8 @@ public class ManagerAutomationFailureService {
                     + "Кнопка «Проверить отправку» сверит существующее сообщение без нового контакта с клиентом. "
                     + "Карточка изменится только по подтверждённому результату.");
         }
-        reasonParts.add("неудачных попыток подряд: " + state.getConsecutiveFailures());
+        if (state.getConsecutiveFailures() > 0)
+            reasonParts.add("неудачных попыток подряд: " + state.getConsecutiveFailures());
         if (state.getNextAttemptAt() != null) {
             reasonParts.add("следующая попытка: " + state.getNextAttemptAt());
         }
@@ -245,14 +246,16 @@ public class ManagerAutomationFailureService {
                 invoice == null ? null : invoice.getId(),
                 title,
                 subtitle,
-                policy.requiresDeliveryReceipt(state) ? "Сверка доставки · система"
+                policy.requiresDeliveryReceipt(state) ? (contactHealth != null && company != null
+                        && contactHealth.requiresManagerAttention(company.getId()) ? "Доставка не подтверждена" : "Сверка доставки · система")
                         : "Ошибка автоматизации · " + state.getConsecutiveFailures(),
                 String.join(" · ", reasonParts),
                 targetUrl,
                 company == null ? null : company.getUrlChat(),
                 state.getScenario(),
                 state.getConsecutiveFailures(),
-                state.getCreatedAt(),
+                policy.requiresDeliveryReceipt(state) && state.getDeliveryPreparedAt() != null
+                        ? state.getDeliveryPreparedAt() : state.getCreatedAt(),
                 state.getLastAttemptAt(),
                 state.getNextAttemptAt()
         ));
@@ -280,7 +283,7 @@ public class ManagerAutomationFailureService {
                     }
                     // Receipt reconciliation still owns the retry, but live work must remain visible
                     // as a manager problem. Moving it to WORKLOAD hides the concrete order card.
-                    return contactHealth == null || companyId == null || !contactHealth.hasActiveWork(companyId);
+                    return contactHealth == null || companyId == null || !contactHealth.requiresManagerAttention(companyId);
                 }).orElse(false);
     }
 

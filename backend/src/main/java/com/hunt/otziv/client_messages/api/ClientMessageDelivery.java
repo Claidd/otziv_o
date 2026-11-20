@@ -21,6 +21,12 @@ public interface ClientMessageDelivery {
     /** Receipt-only lookup. Missing evidence never authorizes another provider call. */
     ClientMessageSendResult recordedOutcome(String operationId);
 
+    /** Local ledgers only. Absence is useful only with an owner's locked, unstarted queue row. */
+    default boolean hasNoRecordedOperation(String operationId) { return false; }
+
+    /** Additional check for a durable pre-dispatch gateway rejection, never for UNKNOWN/timeout. */
+    default boolean confirmsUnsentGatewayRejection(String operationId) { return false; }
+
     /** A matching durable UNKNOWN barrier, excluding running, missing or unreadable operations. */
     default boolean hasSettledUncertainOperation(String operationId) { return false; }
 

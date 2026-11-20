@@ -929,6 +929,29 @@ public class ContractorPaymentLiveRoutingService {
         return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.AUTO, true, excludedUserId);
     }
 
+    /** Billing holds the invoice lock and has proved and retired the old unstarted delivery command. */
+    @Transactional
+    public ContractorPaymentAllocation reserveAfterUnsentCommonInvoice(CommonInvoice invoice, List<Order> orders,
+            Manager manager, long amount) {
+        requireClosedUnsentCommonInvoiceAttempt(invoice);
+        return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.AUTO, true);
+    }
+
+    public void requireClosedUnsentCommonInvoiceAttempt(CommonInvoice invoice) {
+        if (invoice == null || invoice.getId() == null || invoice.getStatus() != CommonInvoiceStatus.READY
+                || invoice.getPaidKopecks() != 0 || invoice.getSentAt() != null || invoice.getPaidAt() != null
+                || invoice.getClientReportedAt() != null || invoice.getManualConfirmedAt() != null
+                || invoice.getContractorAllocationId() != null || invoice.getPaymentRouteType() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Состояние счёта требует сверки до восстановления маршрута");
+        }
+        var previous = latest(ContractorAllocationSourceType.COMMON_INVOICE, invoice.getId()).orElse(null);
+        if (previous != null && (previous.getStatus() != ContractorAllocationStatus.CANCELED
+                || !Objects.equals(previous.getCommonInvoiceId(), invoice.getId())
+                || previous.getConfirmedKopecks() != 0 || previous.getClientReportedAt() != null)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Прежний резерв не отменён без оплаты; требуется сверка");
+        }
+    }
+
     private ContractorPaymentAllocation reserveForCommonInvoice(
             CommonInvoice invoice,
             List<Order> orders,

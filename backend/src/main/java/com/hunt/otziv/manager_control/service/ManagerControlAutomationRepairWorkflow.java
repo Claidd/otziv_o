@@ -92,14 +92,20 @@ public class ManagerControlAutomationRepairWorkflow {
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "История проверена, но исходная отправка пока не подтверждена. Система продолжит сверку автоматически. Новое сообщение не отправлялось и повтор заблокирован; отсутствие записи не доказывает недоставку.");
+                        "Проверка завершена: подтвердить доставку по доступной истории не удалось. Новое сообщение не отправлялось. "
+                        + "Повторное нажатие не разрешит отправку. Передайте администратору название компании и результат проверки: "
+                        + "нужно сверить чат, а для счёта ещё и поступления, затем выбрать дальнейшее действие. "
+                        + "Система продолжит сверку автоматически, но отсутствие записи само по себе не доказывает недоставку.");
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.PROVIDER_REJECTED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, PROVIDER_REJECTED_MESSAGE);
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNRESOLVED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Исходная отправка пока не подтверждена. Система сохранит блокировку повтора и продолжит сверку существующей операции. Без однозначной квитанции замечание остаётся открытым.");
+                        "В журнале исходной отправки нет подтверждения от мессенджера. Новое сообщение не отправлялось. "
+                        + "Повторное нажатие не разрешит отправку. Передайте администратору название компании: "
+                        + "нужна сверка исходного чата и выбор дальнейшего действия. "
+                        + "Система продолжит сверку существующей операции; без подтверждения замечание остаётся открытым.");
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED) {
                 if (managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId()).isPresent()) {

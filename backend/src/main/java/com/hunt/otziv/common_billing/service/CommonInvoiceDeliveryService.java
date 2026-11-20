@@ -100,6 +100,10 @@ public class CommonInvoiceDeliveryService {
 
     private final AppSettingService appSettingService;
 
+    @Autowired(required = false)
+    @Lazy
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget dispatchBudget;
+
     public CommonInvoiceDetailsResponse sendInvoice(Long invoiceId, boolean manual) {
         return sendInvoice(invoiceId, manual, false);
     }
@@ -294,6 +298,12 @@ public class CommonInvoiceDeliveryService {
                 ? invoiceRepository.findUnsentActionCandidates(UNSENT_ACTION_STATUSES, before, page)
                 : invoiceRepository.findPendingPaymentRouteChangeCandidates(UNSENT_ACTION_STATUSES, before, page);
         int queued = 0;
+        if (invoiceRecoveryEnabled()) {
+            for (long id : invoiceRepository.pendingUnstartedDeliveryRecovery(page)) {
+                try { if (recoverUnstartedInvoice(id)) queued++; }
+                catch (RuntimeException failure) { log.warn("Common invoice recovery held: invoiceId={}, reason={}", id, failureReason(failure)); }
+            }
+        }
         if (immediateClientMessagesEnabled() && badReviewNoticesEnabled()) {
             for (long id : invoiceRepository.pendingBadReviewNotices(page)) {
                 try { if (queuePaymentMessage(id, false, false, false, null, false, false)) queued++; }
@@ -305,6 +315,80 @@ public class CommonInvoiceDeliveryService {
             catch (RuntimeException failure) { log.warn("Common invoice queue preparation failed: invoiceId={}, reason={}", candidate.getId(), failureReason(failure)); }
         }
         return queued;
+    }
+
+    boolean invoiceRecoveryEnabled() {
+        return messageDeliveryEnabled()
+                && appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true);
+    }
+
+    /** Repairs only a reset, unpaid first invoice; existing issued requisites/uncertain delivery stay protected. */
+    boolean recoverUnstartedInvoice(long invoiceId) {
+        if (!invoiceRecoveryEnabled() || dispatchBudget == null) return false;
+        var candidate = messageQueue.unresolved(invoiceId).orElse(null);
+        if (candidate == null) return false;
+        var candidateState = messageQueue.status(candidate.operationId());
+        if (candidateState == null) return false;
+        // The gateway lookup is outside the invoice transaction. The queue state, lease and operation
+        // are rechecked under its row lock before any business mutation.
+        boolean gatewayRejected = "FAILED".equals(candidateState.status())
+                && "gateway_not_ready".equals(candidateState.errorCode())
+                && messageSender.confirmsUnsentGatewayRejection(candidate.operationId());
+        return writeTransaction(() -> {
+            var prelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+            var invoice = prelude.invoice();
+            if (invoice.getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION
+                    || !normalize(invoice.getLastError()).startsWith("previous_delivery_context_changed:")
+                    || !invoice.getAccount().isEnabled() || invoice.isPaperInvoiceAutomationHold()
+                    || invoice.getSentAt() != null || invoice.getPaidKopecks() != 0 || invoice.getClientReportedAt() != null
+                    || invoice.getManualConfirmedAt() != null || invoice.getPaidAt() != null
+                    || invoice.getContractorAllocationId() != null || invoice.getPaymentRouteType() != null
+                    || invoice.getPaymentMessageOperationId() != null || invoice.isPaymentMessageConfirmed()
+                    || isOwnerPaperInvoice(invoice)) {
+                log.debug("Unstarted invoice recovery held: invoiceId={}, gate=invoice_state", invoiceId);
+                return false;
+            }
+            var old = messageQueue.unresolved(invoiceId).orElse(null);
+            var company = chatCompany(invoice);
+            var currentManager = manager(invoice);
+            if (old == null || old.reminder() || old.badReviewNotice() || old.alreadyConfirmed()
+                    || old.paymentRouteChanged() || old.remainingKopecks() == remainingKopecks(invoice)
+                    || company == null || currentManager == null
+                    || !Objects.equals(old.managerClientId(), currentManager.getClientId())
+                    || !Objects.equals(old.groupId(), company.getGroupId())
+                    || !Objects.equals(old.chatCompany(), deliveryTarget(company))) {
+                log.debug("Unstarted invoice recovery held: invoiceId={}, gate=original_route", invoiceId);
+                return false;
+            }
+            var admission = dispatchBudget.previewForSender(
+                    com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.INVOICE_RECOVERY,
+                    old.chatCompany(), old.managerClientId());
+            if (admission == null || !admission.allowed() || !invoiceRecoveryEnabled()) {
+                log.debug("Unstarted invoice recovery held: invoiceId={}, gate=autoresponder, code={}",
+                        invoiceId, admission == null ? "unavailable" : admission.code());
+                return false;
+            }
+            if (!messageQueue.retireUnstarted(invoiceId, old.operationId(), messageSender,
+                    gatewayRejected && candidate.operationId().equals(old.operationId()))) {
+                log.debug("Unstarted invoice recovery held: invoiceId={}, gate=unsent_proof", invoiceId);
+                return false;
+            }
+            invoice.setStatus(CommonInvoiceStatus.READY);
+            invoice.setLastError(null);
+            var prepared = preparePaymentMessage(invoiceId, false, false, false, null, false, prelude, true);
+            if (prepared == null || prepared.alreadyConfirmed())
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Восстановление отправки ожидает готовности счёта");
+            String operation = "invoice-recovery:" + invoiceId + ":" + java.util.UUID.randomUUID();
+            invoice.setPaymentMessageOperationId(operation);
+            invoiceRepository.save(invoice);
+            messageQueue.enqueue(new PreparedCommonInvoiceMessage(prepared.invoiceId(), prepared.chatCompany(),
+                    prepared.managerClientId(), prepared.groupId(), prepared.message(), prepared.telegramCopyTransferNumber(),
+                    false, false, prepared.paymentRouteChanged(), operation, false, null, prepared.remainingKopecks()));
+            messageQueue.linkRetiredReplacement(invoiceId, old.operationId(), operation);
+            log.info("Unstarted common invoice command retired: invoiceId={}, previousOperation={}, replacement={}",
+                    invoiceId, old.operationId(), operation);
+            return true;
+        });
     }
 
     /**
@@ -394,6 +478,12 @@ public class CommonInvoiceDeliveryService {
 
     private PreparedCommonInvoiceMessage preparePaymentMessage(Long invoiceId, boolean reminder, boolean manual,
             boolean dueOnly, LocalDateTime dueNow, boolean checkVisibility, LockedInvoicePaymentPrelude prelocked) {
+        return preparePaymentMessage(invoiceId, reminder, manual, dueOnly, dueNow, checkVisibility, prelocked, false);
+    }
+
+    private PreparedCommonInvoiceMessage preparePaymentMessage(Long invoiceId, boolean reminder, boolean manual,
+            boolean dueOnly, LocalDateTime dueNow, boolean checkVisibility, LockedInvoicePaymentPrelude prelocked,
+            boolean verifiedUnstartedRecovery) {
         if (reminder && dueOnly && !automaticPaymentRemindersEnabled()) {
             return null;
         }
@@ -462,7 +552,9 @@ public class CommonInvoiceDeliveryService {
             return null;
         }
         if (!isOwnerPaperInvoice(invoice)) {
-            ensureCommonPaymentRouteSelected(invoice, remainingKopecks(invoice));
+            if (verifiedUnstartedRecovery)
+                invoiceInitialization.ensureUnstartedRecoveryPaymentRouteSelected(invoice, remainingKopecks(invoice));
+            else ensureCommonPaymentRouteSelected(invoice, remainingKopecks(invoice));
         }
         Company chatCompany = chatCompany(invoice);
         Manager messageManager = manager(invoice, items);

@@ -130,6 +130,8 @@ class ManagerControlAutomationRepairWorkflowTest {
         assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
         assertTrue(failure.getReason().contains("продолжит сверку автоматически"));
         assertTrue(failure.getReason().contains("Новое сообщение не отправлялось"));
+        assertTrue(failure.getReason().contains("Повторное нажатие не разрешит отправку"));
+        assertTrue(failure.getReason().contains("Передайте администратору"));
         org.junit.jupiter.api.Assertions.assertFalse(failure.getReason().contains("Передать вручную"));
         verify(scheduledMessages, never()).retryNow(anyLong());
         verifyNoInteractions(repairOutcome);

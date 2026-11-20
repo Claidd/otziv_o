@@ -51,4 +51,27 @@ class CommonInvoiceBadReviewDispatchTest {
         verifyNoInteractions(budget);
         verify(invoices).finishQueuedMessage(eq(claim), eq(notice), argThat(r -> !r.sent()), eq(false));
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"automation_paused", "outside_business_window", "daily_limit", "rate_limited"})
+    void automaticInvoiceRecoveryWaitsAndResumesOnce(String reason) {
+        ReflectionTestUtils.setField(worker, "dispatchBudget", budget);
+        var recovery = new PreparedCommonInvoiceMessage(406L, null, "sender", "group", "К оплате 2500", null,
+                false, false, false, "invoice-recovery:406:one", false, null, 250000);
+        var first = new CommonInvoiceMessageQueue.Claim(recovery.operationId(), 406L, "QUEUED", 0, "first");
+        var second = new CommonInvoiceMessageQueue.Claim(recovery.operationId(), 406L, "RETRYABLE", 0, "second");
+        when(queue.claim()).thenReturn(Optional.of(first), Optional.empty(), Optional.of(second), Optional.empty());
+        when(queue.snapshot(recovery.operationId())).thenReturn(recovery);
+        when(invoices.messageDeliveryEnabled()).thenReturn(true);
+        when(invoices.invoiceRecoveryEnabled()).thenReturn(true);
+        when(invoices.queuedMessageMayDispatch(recovery)).thenReturn(true);
+        when(budget.reserveForSender(BackgroundDispatchBudget.Purpose.INVOICE_RECOVERY, "COMMON_INVOICE", 406L,
+                recovery.chatCompany(), "sender")).thenReturn(new BackgroundDispatchBudget.Admission(false, reason, reason, null),
+                BackgroundDispatchBudget.Admission.allow());
+        worker.tick();
+        verify(invoices, never()).sendPreparedPaymentMessage(any());
+        worker.tick();
+        worker.tick();
+        verify(invoices, times(1)).sendPreparedPaymentMessage(recovery);
+    }
 }

@@ -204,6 +204,30 @@ class ReviewSilenceArchiveTest {
         assertThat(service.reserveForSender(offer,"OFFER_CAMPAIGN",4,"TELEGRAM",null).allowed()).isTrue();
     }
 
+    @ParameterizedTest @ValueSource(strings={"allowed","window","limit","gap","paused","disabled"})
+    void invoiceRecoveryPreviewHonorsSettingsWithoutConsumingASend(String condition) {
+        var ledger = new InMemorySenderDispatchLedger();
+        ReflectionTestUtils.setField(service, "senderAccountPacing", new SenderAccountPacing(ledger));
+        LocalDateTime local = LocalDateTime.of(2026,11,3,condition.equals("window") ? 22 : 11,0);
+        LocalDateTime storage = messageTime.toStorageTime(local);
+        doReturn(local).when(messageTime).nowIrkutsk();
+        doReturn(storage).when(messageTime).nowStorage();
+        if (condition.equals("limit")) when(stateRepository.countArchiveNoticeReservationsSince(any())).thenReturn(140L);
+        if (condition.equals("gap")) when(stateRepository.latestArchiveNoticeReservation()).thenReturn(Optional.of(storage));
+        if (condition.equals("disabled")) when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED,true)).thenReturn(false);
+        if (condition.equals("paused")) when(appSettingService.getStringFresh(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL,null)).thenReturn(storage.plusHours(1).toString());
+        var purpose = com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.INVOICE_RECOVERY;
+        var target = new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(20L,"fixture","https://chat.whatsapp.com/x",null,null);
+        assertThat(service.previewForSender(purpose,target,"sender").allowed()).isEqualTo(condition.equals("allowed"));
+        assertThat(ledger.rows).isEmpty();
+        if (condition.equals("allowed")) {
+            assertThat(service.previewForSender(purpose,target,"sender").allowed()).isTrue();
+            assertThat(service.reserveForSender(purpose,"COMMON_INVOICE",406L,target,"sender").allowed()).isTrue();
+            assertThat(service.previewForSender(purpose,target,"sender").code()).isEqualTo("rate_limited");
+            assertThat(ledger.rows).hasSize(1);
+        }
+    }
+
     @Test void clientTextSilenceWaitsTheClientTextIntervalAfterTheSeventhReminder() throws Exception {
         waitForClientTexts();
         when(appSettingService.getInt(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS,2)).thenReturn(3);

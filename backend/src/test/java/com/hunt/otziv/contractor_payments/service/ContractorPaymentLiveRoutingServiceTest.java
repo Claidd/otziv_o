@@ -943,6 +943,74 @@ class ContractorPaymentLiveRoutingServiceTest {
         verify(accountingPhaseService, never()).lockAndPromoteForLiveRoute();
     }
 
+    @Test
+    void verifiedUnsentInvoiceCanReserveCurrentAmountAfterCanceledUnpaidAttempt() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        var worker = worker(39L, 139L);
+        var manager = manager(49L, 149L);
+        var specialist = profile(59L, worker.getUser(), ContractorRole.SPECIALIST);
+        var invoice = invoice(406L, 250_000L, 0L);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        var previous = commonAllocation(2874L, invoice.getId(), ContractorAllocationStatus.CANCELED);
+        previous.setAmountKopecks(125_000L);
+        previous.setAttemptNo(1);
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE, ContractorAllocationSourceType.COMMON_INVOICE, invoice.getId()))
+                .thenReturn(Optional.of(previous));
+        when(profileRepository.findByUserIdAndRoleForUpdate(139L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(specialist));
+        when(profileService.available(specialist, ContractorAllocationMode.LIVE)).thenReturn(250_000L);
+
+        var next = service.reserveAfterUnsentCommonInvoice(invoice,
+                List.of(order(139L, worker, manager)), manager, 250_000L);
+
+        assertEquals(2, next.getAttemptNo());
+        assertEquals(250_000L, next.getAmountKopecks());
+        assertEquals(ContractorAllocationStatus.RESERVED, next.getStatus());
+        assertEquals(ContractorAllocationStatus.CANCELED, previous.getStatus());
+        assertEquals(125_000L, previous.getAmountKopecks());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ContractorAllocationStatus.class, names = "CANCELED", mode = EnumSource.Mode.EXCLUDE)
+    void unstartedRecoveryCannotReuseAnyNonCanceledAttempt(ContractorAllocationStatus status) {
+        var invoice = invoice(406L, 250_000L, 0L);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE, ContractorAllocationSourceType.COMMON_INVOICE, invoice.getId()))
+                .thenReturn(Optional.of(commonAllocation(2874L, invoice.getId(), status)));
+        assertThrows(ResponseStatusException.class,
+                () -> service.reserveAfterUnsentCommonInvoice(invoice, List.of(), manager(49L, 149L), 250_000L));
+        verify(accountingPhaseService, never()).lockAndPromoteForLiveRoute();
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"invoice_paid", "issued", "reported", "manual_paid", "paid_at", "route", "allocation", "previous_paid", "previous_reported", "other_invoice"})
+    void unstartedRecoveryRefusesAnyPaymentOrIssuedRouteEvidence(String evidence) {
+        var invoice = invoice(406L, 250_000L, 0L);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        var previous = commonAllocation(2874L, invoice.getId(), ContractorAllocationStatus.CANCELED);
+        lenient().when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE, ContractorAllocationSourceType.COMMON_INVOICE, invoice.getId()))
+                .thenReturn(Optional.of(previous));
+        switch (evidence) {
+            case "invoice_paid" -> invoice.setPaidKopecks(1L);
+            case "issued" -> invoice.setSentAt(LocalDateTime.now());
+            case "reported" -> invoice.setClientReportedAt(LocalDateTime.now());
+            case "manual_paid" -> invoice.setManualConfirmedAt(LocalDateTime.now());
+            case "paid_at" -> invoice.setPaidAt(LocalDateTime.now());
+            case "route" -> invoice.setPaymentRouteType("MANUAL_MOBILE_BANK");
+            case "allocation" -> invoice.setContractorAllocationId(2874L);
+            case "previous_paid" -> previous.setConfirmedKopecks(1L);
+            case "previous_reported" -> previous.setClientReportedAt(LocalDateTime.now());
+            case "other_invoice" -> previous.setCommonInvoiceId(999L);
+            default -> throw new AssertionError(evidence);
+        }
+        assertThrows(ResponseStatusException.class,
+                () -> service.reserveAfterUnsentCommonInvoice(invoice, List.of(), manager(49L, 149L), 250_000L));
+        verify(accountingPhaseService, never()).lockAndPromoteForLiveRoute();
+    }
+
     /** Money may have moved on these attempts: the bad-review cycle does not reopen them by itself. */
     @ParameterizedTest
     @EnumSource(value = ContractorAllocationStatus.class, names = {"EXPIRED", "PARTIALLY_RETURNED", "RETURNED"})

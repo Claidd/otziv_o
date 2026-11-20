@@ -4285,6 +4285,17 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         return reserveOnChannel(purpose, sourceKind, sourceId, budgetChannel(target), senderClientId);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission previewForSender(
+            com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose purpose,
+            ClientMessageDelivery.Target target, String senderClientId) {
+        if (purpose != com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.INVOICE_RECOVERY)
+            return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(
+                    false, "automation_paused", "Неизвестный сценарий восстановления", null);
+        return reserveOnChannel(purpose, "COMMON_INVOICE", 0, budgetChannel(target), senderClientId, false);
+    }
+
     private String budgetChannel(ClientMessageDelivery.Target target) {
         String channel = expectedChannel(target);
         if ("ANY".equals(channel) && target != null) {
@@ -4333,11 +4344,19 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             String channel,
             String senderClientId
     ) {
+        return reserveOnChannel(purpose, sourceKind, sourceId, channel, senderClientId, true);
+    }
+
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission reserveOnChannel(
+            com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose purpose,
+            String sourceKind, long sourceId, String channel, String senderClientId, boolean reserve) {
         LocalDateTime nowStorage = messageTime.nowStorage();
         LocalDateTime nowIrkutsk = messageTime.nowIrkutsk();
         boolean useAutomationWindows = purpose != com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.OFFER_CAMPAIGN;
         var scenario = purpose == com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.BAD_REVIEW_INVOICE
-                ? ClientMessageScenario.BAD_REVIEW_INVOICE : ClientMessageScenario.PAYMENT_REMINDER;
+                ? ClientMessageScenario.BAD_REVIEW_INVOICE
+                : purpose == com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.INVOICE_RECOVERY
+                ? ClientMessageScenario.PAYMENT_INVOICE_RETRY : ClientMessageScenario.PAYMENT_REMINDER;
         boolean permitted = useAutomationWindows
                 ? ClientMessageAutomationPolicy.allowed(appSettingService, scenario, nowStorage)
                 : ClientMessageAutomationPolicy.masterAllowed(appSettingService, nowStorage);
@@ -4373,6 +4392,15 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         if (allowed.isAfter(nowIrkutsk.plusSeconds(1))) {
             return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(false, "rate_limited",
                     "Следующий слот отправки: " + allowed, messageTime.toStorageTime(allowed));
+        }
+        if (!reserve) {
+            String account = SenderAccountPacing.account(channel, senderClientId);
+            var decision = senderAccountPacing == null || account == null
+                    ? new SenderAccountPacing.Decision(true, null, null, null)
+                    : senderAccountPacing.preview(SenderAccountPacing.Lane.AUTORESPONDER, account, gapSeconds(channel), nowStorage);
+            return decision.allowed() ? com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission.allow()
+                    : new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(
+                            false, decision.code(), decision.reason(), decision.nextAt());
         }
         com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission held =
                 senderAccountAdmission(SenderAccountPacing.Lane.AUTORESPONDER, channel, senderClientId, nowStorage);

@@ -425,7 +425,7 @@ class CommonBillingServiceTest {
         lenient().when(messageQueue.claim()).thenAnswer(inv -> Optional.ofNullable(queuedClaims.poll()));
         lenient().when(messageQueue.snapshot(anyString())).thenAnswer(inv -> queuedMessages.get(inv.getArgument(0)));
         lenient().when(messageQueue.unresolved(anyLong())).thenAnswer(inv -> queuedMessages.values().stream()
-                .filter(p -> p.invoiceId().equals(inv.getArgument(0)) && !"SENT".equals(queuedStates.get(p.operationId()))).findFirst());
+                .filter(p -> p.invoiceId().equals(inv.getArgument(0)) && !List.of("SENT", "SUPERSEDED").contains(queuedStates.get(p.operationId()))).findFirst());
         lenient().when(messageQueue.owns(any())).thenReturn(true);
         lenient().doAnswer(inv -> {
             CommonInvoiceMessageQueue.Claim claim = inv.getArgument(0);
@@ -7679,6 +7679,97 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
         verify(messageQueue, never()).enqueue(any());
         verifyNoInteractions(messageSender);
+    }
+
+    private CommonInvoice unstartedRecoveryInvoice() {
+        var invoice = invoice(account());
+        invoice.getAccount().setEnabled(true);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("previous_delivery_context_changed: 1250 -> 2500");
+        invoice.setAmountKopecks(250000L);
+        var order = order(101L);
+        order.setSum(BigDecimal.valueOf(2500));
+        order.getCompany().setGroupId("original-group");
+        order.getCompany().getManager().setClientId("original-client");
+        invoice.getAccount().setInvoiceCompany(order.getCompany());
+        var item = item(invoice, order);
+        item.setAmountKopecks(250000L);
+        lenient().when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        lenient().when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        lenient().when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(2500));
+        lenient().when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        lenient().when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        lenient().when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        var budget = org.mockito.Mockito.mock(com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.class);
+        lenient().when(budget.previewForSender(any(), any(), any())).thenReturn(
+                com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission.allow());
+        var delivery = (CommonInvoiceDeliveryService) ReflectionTestUtils.getField(service, "invoiceDelivery");
+        ReflectionTestUtils.setField(delivery, "dispatchBudget", budget);
+        var old = new PreparedCommonInvoiceMessage(10L,
+                new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(20L, "Компания", null, null, null),
+                "original-client", "original-group", "old 1250", null, false, false, false,
+                "invoice-message:10:old-recovery", false, null, 125000L);
+        queuedMessages.put(old.operationId(), old);
+        queuedStates.put(old.operationId(), "FAILED");
+        lenient().when(messageQueue.status(old.operationId())).thenReturn(
+                new com.hunt.otziv.client_messages.api.DeliveryOperation(old.operationId(), "FAILED", 5, "gateway_not_ready"));
+        lenient().when(messageSender.confirmsUnsentGatewayRejection(old.operationId())).thenReturn(true);
+        lenient().when(messageQueue.retireUnstarted(eq(10L), eq(old.operationId()), eq(messageSender), eq(true)))
+                .thenAnswer(inv -> { queuedStates.put(old.operationId(), "SUPERSEDED"); return true; });
+        return invoice;
+    }
+
+    @Test
+    void recoveryPreparesCurrentAmountOnceAndPreservesOldCommandWithoutSending() {
+        var invoice = unstartedRecoveryInvoice();
+        var delivery = (CommonInvoiceDeliveryService) ReflectionTestUtils.getField(service, "invoiceDelivery");
+        assertTrue(delivery.recoverUnstartedInvoice(10L));
+        assertEquals(250000L, invoice.getAmountKopecks());
+        assertEquals(0L, invoice.getPaidKopecks());
+        var current = queuedMessages.get(invoice.getPaymentMessageOperationId());
+        assertTrue(current.automaticRecovery());
+        assertEquals(250000L, current.remainingKopecks());
+        assertEquals("original-client", current.managerClientId());
+        assertEquals("original-group", current.groupId());
+        assertEquals("old 1250", queuedMessages.get("invoice-message:10:old-recovery").message());
+        verify(messageQueue).linkRetiredReplacement(10L, "invoice-message:10:old-recovery", current.operationId());
+        assertFalse(delivery.recoverUnstartedInvoice(10L));
+        verify(messageQueue, times(1)).enqueue(any());
+        verify(messageSender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"paid", "reported", "confirmed", "sent", "route", "allocation", "operation", "paper", "account", "amount", "chat", "sender", "budget", "disabled", "receipt"})
+    void recoveryLeavesIssuedPaidChangedOrUncertainInvoiceUntouched(String condition) {
+        var invoice = unstartedRecoveryInvoice();
+        var delivery = (CommonInvoiceDeliveryService) ReflectionTestUtils.getField(service, "invoiceDelivery");
+        switch (condition) {
+            case "paid" -> invoice.setPaidKopecks(1L);
+            case "reported" -> invoice.setClientReportedAt(LocalDateTime.now());
+            case "confirmed" -> invoice.setManualConfirmedAt(LocalDateTime.now());
+            case "sent" -> invoice.setSentAt(LocalDateTime.now());
+            case "route" -> invoice.setPaymentRouteType("MANUAL_MOBILE_BANK");
+            case "allocation" -> invoice.setContractorAllocationId(99L);
+            case "operation" -> invoice.setPaymentMessageOperationId("other-operation");
+            case "paper" -> invoice.setPaperInvoiceAutomationHold(true);
+            case "account" -> invoice.getAccount().setEnabled(false);
+            case "amount" -> invoice.setAmountKopecks(125000L);
+            case "chat" -> invoice.getAccount().getInvoiceCompany().setGroupId("changed-group");
+            case "sender" -> invoice.getAccount().getInvoiceCompany().getManager().setClientId("changed-client");
+            case "budget" -> {
+                var budget = (com.hunt.otziv.client_messages.api.BackgroundDispatchBudget) ReflectionTestUtils.getField(delivery, "dispatchBudget");
+                when(budget.previewForSender(any(), any(), any())).thenReturn(
+                        new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(false, "paused", "", null));
+            }
+            case "disabled" -> when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(false);
+            case "receipt" -> when(messageSender.confirmsUnsentGatewayRejection("invoice-message:10:old-recovery")).thenReturn(false);
+            default -> throw new AssertionError(condition);
+        }
+        assertFalse(delivery.recoverUnstartedInvoice(10L));
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("FAILED", queuedStates.get("invoice-message:10:old-recovery"));
+        verify(messageQueue, never()).enqueue(any());
+        verify(messageSender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
     }
 
     @Test
