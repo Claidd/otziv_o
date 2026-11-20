@@ -23,3 +23,11 @@ Local builds passed and the targeted activation/manifest regression suite passed
 118 tests. Registry publication, anonymous download and exact-digest security
 evidence are required before changing deployment pins. Publication alone does
 not deploy or activate either image.
+
+The publication runs `44811739236` (Nginx) and `44811745959` (phpMyAdmin)
+completed successfully, including clean exact-digest scans and independent
+anonymous pulls. Their unmodified evidence and HTTP smoke results are retained
+under `proofs/c61-{nginx,phpmyadmin}`. Both published images returned HTTP 200
+in isolated containers; phpMyAdmin served its login form and JavaScript asset.
+The proof runner is retained as `proofs/c61-http-smoke.py` and is hash-bound by
+each HTTP receipt. Deployment pins select these verified digests.

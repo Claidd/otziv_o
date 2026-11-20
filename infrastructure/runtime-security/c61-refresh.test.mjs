@@ -33,6 +33,11 @@ async function fixture(component) {
 }
 
 for (const component of Object.keys(C61_PARENTS)) {
+  test('C61 ' + component + ' published digest passes the exact activation scan', async () => {
+    const folder = 'infrastructure/runtime-security/proofs/c61-' + component + '/publication/';
+    const publication = JSON.parse(await read(folder + 'publication.json'));
+    await validateC61ActivationScan(publication, folder + 'publication.json', read);
+  });
   test('C61 ' + component + ' permits only the fixes in the accepted inventory', async () => {
     await (await fixture(component)).validate();
   });

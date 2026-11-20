@@ -1,0 +1,30 @@
+{
+  "schema": "otziv-c61-http-smoke-v1",
+  "result": "PASS",
+  "component": "phpmyadmin",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:29409eda170ad3cfbe4418a9b65a663d0e57baadc619994471429bd7d63446ad",
+  "inspectedImageId": "sha256:29409eda170ad3cfbe4418a9b65a663d0e57baadc619994471429bd7d63446ad",
+  "productionAccess": false,
+  "localCandidateOnly": false,
+  "network": "none",
+  "publishedPorts": false,
+  "executedScriptSha256": "f04ef1ecf7385e0fb715d6bb416c785c29973a9fab514ae0d390a78cd7638380",
+  "publicationSha256": "74a4efdf47f93836422cc9365f4893be616b2260370c32c1798dcc87532a4554",
+  "imageConfigId": "sha256:129fd9fc68e110c7232bdc8d4e099ad1f39bf04ab6b69af4c06a99b2b604de0e",
+  "commit": "0d4b46e3f15c4e4d0c048d813e84c3ce8eea40a6",
+  "run": "44811745959",
+  "attempt": "1",
+  "http": {
+    "status": 200,
+    "loginForm": true,
+    "bodySha256": "e0867fb68aa51a3ab3776960a6984be16874c5810022931cfec713130bd922ed",
+    "assetStatus": 200,
+    "assetSha256": "fc9a93dd241f6b045cbff0481cf4e1901becd0e12fb45166a8f17f95823f0b1a",
+    "phpVersion": "8.3.37",
+    "pcreVersion": "10.49 2026-09-28",
+    "namedCapture": true
+  },
+  "pcre2Package": "pcre2-10.49-r0",
+  "brotliPackage": "brotli-libs-1.2.1-r0",
+  "ownedContainersRemaining": 0
+}
