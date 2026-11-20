@@ -116,6 +116,7 @@ on:
           - c55-minio
           - c56-mysql
           - c57-mysql
+          - c60-mysql
           - c58-postgres
           - c59-nginx
           - c52-nginx
