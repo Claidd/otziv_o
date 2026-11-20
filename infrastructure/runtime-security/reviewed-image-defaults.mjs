@@ -18,6 +18,7 @@ import {validateBrotliC45Activation,couplePostgresC36WithKeycloakC45} from './br
 import {validateAptC48Activation,couplePostgresC36WithKeycloakC48} from './apt-c48-activation.mjs';
 import {overlayForSet, overlayForManifest, overlayCompressedProofs} from './os-package-overlay-registry.mjs';
 import {validateOverlayActivation, coupleOverlayKeycloak} from './os-package-overlay.mjs';
+import {validateC61ActivationScan} from './c61-refresh.mjs';
 import {validateC59ActivationScan} from './c59-refresh.mjs';
 import {validateC55ActivationScan} from './c55-refresh.mjs';
 import {validateC50ActivationScan} from './c50-refresh.mjs';
@@ -291,6 +292,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if (selected.manifestSet === 'c55-alloy') {
     await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read, 'c55');
+  }
+  if (['c61-nginx', 'c61-phpmyadmin'].includes(selected.manifestSet)) {
+    await validateC61ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet === 'c59-nginx') {
     await validateC59ActivationScan(publication.value, entry.publication.path, read);

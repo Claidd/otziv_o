@@ -1,0 +1,25 @@
+{
+  "schema": "otziv-c61-http-smoke-v1",
+  "result": "PASS",
+  "component": "nginx",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:55e5b2dfa71bc889e854ef1b1f737afe155ab4f0244cc2bf4c5c517b1e1472f6",
+  "inspectedImageId": "sha256:55e5b2dfa71bc889e854ef1b1f737afe155ab4f0244cc2bf4c5c517b1e1472f6",
+  "productionAccess": false,
+  "localCandidateOnly": false,
+  "network": "none",
+  "publishedPorts": false,
+  "executedScriptSha256": "f04ef1ecf7385e0fb715d6bb416c785c29973a9fab514ae0d390a78cd7638380",
+  "publicationSha256": "86157436a475f9f036f9fea28048c6825042902d36383c0d916a700f2c3571b3",
+  "imageConfigId": "sha256:2d4c42ee93207e53ab16e8fa6c25c6bc308d449a7021a32052c66970f6e965eb",
+  "commit": "0d4b46e3f15c4e4d0c048d813e84c3ce8eea40a6",
+  "run": "44811739236",
+  "attempt": "1",
+  "http": {
+    "status": 200,
+    "regexNamedCapture": true,
+    "bodySha256": "122ea6269e6c02fde433e6051e31706acc78a0127bf088c28fd20ca867de800e"
+  },
+  "pcre2Package": "pcre2-10.49-r0",
+  "brotliPackage": "brotli-libs-1.2.1-r0",
+  "ownedContainersRemaining": 0
+}

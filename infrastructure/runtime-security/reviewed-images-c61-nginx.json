@@ -1,0 +1,25 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c61-nginx",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "nginx",
+      "sourceBeforeRef": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 48,
+          "service": "nginx"
+        }
+      ],
+      "context": "infrastructure/runtime-security/builds/c61-nginx",
+      "dockerfile": "infrastructure/runtime-security/builds/c61-nginx/Dockerfile",
+      "platform": "linux/amd64",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:a0168e8b87c0ecfeb2584b62827a0f7ec1690bb1aa26c762f6368636a5936416",
+      "buildArgs": {},
+      "dockerfileSha256": "97a177c1586f44e4b1e1c6ea753d9851e9a26e1ec1a47c70c0895af20fd4c28a"
+    }
+  ]
+}

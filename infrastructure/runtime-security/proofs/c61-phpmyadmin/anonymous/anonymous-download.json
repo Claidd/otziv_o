@@ -1,0 +1,79 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "phpmyadmin",
+  "commit": "0d4b46e3f15c4e4d0c048d813e84c3ce8eea40a6",
+  "run": "44811745959",
+  "attempt": "1",
+  "manifestSet": "c61-phpmyadmin",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c61-phpmyadmin.json",
+  "runner": "GitHub Actions 1000038623",
+  "startedAt": "2026-11-20T20:30:59.572Z",
+  "sourcePublicationSha256": "74a4efdf47f93836422cc9365f4893be616b2260370c32c1798dcc87532a4554",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:29409eda170ad3cfbe4418a9b65a663d0e57baadc619994471429bd7d63446ad",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:a93d359682bc113ab1767aca4b1dab118fb5fda37c126fac830a7458e10cd35e",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:29409eda170ad3cfbe4418a9b65a663d0e57baadc619994471429bd7d63446ad",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:a93d359682bc113ab1767aca4b1dab118fb5fda37c126fac830a7458e10cd35e",
+        "size": 8816
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:129fd9fc68e110c7232bdc8d4e099ad1f39bf04ab6b69af4c06a99b2b604de0e",
+        "size": 39531
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:9b17c1f324a8d623ae1f1b46cca2a13e8507c1239c83e01c28612c600461564f",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:2c8ffc1e0d4009bb18d19848bc9d3457fcd7b11fec8d84b030c442bc4c34697e",
+        "size": 894989
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:29853ee5dfbed71f197860c381814836fcf8dba51d4373d9c948a3de5cd69122",
+        "size": 40573
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:129fd9fc68e110c7232bdc8d4e099ad1f39bf04ab6b69af4c06a99b2b604de0e",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "0d4b46e3f15c4e4d0c048d813e84c3ce8eea40a6",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "phpmyadmin",
+    "com.otziv.security.brotli-refresh": "C40: official Alpine3.24 brotli-libs1.2.1-r0; C39 PHP/iconv/application/config and unrelated packages unchanged",
+    "com.otziv.security.c50": "C50: official musl security package; accepted application and configuration bytes unchanged",
+    "com.otziv.security.c53": "C53: official apache2 security package; accepted application and configuration bytes unchanged",
+    "com.otziv.security.c61": "Official libxml2/PHP fixes; configuration and unrelated packages unchanged",
+    "com.otziv.security.curl-refresh": "C41: official Alpine3.24 curl/libcurl8.23.0-r0; C40 PHP/iconv/application/config and all other packages unchanged",
+    "com.otziv.security.expat-refresh": "C47: official Alpine3.24 libexpat2.10.0-r0; C41 server/application/config and unrelated packages unchanged",
+    "com.otziv.security.php-refresh": "C39: PHP8.3.36-r0; version-matched official iconv with GNU libiconv1.18; C32 application/config/non-PHP runtime preserved",
+    "com.otziv.security.scope": "Exact C7 PMA5.2.3 Composer tree; signed Alpine3.24 PHP83/Apache; unmodified PHP8.3.35 iconv extension with GNU libiconv1.18; community refresh required",
+    "com.otziv.security.zlib-refresh": "C49: official Alpine3.24 zlib1.3.2-r1; official symfony/expression-language v5.4.54 Parser.php and composer.json; C47 server/application/config and unrelated packages unchanged"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-20T20:31:07.362Z"
+}
