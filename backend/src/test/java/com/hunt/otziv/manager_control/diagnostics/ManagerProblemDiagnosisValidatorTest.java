@@ -98,6 +98,13 @@ class ManagerProblemDiagnosisValidatorTest {
     }
 
     @Test
+    void manualRemindersDoNotExposeCardOrAccountNumbersInAuditEvidence() {
+        assertThat(DiagnosticRedactor.redact("Счёт 406: 2500 ₽, карта 4000 0000 0000 0002, счёт 40702810000000000000"))
+                .contains("Счёт 406: 2500 ₽", "[платёжный номер скрыт]")
+                .doesNotContain("4000 0000", "40702810");
+    }
+
+    @Test
     void authorizationHeadersAndJsonSecretsAreRemovedCompletely() {
         assertThat(DiagnosticRedactor.redact("Authorization: Bearer topSecret\n{\"api_key\":\"jsonSecret\"}"))
                 .doesNotContain("topSecret", "jsonSecret");

@@ -27,6 +27,23 @@ import type {
   CommonInvoiceReturnableOrdersResponse
 } from '../../../core/common-billing.api';
 
+describe('previous invoice delivery blocks a new amount', () => {
+  it('distinguishes the previous operation from a new delivery failure', () => {
+    const error = 'previous_delivery_context_changed: старая операция на 1250 ₽ блокирует текущий счёт на 2500 ₽';
+    const prototype = CommonBillingComponent.prototype as unknown as {
+      humanCommonInvoiceError(error: string): string;
+      commonInvoiceProblemSteps(): string[];
+    };
+    expect(prototype.humanCommonInvoiceError(error)).toBe('старая операция на 1250 ₽ блокирует текущий счёт на 2500 ₽');
+    expect(commonInvoiceDeliveryWarning(error)).toBe('Прежняя отправка требует сверки. старая операция на 1250 ₽ блокирует текущий счёт на 2500 ₽');
+    const steps = prototype.commonInvoiceProblemSteps.call({
+      invoicePaymentNotificationError: () => '', invoiceProblemRaw: () => error
+    } as unknown as typeof prototype);
+    expect(steps.join(' ')).toContain('Новое сообщение с текущей суммой ещё не создано');
+    expect(steps.join(' ')).toContain('не повторяйте старый счёт');
+  });
+});
+
 describe('ordinary payment after cancelling only one paper part', () => {
   for (const ordinary of [true,false]) {
     it(ordinary ? 'copies the selected order payment instructions' : 'keeps the common link for other orders', async () => {

@@ -90,6 +90,9 @@ export function commonInvoiceDeliveryWait(
 export function commonInvoiceDeliveryWarning(lastError: string | null | undefined): string | null {
   const detail = lastError?.trim();
   if (!detail) return null;
+  if (detail.toLowerCase().startsWith('previous_delivery_context_changed:')) {
+    return `Прежняя отправка требует сверки. ${detail.slice(detail.indexOf(':') + 1).trim()}`;
+  }
   return commonInvoiceDeliveryWait(detail) ?? `Отправка не подтверждена. ${detail}`;
 }
 

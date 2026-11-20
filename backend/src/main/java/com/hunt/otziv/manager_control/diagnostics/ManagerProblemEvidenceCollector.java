@@ -144,6 +144,7 @@ public class ManagerProblemEvidenceCollector {
                     "order_id", "ready", "paid", "amount_kopecks", "active_membership", "publication_blocker_since", "paid_at", "current_order_status",
                     "current_status_changed_at", "archive_source_order_status_title", "payment_method", "has_source_payment_link"));
             collectInvoiceHistory(facts, entityId, invoices.getFirst().get("created_at"));
+            collectInvoiceStaffMessages(facts, entityId, managerId, invoices.getFirst().get("created_at"), observedAt);
             appendInvoiceMonetaryDisplay(facts);
             appendInvoiceArchiveChronology(facts);
             Map<String, Object> counts = jdbc.queryForMap("""
@@ -309,6 +310,52 @@ public class ManagerProblemEvidenceCollector {
 
     private static String rubles(java.math.BigDecimal kopecks) {
         return kopecks.movePointLeft(2).stripTrailingZeros().toPlainString().replace('.', ',') + " ₽";
+    }
+
+    /** Read staff chat only after invoice ownership is established; keep authorship and redacted text distinct. */
+    private void collectInvoiceStaffMessages(List<Fact> facts, long invoiceId, long managerId,
+                                             Object createdAt, LocalDateTime observedAt) {
+        LocalDateTime since = timestamp(createdAt);
+        if (since == null) {
+            facts.add(new Fact("invoice:" + invoiceId + ":staff_chat_scope", "history_coverage", "staff_chat_scope",
+                    "Дата создания счёта неизвестна; ручные сообщения требуют отдельной сверки"));
+            return;
+        }
+        // INCOMING is the gateway event direction, not the author's role: staff can write
+        // directly in WhatsApp. Keep attribution explicit instead of treating it as a client reply.
+        var messages = jdbc.queryForList("""
+                SELECT m.id,m.company_id,m.platform,m.direction,m.sender_role,m.actor_user_id,
+                       m.message_at,m.created_at,m.message_text,m.edited_text,m.edited_at,m.edit_count,m.matched_company_count,
+                       EXISTS(SELECT 1 FROM managers manager WHERE manager.manager_id=?
+                              AND manager.user_id=m.actor_user_id) AS author_is_audited_manager
+                FROM client_chat_messages m
+                WHERE m.manager_id=? AND m.sender_role='STAFF' AND m.routing_ambiguous=FALSE
+                  AND m.message_at>=? AND m.message_at<=? AND m.created_at<=?
+                  AND m.company_id IN (
+                    SELECT a.invoice_company_id FROM common_invoices i
+                    JOIN common_billing_accounts a ON a.account_id=i.account_id WHERE i.invoice_id=?
+                    UNION
+                    SELECT o.order_company FROM common_invoice_orders io
+                    JOIN orders o ON o.order_id=io.order_id
+                    WHERE io.invoice_id=? AND io.active_membership=TRUE)
+                ORDER BY m.message_at DESC,m.id DESC LIMIT 21
+                """, managerId, managerId, since, observedAt, observedAt, invoiceId, invoiceId);
+        for (var message : messages.stream().limit(20).toList()) {
+            String ref = "message:" + number(message, "id");
+            addRow(facts, ref, "client_chat_message", message, "id", "company_id", "platform", "direction",
+                    "sender_role", "actor_user_id", "author_is_audited_manager", "matched_company_count",
+                    "message_at", "created_at", "edited_at", "edit_count");
+            addRecordedText(facts, ref + ":recorded_text", "recorded_text", message.get("message_text"));
+            if (message.get("edited_text") != null)
+                addRecordedText(facts, ref + ":edited_text", "recorded_edited_text", message.get("edited_text"));
+        }
+        facts.add(new Fact("invoice:" + invoiceId + ":staff_chat_scope", "history_coverage", "staff_chat_scope",
+                "Записанные сообщения STAFF по компаниям этого счёта с " + since + " до момента сбора фактов"
+                        + ". Авторство проверяется по actor_user_id; INCOMING означает получение события шлюзом. "
+                        + "Сообщение подтверждает его содержание и автора, но не прочтение клиентом, поступление оплаты или выполнение заказа. "
+                        + "Неоднозначно привязанные сообщения исключены; общий чат нескольких компаний одного менеджера допустим. "
+                        + "Отсутствие записи не доказывает отсутствие напоминания."
+                        + (messages.size() > 20 ? " Показаны только последние 20 сообщений." : "")));
     }
 
     /** Read only after invoice ownership is established; never export audit actors, free-form details or payment references. */

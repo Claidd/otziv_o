@@ -640,6 +640,10 @@ public class CommonInvoiceRecoveryWorkflow {
 
     void ensureAttentionCanBeRetried(CommonInvoice invoice) {
         String error = attentionError(invoice);
+        if (error.startsWith("previous_delivery_context_changed")) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Сначала сверяйте и завершите прежнюю операцию отправки; повтор обработки её не отменяет");
+        }
         if (isMigrationPaymentRegistryAttention(invoice)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платеж из миграционного реестра нельзя повторять до ручной сверки T-Bank");
         }
@@ -656,6 +660,10 @@ public class CommonInvoiceRecoveryWorkflow {
 
     void ensureAttentionCanBeResolved(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         String error = attentionError(invoice);
+        if (error.startsWith("previous_delivery_context_changed")) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Сначала сверяйте и завершите прежнюю операцию отправки. Закрытие проверки не отменяет старый конверт в очереди");
+        }
         if (isMigrationPaymentRegistryAttention(invoice)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Миграционный платежный карантин нельзя закрыть без ручной сверки T-Bank");
         }

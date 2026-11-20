@@ -221,9 +221,27 @@ public class CommonInvoiceDeliveryService {
             var invoice = prelude.invoice();
             if(invoice.isPaperInvoiceAutomationHold()) throw new ResponseStatusException(HttpStatus.CONFLICT,"Банковский счёт отменяется или отменён. Для новой отправки сначала выпустите новый комплект");
             if (checkVisibility) ensureCommonInvoiceVisibleForCurrentUser(invoice);
+            if (invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                    && normalize(invoice.getLastError()).startsWith("previous_delivery_context_changed:")) {
+                ensureCommonInvoiceNotNeedsAttention(invoice);
+            }
             var existing = messageQueue.unresolved(invoiceId);
             if (existing.isPresent()) {
                 var saved = existing.get();
+                if (SEND_INVOICE_STATUSES.contains(invoice.getStatus()) && remainingKopecks(invoice) > 0
+                        && (saved.remainingKopecks() != remainingKopecks(invoice)
+                        || !Objects.equals(saved.operationId(), invoice.getPaymentMessageOperationId()))) {
+                    // A previous frozen command still owns the queue after a composition repair.
+                    // Surface the reconciliation hold; never retry its obsolete amount or erase its receipt.
+                    invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                    invoice.setNextReminderAt(null);
+                    invoice.setLastError(limit("previous_delivery_context_changed: старая операция отправки на "
+                            + BigDecimal.valueOf(saved.remainingKopecks(), 2).toPlainString()
+                            + " ₽ блокирует текущий счёт на " + BigDecimal.valueOf(remainingKopecks(invoice), 2).toPlainString()
+                            + " ₽. Сверьте результат прежней операции; новая отправка не создана", 512));
+                    invoiceRepository.save(invoice);
+                    return false;
+                }
                 if (saved.reminder() != reminder || (routeChanged && !saved.paymentRouteChanged()))
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Предыдущая отправка счета ещё не завершена");
                 if (manual) {
