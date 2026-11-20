@@ -44,12 +44,35 @@ class ManagerReportReviewQualityServiceTest {
         assertThat(result.accepted()).isTrue();
         assertThat(result.reason()).contains("Прочтение и оплата проверяются отдельно");
 
+        for (String otherMessage : List.of("добрый день", "я решила оплатить", "хочу проверить тексты")) {
+            provider(root.toString());
+            assertThat(service.assessAnswer(report.replace("оплатите, пожалуйста", otherMessage),
+                    question(),answer,false,List.of(),false,submitted).accepted()).isFalse();
+        }
+        for (String unrelated : List.of("Отправила новый договор", "Напоминание о проверке текстов отправлено",
+                "Напоминание клиенту отправлено 18.11.26 в 12:05.", "Напоминание клиенту отправлено 19.11.26 в 12:06.")) {
+            claim.put("answerQuote",unrelated);
+            ((com.fasterxml.jackson.databind.node.ObjectNode)root.path("criteria").get(0)).put("answerQuote",unrelated);
+            provider(root.toString());
+            assertThat(service.assessAnswer(report,question(),unrelated,false,List.of(),false,submitted).accepted())
+                    .as("A recorded payment reminder cannot prove: %s",unrelated).isFalse();
+        }
+
         // A compound statement must not inherit the communication verdict.
         String mixed=answer+" Клиент оплатил счёт.";
         claim.put("answerQuote",mixed);
         ((com.fasterxml.jackson.databind.node.ObjectNode)root.path("criteria").get(0)).put("answerQuote",mixed);
         provider(root.toString());
         assertThat(service.assessAnswer(report,question(),mixed,false,List.of(),false,submitted).accepted()).isFalse();
+
+        // The model can still credit ordinary paraphrases; the bounded repair is not a wording password.
+        String paraphrase="Написала клиенту с просьбой оплатить";
+        root.put("contextStatus","SUFFICIENT");
+        claim.put("answerQuote",paraphrase).put("status","SUPPORTED");
+        ((com.fasterxml.jackson.databind.node.ObjectNode)root.path("criteria").get(0))
+                .put("answerQuote",paraphrase).put("status","SATISFIED");
+        provider(root.toString());
+        assertThat(service.assessAnswer(report,question(),paraphrase,false,List.of(),false,submitted).accepted()).isTrue();
     }
 
     private AiProviderRouter providerRouter;

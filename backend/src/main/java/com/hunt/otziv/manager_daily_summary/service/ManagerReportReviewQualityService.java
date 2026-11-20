@@ -657,7 +657,8 @@ public class ManagerReportReviewQualityService {
                 if (verified && status == ClaimStatus.UNVERIFIABLE) {
                     status = ClaimStatus.SUPPORTED;
                     restoredCommunication = true;
-                } else if (!verified && !recordedMessageClaim(quote)) status = ClaimStatus.UNVERIFIABLE;
+                } else if (!verifiedCommunication(quote, refs, checks, typedFacts, false)
+                        && !recordedMessageClaim(quote)) status = ClaimStatus.UNVERIFIABLE;
             }
             // Known structured fields are checked again independently of the model's verdict/value extraction.
             if (temporal.equals("CURRENT") && kind == ClaimKind.FACT
@@ -1551,6 +1552,11 @@ public class ManagerReportReviewQualityService {
 
     private boolean verifiedCommunication(String quote, List<String> refs, List<FactCheck> checks,
                                            Map<String, AuthoritativeFact> facts) {
+        return verifiedCommunication(quote, refs, checks, facts, true);
+    }
+
+    private boolean verifiedCommunication(String quote, List<String> refs, List<FactCheck> checks,
+                                           Map<String, AuthoritativeFact> facts, boolean requireReminderMeaning) {
         String text = normalize(quote);
         // A narrowly scoped communication claim, never a compound payment/delivery/completion claim.
         if (!text.matches("(?:(?:я|мы) )?(?:написал[аи]?|отправил[аи]?|направил[аи]?|напомнил[аи]?) .+")
@@ -1569,9 +1575,42 @@ public class ManagerReportReviewQualityService {
                     .allMatch(field -> checks.stream().anyMatch(check -> check.factId().equals(prefix + field)
                             && facts.containsKey(check.factId()) && refs.contains(facts.get(check.factId()).evidenceRef())
                             && matchesFact(facts.get(check.factId()), check.assertedValue())));
-            if (checked) return true;
+            if (checked && (!requireReminderMeaning || matchingReminder(text, words.value(),
+                    facts.get(prefix + "message_at").value()))) return true;
         }
         return false;
+    }
+
+    /** Only a bounded reminder claim can repair an AI receipt/reading error without semantic inference. */
+    private boolean matchingReminder(String claim, String message, String messageAt) {
+        String core = claim;
+        try {
+            var at = LocalDateTime.parse(messageAt.replace(' ', 'T'));
+            String time = normalize(at.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
+            List<String> suffixes = new ArrayList<>();
+            for (String format : List.of("dd.MM.yyyy", "dd.MM.yy", "dd.MM")) {
+                String date = normalize(at.format(java.time.format.DateTimeFormatter.ofPattern(format)));
+                suffixes.add(date + " в " + time);
+                suffixes.add(date);
+            }
+            suffixes.add("в " + time);
+            for (String suffix : suffixes) if (core.endsWith(" " + suffix)) {
+                core = core.substring(0, core.length() - suffix.length() - 1); break;
+            }
+        } catch (RuntimeException invalidTime) { return false; }
+        String topic = "(?: об оплате| о проверке текстов)?";
+        if (!core.matches("напоминание(?: клиенту)?" + topic + " (?:отправлено|написано|направлено)")
+                && !core.matches("(?:(?:я|мы) )?(?:написал[аи]?|отправил[аи]?|направил[аи]?)(?: клиенту)? напоминание" + topic)
+                && !core.matches("(?:(?:я|мы) )?напомнил[аи]?(?: клиенту)? (?:об оплате|о проверке текстов)")) return false;
+        String body = normalize(message);
+        boolean payment = body.matches("(?U).*\\b(?:оплатите|оплати)\\b.*")
+                || body.matches(".*напомина(?:ю|ем) (?:об оплате|про оплату).*");
+        boolean textCheck = body.contains("текст")
+                && (body.matches("(?U).*\\bпроверьте\\b.*")
+                    || body.matches(".*напомина(?:ю|ем) (?:о проверке|про проверку) текст.*"));
+        if (core.contains("об оплате")) return payment;
+        if (core.contains("о проверке текстов")) return textCheck;
+        return payment || textCheck;
     }
 
     private boolean wordingAppraisalOnly(String quote) {
