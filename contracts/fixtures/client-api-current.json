@@ -1750,6 +1750,15 @@
       "zpSum" : 12.5,
       "source" : "contract-example"
     },
+    "ManagerAutomationFailureServiceSystemDeliveryReviewOutput" : {
+      "stateId" : 2,
+      "companyId" : 2,
+      "title" : "contract-example",
+      "managerId" : 2,
+      "scenario" : "contract-example",
+      "preparedAt" : "2026-09-07T08:00:00",
+      "targetUrl" : "contract-example"
+    },
     "ManagerBoardResponseOutput" : {
       "section" : "contract-example",
       "status" : "contract-example",

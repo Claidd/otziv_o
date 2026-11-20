@@ -138,9 +138,35 @@ class ManagerAutomationFailureServiceTest {
         assertEquals("UNKNOWN", state.getDeliveryStatus());
         assertEquals("state_transaction_outcome_uncertain", state.getLastErrorCode());
 
+        // Company ownership can differ from order ownership; absent routing is not proof of idle work.
+        when(contacts.routing(7L)).thenReturn(new com.hunt.otziv.client_messages.api.ClientContactHealth.Routing(
+                java.util.Set.of(), java.util.Set.of()));
+        assertEquals(1, service.issues(manager, 10).size());
         // Closing the last order/request restores the existing system-only reconciliation.
         when(contacts.requiresManagerAttention(20L)).thenReturn(false);
         assertTrue(service.systemOwnsIssue(issue));
+        when(contacts.routing(7L)).thenReturn(new com.hunt.otziv.client_messages.api.ClientContactHealth.Routing(
+                java.util.Set.of(), java.util.Set.of()));
+        assertTrue(service.issues(manager, 10).isEmpty());
+        var review = service.systemDeliveryReviews(manager).getFirst();
+        assertEquals(20L, review.companyId());
+        assertEquals(11L, review.stateId());
+        assertEquals("АВТОКАР", review.title());
+        assertEquals(state.getDeliveryPreparedAt(), review.preparedAt());
+        // A new order/request restores manager responsibility, never resends the old message.
+        when(contacts.routing(7L)).thenReturn(new com.hunt.otziv.client_messages.api.ClientContactHealth.Routing(
+                java.util.Set.of(), java.util.Set.of(20L)));
+        assertEquals(1, service.issues(manager, 10).size());
+        assertTrue(service.systemDeliveryReviews(manager).isEmpty());
+        // Even an idle company cannot move an unsettled invoice out of manager control.
+        when(contacts.routing(7L)).thenReturn(new com.hunt.otziv.client_messages.api.ClientContactHealth.Routing(
+                java.util.Set.of(), java.util.Set.of()));
+        var invoice = new CommonInvoice(); invoice.setId(406L); invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        var item = new CommonInvoiceOrder(); item.setInvoice(invoice);
+        when(commonInvoiceOrderRepository.findByOrderIdWithInvoice(100L)).thenReturn(Optional.of(item));
+        assertEquals(406L, service.issues(manager, 10).getFirst().commonInvoiceId());
+        assertTrue(service.systemDeliveryReviews(manager).isEmpty());
+        assertEquals("UNKNOWN", state.getDeliveryStatus());
         org.mockito.Mockito.verify(stateRepository, org.mockito.Mockito.never()).save(any());
     }
 

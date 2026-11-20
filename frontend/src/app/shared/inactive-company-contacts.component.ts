@@ -8,6 +8,11 @@ interface Contact {
   companyId: number; title: string; companyStatus: string; platform: string;
   description: string; checkStatus: string; checkedAt: string | null; excluded: boolean;
 }
+interface DeliveryReview {
+  stateId: number; companyId: number | null; title: string; managerId: number;
+  scenario: string; preparedAt: string | null; targetUrl: string;
+}
+type ContactTarget = { companyId: number; title: string };
 
 @Component({
   selector: 'app-inactive-company-contacts', standalone: true, imports: [DatePipe, RouterLink],
@@ -46,6 +51,36 @@ interface Contact {
           }
         </article>
       } @empty { @if (!loading() && !error()) { <p>Компаний с подтверждённо недоступным чатом в этом списке нет.</p> } }
+      <h2>Сверка прежних отправок</h2>
+      <p>Исторические отправки компаний без действующей работы проверяет администратор.
+        Они не входят в обязательные замечания менеджера. При появлении заказа или открытой заявки проблема вернётся менеджеру.</p>
+      <p>Это не подтверждение доставки и не запрет всех будущих напоминаний. Повтор старого сообщения заблокирован.
+        Ограничение рассылки устанавливается отдельно, только при подтверждённо недоступном чате компании на стопе.</p>
+      @if (reviewError()) { <p role="alert">{{ reviewError() }}</p> }
+      <p>Операций: {{ filteredReviews().length }}</p>
+      @for (row of filteredReviews(); track row.stateId) {
+        <article>
+          <h3>{{ row.title }} <small>операция №{{ row.stateId }}</small></h3>
+          <p>{{ row.scenario }}</p>
+          @if (row.preparedAt) { <p>Исходная попытка: {{ row.preparedAt | date:'dd.MM.yyyy HH:mm' }}</p> }
+          <p>Исход не подтверждён. Сверьте исходный чат и журнал операции; для счёта также поступления.
+            Проверка доступа к текущему чату не подтверждает доставку старого сообщения и не разрешает его повтор.</p>
+          <div class="actions">
+            <a [routerLink]="'/companies'" [queryParams]="{keyword: row.title}">Открыть компанию</a>
+            @if (row.companyId !== null) {
+              <button type="button" (click)="pending.set({companyId: row.companyId!, title: row.title})" [disabled]="checking() !== null">Проверить доступ</button>
+            }
+          </div>
+          @if (row.companyId !== null && pending()?.companyId === row.companyId) {
+            <div class="confirmation" role="group" aria-label="Проверка доступа">
+              <p>Проверить доступ к чату «{{ row.title }}»? Клиенту ничего не отправится.
+                Подтверждённо закрытый чат компании на стопе будет исключён из рассылки.</p>
+              <button type="button" (click)="check({companyId: row.companyId!, title: row.title})" [disabled]="checking() !== null">{{ checking() === row.companyId ? 'Проверяю…' : 'Проверить' }}</button>
+              <button type="button" (click)="pending.set(null)" [disabled]="checking() !== null">Отмена</button>
+            </div>
+          }
+        </article>
+      } @empty { @if (!loading() && !reviewError()) { <p>Прежних отправок для административной сверки нет.</p> } }
     </section>
   `,
   styles: [`
@@ -65,16 +100,24 @@ export class InactiveCompanyContactsComponent {
   private readonly http = inject(HttpClient);
   private readonly url = `${appEnvironment.apiBaseUrl}/api/admin/client-messages/contacts`;
   readonly rows = signal<Contact[]>([]);
+  readonly reviews = signal<DeliveryReview[]>([]);
+  readonly reviewError = signal('');
   readonly search = signal(''); readonly loading = signal(false); readonly error = signal('');
-  readonly notice = signal(''); readonly checking = signal<number | null>(null); readonly pending = signal<Contact | null>(null);
+  readonly notice = signal(''); readonly checking = signal<number | null>(null); readonly pending = signal<ContactTarget | null>(null);
   readonly filtered = computed(() => this.rows().filter(row => `${row.title} ${row.companyId}`.toLowerCase().includes(this.search().trim().toLowerCase())));
+  readonly filteredReviews = computed(() => this.reviews().filter(row => `${row.title} ${row.companyId} ${row.stateId}`.toLowerCase().includes(this.search().trim().toLowerCase())));
   constructor() { this.load(); }
   load(): void {
     this.loading.set(true); this.error.set('');
     this.http.get<Contact[]>(this.url).subscribe({ next: rows => { this.rows.set(rows); this.loading.set(false); },
       error: () => { this.error.set('Не удалось загрузить список. Повторите проверку.'); this.loading.set(false); } });
+    this.reviewError.set('');
+    this.http.get<DeliveryReview[]>(`${appEnvironment.apiBaseUrl}/api/admin/manager-control/delivery-reviews`).subscribe({
+      next: rows => this.reviews.set(rows),
+      error: () => this.reviewError.set('Не удалось загрузить сверку прежних отправок. Обновите список.')
+    });
   }
-  check(row: Contact): void {
+  check(row: ContactTarget): void {
     if (this.checking() !== null) return;
     this.checking.set(row.companyId); this.error.set(''); this.notice.set('');
     this.http.post<Contact>(`${this.url}/${row.companyId}/recheck`, {}).subscribe({
