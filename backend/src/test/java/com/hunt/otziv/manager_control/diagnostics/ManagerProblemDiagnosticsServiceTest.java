@@ -118,6 +118,37 @@ class ManagerProblemDiagnosticsServiceTest {
     }
 
     @Test
+    void knownUnpaidBanOverridesUnknownCauseWithoutRewritingStoredAnalysis() throws Exception {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = List.of(new Fact("card:10:entity_type", "card", "entity_type", "COMMON_INVOICE"),
+                new Fact("invoice:373:status", "invoice", "status", "BAN"),
+                new Fact("invoice:373:previous_status", "invoice", "previous_status", "UNPAID"),
+                new Fact("invoice:373:close_reason", "invoice", "close_reason", "BAN"),
+                new Fact("invoice:373:closed_at", "invoice", "closed_at", "2026-11-18 21:12:05"),
+                new Fact("invoice:373:closed_by", "invoice", "closed_by", "vika"),
+                new Fact("invoice:373:paid_kopecks", "invoice", "paid_kopecks", "0"));
+        var original = new Diagnosis("Счёт заблокирован, причина блокировки неизвестна.", List.of(), List.of(), List.of(),
+                List.of(new Action("CHECK_SOURCE", "Уточните причину блокировки.", "Менеджер", "Причина известна.", List.of("invoice:373:status"))), List.of("Причина известна."));
+        assertThat(ManagerProblemBusinessDiagnosis.readable(original)).isTrue();
+        String storedJson = new ObjectMapper().writeValueAsString(original);
+        var saved = new ManagerProblemDiagnosisStore.Stored(299, 5, 1, 2, "NEEDS_CONTEXT", LocalDateTime.now(), facts, original,
+                "deepseek-flash", PROMPT_VERSION, null, 1);
+        when(store.latestForSource(10L)).thenReturn(saved);
+
+        DiagnosticView result = service.latest(10L);
+
+        assertThat(result.model()).isEqualTo("server-rules");
+        assertThat(result.status()).isEqualTo("NEEDS_CONTEXT");
+        assertThat(result.version()).isEqualTo(5);
+        assertThat(result.facts()).isSameAs(facts);
+        assertThat(result.diagnosis().summary()).contains("18.11.2026 21:12", "vika", "Учтённая оплата — 0 ₽").doesNotContain("причина блокировки неизвестна");
+        assertThat(new ObjectMapper().writeValueAsString(saved.diagnosis())).isEqualTo(storedJson);
+        verify(store).latestForSource(10L);
+        verifyNoMoreInteractions(store);
+        verifyNoInteractions(collector, events);
+    }
+
+    @Test
     void currentTechnicalDiagnosisGetsBusinessPresentationWhileItsStoredEvidenceRemainsUntouched() {
         when(settings.mode()).thenReturn("ENFORCE");
         var facts = List.of(new Fact("invoice:189:status", "invoice", "status", "COLLECTING"));

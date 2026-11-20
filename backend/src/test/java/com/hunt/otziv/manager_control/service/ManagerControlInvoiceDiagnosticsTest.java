@@ -33,6 +33,19 @@ class ManagerControlInvoiceDiagnosticsTest {
             mock(PaymentLinkRepository.class), settings);
 
     @Test
+    void knownUnpaidBanExplainsClosureWithoutResolvingOrReopeningIt() {
+        var invoice = invoice(CommonInvoiceStatus.BAN, null);
+        invoice.setPreviousStatus("UNPAID"); invoice.setCloseReason("BAN");
+        invoice.setClosedAt(LocalDateTime.of(2026,11,18,21,12)); invoice.setPaidKopecks(0);
+        assertThat(reason(invoice, List.of())).contains("18.11.2026 21:12", "Учтённая оплата — 0 ₽", "сам статус не подтверждает сбой");
+        given(invoice, List.of());
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(invoice.getStatus()).isEqualTo(CommonInvoiceStatus.BAN);
+        invoice.setCloseReason(null);
+        assertThat(reason(invoice, List.of())).contains("проверьте причину блокировки");
+    }
+
+    @Test
     void historicalAuditUsesCurrentInvoiceProblemRuleRatherThanItsDeferredCard() {
         var paid = invoice(CommonInvoiceStatus.PAID, null);
         given(paid,List.of());

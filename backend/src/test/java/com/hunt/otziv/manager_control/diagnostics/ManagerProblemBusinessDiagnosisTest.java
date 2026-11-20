@@ -9,6 +9,42 @@ import static org.assertj.core.api.Assertions.*;
 import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.*;
 
 class ManagerProblemBusinessDiagnosisTest {
+    private static List<Fact> unpaidBanFacts() {
+        return List.of(f("card", "entity_type", "COMMON_INVOICE"), f("invoice", "status", "BAN"),
+                f("invoice", "previous_status", "UNPAID"), f("invoice", "close_reason", "BAN"),
+                f("invoice", "closed_at", "2026-11-18 21:12:05"), f("invoice", "closed_by", "vika"),
+                f("invoice", "paid_kopecks", "0"), f("invoice", "bad_task_count", "6"), f("invoice", "bad_task_done_count", "6"));
+    }
+
+    @Test
+    void unpaidBanUsesStoredDecisionWithoutInventingPaymentOrExternalTaskProof() {
+        var facts = unpaidBanFacts();
+        var result = ManagerProblemBusinessDiagnosis.fallback(facts);
+        assertThat(ManagerProblemBusinessDiagnosis.hasCurrentUnpaidBan(facts)).isTrue();
+        assertThat(result.summary()).contains("из «Не оплачено» в «Бан»", "18.11.2026 21:12", "vika", "6 из 6", "сам статус не доказывает ошибку");
+        assertThat(result.missingEvidence()).anyMatch(v -> v.contains("не подтверждает отсутствие поступления"));
+        assertThat(result.actions().getFirst().text()).contains("не требует повторного счёта", "разблокировки");
+        assertThat(result.actions().getFirst().evidenceRefs()).contains("invoice:1:closed_by", "invoice:1:close_reason");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
+    }
+
+    @Test
+    void banWithoutScopedClosureOrWithCurrentPaymentNeverInfersKnownUnpaidClosure() {
+        for (String field : List.of("entity_type", "status", "previous_status", "close_reason", "closed_at", "paid_kopecks"))
+            assertThat(ManagerProblemBusinessDiagnosis.hasCurrentUnpaidBan(unpaidBanFacts().stream().filter(f -> !f.field().equals(field)).toList())).isFalse();
+        for (var changed : List.of(f("invoice", "paid_kopecks", "100"), f("invoice", "closed_at", "неизвестно"),
+                f("invoice", "status", "PAID"), f("card", "entity_type", "ORDER"))) {
+            var facts = new ArrayList<>(unpaidBanFacts().stream().filter(f -> !f.field().equals(changed.field())).toList());
+            facts.add(changed);
+            assertThat(ManagerProblemBusinessDiagnosis.hasCurrentUnpaidBan(facts)).isFalse();
+        }
+        var unknownDelivery = new ArrayList<>(unpaidBanFacts());
+        unknownDelivery.add(f("automation", "delivery_status", "UNKNOWN"));
+        assertThat(ManagerProblemBusinessDiagnosis.fallback(unknownDelivery).actions().getFirst().code()).isEqualTo("CHECK_DELIVERY");
+        var noCounts = unpaidBanFacts().stream().filter(f -> !f.field().startsWith("bad_task_")).toList();
+        assertThat(ManagerProblemBusinessDiagnosis.fallback(noCounts).summary()).doesNotContain("задачи отмечены", "6 из 6");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"PARTIALLY_PAID", "ARCHIVED"})
     void historicalInvoiceArchivePreservesPaymentWithoutDeclaringOldCompositionAConfirmedDebt(String status) {

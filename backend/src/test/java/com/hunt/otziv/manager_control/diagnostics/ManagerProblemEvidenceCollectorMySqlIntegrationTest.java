@@ -49,7 +49,7 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         for (Class<?> type : List.of(ManagerDailyControl.class, ManagerDailyControlConcreteItem.class, CommonInvoice.class,
                 CommonInvoiceOrder.class, ScheduledClientMessageState.class, ScheduledClientMessageAttempt.class,
                 ClientChatMessage.class, ClientChatUnansweredItem.class, CommonBillingAccount.class, Company.class, Order.class,
-                OrderStatus.class, BusinessAuditEvent.class)) createFromEntityMapping(type);
+                OrderStatus.class, BusinessAuditEvent.class, com.hunt.otziv.bad_reviews.model.BadReviewTask.class)) createFromEntityMapping(type);
         jdbc.execute("DROP TABLE IF EXISTS manager_client_message_queue");
         new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource(
                 "db/migration/V1_10_313__manager_client_message_queue.sql")).execute(jdbc.getDataSource());
@@ -60,6 +60,20 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         jdbc.execute("CREATE TABLE managers(manager_id BIGINT,user_id BIGINT)");
         jdbc.update("INSERT INTO managers VALUES(2,30),(3,31)");
         jdbc.update("INSERT INTO manager_daily_controls(daily_control_id,manager_id) VALUES(1,2)");
+    }
+
+    @Test
+    void bannedInvoiceCarriesStoredClosureAndOnlyItsActivePositionsBadTaskCounts() {
+        invoiceFixture();
+        jdbc.update("UPDATE common_invoices SET status='BAN',previous_status='UNPAID',closed_by='vika',close_reason='BAN',closed_at='2026-11-18 21:12:05',paid_kopecks=0 WHERE invoice_id=189");
+        for (int id=1; id<=6; id++) jdbc.update("INSERT INTO bad_review_tasks(bad_review_task_id,bad_review_task_order,bad_review_task_status) VALUES(?,?,'DONE')", id, id<=3 ? 25734 : 25735);
+        jdbc.update("INSERT INTO bad_review_tasks(bad_review_task_id,bad_review_task_order,bad_review_task_status) VALUES(7,99,'NEW'),(8,888,'NEW')");
+        var facts = collector.collect(10L).facts();
+        assertThat(facts).contains(new ManagerProblemDiagnosticsService.Fact("invoice:189:closed_by", "invoice", "closed_by", "vika"),
+                new ManagerProblemDiagnosticsService.Fact("invoice:189:bad_task_count", "invoice", "bad_task_count", "6"),
+                new ManagerProblemDiagnosticsService.Fact("invoice:189:bad_task_done_count", "invoice", "bad_task_done_count", "6"));
+        jdbc.update("UPDATE bad_review_tasks SET bad_review_task_status='NEW' WHERE bad_review_task_id=1");
+        assertThat(collector.collect(10L).facts()).contains(new ManagerProblemDiagnosticsService.Fact("invoice:189:bad_task_done_count", "invoice", "bad_task_done_count", "5"));
     }
 
     @Test
