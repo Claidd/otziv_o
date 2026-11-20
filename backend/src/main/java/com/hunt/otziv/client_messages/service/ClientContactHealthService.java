@@ -76,11 +76,11 @@ public class ClientContactHealthService implements ClientContactHealth {
                 settingList("client.messages.open-next-order-request-statuses",ScheduledClientMessageService.DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES));
     }
     @Override public Routing routing(Long managerId) {
-        var companies = snapshots(" WHERE c.company_active=1 AND c.company_manager=?",managerId);
+        var companies = snapshots(" WHERE c.company_manager=?",managerId);
         var active = activeCompanies(companies);
         var evidence = allEvidence();
         Set<Long> excluded = new HashSet<>();
-        for (var s:companies) if ("На стопе".equalsIgnoreCase(text(s.status())) && !active.contains(s.id())
+        for (var s:companies) if (s.active() && "На стопе".equalsIgnoreCase(text(s.status())) && !active.contains(s.id())
                 && unavailable(s,evidence.get(s.id())) != null) excluded.add(s.id());
         Set<Long> needsManager = new HashSet<>(active);
         companies.stream().filter(s -> "В работе".equalsIgnoreCase(text(s.status())))
@@ -107,7 +107,7 @@ public class ClientContactHealthService implements ClientContactHealth {
     }
     @Override public boolean requiresManagerAttention(Long id) {
         var s = snapshot(id);
-        return s != null && s.active() && ("В работе".equalsIgnoreCase(text(s.status())) || hasActiveWork(id));
+        return s != null && ("В работе".equalsIgnoreCase(text(s.status())) || hasActiveWork(id));
     }
     private String unavailable(Snapshot s, Evidence e) {
         if (s == null) return null;
@@ -231,13 +231,15 @@ public class ClientContactHealthService implements ClientContactHealth {
                 SELECT c.company_id FROM companies c LEFT JOIN client_contact_health h ON h.company_id=c.company_id
                 LEFT JOIN company_status cs ON cs.company_status_id=c.company_status
                 WHERE c.company_active=1 AND COALESCE(cs.status_title,'')<>'Бан'
-                  AND (h.checked_at IS NULL OR h.checked_at < ?)
+                  AND (h.checked_at IS NULL OR h.checked_at < ?
+                    OR (h.check_status='UNKNOWN' AND h.checked_at < ?))
                 ORDER BY CASE WHEN EXISTS (
                     SELECT 1 FROM scheduled_client_message_state s
                     WHERE s.company_id=c.company_id AND s.state_status='ACTIVE'
                       AND (s.consecutive_failures>0 OR s.delivery_status='UNKNOWN')
                 ) THEN 0 ELSE 1 END,h.checked_at,c.company_id LIMIT 10
-                """,Long.class,Timestamp.valueOf(LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(6)));
+                """,Long.class,Timestamp.valueOf(LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(6)),
+                    Timestamp.valueOf(LocalDateTime.now(java.time.ZoneOffset.UTC).minusMinutes(15)));
         for (Long id : ids) recheck(id);
     }
 }

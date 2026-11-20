@@ -174,7 +174,8 @@ class ManagerControlInvoiceDiagnosticsTest {
         var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION,
                 "previous_delivery_context_changed: old 1250 current 2500");
         assertThat(reason(invoice, List.of())).contains("Прежняя операция", "новое сообщение не создано",
-                "не повторяйте старый счёт").doesNotContain("previous_delivery_context_changed", "old 1250");
+                "не повторяйте старый счёт", "рабочее окно", "паузы и лимитов", "При неизвестном результате нужна сверка администратора")
+                .doesNotContain("previous_delivery_context_changed", "old 1250");
     }
 
     @Test

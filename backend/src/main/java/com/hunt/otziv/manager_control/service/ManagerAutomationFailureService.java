@@ -63,6 +63,26 @@ public class ManagerAutomationFailureService {
 
     @Transactional(readOnly = true)
     public List<AutomationFailureIssue> issues(Manager manager, int limit) {
+        return collectIssues(manager, limit, false);
+    }
+
+    /** Historical uncertainty without live work belongs to the administrator, not a manager SLA. */
+    @Transactional(readOnly = true)
+    public List<SystemDeliveryReview> systemDeliveryReviews(Manager manager) {
+        return collectIssues(manager, MAX_CANDIDATES, true).stream().map(issue -> {
+            var state = stateRepository.findById(issue.stateId()).orElseThrow();
+            Long companyId = state.getCompanyId();
+            if (companyId == null && state.getOrderId() != null) companyId = orderRepository
+                    .findByIdForOrderDto(state.getOrderId()).map(Order::getCompany).map(Company::getId).orElse(null);
+            return new SystemDeliveryReview(issue.stateId(), companyId, issue.title(), manager.getId(),
+                    issue.subtitle(), issue.firstObservedAt(), issue.targetUrl());
+        }).toList();
+    }
+
+    public record SystemDeliveryReview(Long stateId, Long companyId, String title, Long managerId,
+            String scenario, LocalDateTime preparedAt, String targetUrl) { }
+
+    private List<AutomationFailureIssue> collectIssues(Manager manager, int limit, boolean systemOnly) {
         if (manager == null
                 || manager.getId() == null
                 || !appSettingService.getBoolean(
@@ -99,7 +119,13 @@ public class ManagerAutomationFailureService {
             if (!liveFailure && !policy.isActionable(state, now, threshold, afterMinutes) && !transientWait) {
                 return;
             }
+            boolean noLiveWork = contactRouting != null && companyId != null
+                    && !contactRouting.active().contains(companyId)
+                    // An order can still belong to the former manager after its company moves.
+                    && !contactHealth.requiresManagerAttention(companyId);
             resolveIssue(manager, state, now).ifPresent(issue -> {
+                boolean systemReview = noLiveWork && issue.commonInvoiceId() == null && policy.requiresDeliveryReceipt(state);
+                if (systemReview != systemOnly) return;
                 unique.merge(issue.deduplicationKey(), issue, this::moreImportant);
             });
         });

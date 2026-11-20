@@ -41,7 +41,7 @@ public class ManagerControlAccessPolicy {
         }
     }
 
-    List<Manager> visibleManagers(Principal principal, Authentication authentication) {
+    public List<Manager> visibleManagers(Principal principal, Authentication authentication) {
         if (managerPermissionService.hasRole(authentication, "ADMIN")) {
             List<Manager> managers = managerRepository.findAllWithUserAndImage();
             return managers.isEmpty() ? List.of() : managerRepository.findAllManagersWorkers(managers);

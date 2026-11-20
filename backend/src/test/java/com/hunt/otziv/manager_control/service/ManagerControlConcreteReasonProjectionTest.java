@@ -108,6 +108,18 @@ class ManagerControlConcreteReasonProjectionTest {
                 sla, presenter, cards, delivery);
     }
 
+    @Test
+    void historicalAutomationCardLeavesManagerListWithoutClaimingDeliveryWasFixed() {
+        var card = card("AUTOMATION_FAILURE");
+        when(cards.findByParentItem(card.getParentItem())).thenReturn(List.of(card));
+        var response = workflow().readConcreteExamples(card.getParentItem(), List.of());
+        assertThat(response).isEmpty();
+        assertThat(card.getStatus()).isEqualTo(ManagerDailyControlItemStatus.RESOLVED);
+        assertThat(card.getComment()).contains("администратору", "состояние доставки не изменено").doesNotContain("устранена");
+        assertThat(card.isAutomaticResolution()).isTrue();
+        verify(cards).save(card);
+    }
+
     private ManagerDailyControlConcreteItem card(String type) {
         var parent = new ManagerDailyControlItem(); parent.setId(22L); parent.setReasonCode("COMMON_INVOICES");
         var card = new ManagerDailyControlConcreteItem();

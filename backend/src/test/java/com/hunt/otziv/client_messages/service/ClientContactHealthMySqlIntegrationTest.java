@@ -161,4 +161,26 @@ class ClientContactHealthMySqlIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT delivery_status FROM scheduled_client_message_state WHERE state_id=2254395",String.class)).isEqualTo("UNKNOWN");
         health.checkDueContacts();verify(telegram,times(1)).check(-1001);
     }
+    @Test void unknownAccessIsRetriedAfterFifteenMinutesWithoutResendingTheHistoricalOperation() {
+        jdbc.update("UPDATE companies SET company_url_chat='https://max.ru/join/example',company_max_group_chat_id=-7445");
+        jdbc.update("INSERT INTO scheduled_client_message_state VALUES(1238696,2116,'ACTIVE',0,'UNKNOWN')");
+        when(max.check(-7445)).thenReturn(new com.hunt.otziv.maxbot.api.MaxChatAccess.Result("UNKNOWN","access_unconfirmed"));
+        health.recheck(2116L);
+        jdbc.update("UPDATE client_contact_health SET checked_at=UTC_TIMESTAMP()-INTERVAL 14 MINUTE");
+        health.checkDueContacts(); verify(max,times(1)).check(-7445);
+        when(max.check(-7445)).thenReturn(new com.hunt.otziv.maxbot.api.MaxChatAccess.Result("UNAVAILABLE","max_chat_closed"));
+        jdbc.update("UPDATE client_contact_health SET checked_at=UTC_TIMESTAMP()-INTERVAL 16 MINUTE");
+        health.checkDueContacts(); verify(max,times(2)).check(-7445);
+        assertThat(health.excludedCompanies()).hasSize(1);
+        assertThat(health.managerIssues(13L)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT delivery_status FROM scheduled_client_message_state WHERE state_id=1238696",String.class)).isEqualTo("UNKNOWN");
+        health.checkDueContacts(); verify(max,times(2)).check(-7445);
+    }
+    @Test void disabledCompanyWithActiveOrderStillRequiresManagerAttention() {
+        jdbc.update("UPDATE companies SET company_active=FALSE");
+        jdbc.update("UPDATE orders SET order_status=2");
+        assertThat(health.requiresManagerAttention(2116L)).isTrue();
+        assertThat(health.routing(13L).active()).containsExactly(2116L);
+        assertThat(health.adminOnly(2116L)).isFalse();
+    }
 }

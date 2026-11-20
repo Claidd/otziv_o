@@ -240,7 +240,9 @@ public class ManagerControlConcreteSnapshotWorkflow {
             cardLifecycle.recordConcreteEpisode(item, ManagerDailyControlItemStatus.RESOLVED, true);
             item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
             item.setActionType(ManagerDailyControlActionType.RESOLVED);
-            item.setComment("Проблема больше не актуальна и закрыта автоматически");
+            item.setComment("AUTOMATION_FAILURE".equals(item.getEntityType())
+                    ? "Карточка больше не требует действия менеджера. Неподтверждённые прежние отправки доступны администратору в разделе контактов; состояние доставки не изменено."
+                    : "Проблема больше не актуальна и закрыта автоматически");
             item.setResolvedAt(now);
             item.setAutomaticResolution(true);
             item.setFollowUpAt(null);
