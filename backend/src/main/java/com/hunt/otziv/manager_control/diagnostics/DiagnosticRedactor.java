@@ -11,6 +11,7 @@ public final class DiagnosticRedactor {
     private static final Pattern URL = Pattern.compile("https?://[^\\s<>\\\"]+", Pattern.CASE_INSENSITIVE);
     private static final Pattern EMAIL = Pattern.compile("[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", Pattern.CASE_INSENSITIVE);
     private static final Pattern PHONE = Pattern.compile("(?<![\\w-])(?:\\+\\d[\\d ()-]{8,}\\d|\\d{11,15})(?![\\w-])");
+    private static final Pattern PAYMENT_NUMBER = Pattern.compile("(?<![\\w-])\\d(?:[ \\u00a0-]?\\d){15,19}(?![\\w-])");
     private DiagnosticRedactor() { }
 
     public static String redact(Object value) {
@@ -21,6 +22,7 @@ public final class DiagnosticRedactor {
         text = SECRET.matcher(text).replaceAll("$1=[скрыто]");
         text = URL.matcher(text).replaceAll("[ссылка скрыта]");
         text = EMAIL.matcher(text).replaceAll("[email скрыт]");
+        text = PAYMENT_NUMBER.matcher(text).replaceAll("[платёжный номер скрыт]");
         text = PHONE.matcher(text).replaceAll("[номер скрыт]");
         return text.length() > 2000 ? text.substring(0, 2000) + "…" : text;
     }

@@ -139,6 +139,14 @@ class ManagerControlInvoiceDiagnosticsTest {
     }
 
     @Test
+    void stalePreviousAmountIsNotDescribedAsFailureToDeliverCurrentAmount() {
+        var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION,
+                "previous_delivery_context_changed: old 1250 current 2500");
+        assertThat(reason(invoice, List.of())).contains("Прежняя операция", "новое сообщение не создано",
+                "не повторяйте старый счёт").doesNotContain("previous_delivery_context_changed", "old 1250");
+    }
+
+    @Test
     void invoice297SeparatesThePreviousTextErrorFromCurrentUnreadyPositions() {
         var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION,
                 "409 CONFLICT: Нельзя отправить заказ в публикацию: текст отзыва уже опубликован ранее. "

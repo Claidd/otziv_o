@@ -316,7 +316,7 @@
                   }
                 </div>
               }
-              @if (invoiceProblemRaw()) {
+              @if (invoiceProblemRaw() && !attentionHasPreviousDeliveryConflict()) {
                 <code>{{ invoiceProblemRaw() }}</code>
               }
               @if (invoicePaymentNotificationError()) {
@@ -326,7 +326,7 @@
           </section>
         }
 
-        @if (invoiceNeedsAttention()) {
+        @if (invoiceNeedsAttention() && !attentionHasPreviousDeliveryConflict()) {
           <section class="side-group side-group--alert" aria-labelledby="invoice-side-fix">
             <header class="side-group-head">
               <span class="material-icons-sharp" aria-hidden="true">build</span>

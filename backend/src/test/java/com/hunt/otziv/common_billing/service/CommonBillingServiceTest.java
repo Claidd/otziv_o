@@ -7626,6 +7626,62 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void staleInvoiceEnvelopeSurfacesAttentionWithoutRetryingOrReplacingHistory() {
+        for (String state : List.of("FAILED", "UNKNOWN", "SENDING", "QUEUED")) {
+            CommonInvoice invoice = invoice(account());
+            invoice.setStatus(CommonInvoiceStatus.READY);
+            invoice.setAmountKopecks(250_000L);
+            invoice.setPaidKopecks(0L);
+            invoice.setPaymentMessageOperationId(null);
+            invoice.setLastError(null);
+            var old = new PreparedCommonInvoiceMessage(10L, null, "whatsapp_vika", "group", "old 1250",
+                    null, false, false, false, "invoice-message:10:old", false, null, 125_000L);
+            queuedMessages.put(old.operationId(), old);
+            queuedStates.put(old.operationId(), state);
+            when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+            when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+            when(invoiceRepository.findUnsentActionCandidates(any(), any(), any(Pageable.class))).thenReturn(List.of(invoice));
+
+            assertEquals(0, service.sendUnsentActionInvoices(20));
+
+            assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+            assertTrue(invoice.getLastError().startsWith("previous_delivery_context_changed:"));
+            assertTrue(invoice.getLastError().contains("1250.00 ₽"));
+            assertTrue(invoice.getLastError().contains("2500.00 ₽"));
+            assertEquals(250_000L, invoice.getAmountKopecks());
+            assertNull(invoice.getPaymentMessageOperationId());
+            assertEquals(old, queuedMessages.get(old.operationId()));
+            assertEquals(state, queuedStates.get(old.operationId()));
+            assertThrows(ResponseStatusException.class, () -> service.sendInvoice(10L, true));
+            assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+            assertTrue(invoice.getLastError().startsWith("previous_delivery_context_changed:"));
+            verify(messageQueue, never()).retryKnownUnsent(anyString());
+            verify(messageQueue, never()).enqueue(any());
+            verifyNoInteractions(messageSender);
+        }
+    }
+
+    @Test
+    void pendingInvoiceWithMatchingEnvelopeRemainsQueuedWithoutFalseAttention() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setAmountKopecks(250_000L);
+        invoice.setPaidKopecks(0L);
+        invoice.setPaymentMessageOperationId("invoice-message:10:current");
+        var current = new PreparedCommonInvoiceMessage(10L, null, "whatsapp_vika", "group", "2500",
+                null, false, false, false, invoice.getPaymentMessageOperationId(), false, null, 250_000L);
+        queuedMessages.put(current.operationId(), current);
+        queuedStates.put(current.operationId(), "QUEUED");
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(invoiceRepository.findUnsentActionCandidates(any(), any(), any(Pageable.class))).thenReturn(List.of(invoice));
+        assertEquals(0, service.sendUnsentActionInvoices(20));
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        verify(messageQueue, never()).enqueue(any());
+        verifyNoInteractions(messageSender);
+    }
+
+    @Test
     void unsentPartiallyPaidInvoiceIsSentForRemainingAmountAndGetsReminderDate() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
@@ -8601,6 +8657,20 @@ class CommonBillingServiceTest {
         assertThrows(ResponseStatusException.class, () -> service.retryAttention(10L));
         assertFalse(item.isPaid());
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void genericResolutionCannotHideAnUnreconciledPreviousDelivery() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("previous_delivery_context_changed: old 1250 current 2500");
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+        var failure = assertThrows(ResponseStatusException.class, () -> service.resolveAttention(10L));
+        assertTrue(failure.getReason().contains("прежнюю операцию"));
+        assertThrows(ResponseStatusException.class, () -> service.retryAttention(10L));
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        verifyNoInteractions(messageSender);
     }
 
     @Test

@@ -490,8 +490,10 @@ export class CommonBillingComponent implements OnDestroy {
     this.expectedCurrentInvoiceId()
   ));
   readonly paymentInitCheckReady = computed(() => !this.invoiceLoading() && this.paymentInitCheckSnapshot() !== null);
+  readonly attentionHasPreviousDeliveryConflict = computed(() => this.attentionError().startsWith('previous_delivery_context_changed:'));
   readonly attentionRequiresManualCheck = computed(() => {
     return this.attentionHasLatePayment()
+      || this.attentionHasPreviousDeliveryConflict()
       || this.attentionHasPaymentInitCheck()
       || this.attentionIsMigrationPaymentRegistry()
       || this.attentionHasFinalCancelFailure();
@@ -548,6 +550,7 @@ export class CommonBillingComponent implements OnDestroy {
   });
   readonly invoiceProblemSteps = computed(() => this.commonInvoiceProblemSteps());
   readonly invoiceProblemActionLabel = computed(() => {
+    if (this.attentionHasPreviousDeliveryConflict()) return '';
     const notificationError = this.invoicePaymentNotificationError().toLowerCase();
     if (notificationError) {
       return 'После ручной отправки или исправления нажмите "Уведомление обработано".';
@@ -2579,6 +2582,9 @@ export class CommonBillingComponent implements OnDestroy {
 
   private humanCommonInvoiceError(error: string): string {
     const normalized = error.toLowerCase();
+    if (normalized.startsWith('previous_delivery_context_changed:')) {
+      return error.slice(error.indexOf(':') + 1).trim();
+    }
     if (normalized.startsWith('disabled:')) {
       return 'Связь выключена, а неоплаченные заказы были отключены от общего счета. Проверьте, нужно ли включить связь заново или закрыть этот хвост в контроле.';
     }
@@ -2629,6 +2635,13 @@ export class CommonBillingComponent implements OnDestroy {
   private commonInvoiceProblemSteps(): string[] {
     const notificationError = this.invoicePaymentNotificationError().toLowerCase();
     const commonError = this.invoiceProblemRaw().toLowerCase();
+    if (commonError.startsWith('previous_delivery_context_changed:')) {
+      return [
+        'Прежняя операция блокирует текущий счёт. Новое сообщение с текущей суммой ещё не создано.',
+        'Передайте администратору сверку прежней операции с журналом отправки и историей чата.',
+        'До сверки не повторяйте старый счёт и не закрывайте проверку. История прежней отправки должна сохраниться.'
+      ];
+    }
     if (notificationError.startsWith('whatsapp_group_missing')) {
       return [
         'Откройте чат компании и убедитесь, что это нужная WhatsApp-группа.',

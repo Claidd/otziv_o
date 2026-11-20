@@ -56,7 +56,80 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource(
                 "db/migration/V1_10_376__manager_problem_subject_index.sql")).execute(jdbc.getDataSource());
         collector = new ManagerProblemEvidenceCollector(jdbc);
+        jdbc.execute("DROP TABLE IF EXISTS managers");
+        jdbc.execute("CREATE TABLE managers(manager_id BIGINT,user_id BIGINT)");
+        jdbc.update("INSERT INTO managers VALUES(2,30),(3,31)");
         jdbc.update("INSERT INTO manager_daily_controls(daily_control_id,manager_id) VALUES(1,2)");
+    }
+
+    @Test
+    void invoiceAuditIncludesDirectStaffRemindersWithAttributionAndEditProvenance() {
+        invoiceFixture();
+        jdbc.update("UPDATE common_billing_accounts SET invoice_company_id=7");
+        jdbc.update("UPDATE orders SET order_company=8 WHERE order_id=25734");
+        staffMessage(57822, 7, 2, 30, "INCOMING", "Здравствуйте, оплатите, пожалуйста", false);
+        // Shared chat for five companies of one manager is not ambiguous (production #57822).
+        jdbc.update("UPDATE client_chat_messages SET matched_company_count=5 WHERE id=57822");
+        staffMessage(57823, 8, 2, 31, "OUTGOING", "Проверьте тексты", false);
+        jdbc.update("UPDATE client_chat_messages SET edited_text='Уточнение https://private.test/token',edited_at='2026-11-18 13:00:00',edit_count=1 WHERE id=57822");
+
+        var facts = collector.collect(10L).facts();
+
+        assertThat(facts).anyMatch(f -> f.reference().equals("message:57822:recorded_text")
+                && f.subject().equals("recorded_chat_message") && f.value().contains("оплатите, пожалуйста"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("message:57822:direction") && f.value().equals("INCOMING"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("message:57822:matched_company_count") && f.value().equals("5"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("message:57822:author_is_audited_manager") && List.of("1", "true").contains(f.value()));
+        assertThat(facts).anyMatch(f -> f.reference().equals("message:57823:author_is_audited_manager") && List.of("0", "false").contains(f.value()));
+        assertThat(facts).anyMatch(f -> f.reference().equals("message:57822:edited_text") && f.value().contains("Уточнение"));
+        assertThat(facts.toString()).doesNotContain("private.test");
+        assertThat(facts).anyMatch(f -> f.field().equals("staff_chat_scope") && f.value().contains("не прочтение клиентом, поступление оплаты"));
+        assertThat(collector.collect(10L).facts()).isEqualTo(facts); // polling does not invent new evidence
+    }
+
+    @Test
+    void invoiceStaffEvidenceExcludesOtherScopesAmbiguousRoutingAndFutureEvents() {
+        invoiceFixture();
+        jdbc.update("UPDATE common_billing_accounts SET invoice_company_id=7");
+        jdbc.update("UPDATE orders SET order_company=8 WHERE order_id=99"); // removed membership
+        staffMessage(1, 7, 2, 30, "INCOMING", "visible", false);
+        staffMessage(2, 7, 3, 31, "INCOMING", "other manager", false);
+        staffMessage(3, 9, 2, 30, "INCOMING", "other company", false);
+        staffMessage(4, 8, 2, 30, "INCOMING", "removed membership", false);
+        staffMessage(5, 7, 2, 30, "INCOMING", "ambiguous", true);
+        for (long id : List.of(6L, 7L, 8L, 9L, 10L)) staffMessage(id, 7, 2, 30, "INCOMING", "excluded", false);
+        jdbc.update("UPDATE client_chat_messages SET sender_role='CLIENT' WHERE id=6");
+        jdbc.update("UPDATE client_chat_messages SET message_at='2026-07-01' WHERE id=7");
+        jdbc.update("UPDATE client_chat_messages SET message_at=DATE_ADD(NOW(),INTERVAL 1 DAY) WHERE id=8");
+        jdbc.update("UPDATE client_chat_messages SET created_at=DATE_ADD(NOW(),INTERVAL 1 DAY) WHERE id=9");
+        jdbc.update("UPDATE client_chat_messages SET matched_company_count=2,routing_ambiguous=TRUE WHERE id=10");
+        assertThat(collector.collect(10L).facts().stream().filter(f -> f.subject().equals("recorded_chat_message")))
+                .singleElement().satisfies(f -> assertThat(f.value()).isEqualTo("visible"));
+        jdbc.update("UPDATE common_billing_accounts SET manager_id=99");
+        jdbc.update("UPDATE orders SET order_manager=99");
+        assertThat(collector.collect(10L).facts()).noneMatch(f -> f.subject().equals("recorded_chat_message"));
+    }
+
+    @Test
+    void invoiceChatHistoryIsBoundedAndNeverClaimsMissingMessagesDidNotExist() {
+        invoiceFixture();
+        jdbc.update("UPDATE common_billing_accounts SET invoice_company_id=7");
+        for (int id=1; id<=22; id++) staffMessage(id,7,2,30,"INCOMING","reminder",false);
+        var facts=collector.collect(10L).facts();
+        assertThat(facts.stream().filter(f -> f.subject().equals("recorded_chat_message"))).hasSize(20);
+        assertThat(facts).noneMatch(f -> f.reference().startsWith("message:1:") || f.reference().startsWith("message:2:"));
+        assertThat(facts).anyMatch(f -> f.field().equals("staff_chat_scope") && f.value().contains("последние 20")
+                && f.value().contains("не доказывает отсутствие"));
+        jdbc.update("UPDATE common_invoices SET created_at=NULL");
+        assertThat(collector.collect(10L).facts()).noneMatch(f -> f.subject().equals("recorded_chat_message"));
+    }
+
+    private void staffMessage(long id,long company,long manager,long actor,String direction,String text,boolean ambiguous) {
+        jdbc.update("""
+                INSERT INTO client_chat_messages(id,company_id,manager_id,actor_user_id,platform,direction,sender_role,
+                    message_at,created_at,message_text,routing_ambiguous,matched_company_count)
+                VALUES(?,?,?,?,'WHATSAPP',?,'STAFF','2026-11-18 12:05:46','2026-11-18 12:05:48',?,?,1)
+                """,id,company,manager,actor,direction,text,ambiguous);
     }
 
     @Test

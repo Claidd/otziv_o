@@ -746,6 +746,11 @@ public class ManagerControlInvoiceDiagnostics {
             List<CommonInvoiceOrder> items
     ) {
         String error = safe(rawError).toLowerCase(Locale.ROOT);
+        if (error.startsWith("previous_delivery_context_changed:")) {
+            return "Прежняя операция отправки относится к другой сумме или версии счёта и блокирует текущую. "
+                    + "Это не неудачная отправка новой суммы: новое сообщение не создано. "
+                    + "Передайте администратору сверку прежней операции и чата; не повторяйте старый счёт и не закрывайте проверку до сверки.";
+        }
         var heldTooLong = autoresponderWait(invoice);
         if (heldTooLong.isPresent()) {
             return "Напоминание по счёту ещё не отправлялось: больше " + (AUTORESPONDER_WAIT_LIMIT_HOURS / 24)
