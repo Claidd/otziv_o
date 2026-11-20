@@ -18,6 +18,24 @@ import {
   maxGroupLinkCommand
 } from './manager-control.component';
 
+describe('withdrawn audit presentation', () => {
+  const page = ManagerControlComponent.prototype;
+  it('does not present a withdrawn report as accepted or unanswered questions', () => {
+    const review = { status: 'COMPLETED', answerQuality: 'REPORT_WITHDRAWN', autoCompleted: true,
+      openDisputeCount: 0, questionCount: 2, acceptedAnswerCount: 0, totalReviewSeconds: 0,
+      issues: [{ status: 'WITHDRAWN' }, { status: 'WITHDRAWN' }] } as any;
+    expect(page.reportReviewStatus(review)).toBe('проверка закрыта · замечания сняты');
+    expect(page.reportReviewProgress(review)).toBe('действующих вопросов нет · снято 2');
+  });
+  it('retains actual accepted answers when only part of a report was withdrawn', () => {
+    const review = { status: 'COMPLETED', answerQuality: 'PASSED_WITH_WITHDRAWALS',
+      openDisputeCount: 0, questionCount: 2, acceptedAnswerCount: 1, totalReviewSeconds: 0,
+      issues: [{ status: 'WITHDRAWN' }, { status: 'ANSWERED' }] } as any;
+    expect(page.reportReviewStatus(review)).toBe('отчёт принят');
+    expect(page.reportReviewProgress(review)).toBe('1/1 действующих вопросов · снято 1');
+  });
+});
+
 describe('persistent repair result', () => {
   it('keeps the actual 409 reason after a refreshed card and clears it for a new successful check', () => {
     const card = { controlEntityId: 8788, type: 'ORDER', title: 'Fixture', itemStatus: 'OPEN',

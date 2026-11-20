@@ -46,6 +46,34 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 
 @ExtendWith(MockitoExtension.class)
 class ManagerReportReviewTelegramServiceTest {
+    @Test void savedCommunicationAnswerIsQueuedOncePerEvidenceChangeWithoutSendingAnotherQuestion() {
+        var review=new ManagerReportReviewSession(); review.setId(215L); review.setManager(Manager.builder().id(3L).build());
+        review.setCurrentQuestionIndex(0);review.setAnswersJson("original-answer-json");review.setAnswerQuality("NEEDS_CONTEXT");
+        review.setRecoveryAwaitingContext(true);review.setAiUnavailableStartedAt(LocalDateTime.now().minusHours(1));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как напомнили?",List.of("действие"),List.of(10217L));
+        var submitted=java.time.ZonedDateTime.parse("2026-11-19T13:00:00+08:00");
+        String answer="Напоминание написала в 12:05";
+        when(qualityService.latestAnswerRecordedAt("original-answer-json",0)).thenReturn(submitted);
+        when(qualityService.previousAcceptedContext("original-answer-json",0)).thenReturn(List.of(answer));
+        when(issueService.isPending(review,0)).thenReturn(true);
+        String header=org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"answerEvidenceHeader",0,submitted,answer);
+        var snapshot=new com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewEvent();
+        snapshot.setEventType("ANSWER_EVIDENCE_SNAPSHOT");
+        snapshot.setPayloadText(header+new ManagerReportReviewEvidenceSnapshotService(new com.fasterxml.jackson.databind.ObjectMapper()).encode("original facts"));
+        when(eventRepository.findByReview_IdOrderByCreatedAtAsc(215L)).thenReturn(List.of(snapshot));
+        String fresh="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"+RecordedCommunicationEvidenceTest.message("57822","1","2026-11-19T12:05:46","0");
+        when(taskContextService.refreshSources("",List.of(10217L),3L)).thenReturn(fresh);
+        assertThat((Boolean)org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"refreshCommunicationAnswerContext",review,List.of(question))).isTrue();
+        assertThat(review.isRecoveryAwaitingContext()).isFalse();
+        assertThat(review.getAnswersJson()).isEqualTo("original-answer-json");
+        String fingerprint=review.getRecoveryContextFingerprint();
+        review.setRecoveryAwaitingContext(true); review.setRecoveryContextCheckedAt(LocalDateTime.now().minusMinutes(16));
+        assertThat((Boolean)org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"refreshCommunicationAnswerContext",review,List.of(question))).isFalse();
+        assertThat(review.isRecoveryAwaitingContext()).isTrue();
+        assertThat(review.getRecoveryContextFingerprint()).isEqualTo(fingerprint);
+        verify(telegramService,never()).sendMessage(anyLong(),any(),any());
+        verify(qualityService,never()).assessAnswer(any(),any(),any(),org.mockito.ArgumentMatchers.anyBoolean());
+    }
 
     @Mock private ManagerReportReviewSessionRepository sessionRepository;
     @Mock private ManagerReportReviewEventRepository eventRepository;
@@ -618,9 +646,10 @@ class ManagerReportReviewTelegramServiceTest {
                 eq(700L), text.capture(), eq("HTML"), any()
         );
         assertThat(text.getValue())
-                .contains("Подумайте")
-                .contains("какой принцип работы здесь важен")
-                .contains("Готовой формулировки нет")
+                .contains("Ответьте коротко по этому случаю")
+                .contains("когда и как вы сами проверите результат")
+                .contains("обещать за клиента дату ответа или оплаты не нужно")
+                .doesNotContain("какой принцип работы здесь важен")
                 .doesNotContain("название компании")
                 .doesNotContain("фактический ответ менеджера")
                 .doesNotContain("правильный ответ или необходимое действие");

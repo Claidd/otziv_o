@@ -176,6 +176,7 @@ public class ManagerControlInvoiceDiagnostics {
         findActionInvoiceCandidates(manager).stream()
                 .filter(invoice -> !paymentRemindersOnSchedule(invoice, now))
                 .filter(invoice -> !handledAutomatically(invoice, now))
+                .filter(invoice -> invoice.getStatus() != CommonInvoiceStatus.BAN || isCommonInvoiceManagerControlProblem(invoice, now))
                 .filter(invoice -> invoice.getStatus() != CommonInvoiceStatus.UNPAID || unpaidAttention(invoice, now).isPresent())
                 .forEach(invoice -> byId.putIfAbsent(invoice.getId(), invoice));
         // Reminders refresh an ordinary invoice every few days, so the stale rule never sees it.
@@ -303,6 +304,11 @@ public class ManagerControlInvoiceDiagnostics {
             return true;
         }
         CommonInvoiceStatus status = invoice.getStatus();
+        if (status == CommonInvoiceStatus.BAN) {
+            if (unpaidCycle == null) return true;
+            try { return !unpaidCycle.completedBan(invoice.getId()); }
+            catch (RuntimeException unavailable) { return true; }
+        }
         if (status == CommonInvoiceStatus.UNPAID) {
             return unpaidAttention(invoice, now).isPresent();
         }

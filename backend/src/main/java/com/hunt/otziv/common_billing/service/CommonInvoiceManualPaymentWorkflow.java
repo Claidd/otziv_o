@@ -1124,6 +1124,16 @@ public class CommonInvoiceManualPaymentWorkflow {
         settlementService.mergeInvoicePaymentMethod(invoice, method);
     }
 
+    boolean hasUnresolvedBanPayment(CommonInvoice invoice) {
+        // An archived reference is history, not confirmation of cancellation by the bank.
+        // Keep every unknown/live/paid reference visible for reconciliation.
+        return !normalize(invoice.getTbankPaymentId()).isBlank()
+                || !normalize(invoice.getPaymentUrl()).isBlank()
+                || paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(invoice.getId()).stream()
+                    .anyMatch(ref -> !Set.of(PAYMENT_REF_CANCELED, "REJECTED", "EXPIRED", "REFUNDED", "REVERSED")
+                            .contains(normalize(ref.getStatus())));
+    }
+
     boolean hasFrozenCommonPaymentRoute(CommonInvoice invoice) {
         return CommonInvoiceRouteState.hasFrozenCommonPaymentRoute(invoice);
     }

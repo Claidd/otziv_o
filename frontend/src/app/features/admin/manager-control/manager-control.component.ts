@@ -636,6 +636,7 @@ export class ManagerControlComponent implements OnInit {
       case 'COMPLETED':
         if (review.answerQuality === 'AUDIT_RESET') return 'закрыт при запуске обновлённого аудита';
         if (review.answerQuality === 'AUDIT_DISABLED') return 'закрыт: аудит отключён';
+        if (review.answerQuality === 'REPORT_WITHDRAWN') return 'проверка закрыта · замечания сняты';
         if (review.autoCompleted) return 'принят автоматически · обязательных вопросов нет';
         return 'отчёт принят';
       case 'DISPUTE_PENDING':
@@ -661,6 +662,8 @@ export class ManagerControlComponent implements OnInit {
     const withdrawnIssues = review.issues?.filter((issue) => issue.status === 'WITHDRAWN').length ?? 0;
     const questions = validIssues.length > 0
       ? `${answeredIssues}/${validIssues.length} действующих вопросов`
+      : withdrawnIssues > 0
+        ? 'действующих вопросов нет'
       : review.questionCount > 0
         ? `${review.acceptedAnswerCount}/${review.questionCount} ответов`
       : 'вопросы ещё не начаты';
@@ -711,6 +714,10 @@ export class ManagerControlComponent implements OnInit {
       case 'AI_VERIFICATION_PAUSED': return 'Проверка приостановлена: ИИ недоступен';
       case 'AI_VERIFICATION_RESUMED': return 'Проверка возобновлена';
       case 'OWNER_VERIFICATION_REQUESTED': return 'Проверка передана владельцу';
+      case 'COMMUNICATION_EVIDENCE_REFRESHED': return 'Найдены данные для повторной проверки сохранённого ответа';
+      case 'ANSWER_ASSESSMENT_VERSION': return 'Сохранена версия оценки ответа';
+      case 'ANSWER_EVIDENCE_SUPPLEMENT': return 'Сохранены дополнительные исторические факты';
+      case 'SYSTEM_SOURCE_QUESTION_WITHDRAWN': return 'Вопрос снят после сверки источника';
       default: return eventType;
     }
   }
@@ -721,7 +728,7 @@ export class ManagerControlComponent implements OnInit {
       case 'ANSWERED': return 'ответ принят';
       case 'DISPUTE_PENDING': return 'ожидается описание спора';
       case 'DISPUTED': return 'оспорено';
-      case 'WITHDRAWN': return 'снято владельцем';
+      case 'WITHDRAWN': return 'снято после проверки';
       case 'NEEDS_CONTEXT': return 'нужна дополнительная проверка';
       default: return status;
     }

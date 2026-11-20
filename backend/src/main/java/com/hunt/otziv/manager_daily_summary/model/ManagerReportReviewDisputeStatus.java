@@ -5,5 +5,7 @@ public enum ManagerReportReviewDisputeStatus {
     OPEN,
     ACCEPTED,
     REJECTED,
-    NEEDS_CONTEXT
+    NEEDS_CONTEXT,
+    /** System request replaced by source resolution/new evidence; never an owner's acceptance. */
+    SUPERSEDED
 }
