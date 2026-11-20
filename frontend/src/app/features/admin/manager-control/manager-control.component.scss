@@ -1675,6 +1675,17 @@ p {
   background: #fff2f5;
 }
 
+.detail-example-text .manager-action-note.unconfirmed {
+  border-color: #c9a654;
+  color: #725316;
+  background: #fff5d7;
+}
+
+:host-context(.otziv-dark-theme) .detail-example-text .manager-action-note.unconfirmed {
+  color: #f4d98c;
+  background: #3d3521;
+}
+
 .detail-example-text .worker-explanation-note {
   display: grid;
   gap: 6px;

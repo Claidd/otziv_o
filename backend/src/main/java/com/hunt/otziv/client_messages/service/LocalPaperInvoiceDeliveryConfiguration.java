@@ -53,6 +53,15 @@ public class LocalPaperInvoiceDeliveryConfiguration {
                         ?ClientMessageSendResult.sent("Fixture",id):ClientMessageSendResult.failed("operation_unknown","Fixture receipt missing");
             }
             @Override public ClientMessageSendResult recoverRecordedOutcomeFromChat(String operation,java.time.LocalDateTime preparedAt) {return recordedOutcome(operation);}
+            @Override public boolean confirmsUnsentGatewayRejection(String operation) {
+                if (!sandbox || operation == null || operation.isBlank()) return false;
+                // Simulate a reachable gateway with NOT_FOUND. The production caller still requires
+                // a locked FAILED/gateway_not_ready command with no dispatch marker and no lease.
+                try {
+                    var response=rest.postForObject("http://paper-invoice-fixture:8099/delivery-receipt",Map.of("operationId",operation),Map.class);
+                    return response != null && response.isEmpty();
+                } catch (RuntimeException unavailable) { return false; }
+            }
             @Override public boolean hasSettledUncertainOperation(String operation) {return false;}
             @Override public boolean publicationProgressEnabled(Long company) {return false;}
         };

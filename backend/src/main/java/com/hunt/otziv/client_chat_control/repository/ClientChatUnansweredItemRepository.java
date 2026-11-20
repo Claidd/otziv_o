@@ -146,6 +146,8 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
     @Query("""
         SELECT DISTINCT item
         FROM ClientChatUnansweredItem item
+        LEFT JOIN FETCH item.manager manager
+        LEFT JOIN FETCH manager.user
         LEFT JOIN FETCH item.company
         LEFT JOIN FETCH item.resolutionMessage
         WHERE item.manager.id = :managerId
@@ -166,8 +168,8 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
     @Query("""
         SELECT DISTINCT item
         FROM ClientChatUnansweredItem item
-        JOIN item.manager manager
-        JOIN manager.user managerUser
+        JOIN FETCH item.manager manager
+        JOIN FETCH manager.user managerUser
         LEFT JOIN FETCH item.company
         LEFT JOIN FETCH item.resolutionMessage
         WHERE manager.id = :managerId

@@ -37,7 +37,8 @@ public class CommonInvoiceMessageWorker {
                     if (result == null || (!result.sent() && !ClientMessageDelivery.isKnownUnsent(result))) {
                         result = delivery.recoverRecordedOutcomeFromChat(claim.operationId(), queue.preparedAt(claim.operationId()));
                     }
-                } else if (!invoices.messageDeliveryEnabled()) {
+                } else if (!invoices.messageDeliveryEnabled()
+                        || (prepared.automaticRecovery() && !invoices.invoiceRecoveryEnabled())) {
                     paused = true;
                     result = ClientMessageSendResult.failed("live_disabled", "Delivery paused");
                 } else if (!invoices.queuedMessageMayDispatch(prepared)) {
@@ -67,11 +68,12 @@ public class CommonInvoiceMessageWorker {
             PreparedCommonInvoiceMessage prepared) {
         if (prepared == null || prepared.alreadyConfirmed() || prepared.invoiceId() == null) return null;
         boolean repricing = prepared.badReviewNotice();
-        if (!repricing && (!prepared.reminder() || prepared.manual())) return null;
+        if (!repricing && !prepared.automaticRecovery() && (!prepared.reminder() || prepared.manual())) return null;
         if (dispatchBudget == null) return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(
                 false, "automation_paused", "Правила автоответчика недоступны", null);
         return dispatchBudget.reserveForSender(
-                prepared.reminder() ? com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER
+                prepared.automaticRecovery() ? com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.INVOICE_RECOVERY
+                        : prepared.reminder() ? com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER
                         : com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.BAD_REVIEW_INVOICE,
                 "COMMON_INVOICE",
                 prepared.invoiceId(),

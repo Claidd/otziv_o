@@ -1157,6 +1157,17 @@ public class CommonInvoiceInitializationService {
     }
 
     void ensureCommonPaymentRouteSelected(CommonInvoice invoice, long remainingKopecks, Long reviewedProfileId) {
+        ensureCommonPaymentRouteSelected(invoice, remainingKopecks, reviewedProfileId, false);
+    }
+
+    /** Called only after billing has retired the old command under lock with proof that it never sent. */
+    void ensureUnstartedRecoveryPaymentRouteSelected(CommonInvoice invoice, long remainingKopecks) {
+        contractorPaymentLiveRoutingService.requireClosedUnsentCommonInvoiceAttempt(invoice);
+        ensureCommonPaymentRouteSelected(invoice, remainingKopecks, null, true);
+    }
+
+    private void ensureCommonPaymentRouteSelected(CommonInvoice invoice, long remainingKopecks,
+            Long reviewedProfileId, boolean verifiedUnstartedRecovery) {
         if (invoice == null || invoice.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден");
         }
@@ -1205,7 +1216,9 @@ public class CommonInvoiceInitializationService {
                     : contractorCommonPaymentRoute(invoice, liveAllocation);
         } else if (contractorPaymentLiveRoutingService.enabledForNewRoutes()) {
             try {
-                liveAllocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks));
+                liveAllocation = requireLiveCommonInvoiceAllocation(invoice, verifiedUnstartedRecovery
+                        ? contractorPaymentLiveRoutingService.reserveAfterUnsentCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks)
+                        : contractorPaymentLiveRoutingService.reserveForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks));
                 route = isContractorRecipient(liveAllocation) ? contractorCommonPaymentRoute(invoice, liveAllocation) : invoiceRouteSelector.selectCommonInvoiceOwnerAutomaticRoute(routeManager, remainingKopecks);
             } catch (RuntimeException exception) {
                 notifyCommonInvoiceRoutingFailure(invoice, routeOrders, exception);

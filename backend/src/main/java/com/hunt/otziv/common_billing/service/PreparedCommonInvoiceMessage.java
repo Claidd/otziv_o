@@ -17,6 +17,10 @@ record PreparedCommonInvoiceMessage(Long invoiceId, ClientMessageDelivery.Target
         return operationId != null && operationId.startsWith("bad-review-invoice:");
     }
 
+    boolean automaticRecovery() {
+        return operationId != null && operationId.startsWith("invoice-recovery:");
+    }
+
     PreparedCommonInvoiceMessage asReviewedUpdate() {
         return new PreparedCommonInvoiceMessage(invoiceId, chatCompany, managerClientId, groupId,
                 "Обновлённый общий счёт. Предыдущая сумма больше не актуальна.\n\n" + message, telegramCopyTransferNumber,

@@ -57,6 +57,85 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
                 "original-client", "original-group", text, "frozen-copy", false, true, false, "invoice-message:test", false, null, 120000);
     }
 
+    @Test void retiresOnlyUnstartedCommandsWithoutEitherProviderRecordAndKeepsHistory() {
+        var delivery = org.mockito.Mockito.mock(ClientMessageDelivery.class);
+        org.mockito.Mockito.when(delivery.hasNoRecordedOperation("invoice-message:test")).thenReturn(true);
+        tx.executeWithoutResult(status -> queue.enqueue(draft("old amount")));
+        jdbc.update("UPDATE common_invoice_message_queue SET state='FAILED',error_code='gateway_not_ready',attempts=5");
+        assertThat(tx.<Boolean>execute(s -> queue.retireUnstarted(10L, "invoice-message:test", delivery))).isTrue();
+        assertThat(queue.status("invoice-message:test").status()).isEqualTo("SUPERSEDED");
+        assertThat(queue.status("invoice-message:test").attempts()).isEqualTo(5);
+        assertThat(queue.snapshot("invoice-message:test").message()).isEqualTo("old amount");
+        assertThat(queue.unresolved(10L)).isEmpty();
+        assertThat(tx.<Boolean>execute(s -> queue.retireUnstarted(10L, "invoice-message:test", delivery))).isFalse();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"UNKNOWN", "SENDING", "SENT", "started", "lease", "claim", "provider", "uncertain", "replacement"})
+    void recoveryCannotRetireUncertainOrOwnedCommands(String condition) {
+        var delivery = org.mockito.Mockito.mock(ClientMessageDelivery.class);
+        org.mockito.Mockito.when(delivery.hasNoRecordedOperation("invoice-message:test")).thenReturn(!condition.equals("provider"));
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        jdbc.update("UPDATE common_invoice_message_queue SET state='FAILED',error_code='gateway_not_ready'");
+        switch (condition) {
+            case "UNKNOWN", "SENDING", "SENT" -> jdbc.update("UPDATE common_invoice_message_queue SET state=?", condition);
+            case "started" -> jdbc.update("UPDATE common_invoice_message_queue SET dispatch_started_at=NOW(6)");
+            case "lease" -> jdbc.update("UPDATE common_invoice_message_queue SET lease_until=NOW(6)-INTERVAL 1 HOUR");
+            case "claim" -> jdbc.update("UPDATE common_invoice_message_queue SET claim_token='owner'");
+            case "uncertain" -> jdbc.update("UPDATE common_invoice_message_queue SET error_code='operation_unknown'");
+            case "replacement" -> jdbc.update("UPDATE common_invoice_message_queue SET replacement_operation_id='replacement'");
+            default -> { }
+        }
+        assertThat(tx.<Boolean>execute(s -> queue.retireUnstarted(10L, "invoice-message:test", delivery))).isFalse();
+        assertThat(queue.status("invoice-message:test").status()).isNotEqualTo("SUPERSEDED");
+    }
+
+    @Test void recoveryRetirementRollsBackWhenNewInvoicePreparationFails() {
+        var delivery = org.mockito.Mockito.mock(ClientMessageDelivery.class);
+        org.mockito.Mockito.when(delivery.hasNoRecordedOperation("invoice-message:test")).thenReturn(true);
+        tx.executeWithoutResult(s -> queue.enqueue(draft("original")));
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> {
+            assertThat(queue.retireUnstarted(10L, "invoice-message:test", delivery)).isTrue();
+            throw new IllegalStateException("new invoice is not ready");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(queue.unresolved(10L)).isPresent();
+        assertThat(queue.status("invoice-message:test").status()).isEqualTo("QUEUED");
+    }
+
+    @Test void recoveredInvoiceKeepsOneNewCommandAndAnExplicitLinkToItsOldVersion() {
+        var delivery = org.mockito.Mockito.mock(ClientMessageDelivery.class);
+        org.mockito.Mockito.when(delivery.hasNoRecordedOperation("invoice-message:test")).thenReturn(true);
+        var old = draft("old amount");
+        var replacement = new PreparedCommonInvoiceMessage(10L, old.chatCompany(), old.managerClientId(),
+                old.groupId(), "new amount", old.telegramCopyTransferNumber(), false, false, false,
+                "invoice-recovery:10:test", false, null, 250000);
+        tx.executeWithoutResult(s -> {
+            queue.enqueue(old);
+            assertThat(queue.retireUnstarted(10L, old.operationId(), delivery)).isTrue();
+            queue.enqueue(replacement);
+            queue.linkRetiredReplacement(10L, old.operationId(), replacement.operationId());
+        });
+        assertThat(queue.unresolved(10L)).contains(replacement);
+        assertThat(queue.snapshot(old.operationId())).isEqualTo(old);
+        assertThat(jdbc.queryForObject("SELECT replacement_operation_id FROM common_invoice_message_queue WHERE operation_id=?",
+                String.class, old.operationId())).isEqualTo(replacement.operationId());
+        tx.executeWithoutResult(s -> queue.enqueue(replacement));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM common_invoice_message_queue WHERE state='QUEUED'", Integer.class)).isEqualTo(1);
+    }
+
+    @Test void frozenGatewayIntentNeedsBothDurableRejectionAndLiveAbsenceEvidence() {
+        var delivery = org.mockito.Mockito.mock(ClientMessageDelivery.class);
+        tx.executeWithoutResult(s -> queue.enqueue(draft("original")));
+        jdbc.update("UPDATE common_invoice_message_queue SET state='FAILED',error_code='gateway_not_ready'");
+        assertThat(tx.<Boolean>execute(s -> queue.retireUnstarted(10L,"invoice-message:test",delivery,false))).isFalse();
+        jdbc.update("UPDATE common_invoice_message_queue SET state='UNKNOWN'");
+        assertThat(tx.<Boolean>execute(s -> queue.retireUnstarted(10L,"invoice-message:test",delivery,true))).isFalse();
+        jdbc.update("UPDATE common_invoice_message_queue SET state='FAILED',error_code='operation_unknown'");
+        assertThat(tx.<Boolean>execute(s -> queue.retireUnstarted(10L,"invoice-message:test",delivery,true))).isFalse();
+        jdbc.update("UPDATE common_invoice_message_queue SET error_code='gateway_not_ready'");
+        assertThat(tx.<Boolean>execute(s -> queue.retireUnstarted(10L,"invoice-message:test",delivery,true))).isTrue();
+    }
+
     @Test void migrationRetiresOnlyProvenUnstartedFullyPaidCommands() throws Exception {
         jdbc.execute("CREATE TABLE common_invoices(invoice_id BIGINT PRIMARY KEY,status VARCHAR(30),amount_kopecks BIGINT,paid_kopecks BIGINT)");
         jdbc.execute("CREATE TABLE whatsapp_business_send_operations(operation_id VARCHAR(160) PRIMARY KEY)");

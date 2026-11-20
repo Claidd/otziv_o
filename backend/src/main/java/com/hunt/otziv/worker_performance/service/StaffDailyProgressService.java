@@ -1016,28 +1016,7 @@ public class StaffDailyProgressService {
                        lifecycle.excluded AS lifecycle_excluded,
                        lifecycle.exclusion_reason AS lifecycle_exclusion_reason
                 FROM (
-                    SELECT o.order_worker AS worker_id,
-                           'order' AS item_type,
-                           e.order_id AS item_id,
-                           COALESCE((
-                               SELECT MAX(prev.created_at)
-                               FROM business_audit_events prev
-                               WHERE prev.order_id = e.order_id
-                                 AND prev.action = 'order_status_changed'
-                                 AND prev.new_value = e.old_value
-                                 AND prev.created_at < e.created_at
-                           ), TIMESTAMP(o.order_created) + INTERVAL 10 HOUR) AS opened_at,
-                           e.created_at AS done_at
-                    FROM business_audit_events e
-                    JOIN orders o ON o.order_id = e.order_id
-                    WHERE o.order_worker IN (:workerIds)
-                      AND e.action = 'order_status_changed'
-                      AND e.created_at >= :from
-                      AND e.created_at < :to
-                      AND e.old_value IN ('Новый', 'Коррекция')
-                      AND COALESCE(e.new_value, '') NOT IN ('Новый', 'Коррекция')
-                      AND o.order_waiting_for_client = FALSE
-
+                """ + OrderCompletionQuery.SQL + """
                     UNION ALL
 
                     SELECT r.review_worker AS worker_id,

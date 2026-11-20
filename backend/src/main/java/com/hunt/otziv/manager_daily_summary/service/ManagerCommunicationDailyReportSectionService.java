@@ -208,6 +208,7 @@ public class ManagerCommunicationDailyReportSectionService {
         if (!ai.isBlank()) {
             analysis.append(ai);
         } else {
+            if (!todayClosed.isEmpty()) analysis.append("<b>AI-разбор не получен.</b> Ниже сводка по записям системы; она не заменяет содержательную проверку переписки.\n");
             analysis.append(fallbackAnalysis(todayClosed, examples, missingReply, messageSeries));
         }
 

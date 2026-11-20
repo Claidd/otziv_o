@@ -24,6 +24,7 @@ class ClientContactHealthMySqlIntegrationTest {
     @Container static final MySQLContainer MYSQL = new MySQLContainer("mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383")
             .withDatabaseName("contact_fixture").withUsername("root").withPassword(UUID.randomUUID().toString());
     JdbcTemplate jdbc; ClientContactHealthService health; TelegramChatAccess telegram; WhatsAppChatAccess whatsapp;
+    com.hunt.otziv.maxbot.api.MaxChatAccess max;
     @BeforeEach void setup() {
         var data = new DriverManagerDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
         jdbc = new JdbcTemplate(data);
@@ -45,14 +46,33 @@ class ClientContactHealthMySqlIntegrationTest {
         var settings=mock(BackgroundAutomationSettings.class);
         when(settings.getStringFresh(anyString(),anyString())).thenAnswer(call -> call.getArgument(1));
         telegram=mock(TelegramChatAccess.class);whatsapp=mock(WhatsAppChatAccess.class);
-        health=new ClientContactHealthService(jdbc,new ArchiveCompanyMessageCandidateRepository(new NamedParameterJdbcTemplate(jdbc)),settings,telegram,whatsapp);
+        max=mock(com.hunt.otziv.maxbot.api.MaxChatAccess.class);
+        health=new ClientContactHealthService(jdbc,new ArchiveCompanyMessageCandidateRepository(new NamedParameterJdbcTemplate(jdbc)),settings,telegram,whatsapp,max);
     }
     ClientMessageDelivery.Target target(){return new ClientMessageDelivery.Target(2116L,"Pervoцвет","https://t.me/example",-1001L,null);}
     void unavailable(){when(telegram.check(-1001)).thenReturn(new TelegramChatAccess.Result("UNAVAILABLE","chat_not_found"));health.recheck(2116L);}
+    @Test void closedMaxChatUsesTheSameIdleExclusionAndActiveOrderEscalation() {
+        jdbc.update("UPDATE companies SET company_url_chat='https://max.ru/join/example',company_max_group_chat_id=-7445");
+        when(max.check(-7445)).thenReturn(new com.hunt.otziv.maxbot.api.MaxChatAccess.Result("UNAVAILABLE","max_chat_closed"));
+        var result=health.recheck(2116L);
+        assertThat(result.reason()).isEqualTo("max_chat_closed");
+        assertThat(result.excluded()).isTrue();
+        assertThat(health.managerIssues(13L)).isEmpty();
+        jdbc.update("UPDATE orders SET order_status=2");
+        assertThat(health.excludedCompanies()).isEmpty();
+        assertThat(health.managerIssues(13L)).extracting(com.hunt.otziv.client_messages.api.ClientContactHealth.Contact::reason).containsExactly("max_chat_closed");
+        when(max.check(-7445)).thenReturn(new com.hunt.otziv.maxbot.api.MaxChatAccess.Result("UNKNOWN","access_unconfirmed"));
+        assertThat(health.recheck(2116L).reason()).isEqualTo("max_chat_closed");
+        when(max.check(-7445)).thenReturn(new com.hunt.otziv.maxbot.api.MaxChatAccess.Result("AVAILABLE","member"));
+        health.recheck(2116L);
+        assertThat(health.managerIssues(13L)).isEmpty();
+        verifyNoInteractions(telegram,whatsapp);
+    }
     @Test void onlyStoppedWithoutWorkIsExcludedAndLiveWorkMovesItToManagerImmediately() {
         unavailable();
         assertThat(health.adminOnly(2116L)).isTrue();
         assertThat(health.holdNewMessage(target(),"whatsapp_vika",null)).isTrue();
+        assertThat(health.requiresManagerAttention(2116L)).isFalse();
         assertThat(health.excludedCompanies()).hasSize(1);
         assertThat(health.managerIssues(13L)).isEmpty();
         assertThat(health.routing(13L).excluded()).containsExactly(2116L);
@@ -70,7 +90,10 @@ class ClientContactHealthMySqlIntegrationTest {
         jdbc.update("UPDATE next_order_requests SET request_status='COMPLETED'");
         jdbc.update("UPDATE companies SET company_status=2");
         assertThat(health.adminOnly(2116L)).isFalse();
-        assertThat(health.managerIssues(13L)).isEmpty();
+        assertThat(health.managerIssues(13L)).hasSize(1);
+        assertThat(health.routing(13L).active()).containsExactly(2116L);
+        assertThat(health.excludedCompanies()).isEmpty();
+        assertThat(health.requiresManagerAttention(2116L)).isTrue();
     }
     @Test void timeoutDoesNotCreateExclusionOrClearConfirmedExclusion() {
         when(telegram.check(-1001)).thenReturn(new TelegramChatAccess.Result("UNKNOWN","timeout"));

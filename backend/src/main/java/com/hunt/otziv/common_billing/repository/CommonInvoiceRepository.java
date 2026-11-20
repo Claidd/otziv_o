@@ -305,6 +305,9 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
     @Query("SELECT i.id FROM CommonInvoice i WHERE i.badReviewNoticePending = true AND i.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.UNPAID AND i.account.enabled = true AND i.paymentMessageOperationId IS NULL AND i.paidKopecks = 0 AND i.clientReportedAt IS NULL ORDER BY i.updatedAt, i.id")
     List<Long> pendingBadReviewNotices(Pageable pageable);
 
+    @Query("SELECT i.id FROM CommonInvoice i WHERE i.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.NEEDS_ATTENTION AND i.lastError LIKE 'previous_delivery_context_changed:%' AND i.account.enabled = true ORDER BY i.updatedAt, i.id")
+    List<Long> pendingUnstartedDeliveryRecovery(Pageable pageable);
+
     @Query("""
         SELECT invoice.id
         FROM CommonInvoice invoice

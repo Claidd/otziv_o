@@ -11,6 +11,8 @@ public interface ClientContactHealth {
             LocalDateTime checkedAt, boolean excluded, boolean activeWork) { }
     boolean adminOnly(Long companyId);
     boolean hasActiveWork(Long companyId);
+    /** Live company or an outstanding order/request: delivery failures need manager attention. */
+    default boolean requiresManagerAttention(Long companyId) { return hasActiveWork(companyId); }
     record Routing(java.util.Set<Long> excluded, java.util.Set<Long> active) { }
     Routing routing(Long managerId);
     List<Contact> managerIssues(Long managerId);

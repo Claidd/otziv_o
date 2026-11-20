@@ -340,6 +340,8 @@ class ManagerCommunicationDailyReportSectionServiceTest {
         String report = service.format(10L, date);
 
         assertTrue(report.contains("с подтверждённой отправкой 1"));
+        assertTrue(report.contains("AI-разбор не получен"));
+        assertTrue(report.contains("не заменяет содержательную проверку переписки"));
         assertTrue(report.contains("текст ответа недоступен 1"));
         assertTrue(report.contains("без зафиксированного ответа 0"));
         assertTrue(report.contains("отправлен через карточку"));

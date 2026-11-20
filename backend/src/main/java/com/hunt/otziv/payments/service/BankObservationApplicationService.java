@@ -296,7 +296,8 @@ public class BankObservationApplicationService {
             log.warn("T-Bank GetState terminal mismatch: linkId={}, expected={}, actual={}", link.getId(), runtimeProfile.terminalKey(), responseTerminal);
             return false;
         }
-        if (state.amount() != null && state.amount() != link.getAmountKopecks()) {
+        if (state.amount() != null && state.amount() != link.getAmountKopecks()
+                && !isUnpaidZeroCancellation(link, state, runtimeProfile.terminalKey())) {
             link.setLastError("Сумма GetState не совпадает с платежной ссылкой");
             log.warn("T-Bank GetState amount mismatch: linkId={}, expected={}, actual={}", link.getId(), link.getAmountKopecks(), state.amount());
             return false;
@@ -315,6 +316,21 @@ public class BankObservationApplicationService {
             return false;
         }
         return true;
+    }
+
+    /** A canceled, never-paid attempt can have zero remaining amount; this is never payment evidence. */
+    private boolean isUnpaidZeroCancellation(PaymentLink link, TbankGetStateResponse state, String terminal) {
+        var unpaid = java.util.Set.of(PaymentLinkStatus.CREATED, PaymentLinkStatus.INITIATED,
+                PaymentLinkStatus.NEEDS_RECONCILIATION, PaymentLinkStatus.CANCELED, PaymentLinkStatus.FAILED);
+        return state.success() && "0".equals(normalize(state.errorCode()))
+                && "CANCELED".equals(normalize(state.status())) && Long.valueOf(0).equals(state.amount())
+                && link.getStatus() != null && unpaid.contains(link.getStatus())
+                && (link.getBankCancelOriginStatus() == null || unpaid.contains(link.getBankCancelOriginStatus()))
+                && (link.getConfirmedAmountKopecks() == null || link.getConfirmedAmountKopecks() == 0)
+                && link.getManualConfirmedAt() == null
+                && !normalize(link.getTbankPaymentId()).isBlank()
+                && normalize(link.getTbankPaymentId()).equals(normalize(state.paymentId()))
+                && !normalize(terminal).isBlank() && normalize(terminal).equals(normalize(state.terminalKey()));
     }
 
     private void applyBankStatus(PaymentLink link, String status, boolean success, String errorCode) {
@@ -344,7 +360,11 @@ public class BankObservationApplicationService {
         String responsePaymentId = normalize(state.paymentId());
         String responseOrderId = normalize(state.orderId());
         String responseTerminalKey = normalize(state.terminalKey());
-        return (state.amount() == null || state.amount() == link.getAmountKopecks()) && (responsePaymentId.isBlank() || responsePaymentId.equals(tbank.paymentId())) && (responseOrderId.isBlank() || responseOrderId.equals(tbank.tbankOrderId())) && (responseTerminalKey.isBlank() || responseTerminalKey.equals(tbank.terminalKey()));
+        return (state.amount() == null || state.amount() == link.getAmountKopecks()
+                || isUnpaidZeroCancellation(link, state, tbank.terminalKey()))
+                && (responsePaymentId.isBlank() || responsePaymentId.equals(tbank.paymentId()))
+                && (responseOrderId.isBlank() || responseOrderId.equals(tbank.tbankOrderId()))
+                && (responseTerminalKey.isBlank() || responseTerminalKey.equals(tbank.terminalKey()));
     }
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)

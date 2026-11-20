@@ -80,6 +80,51 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
                 (rs, row) -> rs.getString(1), invoiceId).stream().findFirst().map(this::snapshot);
     }
 
+    /** Must follow the invoice lock; a worker has to own a lease before freezing any provider call. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    boolean retireUnstarted(long invoiceId, String operationId,
+            com.hunt.otziv.client_messages.api.ClientMessageDelivery delivery) {
+        return retireUnstarted(invoiceId, operationId, delivery, false);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    boolean retireUnstarted(long invoiceId, String operationId,
+            com.hunt.otziv.client_messages.api.ClientMessageDelivery delivery, boolean gatewayRejectionVerified) {
+        var rows = jdbc.query("""
+                SELECT state,error_code,dispatch_started_at,lease_until,claim_token,replacement_operation_id
+                FROM common_invoice_message_queue WHERE invoice_id=? AND operation_id=? FOR UPDATE
+                """, (rs,n) -> new UnstartedRow(rs.getString(1), rs.getString(2),
+                        rs.getObject(3) != null, rs.getObject(4) != null, rs.getString(5), rs.getString(6)), invoiceId, operationId);
+        if (rows.isEmpty()) return false;
+        var row = rows.getFirst();
+        boolean known = row.code() == null || row.code().isBlank() || "context_changed".equals(row.code())
+                || com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(
+                        com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(row.code(), ""));
+        if (!java.util.Set.of("FAILED", "QUEUED", "RETRYABLE").contains(row.state()) || !known
+                || row.dispatched() || row.leased() || row.claim() != null || row.replacement() != null
+                || !(delivery.hasNoRecordedOperation(operationId)
+                    || (gatewayRejectionVerified && "FAILED".equals(row.state()) && "gateway_not_ready".equals(row.code())))) return false;
+        return jdbc.update("""
+                UPDATE common_invoice_message_queue SET state='SUPERSEDED',error_code='unstarted_context_replaced',
+                reviewed_at=CURRENT_TIMESTAMP(6),reviewed_by='system:unstarted-invoice-recovery',updated_at=CURRENT_TIMESTAMP(6)
+                WHERE invoice_id=? AND operation_id=?
+                """, invoiceId, operationId) == 1;
+    }
+
+    private record UnstartedRow(String state, String code, boolean dispatched, boolean leased, String claim, String replacement) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    void linkRetiredReplacement(long invoiceId, String previous, String replacement) {
+        int changed = jdbc.update("""
+                UPDATE common_invoice_message_queue old_command
+                JOIN common_invoice_message_queue new_command ON new_command.operation_id=? AND new_command.invoice_id=old_command.invoice_id
+                SET old_command.replacement_operation_id=new_command.operation_id
+                WHERE old_command.operation_id=? AND old_command.invoice_id=? AND old_command.state='SUPERSEDED'
+                  AND old_command.error_code='unstarted_context_replaced' AND old_command.replacement_operation_id IS NULL
+                """, replacement, previous, invoiceId);
+        if (changed != 1) throw new IllegalStateException("Retired invoice command replacement was not linked");
+    }
+
     PreparedCommonInvoiceMessage snapshot(String operationId) {
         var row = jdbc.queryForMap("SELECT invoice_id,envelope_ciphertext FROM common_invoice_message_queue WHERE operation_id=?", operationId);
         String encrypted = (String) row.get("envelope_ciphertext");

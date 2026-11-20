@@ -79,6 +79,31 @@ class ClientChatMessageSenderTest {
         org.mockito.Mockito.verifyNoInteractions(telegramService,whatsAppService,maxBotClient,contacts);
     }
 
+    @Test void absenceCheckFailsClosedAndNeverContactsAProvider() {
+        assertTrue(sender.hasNoRecordedOperation("not-started"));
+        var frozen = new com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations.FrozenMessage("wa", "sender", "send-group", "group", "body");
+        when(businessOperations.findFrozen("wa")).thenReturn(java.util.Optional.of(frozen));
+        assertFalse(sender.hasNoRecordedOperation("wa"));
+        var unknown = new ClientMessageOperationFence.Snapshot("tg", "TELEGRAM", "UNKNOWN", "d", "e", "claim", null);
+        when(operationFence.lookup("tg")).thenReturn(java.util.Optional.of(unknown));
+        assertFalse(sender.hasNoRecordedOperation("tg"));
+        when(operationFence.lookup("unavailable")).thenThrow(new IllegalStateException("database unavailable"));
+        assertFalse(sender.hasNoRecordedOperation("unavailable"));
+        assertFalse(sender.hasNoRecordedOperation(null));
+        org.mockito.Mockito.verifyNoInteractions(whatsAppService, telegramService, maxBotClient);
+    }
+
+    @ParameterizedTest @ValueSource(strings={"NOT_FOUND","UNKNOWN","RUNNING","SUCCEEDED","unavailable"})
+    void gatewayRejectionCheckRejectsUncertainStartedAndUnavailableReceipts(String state) {
+        when(businessOperations.findFrozen("old")).thenReturn(java.util.Optional.of(
+                new com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations.FrozenMessage("old","sender","send-group","group","body")));
+        if (state.equals("unavailable")) when(whatsAppService.getOperationStatus("sender","old")).thenThrow(new IllegalStateException());
+        else when(whatsAppService.getOperationStatus("sender","old")).thenReturn(
+                new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus("old",state,null));
+        assertEquals(state.equals("NOT_FOUND"),sender.confirmsUnsentGatewayRejection("old"));
+        verify(whatsAppService,never()).sendMessageToGroup(any(),any(),any(),any());
+    }
+
     @Test
     void publicationProgressFencesExactTextAndKeyboardAndRequiresPositiveReceipt() {
         Company company = company("https://t.me/example", 12345L, null);

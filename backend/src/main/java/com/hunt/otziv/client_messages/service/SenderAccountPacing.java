@@ -73,6 +73,17 @@ public class SenderAccountPacing {
     }
 
     /** Admits one dispatch on {@code account} or says when to retry; records SENT or WAITING. */
+    public Decision preview(Lane lane, String account, int gapSeconds, LocalDateTime now) {
+        if (account == null) return Decision.allow();
+        Map<String, LocalDateTime> latest = ledger.latest(account);
+        Lane other = lane == Lane.CAMPAIGN ? Lane.AUTORESPONDER : Lane.CAMPAIGN;
+        return decide(lane, now, gapSeconds,
+                latest.get(SenderDispatchLedger.SENT + ":" + lane.name()),
+                latest.get(SenderDispatchLedger.SENT + ":" + other.name()),
+                latest.get(SenderDispatchLedger.WAITING + ":" + other.name()),
+                latest.get(SenderDispatchLedger.SENT + ":" + MANUAL_LANE));
+    }
+
     public Decision admit(Lane lane, String account, int gapSeconds, LocalDateTime now) {
         if (account == null) {
             return Decision.allow();

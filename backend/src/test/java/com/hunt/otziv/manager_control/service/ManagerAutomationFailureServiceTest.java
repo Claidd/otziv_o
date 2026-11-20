@@ -121,7 +121,8 @@ class ManagerAutomationFailureServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "contactHealth", contacts);
         when(contacts.routing(7L)).thenReturn(new com.hunt.otziv.client_messages.api.ClientContactHealth.Routing(
                 java.util.Set.of(), java.util.Set.of(20L)));
-        when(contacts.hasActiveWork(20L)).thenReturn(true);
+        when(contacts.requiresManagerAttention(20L)).thenReturn(true);
+        state.setDeliveryPreparedAt(LocalDateTime.now().minusDays(2));
         when(stateRepository.findManagerControlCandidateIds(eq(7L), any(Pageable.class))).thenReturn(List.of(11L));
         when(stateRepository.findAllById(List.of(11L))).thenReturn(List.of(state));
         when(stateRepository.findById(11L)).thenReturn(Optional.of(state));
@@ -129,12 +130,16 @@ class ManagerAutomationFailureServiceTest {
 
         var issue = service.issues(manager, 10).getFirst();
         assertFalse(service.systemOwnsIssue(issue));
+        assertEquals("Доставка не подтверждена", issue.status());
+        assertEquals(state.getDeliveryPreparedAt(), issue.firstObservedAt());
+        assertFalse(issue.reason().contains("попыток подряд: 0"));
+        assertTrue(issue.reason().contains("Рабочая текущая ссылка"));
         assertTrue(issue.reason().contains("Повторная отправка заблокирована"));
         assertEquals("UNKNOWN", state.getDeliveryStatus());
         assertEquals("state_transaction_outcome_uncertain", state.getLastErrorCode());
 
         // Closing the last order/request restores the existing system-only reconciliation.
-        when(contacts.hasActiveWork(20L)).thenReturn(false);
+        when(contacts.requiresManagerAttention(20L)).thenReturn(false);
         assertTrue(service.systemOwnsIssue(issue));
         org.mockito.Mockito.verify(stateRepository, org.mockito.Mockito.never()).save(any());
     }

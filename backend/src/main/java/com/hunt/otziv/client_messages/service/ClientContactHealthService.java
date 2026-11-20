@@ -27,6 +27,7 @@ public class ClientContactHealthService implements ClientContactHealth {
     private final BackgroundAutomationSettings settings;
     private final TelegramChatAccess telegram;
     private final WhatsAppChatAccess whatsapp;
+    private final com.hunt.otziv.maxbot.api.MaxChatAccess max;
 
     record Snapshot(Long id, String title, String status, Long managerId, String url, String client,
                     String group, Long telegram, Long max, boolean active) {
@@ -81,7 +82,10 @@ public class ClientContactHealthService implements ClientContactHealth {
         Set<Long> excluded = new HashSet<>();
         for (var s:companies) if ("На стопе".equalsIgnoreCase(text(s.status())) && !active.contains(s.id())
                 && unavailable(s,evidence.get(s.id())) != null) excluded.add(s.id());
-        return new Routing(Set.copyOf(excluded),Set.copyOf(active));
+        Set<Long> needsManager = new HashSet<>(active);
+        companies.stream().filter(s -> "В работе".equalsIgnoreCase(text(s.status())))
+                .map(Snapshot::id).forEach(needsManager::add);
+        return new Routing(Set.copyOf(excluded),Set.copyOf(needsManager));
     }
     private Evidence evidence(Long id) {
         return jdbc.query("SELECT route_hash,check_status,reason_code,unavailable_reason,checked_at FROM client_contact_health WHERE company_id=?",
@@ -100,6 +104,10 @@ public class ClientContactHealthService implements ClientContactHealth {
     }
     private boolean idle(Snapshot s) {
         return s != null && s.active() && "На стопе".equalsIgnoreCase(text(s.status())) && !hasActiveWork(s.id());
+    }
+    @Override public boolean requiresManagerAttention(Long id) {
+        var s = snapshot(id);
+        return s != null && s.active() && ("В работе".equalsIgnoreCase(text(s.status())) || hasActiveWork(id));
     }
     private String unavailable(Snapshot s, Evidence e) {
         if (s == null) return null;
@@ -128,7 +136,7 @@ public class ClientContactHealthService implements ClientContactHealth {
     }
     @Override public List<Contact> managerIssues(Long managerId) {
         if (managerId == null) return List.of();
-        return contacts(managerId).stream().filter(Contact::activeWork).toList();
+        return contacts(managerId).stream().filter(contact -> !contact.excluded()).toList();
     }
     private List<Contact> contacts(Long manager) {
         String where = " WHERE c.company_active=1 AND COALESCE(cs.status_title,'')<>'Бан'";
@@ -156,6 +164,7 @@ public class ClientContactHealthService implements ClientContactHealth {
             case "chat_missing" -> "В компании не указан клиентский чат";
             case "chat_unbound" -> "Ссылка указана, но чат не привязан к аккаунту отправки";
             case "chat_not_found" -> "Telegram не находит чат для текущего бота";
+            case "max_chat_closed" -> "MAX подтвердил: клиентский чат закрыт. Укажите действующий чат и проверьте доступ бота";
             case "bot_removed", "bot_not_member", "not_member" -> "Аккаунт отправки больше не состоит в чате";
             case "bot_blocked" -> "Клиент заблокировал бота";
             case "chat_permission_denied" -> "У бота нет права писать в чат";
@@ -178,6 +187,8 @@ public class ClientContactHealthService implements ClientContactHealth {
             var result = telegram.check(s.telegram()); p = new Probe(result.status(), result.reason());
         } else if ("WHATSAPP".equals(s.platform())) {
             var result = whatsapp.check(s.client(),s.group()); p = new Probe(result.status(),result.reason());
+        } else if ("MAX".equals(s.platform())) {
+            var result = max.check(s.max()); p = new Probe(result.status(),result.reason());
         } else p = new Probe("UNKNOWN","access_unconfirmed");
         // CAS by time: a slower older probe cannot overwrite a newer result. An UNKNOWN result retains
         // confirmed unavailability only for the identical route; only AVAILABLE clears that evidence.
