@@ -557,6 +557,9 @@ jobs:
         run: >-
           python3 infrastructure/scripts/prod/backend_test_shards.py select
           --index "$SHARD" --output "$RUNNER_TEMP/shard-selection.json"
+      - name: Resolve pinned backend dependencies before tests
+        if: needs.changes.outputs.backend == 'true'
+        run: python3 -B infrastructure/scripts/prod/maven_dependency_preflight.py --pom backend/pom.xml
       - name: Run the shard and package
         if: ${{ (needs.changes.outputs.backend == 'true') && (needs.backend-reuse.outputs.reused != 'true') }}
         working-directory: backend
@@ -691,6 +694,9 @@ jobs:
         with:
           node-version: "24.18.0"
           package-manager-cache: false
+      - name: Resolve pinned issuer dependencies before tests
+        if: needs.changes.outputs.issuer == 'true'
+        run: python3 -B infrastructure/scripts/prod/maven_dependency_preflight.py --pom infrastructure/keycloak/security-generation/pom.xml
       - name: Build the pinned Keycloak provider and test transaction failure behavior
         if: ${{ needs.changes.outputs.issuer == 'true' }}
         working-directory: backend
