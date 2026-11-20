@@ -1,4 +1,4 @@
-param([ValidateSet('c37-mysql', 'c42-mysql', 'c46-mysql', 'c56-mysql', 'c57-mysql')][string]$Set = 'c42-mysql')
+param([ValidateSet('c37-mysql', 'c42-mysql', 'c46-mysql', 'c56-mysql', 'c57-mysql', 'c60-mysql')][string]$Set = 'c42-mysql')
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -25,6 +25,8 @@ try {
         $entry = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/proofs/c56-mysql/parent-activation.json') | ConvertFrom-Json
     } elseif ($Set -eq 'c56-mysql') {
         $entry = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/proofs/c56-mysql/activation-candidate.json') | ConvertFrom-Json
+    } elseif ($Set -eq 'c57-mysql') {
+        $entry = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/proofs/c60-mysql/parent-activation.json') | ConvertFrom-Json
     } else {
         $activation = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository $activationPath) | ConvertFrom-Json
         $entry = @($activation.images | Where-Object { $_.component -eq 'mysql' })[0]
@@ -46,6 +48,7 @@ try {
         'infrastructure/scripts/prod/coordinated_mysql_curl_refresh.py',
         'infrastructure/scripts/prod/coordinated_mysql_util_linux_refresh.py',
         'infrastructure/scripts/prod/coordinated_mysql_kerberos_refresh.py',
+        'infrastructure/scripts/prod/coordinated_mysql_partition_refresh.py',
         'infrastructure/scripts/prod/coordinated_mysql_cutover.py')
     foreach ($helper in $helpers) {
         $helperDestination = Join-Path $fixture $helper

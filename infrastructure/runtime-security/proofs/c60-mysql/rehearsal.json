@@ -1,0 +1,193 @@
+{
+  "schema": "otziv-mysql-same-engine-refresh-v1",
+  "source": "ghcr.io/claidd/otziv-security@sha256:52be6ed6c0039196dca88202ffd9714520d509bdde9b2f575238d1ea2d81028a",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:5ff5fb9db73125ad1056bad980eb17c25d944c8a5775b53dbfe845b826ae9109",
+  "preliminary": false,
+  "production": false,
+  "sourceWrites": false,
+  "publishedPorts": 0,
+  "network": "none",
+  "sourceDumpSha256": "19670449643e7f7ee9c74b3b75ebdf146b862c108d80a0b56cf37c7a6100f524",
+  "executedSourceSha256": "57b208a70271db709b417eafd16b59b108e13c09d60b08a70232fbb10246dc1b",
+  "startedAt": "2026-11-20T01:07:43.199114+00:00",
+  "checks": [
+    {
+      "name": "engine_version_source",
+      "passed": true
+    },
+    {
+      "name": "engine_version_candidate",
+      "passed": true
+    },
+    {
+      "name": "server_binary_unchanged",
+      "passed": true
+    },
+    {
+      "name": "util_linux_source_vulnerable",
+      "passed": true
+    },
+    {
+      "name": "brotli_preserved",
+      "passed": true
+    },
+    {
+      "name": "openssl_preserved",
+      "passed": true
+    },
+    {
+      "name": "libevent_fixed",
+      "passed": true
+    },
+    {
+      "name": "util_linux_libraries_fixed",
+      "passed": true
+    },
+    {
+      "name": "libxml2_fixed",
+      "passed": true
+    },
+    {
+      "name": "pcre2_preserved",
+      "passed": true
+    },
+    {
+      "name": "kerberos_preserved",
+      "passed": true
+    },
+    {
+      "name": "kerberos_library_fixed",
+      "passed": true
+    },
+    {
+      "name": "only_util_linux_changed",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_source",
+      "passed": true
+    },
+    {
+      "name": "restored_nonempty_production_schema",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_source",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_candidate",
+      "passed": true
+    },
+    {
+      "name": "all_tables_schema_history_accounts_and_settings_exact",
+      "passed": true
+    },
+    {
+      "name": "existing_account_login",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_candidate",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restart",
+      "passed": true
+    },
+    {
+      "name": "restart_preserves_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_restart",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_rollback",
+      "passed": true
+    },
+    {
+      "name": "same_volume_rollback_preserves_all_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_rollback",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restored",
+      "passed": true
+    },
+    {
+      "name": "fresh_restore_preserves_all_data_and_schema",
+      "passed": true
+    }
+  ],
+  "sourceLocalId": "sha256:52be6ed6c0039196dca88202ffd9714520d509bdde9b2f575238d1ea2d81028a",
+  "sourceMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "sourceOpenSSL": "openssl-libs-3.5.8-2.0.1.el9_8.x86_64",
+  "sourceLibbrotli": "libbrotli-1.0.9-10.0.1.el9_8.x86_64",
+  "sourceLibxml2": "libxml2-2.9.13-14.el9_8.5.x86_64",
+  "sourcePcre2": "pcre2-10.40-7.0.1.el9_8.x86_64",
+  "sourcePcre2Syntax": "pcre2-syntax-10.40-7.0.1.el9_8.noarch",
+  "sourceLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "sourceCurl": [
+    "curl-7.76.1-40.el9_8.9.x86_64",
+    "libcurl-7.76.1-40.el9_8.9.x86_64"
+  ],
+  "sourceUtilLinux": [
+    "libblkid-2.37.4-28.0.1.el9_9.x86_64",
+    "libmount-2.37.4-28.0.1.el9_9.x86_64",
+    "libsmartcols-2.37.4-28.0.1.el9_9.x86_64",
+    "libuuid-2.37.4-28.0.1.el9_9.x86_64"
+  ],
+  "sourceKerberos": "krb5-libs-1.21.1-10.0.1.el9_9.2.x86_64",
+  "sourceOtherPackagesSha256": "fc306273dfbffd7f748b13537e884f1cd8f7f65c58c6deaaaaf4fa78591a8451",
+  "candidateLocalId": "sha256:5ff5fb9db73125ad1056bad980eb17c25d944c8a5775b53dbfe845b826ae9109",
+  "candidateMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "candidateOpenSSL": "openssl-libs-3.5.8-2.0.1.el9_8.x86_64",
+  "candidateLibbrotli": "libbrotli-1.0.9-10.0.1.el9_8.x86_64",
+  "candidateLibxml2": "libxml2-2.9.13-14.el9_8.5.x86_64",
+  "candidatePcre2": "pcre2-10.40-7.0.1.el9_8.x86_64",
+  "candidatePcre2Syntax": "pcre2-syntax-10.40-7.0.1.el9_8.noarch",
+  "candidateLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "candidateCurl": [
+    "curl-7.76.1-40.el9_8.9.x86_64",
+    "libcurl-7.76.1-40.el9_8.9.x86_64"
+  ],
+  "candidateUtilLinux": [
+    "libblkid-2.37.4-28.0.1.el9_9.1.x86_64",
+    "libmount-2.37.4-28.0.1.el9_9.1.x86_64",
+    "libsmartcols-2.37.4-28.0.1.el9_9.1.x86_64",
+    "libuuid-2.37.4-28.0.1.el9_9.1.x86_64"
+  ],
+  "candidateKerberos": "krb5-libs-1.21.1-10.0.1.el9_9.2.x86_64",
+  "candidateOtherPackagesSha256": "fc306273dfbffd7f748b13537e884f1cd8f7f65c58c6deaaaaf4fa78591a8451",
+  "before": {
+    "tableCount": 382,
+    "rows": 1417154,
+    "countsSha256": "057874bf9cc49bd46c2b03357ea58fb584ced3d83d683e608b316e68fb09df23",
+    "checksumsSha256": "3e3be50da97a7b33bc00d7c09d24223694798882ee611452324e54012cc58465",
+    "historySha256": "f80c06ff087700f21993ad85048bb6066acf889cf4d84a89364060d0767f42b3",
+    "schemaSha256": "31294530dadc1c770ad41bab7656007dd61d25f474734338160acfc3c674f008",
+    "accountsSha256": "be842f363c1bf41434227f663a2e7643e76f3d2c6bc3e75993bf898b3c3b483e",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "after": {
+    "tableCount": 382,
+    "rows": 1417154,
+    "countsSha256": "057874bf9cc49bd46c2b03357ea58fb584ced3d83d683e608b316e68fb09df23",
+    "checksumsSha256": "3e3be50da97a7b33bc00d7c09d24223694798882ee611452324e54012cc58465",
+    "historySha256": "f80c06ff087700f21993ad85048bb6066acf889cf4d84a89364060d0767f42b3",
+    "schemaSha256": "31294530dadc1c770ad41bab7656007dd61d25f474734338160acfc3c674f008",
+    "accountsSha256": "be842f363c1bf41434227f663a2e7643e76f3d2c6bc3e75993bf898b3c3b483e",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "result": "PASS",
+  "ownedResourcesRemaining": {
+    "containers": 0,
+    "volumes": 0
+  },
+  "completedAt": "2026-11-20T01:20:11.063640+00:00"
+}
