@@ -117,7 +117,7 @@ public class ManagerProblemEvidenceCollector {
             List<Map<String, Object>> invoices = jdbc.queryForList("""
                     SELECT v.invoice_id, v.status, v.amount_kopecks, v.paid_kopecks, v.last_error,
                            v.sent_at, v.next_reminder_at, v.payment_success_notification_error, v.updated_at, a.enabled AS account_enabled,
-                           v.created_at, v.closed_at, v.close_reason, v.previous_status
+                           v.created_at, v.closed_at, v.closed_by, v.close_reason, v.previous_status
                     FROM common_invoices v JOIN common_billing_accounts a ON a.account_id=v.account_id
                     LEFT JOIN companies company ON company.company_id=a.invoice_company_id
                     WHERE v.invoice_id=? AND (a.manager_id=? OR company.company_manager=? OR EXISTS (
@@ -130,7 +130,18 @@ public class ManagerProblemEvidenceCollector {
             }
             invoices.forEach(row -> addRow(facts, "invoice:" + entityId, "invoice", row,
                     "invoice_id", "status", "amount_kopecks", "paid_kopecks", "last_error", "sent_at", "next_reminder_at", "payment_success_notification_error", "account_enabled",
-                    "created_at", "closed_at", "close_reason", "previous_status"));
+                    "created_at", "closed_at", "closed_by", "close_reason", "previous_status"));
+            if ("BAN".equals(invoices.getFirst().get("status"))) {
+                var badTasks = jdbc.queryForMap("""
+                        SELECT COUNT(*) AS bad_task_count,
+                               COALESCE(SUM(t.bad_review_task_status='DONE'),0) AS bad_task_done_count
+                        FROM bad_review_tasks t
+                        WHERE EXISTS (SELECT 1 FROM common_invoice_orders io
+                            WHERE io.invoice_id=? AND io.active_membership=TRUE
+                              AND io.order_id=t.bad_review_task_order)
+                        """, entityId);
+                addRow(facts, "invoice:" + entityId, "invoice", badTasks, "bad_task_count", "bad_task_done_count");
+            }
             List<Map<String, Object>> orders = jdbc.queryForList("""
                     SELECT io.order_id, io.ready, io.paid, io.amount_kopecks, io.active_membership, io.publication_blocker_since, io.paid_at, io.updated_at,
                            s.order_status_title AS current_order_status, o.order_status_changed_at AS current_status_changed_at,

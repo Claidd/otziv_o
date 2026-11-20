@@ -85,6 +85,7 @@ final class ManagerProblemBusinessDiagnosis {
     static Diagnosis fallback(List<Fact> facts) {
         List<Fact> uncertain = uncertainDelivery(facts);
         if (!uncertain.isEmpty()) return uncertain(facts, uncertain.getFirst());
+        if (hasCurrentUnpaidBan(facts)) return unpaidBan(facts);
         if (hasHistoricalInvoiceArchive(facts)) return historicalInvoiceArchive(facts);
         Fact publicationConflict = currentInvoicePublicationConflict(facts);
         if (publicationConflict != null) return invoicePublicationConflict(facts, publicationConflict);
@@ -118,6 +119,38 @@ final class ManagerProblemBusinessDiagnosis {
         return guidance("Причина замечания пока не подтверждена полностью: требуется сверка исходной задачи.", facts,
                 "Откройте связанную задачу и проверьте её текущее состояние и результат последних действий. Если данных недостаточно, уточните их у ответственного и зафиксируйте срок проверки.",
                 "Исходная задача подтверждает устранение причины; одного комментария или обещания недостаточно.");
+    }
+
+    static boolean hasCurrentUnpaidBan(List<Fact> facts) {
+        if (!Set.of("COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION").contains(value(facts, "card", "entity_type"))
+                || !"BAN".equals(value(facts, "invoice", "status"))
+                || !"BAN".equals(value(facts, "invoice", "close_reason"))
+                || !"UNPAID".equals(value(facts, "invoice", "previous_status"))
+                || number(facts, "invoice", "paid_kopecks") != 0) return false;
+        try {
+            java.time.LocalDateTime.parse(value(facts, "invoice", "closed_at").replace(' ', 'T'));
+            return true;
+        } catch (java.time.format.DateTimeParseException ignored) { return false; }
+    }
+
+    private static Diagnosis unpaidBan(List<Fact> facts) {
+        String date = java.time.LocalDateTime.parse(value(facts, "invoice", "closed_at").replace(' ', 'T'))
+                .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+        String actor = value(facts, "invoice", "closed_by");
+        String summary = "Счёт переведён из «Не оплачено» в «Бан» " + date + ". Учтённая оплата — 0 ₽.";
+        if (!actor.equals("неизвестно") && readable(actor, 60)) summary += " Закрытие записано за: " + actor + ".";
+        long total = number(facts, "invoice", "bad_task_count"), done = number(facts, "invoice", "bad_task_done_count");
+        if (total > 0 && done >= 0 && done <= total)
+            summary += " Сейчас плохие задачи отмечены выполненными: " + done + " из " + total + ".";
+        summary += " Это сохранённое закрытие неоплаченного счёта; сам статус не доказывает ошибку.";
+        List<String> refs = facts.stream().filter(f -> "invoice".equals(f.subject())
+                && Set.of("status", "previous_status", "closed_at", "closed_by", "close_reason", "paid_kopecks",
+                        "bad_task_count", "bad_task_done_count").contains(f.field())).map(Fact::reference).toList();
+        String verification = "Сверены основание закрытия и новые сведения об оплате или обязательствах. Если расхождений нет, зафиксируйте результат проверки, сохранив статус, сумму и историю счёта.";
+        return new Diagnosis(summary, List.of(), List.of(),
+                List.of("Отсутствие учтённой оплаты не подтверждает отсутствие поступления на счёт получателя. Отметки выполнения задач не заменяют внешнее подтверждение результата."),
+                List.of(new Action("CHECK_SOURCE", "Проверьте, появились ли после закрытия новые сведения об оплате или обязательствах. Сам статус «Бан» не требует повторного счёта, публикации или разблокировки. При расхождении передайте сверку администратору.",
+                        "Менеджер", verification, refs)), List.of(verification));
     }
 
     private static Fact currentPaymentPreparationFailure(List<Fact> facts) {

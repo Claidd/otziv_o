@@ -673,6 +673,13 @@ public class ManagerControlInvoiceDiagnostics {
             return unpaidAttention(invoice, LocalDateTime.now()).orElse(UNPAID_REASON);
         }
         if (status == CommonInvoiceStatus.BAN) {
+            if ("UNPAID".equals(invoice.getPreviousStatus()) && "BAN".equals(invoice.getCloseReason())
+                    && invoice.getClosedAt() != null && invoice.getPaidKopecks() == 0) {
+                return "Счёт закрыт из «Не оплачено» в «Бан» "
+                        + invoice.getClosedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+                        + ". Учтённая оплата — 0 ₽. Проверьте только новые сведения об оплате или обязательствах; "
+                        + "сам статус не подтверждает сбой и не требует повторной отправки счёта.";
+            }
             return "Счет в бане. Рекомендация: проверьте причину блокировки в карточке счета.";
         }
         if (isPaperInvoiceDeliveryOverdue(invoice, LocalDateTime.now())) {

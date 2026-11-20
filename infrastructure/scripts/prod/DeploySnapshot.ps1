@@ -570,6 +570,14 @@ function Get-OtzivCoordinatedMysqlBundlePaths {
     $activation = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $activationPath) | ConvertFrom-Json
     $entries = @($activation.images | Where-Object { $_.component -eq 'mysql' })
     $policies = @{
+        'ghcr.io/claidd/otziv-security@sha256:5ff5fb9db73125ad1056bad980eb17c25d944c8a5775b53dbfe845b826ae9109' = @{
+            set = 'c60-mysql'
+            config = 'sha256:4bc0fe2d60d8669d149ae7f64dfa38ee067853301964f7f4cbcbb4d4ac12bc11'
+            rehearsal = 'e81feb160f348ce3c90dd398222ade8d957e594ac5f5a57200d085e55eac5490'
+            script = 'infrastructure/runtime-security/mysql-c60-rehearsal.py'
+            parentHash = '68cb7352e8a435f487404583b0b7c5a04d59f544bac319afb61bc3a1ebeedcad'
+            source = 'ghcr.io/claidd/otziv-security@sha256:52be6ed6c0039196dca88202ffd9714520d509bdde9b2f575238d1ea2d81028a'
+        }
         'ghcr.io/claidd/otziv-security@sha256:52be6ed6c0039196dca88202ffd9714520d509bdde9b2f575238d1ea2d81028a' = @{
             set = 'c57-mysql'
             config = 'sha256:f538c100de0adc3851ce7ec254a008cd03caea4ceb8b620331433bb5dc15c7e7'

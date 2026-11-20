@@ -197,6 +197,7 @@ public class ManagerProblemDiagnosticsService {
         boolean fallback = visible && (!ManagerProblemBusinessDiagnosis.readable(saved.diagnosis())
                 || !ManagerProblemBusinessDiagnosis.uncertainDelivery(saved.facts()).isEmpty()
                 || ManagerProblemBusinessDiagnosis.hasHistoricalInvoiceArchive(saved.facts())
+                || ManagerProblemBusinessDiagnosis.hasCurrentUnpaidBan(saved.facts())
                 || ManagerProblemBusinessDiagnosis.hasCurrentInvoicePublicationConflict(saved.facts()));
         Diagnosis diagnosis = fallback ? ManagerProblemBusinessDiagnosis.fallback(saved.facts()) : saved.diagnosis();
         diagnosis = ManagerProblemBusinessDiagnosis.withClosurePolicy(saved.facts(), diagnosis);
