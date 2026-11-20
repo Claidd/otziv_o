@@ -741,16 +741,19 @@ public class ManagerReportReviewTelegramService {
         ManagerReportReviewSession review = sessionRepository.findForUpdateById(reviewId).orElse(null);
         if (review == null || review.isTestMode() || review.getCompletedAt() != null
                 || (review.getStatus() != ManagerReportReviewStatus.QUESTION_PENDING
-                    && review.getStatus() != ManagerReportReviewStatus.PLAN_PENDING)) return;
+                    && review.getStatus() != ManagerReportReviewStatus.PLAN_PENDING
+                    && review.getStatus() != ManagerReportReviewStatus.DISPUTED
+                    && review.getStatus() != ManagerReportReviewStatus.DISPUTE_PENDING)) return;
         var questions = repairConversationLinks(review, qualityService.readQuestions(review.getQuestionsJson()));
         if (review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING) {
             escalateVerificationIfDue(review, questions);
             return;
         }
         int index = review.getCurrentQuestionIndex();
-        if (index < 0 || index >= questions.size() || !issueService.isPending(review, index)) return;
-        issueService.withdrawResolvedSourceIssues(review, questions);
-        if (issueService.isPending(review, index)) {
+        int withdrawn = issueService.withdrawResolvedSourceIssues(review, questions);
+        if (withdrawn == 0) {
+            if (refreshCommunicationAnswerContext(review, questions)) return;
+            if (index < 0 || index >= questions.size() || !issueService.isPending(review, index)) return;
             String previousFingerprint = review.getRecoveryContextFingerprint();
             refreshWorkerGoalAnswerContext(review,questions.get(index));
             // Changed evidence or assessment rules get one retry before an old pause is escalated.
@@ -781,7 +784,44 @@ public class ManagerReportReviewTelegramService {
         review.setRecoveryNextAttemptAt(null);
         review.setRecoveryAwaitingContext(false);
         accessPolicy.invalidate(review.getManagerUserId());
+        review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        int next = nextQuestionIndex(review, questions, 0);
+        review.setCurrentQuestionIndex(next < 0 ? questions.size() : next);
         continueFlow(review, review.getManager().getUser(), true);
+    }
+
+    private boolean refreshCommunicationAnswerContext(ManagerReportReviewSession review,
+            List<ManagerReportReviewQualityService.ReviewQuestion> questions) {
+        var systemRequest = issueService.unresolvedDispute(review).filter(dispute ->
+                dispute.isVerificationRequestedBySystem() && dispute.getStatus() == ManagerReportReviewDisputeStatus.DRAFT
+                        && clean(dispute.getManagerText()).isBlank());
+        int index = systemRequest.map(dispute -> dispute.getIssue().getQuestionIndex()).orElse(review.getCurrentQuestionIndex());
+        if (index < 0 || index >= questions.size() || questions.get(index).sourceTaskIds().isEmpty()
+                || systemRequest.isEmpty() && (!issueService.isPending(review, index)
+                    || !java.util.Set.of("NEEDS_CONTEXT", "NEEDS_CLARIFICATION").contains(clean(review.getAnswerQuality())))) return false;
+        LocalDateTime now = LocalDateTime.now();
+        if (review.getRecoveryContextCheckedAt() != null && review.getRecoveryContextCheckedAt().isAfter(now.minusMinutes(15)))
+            return false;
+        var submittedAt = qualityService.latestAnswerRecordedAt(review.getAnswersJson(), index);
+        var saved = qualityService.previousAcceptedContext(review.getAnswersJson(), index);
+        if (submittedAt == null || saved.isEmpty() || savedAnswerEvidence(review,index,submittedAt,saved.getLast()).isBlank()) return false;
+        String fingerprint = RecordedCommunicationEvidence.fingerprint(answerContext(review, questions.get(index)), submittedAt);
+        review.setRecoveryContextCheckedAt(now);
+        if (fingerprint.isBlank() || fingerprint.equals(review.getRecoveryContextFingerprint())) return false;
+        if (systemRequest.isPresent() && !issueService.reopenSystemVerification(review, index)) return false;
+        review.setRecoveryContextFingerprint(fingerprint);
+        review.setCurrentQuestionIndex(index);
+        review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        review.setAnswerQuality("NEEDS_CONTEXT");
+        review.setRecoveryAwaitingContext(false);
+        review.setRecoveryAttempts(0);
+        review.setRecoveryNextAttemptAt(now);
+        if (review.getAiUnavailableStartedAt() == null) aiAvailabilityService.pause(review, now.minusMinutes(1),
+                "communication-evidence", "Новые сведения: проверяется сохранённый ответ");
+        event(review, "COMMUNICATION_EVIDENCE_REFRESHED", null, "SYSTEM", "recovery-job",
+                "questionIndex=" + index + ";sourceFingerprint=" + fingerprint + ";savedAnswerRetained=true");
+        sessionRepository.save(review);
+        return true;
     }
 
     @Transactional
@@ -965,7 +1005,12 @@ public class ManagerReportReviewTelegramService {
                 answerEvidenceHeader(questionIndex, answeredAt, answer) + evidenceSnapshots.encode(context));
     }
 
-    private String recordAnswerAssessment(String json, ManagerReportReviewQualityService.ReviewAnswer answer, boolean retry) {
+    private String recordAnswerAssessment(ManagerReportReviewSession review, String json,
+            ManagerReportReviewQualityService.ReviewAnswer answer, boolean retry) {
+        if (retry) event(review, "ANSWER_ASSESSMENT_VERSION", null, "SYSTEM", "before-reassessment",
+                qualityService.assessmentVersion(json, answer));
+        event(review, "ANSWER_ASSESSMENT_VERSION", null, "SYSTEM", retry ? "reassessment" : "assessment",
+                qualityService.appendAnswer("[]", answer));
         return retry ? qualityService.recordAssessment(json, answer, true) : qualityService.appendAnswer(json, answer);
     }
 
@@ -1093,8 +1138,10 @@ public class ManagerReportReviewTelegramService {
                 : savedAnswerEvidence(review, index, answeredAt, messageText);
         if (submittedAt != null && !evidenceContext.isBlank()) {
             String supplement = workerGoalHistoricalSupplement(review, question, answeredAt, evidenceContext);
+            if (!question.sourceTaskIds().isEmpty()) supplement += RecordedCommunicationEvidence.supplement(
+                    answerContext(review, question), evidenceContext, answeredAt);
             if (!supplement.isBlank()) {
-                event(review, "ANSWER_EVIDENCE_SUPPLEMENT", null, "SYSTEM", "worker-goal-recovery",
+                event(review, "ANSWER_EVIDENCE_SUPPLEMENT", null, "SYSTEM", "saved-answer-recovery",
                         answerEvidenceHeader(index, answeredAt, messageText) + evidenceSnapshots.encode(supplement));
                 evidenceContext += "\n" + supplement;
             }
@@ -1124,7 +1171,7 @@ public class ManagerReportReviewTelegramService {
                     "telegram-answer",
                     assessment.reason()
             );
-            review.setAnswersJson(recordAnswerAssessment(
+            review.setAnswersJson(recordAnswerAssessment(review,
                     review.getAnswersJson(),
                     new ManagerReportReviewQualityService.ReviewAnswer(
                             index,
@@ -1150,7 +1197,7 @@ public class ManagerReportReviewTelegramService {
         boolean accepted = assessment.accepted();
         String assessmentReason = assessment.reason();
         String answerProvider = assessment.provider();
-        review.setAnswersJson(recordAnswerAssessment(
+        review.setAnswersJson(recordAnswerAssessment(review,
                 review.getAnswersJson(),
                 new ManagerReportReviewQualityService.ReviewAnswer(
                         index,
@@ -1247,7 +1294,7 @@ public class ManagerReportReviewTelegramService {
                     assessment.missingPoints(), false, "", ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT,
                     assessment.criteria(), assessment.claims(), assessment.commitments());
         }
-        review.setAnswersJson(recordAnswerAssessment(review.getAnswersJson(),
+        review.setAnswersJson(recordAnswerAssessment(review, review.getAnswersJson(),
                 new ManagerReportReviewQualityService.ReviewAnswer(-1, planQuestion.question(), clean(messageText),
                         assessment.accepted(), assessment.score(), assessment.reason(), assessment.provider(), assessment,
                         answeredAt.toString()), submittedAt != null));
@@ -1774,17 +1821,18 @@ public class ManagerReportReviewTelegramService {
         aiAvailabilityService.resume(review, now, "review-completed");
         long answeredIssues = issueService.answeredCount(review);
         long withdrawnIssues = issueService.withdrawnCount(review);
+        boolean allWithdrawn = answeredIssues == 0 && withdrawnIssues > 0;
         review.setCompletedAt(now);
         review.setCurrentQuestionIndex(questions(review).size());
         review.setReplyPromptMessageId(null);
         review.setStatus(ManagerReportReviewStatus.COMPLETED);
-        review.setAnswerQuality(withdrawnIssues > 0 ? "PASSED_WITH_WITHDRAWALS" : "ACCEPTED");
+        review.setAnswerQuality(allWithdrawn ? "REPORT_WITHDRAWN" : withdrawnIssues > 0 ? "PASSED_WITH_WITHDRAWALS" : "ACCEPTED");
         review.setAnswerQualityReason(limit(clean(finalReason), 1000));
         boolean accessRestored = review.getRestrictedAt() != null
                 && review.getRestrictionReleasedAt() == null;
         if (accessRestored) review.setRestrictionReleasedAt(now);
         sessionRepository.save(review);
-        event(review, "REVIEW_COMPLETED", actor == null ? null : actor.getId(), actorRole(review),
+        event(review, allWithdrawn ? "REVIEW_CANCELLED_NO_VALID_ISSUES" : "REVIEW_COMPLETED", actor == null ? null : actor.getId(), actorRole(review),
                 "telegram", review.isTestMode()
                         ? "Тестовый аудит завершён; действующие вопросы отвечены правильно"
                         : "Все действующие вопросы пройдены правильно");
@@ -1801,9 +1849,10 @@ public class ManagerReportReviewTelegramService {
                         ? "🧪 <b>Тестовый аудит завершён</b>\n\n"
                         + "Попытка сохранена в «Контроле менеджеров»: там доступны ответы, "
                         + "оценки DeepSeek и история событий.\n\n"
+                        : allWithdrawn ? "ℹ️ <b>Аудит закрыт: действующих замечаний не осталось</b>\n\n"
                         : "✅ <b>Отчёт принят</b>\n\n")
-                        + "Вы изучили замечания и правильно ответили на "
-                        + answeredIssues + " действующих вопросов."
+                        + (allWithdrawn ? "Вопросы сняты после сверки. Это не оценка правильности прежних ответов."
+                        : "Вы изучили замечания и правильно ответили на " + answeredIssues + " действующих вопросов.")
                         + "\nВыполнение обещанных действий проверяется по карточкам и событиям системы."
                         + (withdrawnIssues > 0
                         ? "\n\nСнято замечаний после проверки источников или решения владельца: " + withdrawnIssues + "."
@@ -1940,34 +1989,19 @@ public class ManagerReportReviewTelegramService {
     private String answerDirectionsHtml(ManagerReportReviewQualityService.ReviewQuestion question) {
         if (workerGoalQuestion(question)) return "\n\n📌 <b>Объясните недобор и помощь специалисту.</b>\n\n"
                 +escape(workerGoalAnswerDirections());
-        return "\n\n📌 <b>Ответ должен содержать выполненные действия и их фактический результат.</b>\n\n"
-                + escape(answerResultDirections())
-                + "\n\n🧭 <b>Подумайте и сформулируйте вывод:</b>"
-                + "\n• что в ответе или действии было недостаточно;"
-                + "\n• какой принцип работы здесь важен;"
-                + "\n• как вы самостоятельно поступите в похожей ситуации."
-                + "\n\n<i>Готовой формулировки нет — ответьте своими словами.</i>";
+        return "\n\n📌 <b>Ответьте коротко по этому случаю.</b>\n\n" + escape(answerResultDirections());
     }
 
     private String answerDirectionsPlain(ManagerReportReviewQualityService.ReviewQuestion question) {
         if (workerGoalQuestion(question)) return "\n\n📌 Объясните недобор и помощь специалисту.\n\n"+workerGoalAnswerDirections();
-        return "\n\n📌 Ответ должен содержать выполненные действия и их фактический результат.\n\n"
-                + answerResultDirections()
-                + "\n\nПодумайте и сформулируйте вывод:"
-                + "\n• что в ответе или действии было недостаточно;"
-                + "\n• какой принцип работы здесь важен;"
-                + "\n• как вы самостоятельно поступите в похожей ситуации."
-                + "\n\nГотовой формулировки нет — ответьте своими словами.";
+        return "\n\n📌 Ответьте коротко по этому случаю.\n\n" + answerResultDirections();
     }
 
     private String answerResultDirections() {
-        return "Одного описания решения или обещания «проверю», «сделаю» недостаточно. "
-                + "По конкретному замечанию обязательно напишите:"
-                + "\n1. Что вы уже сделали."
-                + "\n2. Какой результат получили: что показала проверка, что изменилось или осталось нерешённым."
-                + "\n3. Где можно проверить этот результат: карточка, заказ или счёт, запись в истории и текущий статус."
-                + "\n\nЕсли подтверждение не найдено или действие пока выполнить нельзя, прямо укажите это, "
-                + "что мешает и какой следующий шаг нужен. Ожидаемый результат обозначайте отдельно от уже полученного.";
+        return "Что сейчас происходит → выполненные действия и их фактический результат (или что ещё не сделано)"
+                + " → следующий шаг → когда и как вы сами проверите результат."
+                + "\n\nДостаточно нескольких предложений. Если ждёте клиента, укажите время своей следующей проверки; "
+                + "обещать за клиента дату ответа или оплаты не нужно. План не считается выполненным действием.";
     }
 
     private void requestMissingAnswerContext(ManagerReportReviewSession review, int questionIndex,
@@ -2201,10 +2235,11 @@ public class ManagerReportReviewTelegramService {
     ) {
         return items.stream().map(item -> new ManagerReportReviewQualityService.ReviewQuestion(
                 "Карточка «" + limit(item.getTitle(), 120) + "» отложена более суток и остаётся нерешённой. "
-                        + "Что конкретно мешает закрыть вопрос, какое действие вы выполните и когда проверите результат?",
-                List.of("конкретная причина задержки по карточке «" + limit(item.getTitle(), 120) + "»",
-                        "следующее действие менеджера или ответственного",
-                        "срок и способ проверки окончательного решения"),
+                        + "Что сейчас мешает? Что уже сделали или ещё не сделали? Какой следующий шаг и когда вы сами проверите результат?",
+                List.of("что сейчас мешает закрыть карточку «" + limit(item.getTitle(), 120) + "»",
+                        "выполненное действие и его результат либо прямое указание, что ещё не сделано",
+                        "конкретный следующий шаг менеджера",
+                        "когда и как менеджер проверит результат, без обещания срока оплаты или ответа клиента"),
                 List.of(item.getId())
         )).toList();
     }
@@ -2284,13 +2319,21 @@ public class ManagerReportReviewTelegramService {
             if (same < 0) result.add(question);
             else {
                 var existing = result.get(same);
-                var points = new java.util.LinkedHashSet<>(existing.expectedPoints());
-                points.addAll(question.expectedPoints());
                 var sources = new java.util.LinkedHashSet<>(existing.sourceTaskIds());
                 sources.addAll(question.sourceTaskIds());
+                // One source case gets one question. The required deferred-card question owns
+                // its four criteria; concatenating both versions used to double the examination.
+                var chosen = question.question().startsWith("Карточка «") ? question : existing;
+                var chats = new java.util.LinkedHashSet<>(existing.sourceChatItemIds());
+                chats.addAll(question.sourceChatItemIds());
+                boolean deferredCard = chosen.question().startsWith("Карточка «") && chosen.expectedPoints().size() == 4
+                        && chosen.expectedPoints().getLast().contains("без обещания срока оплаты");
+                var points = new java.util.LinkedHashSet<>(existing.expectedPoints());
+                points.addAll(question.expectedPoints());
                 result.set(same, new ManagerReportReviewQualityService.ReviewQuestion(
-                        existing.question() + (existing.question().equals(question.question()) ? "" : "\n" + question.question()),
-                        List.copyOf(points), List.copyOf(sources)));
+                        deferredCard ? chosen.question() : existing.question()
+                                + (existing.question().equals(question.question()) ? "" : "\n" + question.question()),
+                        deferredCard ? chosen.expectedPoints() : List.copyOf(points), List.copyOf(sources), List.copyOf(chats)));
             }
         }
         return List.copyOf(result);
@@ -2370,7 +2413,8 @@ public class ManagerReportReviewTelegramService {
         event.setSource(limit(clean(source), 32));
         // Evidence is a checksummed JSON envelope in LONGTEXT. Trimming or cutting it breaks
         // original-evidence retries, especially when the fresh facts follow historical context.
-        event.setPayloadText("ANSWER_EVIDENCE_SNAPSHOT".equals(eventType) ? payload : limit(clean(payload), 12_000));
+        event.setPayloadText(java.util.Set.of("ANSWER_EVIDENCE_SNAPSHOT", "ANSWER_EVIDENCE_SUPPLEMENT",
+                "ANSWER_ASSESSMENT_VERSION").contains(eventType) ? payload : limit(clean(payload), 12_000));
         eventRepository.save(event);
     }
 

@@ -14,4 +14,7 @@ public interface CommonInvoiceUnpaidAttention {
 
     /** Empty while the bad-review cycle runs on its own; otherwise the reason for the manager. */
     Optional<String> attention(Long invoiceId, LocalDateTime now);
+
+    /** A recorded unpaid-to-ban decision with no unfinished work or financial reconciliation. */
+    default boolean completedBan(Long invoiceId) { return false; }
 }

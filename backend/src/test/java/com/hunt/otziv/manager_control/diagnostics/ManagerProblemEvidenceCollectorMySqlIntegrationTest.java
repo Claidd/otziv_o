@@ -97,7 +97,11 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         assertThat(facts).anyMatch(f -> f.reference().equals("message:57823:author_is_audited_manager") && List.of("0", "false").contains(f.value()));
         assertThat(facts).anyMatch(f -> f.reference().equals("message:57822:edited_text") && f.value().contains("Уточнение"));
         assertThat(facts.toString()).doesNotContain("private.test");
-        assertThat(facts).anyMatch(f -> f.field().equals("staff_chat_scope") && f.value().contains("не прочтение клиентом, поступление оплаты"));
+        assertThat(facts).contains(new ManagerProblemDiagnosticsService.Fact(
+                "message:57822:communication_recorded", "client_chat_message", "communication_recorded", "true"));
+        assertThat(facts).filteredOn(f -> f.field().equals("staff_chat_scope")).singleElement()
+                .satisfies(f -> assertThat(f.value()).contains("факт написанного", "не подтверждение доставки",
+                        "прочтения клиентом", "поступления оплаты"));
         assertThat(collector.collect(10L).facts()).isEqualTo(facts); // polling does not invent new evidence
     }
 

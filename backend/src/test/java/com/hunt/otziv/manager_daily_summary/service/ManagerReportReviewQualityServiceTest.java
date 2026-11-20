@@ -21,6 +21,36 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 class ManagerReportReviewQualityServiceTest {
+    @Test void recordedManualReminderIsCreditedWithoutPretendingItProvesReceiptOrPayment() throws Exception {
+        String raw = RecordedCommunicationEvidenceTest.message("57822","1","2026-11-19T12:05:46","0");
+        var submitted = java.time.ZonedDateTime.parse("2026-11-19T13:00:00+08:00");
+        String report = RecordedCommunicationEvidence.supplement(raw,"",submitted);
+        java.util.Map<String,String> evidence = org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"evidence",report);
+        var mapper = new ObjectMapper();
+        var refs = evidence.keySet().stream().toList();
+        String answer = "Напоминание клиенту отправлено 19.11.26 в 12:05.";
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(
+                assessment("UNVERIFIABLE",answer,refs.getFirst(),"COMPLETED_ACTION","UNVERIFIABLE","Нет квитанции доставки"));
+        root.put("contextStatus","INSUFFICIENT");
+        var claim=(com.fasterxml.jackson.databind.node.ObjectNode)root.path("claims").get(0);
+        claim.put("temporal","HISTORICAL");
+        var claimRefs=claim.putArray("evidenceRefs"); refs.forEach(claimRefs::add);
+        var checks=claim.putArray("factChecks");
+        for (var field:List.of("communication_recorded","author_is_audited_manager","message_at"))
+            checks.addObject().put("factId","message:57822:"+field).put("assertedValue",
+                    field.equals("message_at")?"2026-11-19T12:05:46":field.equals("communication_recorded")?"true":"1");
+        provider(root.toString());
+        var result=service.assessAnswer(report,question(),answer,false,List.of(),false,submitted);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.reason()).contains("Прочтение и оплата проверяются отдельно");
+
+        // A compound statement must not inherit the communication verdict.
+        String mixed=answer+" Клиент оплатил счёт.";
+        claim.put("answerQuote",mixed);
+        ((com.fasterxml.jackson.databind.node.ObjectNode)root.path("criteria").get(0)).put("answerQuote",mixed);
+        provider(root.toString());
+        assertThat(service.assessAnswer(report,question(),mixed,false,List.of(),false,submitted).accepted()).isFalse();
+    }
 
     private AiProviderRouter providerRouter;
     private AppSettingService settings;

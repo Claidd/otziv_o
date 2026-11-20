@@ -379,6 +379,19 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(merged.getLast()).isEqualTo(unrelated);
     }
 
+    @Test void requiredDeferredCardUsesFourPlainCriteriaWithoutDuplicatingTheSameCase() {
+        var item=source(43,189,"COMMON_INVOICE_DEFERRED"); item.setTitle("Асахи — общий счёт");
+        List<ManagerReportReviewQualityService.ReviewQuestion> deferred = ReflectionTestUtils.invokeMethod(service,"deferredQuestions",List.of(item));
+        var daily=new ManagerReportReviewQualityService.ReviewQuestion("Почему счёт в бане?",List.of("причина","план","срок"),List.of(42L));
+        when(sources.findAllById(any())).thenReturn(List.of(source(42,189,"COMMON_INVOICE"),item));
+        List<ManagerReportReviewQualityService.ReviewQuestion> merged=ReflectionTestUtils.invokeMethod(service,"withGoalQuestions",List.of(daily),deferred);
+        assertThat(merged).hasSize(1);
+        assertThat(merged.getFirst().expectedPoints()).hasSize(4);
+        assertThat(merged.getFirst().question()).isEqualTo(deferred.getFirst().question());
+        assertThat(merged.getFirst().question()).contains("когда вы сами проверите результат");
+        assertThat(merged.getFirst().sourceTaskIds()).containsExactly(42L,43L);
+    }
+
     @Test
     void shadowStoresModelDecisionButCannotPassOrRestrictEvenOverdueAudit() {
         when(rollout.isShadowFor(review)).thenReturn(true);
@@ -456,7 +469,7 @@ class ManagerReportReviewEvidenceFlowTest {
         ArgumentCaptor<String> originalEvidence = ArgumentCaptor.forClass(String.class);
         verify(quality).assessAnswer(originalEvidence.capture(), eq(question), eq(answer), eq(false), any(), eq(false), eq(submittedAt));
         assertThat(originalEvidence.getValue()).contains("COLLECTING").doesNotContain("PAID");
-        verify(context).refreshSources(anyString(), eq(List.of(42L)), eq(9L));
+        verify(context, times(2)).refreshSources(anyString(), eq(List.of(42L)), eq(9L));
         assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
         assertThat(quality.latestAnswerRecordedAt(review.getAnswersJson(), 0)).isEqualTo(submittedAt);
     }
@@ -490,7 +503,7 @@ class ManagerReportReviewEvidenceFlowTest {
 
         assertThat(result).contains("по данным на момент его отправки");
         verify(quality).assessAnswer(eq(initialContext.getValue()), eq(question), eq(answer), eq(false), any(), eq(false), eq(submittedAt));
-        verify(context).refreshSources(anyString(), eq(List.of(42L)), eq(9L));
+        verify(context, times(2)).refreshSources(anyString(), eq(List.of(42L)), eq(9L));
         assertThat(review.getCompletedAt()).isNull();
     }
 
@@ -767,7 +780,7 @@ class ManagerReportReviewEvidenceFlowTest {
         when(context.resolvedSatisfactorily(42L)).thenReturn(resolved);
         var pending = new java.util.concurrent.atomic.AtomicBoolean(true);
         when(issues.isPending(review, 0)).thenAnswer(ignored -> pending.get());
-        doAnswer(ignored -> { pending.set(false); return 1; }).when(issues).withdrawResolvedSourceIssues(eq(review), any());
+        doAnswer(ignored -> pending.getAndSet(false) ? 1 : 0).when(issues).withdrawResolvedSourceIssues(eq(review), any());
         when(issues.nextPending(review, 0)).thenReturn(Optional.of(next));
         when(issues.nextPending(review, 1)).thenReturn(Optional.of(next));
         when(issues.isPending(review, 1)).thenReturn(true);

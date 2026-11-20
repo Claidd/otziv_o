@@ -25,6 +25,24 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ManagerControlInvoiceDiagnosticsTest {
+    @Test void completedBanLeavesBoardAndAuditButErrorsAndUnavailableEvidenceStayVisible() {
+        var invoice = invoice(CommonInvoiceStatus.BAN, null);
+        given(invoice, List.of());
+        var cycle = mock(com.hunt.otziv.common_billing.api.CommonInvoiceUnpaidAttention.class);
+        ReflectionTestUtils.setField(diagnostics, "unpaidCycle", cycle);
+        when(cycle.completedBan(invoice.getId())).thenReturn(true);
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isTrue();
+        assertThatCode(() -> diagnostics.requireResolved(invoice.getId())).doesNotThrowAnyException();
+        when(invoices.findManagerControlInvoices(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any()))
+                .thenReturn(List.of(invoice));
+        assertThat(diagnostics.countActions(null)).isZero();
+        invoice.setLastError("UNKNOWN payment");
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+        assertThat(diagnostics.countActions(null)).isEqualTo(1);
+        invoice.setLastError(null);
+        when(cycle.completedBan(invoice.getId())).thenThrow(new IllegalStateException("unavailable"));
+        assertThat(diagnostics.resolvedForAudit(invoice.getId())).isFalse();
+    }
     private final CommonInvoiceRepository invoices = mock(CommonInvoiceRepository.class);
     private final CommonInvoiceOrderRepository positions = mock(CommonInvoiceOrderRepository.class);
     private final AppSettingService settings = mock(AppSettingService.class);

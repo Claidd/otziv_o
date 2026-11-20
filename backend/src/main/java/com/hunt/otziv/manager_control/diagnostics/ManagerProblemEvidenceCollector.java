@@ -357,13 +357,15 @@ public class ManagerProblemEvidenceCollector {
                     "sender_role", "actor_user_id", "author_is_audited_manager", "matched_company_count",
                     "message_at", "created_at", "edited_at", "edit_count");
             addRecordedText(facts, ref + ":recorded_text", "recorded_text", message.get("message_text"));
+            facts.add(new Fact(ref + ":communication_recorded", "client_chat_message", "communication_recorded", "true"));
             if (message.get("edited_text") != null)
                 addRecordedText(facts, ref + ":edited_text", "recorded_edited_text", message.get("edited_text"));
         }
         facts.add(new Fact("invoice:" + invoiceId + ":staff_chat_scope", "history_coverage", "staff_chat_scope",
                 "Записанные сообщения STAFF по компаниям этого счёта с " + since + " до момента сбора фактов"
                         + ". Авторство проверяется по actor_user_id; INCOMING означает получение события шлюзом. "
-                        + "Сообщение подтверждает его содержание и автора, но не прочтение клиентом, поступление оплаты или выполнение заказа. "
+                        + "Сообщение подтверждает факт написанного в этом чате напоминания и его автора. "
+                        + "Это не подтверждение доставки на устройство, прочтения клиентом, поступления оплаты или выполнения заказа. "
                         + "Неоднозначно привязанные сообщения исключены; общий чат нескольких компаний одного менеджера допустим. "
                         + "Отсутствие записи не доказывает отсутствие напоминания."
                         + (messages.size() > 20 ? " Показаны только последние 20 сообщений." : "")));

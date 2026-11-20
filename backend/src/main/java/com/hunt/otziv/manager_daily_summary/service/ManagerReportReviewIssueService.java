@@ -112,7 +112,7 @@ public class ManagerReportReviewIssueService {
             ManagerReportReviewSession review,
             List<ManagerReportReviewQualityService.ReviewQuestion> questions
     ) {
-        if (review == null || review.getId() == null || questions == null || questions.isEmpty()) {
+        if (review == null || review.getId() == null || review.getCompletedAt() != null || questions == null || questions.isEmpty()) {
             return 0;
         }
         List<ManagerReportReviewIssue> issues = ensureIssues(review, questions);
@@ -123,7 +123,8 @@ public class ManagerReportReviewIssueService {
 
         List<ManagerReportReviewIssue> withdrawn = new ArrayList<>();
         for (ManagerReportReviewIssue issue : issues) {
-            if (issue.getStatus() != ManagerReportReviewIssueStatus.PENDING
+            if (!List.of(ManagerReportReviewIssueStatus.PENDING, ManagerReportReviewIssueStatus.DISPUTE_PENDING,
+                    ManagerReportReviewIssueStatus.DISPUTED, ManagerReportReviewIssueStatus.NEEDS_CONTEXT).contains(issue.getStatus())
                     || issue.getQuestionIndex() < 0
                     || issue.getQuestionIndex() >= questions.size()) {
                 continue;
@@ -133,6 +134,10 @@ public class ManagerReportReviewIssueService {
                     && sourceIds.stream().allMatch(id -> taskContextService.resolvedSatisfactorily(id)
                             || taskContextService.systemOwnsSource(id, review.managerId()))) {
                 issue.setStatus(ManagerReportReviewIssueStatus.WITHDRAWN);
+                disputes(review).stream().filter(dispute -> issue.getId().equals(dispute.getIssue().getId())
+                        && UNRESOLVED_DISPUTES.contains(dispute.getStatus())).forEach(dispute ->
+                        supersede(dispute, "Снято системой: связанная проблема устранена или передана системной сверке. "
+                                + "Это не оценка прежнего ответа и не решение владельца по существу спора."));
                 withdrawn.add(issue);
             }
         }
@@ -140,6 +145,30 @@ public class ManagerReportReviewIssueService {
             issueRepository.saveAll(withdrawn);
         }
         return withdrawn.size();
+    }
+
+    /** Only untouched system requests can return to automated assessment; a human dispute stays with its owner. */
+    @Transactional
+    public boolean reopenSystemVerification(ManagerReportReviewSession review, int questionIndex) {
+        if (review == null || review.getCompletedAt() != null) return false;
+        var dispute = unresolvedDispute(review).filter(value -> value.isVerificationRequestedBySystem()
+                && value.getStatus() == ManagerReportReviewDisputeStatus.DRAFT
+                && clean(value.getManagerText()).isBlank() && value.getIssue().getQuestionIndex() == questionIndex);
+        if (dispute.isEmpty()) return false;
+        var issue = dispute.get().getIssue();
+        supersede(dispute.get(), "Появились новые данные: сохранённый ответ возвращён в автоматическую проверку. "
+                + "Ответ ещё не признан верным; прежняя проверка сохранена в истории.");
+        issue.setStatus(ManagerReportReviewIssueStatus.PENDING);
+        issueRepository.save(issue);
+        return true;
+    }
+
+    private void supersede(ManagerReportReviewDispute dispute, String reason) {
+        dispute.setStatus(ManagerReportReviewDisputeStatus.SUPERSEDED);
+        dispute.setResolvedAt(LocalDateTime.now());
+        dispute.setResolvedByUserId(null);
+        dispute.setOwnerComment(reason);
+        disputeRepository.save(dispute);
     }
 
     @Transactional(readOnly = true)

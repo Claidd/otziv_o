@@ -409,7 +409,7 @@ export interface ManagerReportReviewIssue {
   question: string;
   status: 'PENDING' | 'ANSWERED' | 'DISPUTE_PENDING' | 'DISPUTED' | 'WITHDRAWN' | 'NEEDS_CONTEXT';
   disputeId?: number | null;
-  disputeStatus?: 'DRAFT' | 'OPEN' | 'ACCEPTED' | 'REJECTED' | 'NEEDS_CONTEXT' | null;
+  disputeStatus?: 'DRAFT' | 'OPEN' | 'ACCEPTED' | 'REJECTED' | 'NEEDS_CONTEXT' | 'SUPERSEDED' | null;
   disputeText?: string | null;
   ownerComment?: string | null;
   disputedAt?: string | null;

@@ -132,6 +132,33 @@ public class CommonInvoiceArchiveWorkflow implements com.hunt.otziv.common_billi
      */
     @Override
     @Transactional(readOnly = true)
+    public boolean completedBan(Long invoiceId) {
+        CommonInvoice invoice = invoiceId == null ? null : invoiceRepository.findById(invoiceId).orElse(null);
+        if (invoice == null || invoice.getStatus() != CommonInvoiceStatus.BAN
+                || !"UNPAID".equals(invoice.getPreviousStatus()) || !"BAN".equals(invoice.getCloseReason())
+                || invoice.getClosedAt() == null || normalize(invoice.getClosedBy()).isBlank()
+                || !normalize(invoice.getLastError()).isBlank()
+                || !normalize(invoice.getPaymentSuccessNotificationError()).isBlank()
+                || invoice.getPaidKopecks() != 0 || invoice.getPaidAt() != null
+                || invoice.isPaperInvoiceReviewHold() || invoice.isPaperInvoiceAutomationHold()
+                || !normalize(invoice.getPaperBankDocumentId()).isBlank()
+                || !normalize(invoice.getPaymentMessageOperationId()).isBlank() && !invoice.isPaymentMessageConfirmed()
+                || manualPaymentWorkflow.hasUnresolvedBanPayment(invoice)) return false;
+        var items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId).stream()
+                .filter(CommonInvoiceOrder::isActiveMembership).toList();
+        if (items.isEmpty() || items.stream().anyMatch(item -> item.isPaid() || item.getOrder() == null
+                || item.getOrder().getId() == null
+                || !STATUS_BAN.equals(OrderManualArchivePolicy.statusTitle(item.getOrder())))) return false;
+        var orderIds = items.stream().map(item -> item.getOrder().getId()).distinct().toList();
+        var summaries = badReviewTaskService.getSummaryByOrderIds(orderIds);
+        return orderIds.stream().allMatch(id -> summaries.containsKey(id) && summaries.get(id).total() > 0
+                && summaries.get(id).pending() == 0
+                && summaries.get(id).done() + summaries.get(id).canceled() == summaries.get(id).total()
+                && !recoveryGateService.hasActiveRecoveryTasks(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<String> attention(Long invoiceId, LocalDateTime now) {
         CommonInvoice invoice = invoiceId == null ? null : invoiceRepository.findById(invoiceId).orElse(null);
         if (invoice == null || invoice.getStatus() != CommonInvoiceStatus.UNPAID) {
