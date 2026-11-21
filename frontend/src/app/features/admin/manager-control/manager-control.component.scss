@@ -477,6 +477,15 @@ p {
   background: linear-gradient(135deg, rgba(121, 83, 190, 0.13), rgba(255, 255, 255, 0.94));
 }
 
+:host-context(.otziv-dark-theme) {
+  .summary-preview-button { background: var(--otziv-muted-surface); }
+  .summary-telegram-button { background: var(--otziv-action-soft); }
+  .summary-audit-test-button {
+    background: var(--otziv-tone-publication-surface);
+    color: #d7b6ff;
+  }
+}
+
 .summary-preview-backdrop {
   position: fixed;
   z-index: 1200;

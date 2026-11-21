@@ -4,6 +4,15 @@ import { readFile } from 'node:fs/promises';
 import { containerBounds } from './container-smoke.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 
+test('the shipped Angular frontend uses the activated NGINX runtime', async () => {
+  const activations = JSON.parse(await readFile(new URL('./reviewed-image-activations.json', import.meta.url), 'utf8'));
+  const nginx = activations.images.find(image => image.component === 'nginx');
+  const dockerfile = await readFile(new URL('../../frontend/Dockerfile', import.meta.url), 'utf8');
+  const stages = [...dockerfile.matchAll(/^FROM\s+(\S+)/gmi)];
+  assert.match(nginx.reference, /@sha256:[a-f0-9]{64}$/);
+  assert.equal(stages.at(-1)?.[1], nginx.reference);
+});
+
 test('Chromium profile denies by default, adds namespace syscalls without host capabilities', async () => {
   const profile = JSON.parse(await readFile(new URL('./chromium-seccomp.json', import.meta.url), 'utf8'));
   assert.equal(profile.defaultAction, 'SCMP_ACT_ERRNO');

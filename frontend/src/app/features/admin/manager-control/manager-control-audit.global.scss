@@ -341,3 +341,42 @@ a.review-action.client-audit-chat {
 }
 .report-review-events article { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: 0.4rem; }
 .report-review-events span { margin-top: 0.15rem; white-space: pre-line; }
+
+body.otziv-dark-theme .report-review-card {
+  color-scheme: dark;
+  color: var(--otziv-dark);
+
+  .report-review-dates button, .report-review-recent button, .report-review-item,
+  .report-review-dates input, .report-review-resolution textarea, .report-review-issues article {
+    color: var(--otziv-dark);
+    background: var(--otziv-muted-surface);
+    border-color: var(--otziv-info);
+  }
+  .report-review-recent button.active {
+    background: var(--otziv-action-soft);
+    border-color: var(--otziv-action);
+    color: var(--otziv-action-accent);
+  }
+  .report-review-item.green, .report-review-issues article.issue-withdrawn, .report-review-resolution__accept {
+    border-color: var(--otziv-tone-success-border);
+    background: var(--otziv-tone-success-surface);
+  }
+  .report-review-item.yellow, .report-review-issues article.issue-needs_context {
+    border-color: var(--otziv-tone-wait-border);
+    background: var(--otziv-tone-wait-surface);
+  }
+  .report-review-item.red, .report-review-issues article:is(.issue-disputed, .issue-dispute_pending),
+  .report-review-resolution, .report-review-resolution__confirm {
+    border-color: var(--otziv-tone-bad-border);
+    background: var(--otziv-tone-bad-surface);
+  }
+  .report-review-resolution__context {
+    background: var(--otziv-tone-walk-surface);
+    color: var(--otziv-theme-control);
+  }
+  .report-review-resolution__accept { color: var(--otziv-success); }
+  .report-review-restriction, .report-review-resolution__confirm { color: var(--otziv-danger); }
+  .report-review-item > summary small, .report-review-item > summary em,
+  .report-review-details, .report-review-events { color: var(--otziv-info); }
+  .report-review-details { border-color: var(--otziv-surface-border-neutral); }
+}

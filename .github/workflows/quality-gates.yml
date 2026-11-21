@@ -1518,9 +1518,10 @@ jobs:
         run: |
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
             --memory 128m --pids-limit 64 --entrypoint sh otziv-web-ci -ec '
-              nginx -v
+              nginx -v 2>&1 | grep -Fx "nginx version: nginx/1.30.7"
               apk --no-network info -v -e pcre2 | grep -Fx pcre2-10.49-r0
-              apk --no-network info -v -e libxslt | grep -Fx libxslt-1.1.42-r3
+              apk --no-network info -v -e libxslt | grep -Fx libxslt-1.1.43-r4
+              apk --no-network info -v -e libxml2 | grep -Fx libxml2-2.13.9-r3
               test -s /usr/share/nginx/html/index.html
               test -s /etc/nginx/templates/default.conf.template
             '
