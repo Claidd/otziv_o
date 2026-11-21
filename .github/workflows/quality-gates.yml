@@ -117,6 +117,7 @@ on:
           - c56-mysql
           - c57-mysql
           - c60-mysql
+          - c62-mysql
           - c58-postgres
           - c61-nginx
           - c61-phpmyadmin
@@ -379,6 +380,7 @@ jobs:
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c56-mysql
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c57-mysql
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c60-mysql
+          ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c62-mysql
       - name: Verify the reviewed C51 PostgreSQL deployment bundle
         shell: pwsh
         run: ./infrastructure/scripts/security/test-coordinated-postgres-deploy-bundle.ps1
