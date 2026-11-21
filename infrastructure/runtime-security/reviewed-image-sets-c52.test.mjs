@@ -46,10 +46,7 @@ test('C52 nginx keeps the C50 service scope and installs only the official libxs
   assert.throws(() => validateReviewedImageSet('c52-nginx', Buffer.from(JSON.stringify(incomplete)), baseline), /service_coverage_changed/);
 });
 
-test('the web image pins the same fix for its Alpine 3.21 base and the gate checks the shipped version', async () => {
-  const dockerfile = (await readFile(new URL('../../frontend/Dockerfile', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
-  assert.match(dockerfile, /--repository https:\/\/dl-cdn\.alpinelinux\.org\/alpine\/v3\.21\/main [^\n]*\blibxslt=1\.1\.42-r3\b/);
-  assert.ok(dockerfile.includes("apk --no-network info -v -e libxslt | grep -Fx 'libxslt-1.1.42-r3'"));
+test('the web gate verifies the libxslt package provided by the reviewed NGINX runtime', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/quality-gates.yml', import.meta.url), 'utf8');
-  assert.ok(workflow.includes('apk --no-network info -v -e libxslt | grep -Fx libxslt-1.1.42-r3'));
+  assert.ok(workflow.includes('apk --no-network info -v -e libxslt | grep -Fx libxslt-1.1.43-r4'));
 });

@@ -49,6 +49,24 @@
   color: #287767;
 }
 
+body.otziv-dark-theme {
+  .worker-response-legend .yellow, .risk-response-indicator:is(.pending, .sent) {
+    background: var(--otziv-tone-wait-surface);
+    color: var(--otziv-warning);
+  }
+  .worker-response-legend .red, .risk-response-indicator:is(.overdue, .failed) {
+    background: var(--otziv-tone-bad-surface);
+    color: var(--otziv-danger);
+  }
+  .worker-response-legend .green, .risk-response-indicator.accepted {
+    background: var(--otziv-tone-success-surface);
+    color: var(--otziv-success);
+  }
+  .worker-response-legend i, .risk-response-indicator i {
+    box-shadow: none;
+  }
+}
+
 .risk-response-indicator {
   width: 100%;
   justify-content: center;
