@@ -280,6 +280,28 @@ public class OrderEditService {
         }
     }
 
+    /**
+     * A live order leaving «Архив» for work while its specialist no longer works moves to {@code newWorkerId} with the
+     * scope of a specialist change in this editor: unpublished reviews, waiting bad-review and recovery tasks, the
+     * company membership. The payment-recipient guard applies (it throws when the recipient is fixed); the caller
+     * holds the order's mutation lock.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void reassignWorkerOfOrderLeavingArchive(Order order, Long newWorkerId) {
+        contractorRouteAssignmentGuard.requireWorkerReassignmentAllowed(order.getId());
+        Worker newWorker = workerService.getWorkerById(newWorkerId);
+        Company company = order.getCompany();
+        requireWorkerBelongsToCompanyManager(newWorker, company);
+        order.setWorker(newWorker);
+        reviewRepository.reassignWorkerByOrderId(order.getId(), newWorker);
+        badReviewTaskService.reassignPendingTasksForOrder(order.getId(), newWorker);
+        reviewRecoveryTaskService.reassignPendingTasksForOrder(order.getId(), newWorker);
+        if (company.getWorkers() == null) {
+            company.setWorkers(new HashSet<>());
+        }
+        company.getWorkers().add(newWorker);
+    }
+
     private void requireWorkerBelongsToCompanyManager(Worker worker, Company company) {
         if (worker == null || company == null || company.getManager() == null) {
             throw new IllegalArgumentException("Специалист или менеджер компании не найден");

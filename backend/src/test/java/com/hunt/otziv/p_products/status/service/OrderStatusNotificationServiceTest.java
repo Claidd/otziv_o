@@ -516,6 +516,20 @@ class OrderStatusNotificationServiceTest {
         assertFalse(service.hasWorkerWithTelegram(order));
     }
 
+    @Test
+    void aDeactivatedSpecialistsWorkGroupGetsNoOrderNotifications() {
+        OrderStatusNotificationService service = service();
+        Worker worker = new Worker();
+        worker.setUser(user(321L));
+        worker.getUser().setActive(false);
+        Order order = new Order();
+        order.setCompany(company("Компания"));
+        order.setWorker(worker);
+        order.setDetails(List.of(new OrderDetails()));
+
+        assertFalse(service.hasWorkerWithTelegram(order));
+    }
+
     private OrderStatusNotificationService service() {
         var occurrences=org.mockito.Mockito.mock(OrderNotificationOccurrences.class);
         org.mockito.Mockito.lenient().when(occurrences.reserve(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong())).thenReturn("fixture-operation");
@@ -573,6 +587,7 @@ class OrderStatusNotificationServiceTest {
 
     private User user(Long telegramChatId) {
         User user = new User();
+        user.setActive(true);
         user.setTelegramChatId(telegramChatId);
         user.setWorkerTelegramGroupChatId(-telegramChatId);
         return user;

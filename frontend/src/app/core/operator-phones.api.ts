@@ -11,7 +11,11 @@ export interface PhoneOperatorOption {
 export interface DeviceToken {
   token: string;
   createdAt?: string | null;
+  /** The token works now: switched on and not expired. */
   active: boolean;
+  expiresAt?: string | null;
+  /** ACTIVE, EXPIRED, DISABLED or LEGACY_NO_EXPIRY (an old token without an expiry date). */
+  status?: 'ACTIVE' | 'EXPIRED' | 'DISABLED' | 'LEGACY_NO_EXPIRY' | null;
 }
 
 export interface OperatorPhone {
@@ -60,6 +64,8 @@ export interface OperatorPhoneRequest {
   active: boolean;
   createDate?: string | null;
   operatorId?: number | null;
+  /** True erases the stored birthday; an empty birthday alone keeps it. */
+  clearBirthday?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })

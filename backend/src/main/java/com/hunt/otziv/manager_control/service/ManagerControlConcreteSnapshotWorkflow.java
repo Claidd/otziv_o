@@ -467,6 +467,8 @@ public class ManagerControlConcreteSnapshotWorkflow {
                 "Есть общие счета с ошибкой или зависшим статусом";
             case "PAYMENT_INTEGRITY" ->
                 "Оплаченный заказ ошибочно вошел в повторный платежный цикл";
+            case "INACTIVE_WORKER_ORDERS" ->
+                "Есть рабочие заказы у отключённых специалистов";
             case "PUBLICATION_DATE_ISSUES" ->
                 "Есть заказы в публикации с отзывами без назначенной даты";
             case "CHAT_BINDING_ISSUES" ->

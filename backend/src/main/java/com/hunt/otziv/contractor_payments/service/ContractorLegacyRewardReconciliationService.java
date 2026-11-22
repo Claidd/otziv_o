@@ -136,11 +136,11 @@ public class ContractorLegacyRewardReconciliationService {
         RunRow run = requireApplicableRun(runId, request.snapshotHash(), db);
         List<ItemRow> items = repository.lockItems(runId, "AUTO", null);
         if (items.stream().anyMatch(item -> !"PENDING".equals(item.status()))) {
-            throw conflict("AUTO-снимок уже применён или изменён");
+            throw conflict("Автоматическая часть проверки уже применена или изменилась. Нажмите «Подготовить проверку» ещё раз.");
         }
         if (repository.lockExistingOrders(items.stream().map(ItemRow::orderId).toList())
                 != items.stream().map(ItemRow::orderId).distinct().count()) {
-            throw conflict("Заказ из AUTO-снимка исчез после PREPARE");
+            throw conflict("Заказ из подготовленной проверки удалён. Нажмите «Подготовить проверку» ещё раз.");
         }
         lockSources(items);
         Map<Long, Long> rowsByOrder = items.stream().collect(Collectors.groupingBy(
@@ -148,7 +148,7 @@ public class ContractorLegacyRewardReconciliationService {
         ));
         if (rowsByOrder.entrySet().stream().anyMatch(entry ->
                 repository.countActiveRows(entry.getKey()) != entry.getValue())) {
-            throw conflict("Состав активных начислений AUTO-заказа изменился после PREPARE");
+            throw conflict("Начисления заказа изменились после подготовки проверки. Нажмите «Подготовить проверку» ещё раз.");
         }
         requireLegacyShadowWithoutCutover();
         requireApplicableRun(runId, request.snapshotHash(), repository.dbNow());
@@ -173,7 +173,7 @@ public class ContractorLegacyRewardReconciliationService {
         DbNow db = repository.dbNow();
         RunRow run = requireApplicableRun(runId, request.snapshotHash(), db);
         if (request.completedOn() == null || !request.completedOn().isBefore(run.startDate())) {
-            throw badRequest("Подтверждённая дата должна быть раньше даты запуска");
+            throw badRequest("Подтверждённая дата должна быть раньше даты запуска новой схемы выплат");
         }
         if (recoveryGateService.hasActiveRecoveryTasks(orderId)) {
             throw conflict("У заказа остаются активные задачи восстановления");
@@ -182,18 +182,18 @@ public class ContractorLegacyRewardReconciliationService {
         if (items.isEmpty()
                 || items.stream().anyMatch(item -> !"PENDING".equals(item.status()))
                 || items.stream().anyMatch(item -> !request.groupHash().equals(item.groupHash()))) {
-            throw conflict("MANUAL-группа отсутствует, уже применена или её hash изменился");
+            throw conflict("Эта группа ручной проверки уже применена или изменилась. Нажмите «Подготовить проверку» ещё раз.");
         }
         repository.lockExistingOrders(List.of(orderId));
         if (items.stream().anyMatch(item -> item.targetRole() == null || item.targetSource() == null)) {
-            throw conflict("Получатель не выводится из неизменяемых связей");
+            throw conflict("Получателя выплаты не удалось определить по данным заказа — нужна ручная проверка.");
         }
         boolean typedAttestation = items.stream().allMatch(this::alreadyTarget);
         if (typedAttestation && items.stream().anyMatch(item -> !repository.exactOriginalSnapshot(item))) {
-            throw conflict("Типизированная MANUAL-группа изменилась после PREPARE");
+            throw conflict("Группа ручной проверки изменилась после подготовки. Нажмите «Подготовить проверку» ещё раз.");
         }
         if (repository.countActiveRows(orderId) != items.size()) {
-            throw conflict("Состав активных начислений заказа изменился после PREPARE");
+            throw conflict("Начисления заказа изменились после подготовки проверки. Нажмите «Подготовить проверку» ещё раз.");
         }
         lockSources(items);
         requireLegacyShadowWithoutCutover();
@@ -250,10 +250,10 @@ public class ContractorLegacyRewardReconciliationService {
     private RunRow requireApplicableRun(long runId, String expectedHash, DbNow db) {
         RunRow run = repository.lockRun(runId);
         if (run == null || !Objects.equals(run.snapshotHash(), expectedHash)) {
-            throw conflict("Snapshot hash не совпадает");
+            throw conflict("Данные изменились после подготовки проверки. Нажмите «Подготовить проверку» ещё раз.");
         }
         if (!run.startDate().equals(db.businessDate()) || !db.now().isBefore(run.expiresAt())) {
-            throw conflict("PREPARE-снимок истёк; выполните PREPARE повторно");
+            throw conflict("Подготовленная проверка устарела (действует только в день подготовки). Нажмите «Подготовить проверку» ещё раз.");
         }
         return run;
     }
@@ -261,7 +261,7 @@ public class ContractorLegacyRewardReconciliationService {
     private void lockSources(List<ItemRow> items) {
         for (ItemRow item : items.stream().sorted(Comparator.comparingLong(ItemRow::zpId)).toList()) {
             zpRepository.findByIdForContractorLedgerUpdate(item.zpId())
-                    .orElseThrow(() -> conflict("Начисление исчезло после PREPARE: " + item.zpId()));
+                    .orElseThrow(() -> conflict("Начисление №" + item.zpId() + " удалено после подготовки проверки. Нажмите «Подготовить проверку» ещё раз."));
         }
     }
 
@@ -269,10 +269,10 @@ public class ContractorLegacyRewardReconciliationService {
         boolean alreadyTarget = alreadyTarget(item);
         if (alreadyTarget) {
             if (!repository.exactOriginalSnapshot(item)) {
-                throw conflict("Начисление изменилось после PREPARE: " + item.zpId());
+                throw conflict("Начисление №" + item.zpId() + " изменилось после подготовки проверки. Нажмите «Подготовить проверку» ещё раз.");
             }
         } else if (repository.casApply(item) != 1) {
-            throw conflict("CAS не подтвердил неизменность начисления: " + item.zpId());
+            throw conflict("Начисление №" + item.zpId() + " изменилось во время применения. Нажмите «Подготовить проверку» ещё раз.");
         }
     }
 
@@ -331,7 +331,7 @@ public class ContractorLegacyRewardReconciliationService {
         if (!run.snapshotHash().equals(hash)
                 || automaticItems.size() != rebuilt.stream()
                         .filter(item -> "AUTO".equals(item.kind())).count()) {
-            throw conflict("Полный PREPARE-снимок или evidence заказа изменился");
+            throw conflict("Данные заказов изменились после подготовки проверки. Нажмите «Подготовить проверку» ещё раз.");
         }
     }
 
@@ -340,7 +340,7 @@ public class ContractorLegacyRewardReconciliationService {
         if (rollout.getAccountingAuthority() != ContractorPaymentAccountingAuthority.LEGACY
                 || accountingPhaseService.lockCurrent() != ContractorAllocationMode.SHADOW
                 || cutoverStateService.lockedStartDate().isPresent()) {
-            throw conflict("Сверка разрешена только в LEGACY + SHADOW, без cutover");
+            throw conflict("Сверка доступна только пока новая схема выплат работает в режиме наблюдения.");
         }
     }
 

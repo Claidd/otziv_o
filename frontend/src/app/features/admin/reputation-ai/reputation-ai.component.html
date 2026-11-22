@@ -1014,6 +1014,9 @@
         @for (warning of status()?.warnings ?? []; track trackText($index, warning)) {
           <p class="muted">{{ warning }}</p>
         }
+        @for (hint of status()?.technicalWarnings ?? []; track trackText($index, hint)) {
+          <p class="muted"><small>{{ hint }}</small></p>
+        }
       </article>
     }
 

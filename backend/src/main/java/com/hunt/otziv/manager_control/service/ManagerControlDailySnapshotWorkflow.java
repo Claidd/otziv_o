@@ -186,6 +186,7 @@ public class ManagerControlDailySnapshotWorkflow {
         // Unbound chats plus bound WhatsApp groups whose stored invite no longer opens them (disjoint sets).
         long chatBindingIssueCount = problemExamples.chatBindingIssueCount(manager,today);
         long paymentIntegrityIssueCount = orderRepository.countPaymentIntegrityIssuesByManager(manager, PAYMENT_AUTOMATION_STATUSES);
+        long inactiveWorkerOrderCount = orderRepository.countWorkOrdersOnInactiveWorkerByManager(manager, INACTIVE_WORKER_ORDER_STATUSES);
         long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
         long unansweredClientMessages = clientChatMessageTrackerService.countDue(manager);
         long suspiciousClientClosures = clientChatMessageTrackerService.countAuditRequired(manager);
@@ -200,6 +201,7 @@ public class ManagerControlDailySnapshotWorkflow {
                 onlySystemReconciliation ? "WORKLOAD" : "ACTION", "sync_problem", "/admin/manager-control/" + manager.getId());
         addProblem(problems, "COMMON_INVOICES", "Общие счета", commonInvoiceActionCount, "CRITICAL", "ACTION", "receipt_long", "/admin/common-billing");
         addProblem(problems, "PAYMENT_INTEGRITY", "Повторная оплата", paymentIntegrityIssueCount, "CRITICAL", "ACTION", "payments", ordersUrl(manager, null));
+        addProblem(problems, "INACTIVE_WORKER_ORDERS", "Заказы у отключённых специалистов", inactiveWorkerOrderCount, "CRITICAL", "ACTION", "person_off", ordersUrl(manager, null));
         addProblem(problems, "PUBLICATION_DATE_ISSUES", "Публикация без даты", publicationDateIssueCount, "CRITICAL", "ACTION", "event_busy", ordersUrl(manager, "Публикация"));
         addProblem(problems, "CHAT_BINDING_ISSUES", "Привязка соцсетей", chatBindingIssueCount, "CRITICAL", "ACTION", "link_off", ordersUrl(manager, null));
         addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
@@ -210,7 +212,7 @@ public class ManagerControlDailySnapshotWorkflow {
         addProblem(problems, "LEADS_WORKLOAD", "Лиды в работе", leadsInWork, "INFO", "WORKLOAD", "groups", "/leads");
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
-        long criticalCount = overdueOrders + openRisks + requiresAttention + (onlySystemReconciliation ? 0 : automationFailureCount) + commonInvoiceActionCount + paymentIntegrityIssueCount + publicationDateIssueCount + chatBindingIssueCount + telegramChatIssueCount + unansweredClientMessages + suspiciousClientClosures + workerActionCount;
+        long criticalCount = overdueOrders + openRisks + requiresAttention + (onlySystemReconciliation ? 0 : automationFailureCount) + commonInvoiceActionCount + paymentIntegrityIssueCount + inactiveWorkerOrderCount + publicationDateIssueCount + chatBindingIssueCount + telegramChatIssueCount + unansweredClientMessages + suspiciousClientClosures + workerActionCount;
         long warningCount = leadActionCount;
         long workloadCount = orderAttention + workerWorkloadCount + leadsInWork + (onlySystemReconciliation ? automationFailureCount : 0);
         // A closed or past day is history: it is read, never created, reopened or rescored.

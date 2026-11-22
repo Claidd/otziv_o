@@ -407,6 +407,8 @@ export class AdminPhonesFacade {
       number: raw.number.trim(),
       fio: this.emptyToNull(raw.fio),
       birthday: raw.birthday || null,
+      // The server keeps the stored birthday for null; an emptied field must say so explicitly.
+      clearBirthday: editing && !raw.birthday,
       amountAllowed: Number(raw.amountAllowed || 0),
       amountSent: !editing || this.counterChanged('amountSent') ? Number(raw.amountSent || 0) : null,
       blockTime: Number(raw.blockTime || 0),

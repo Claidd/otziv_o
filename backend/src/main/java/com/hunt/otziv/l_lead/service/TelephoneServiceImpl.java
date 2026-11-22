@@ -198,7 +198,8 @@ public class TelephoneServiceImpl implements TelephoneService {
                 .id(null)
                 .number(dto.getNumber())
                 .fio(dto.getFio())
-                .birthday(dto.getBirthday() != null ? dto.getBirthday() : LocalDate.now())
+                // An unknown birthday stays empty instead of becoming today's date.
+                .birthday(dto.getBirthday())
                 .amountAllowed(dto.getAmountAllowed())
                 .amountSent(dto.getAmountSent())
                 .blockTime(dto.getBlockTime())

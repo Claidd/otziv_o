@@ -72,10 +72,12 @@ function specialistRequiredError(err: unknown): ArchiveRestoreSpecialistRequired
   if (String(payload.code ?? '').toUpperCase() !== 'SPECIALIST_REQUIRED') {
     return null;
   }
+  const suggested = payload.suggestedWorkerId;
   return {
     message: typeof payload.message === 'string' && payload.message.trim() ? payload.message : SPECIALIST_REQUIRED_FALLBACK,
     code: 'SPECIALIST_REQUIRED',
-    workers: Array.isArray(payload.workers) ? payload.workers : []
+    workers: Array.isArray(payload.workers) ? payload.workers : [],
+    suggestedWorkerId: typeof suggested === 'number' && Number.isSafeInteger(suggested) && suggested > 0 ? suggested : null
   };
 }
 
@@ -699,14 +701,15 @@ export class ManagerArchiveComponent implements OnDestroy {
   private askRestoreSpecialist(error: ArchiveRestoreSpecialistRequiredError): void {
     const workers = error.workers;
     const current = this.restoreWorkerId();
-    const companyWorkers = workers.filter((worker) => worker.companyWorker);
+    const suggested = error.suggestedWorkerId ?? null;
     this.restoreWorkerOptions.set(workers);
     this.restoreWorkerNotice.set(error.message);
-    // Same prefill as recovery tasks: only an unambiguous company specialist is suggested.
+    // The person's choice stays while still offered; otherwise the server's suggestion (the automatic rule),
+    // which the person confirms or changes.
     this.restoreWorkerId.set(
       current != null && workers.some((worker) => worker.id === current)
         ? current
-        : companyWorkers.length === 1 ? companyWorkers[0].id : null
+        : suggested != null && workers.some((worker) => worker.id === suggested) ? suggested : null
     );
   }
 

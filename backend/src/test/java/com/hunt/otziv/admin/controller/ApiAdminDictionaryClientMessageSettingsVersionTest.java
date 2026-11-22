@@ -61,15 +61,39 @@ class ApiAdminDictionaryClientMessageSettingsVersionTest {
         verify(scheduledMessages, never()).releaseDryRunMessagesIfLiveEnabled();
     }
 
+    @Test
+    void anInvalidFieldRefusesTheWholeFormBeforeAnySettingIsWritten() throws Exception {
+        String current = controller.getClientMessageSettings().settingsVersion();
+        // Every interval is 0 here, below its minimum: nothing of the form may be stored, not even the valid switches.
+        ApiAdminDictionaryController.ClientMessageSettingsRequest invalid = request(current, 0);
+
+        assertThatThrownBy(() -> controller.updateClientMessageSettings(invalid))
+                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
+                    assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(error.getReason()).startsWith("Настройки не сохранены: ");
+                });
+
+        verify(settings, never()).setBoolean(anyString(), anyBoolean());
+        verify(settings, never()).setInt(anyString(), org.mockito.ArgumentMatchers.anyInt());
+        verify(settings, never()).setString(anyString(), anyString());
+        verify(scheduledMessages, never()).releaseDryRunMessagesIfLiveEnabled();
+    }
+
     /** All fields at their type defaults except the version and the required working windows. */
     private static ApiAdminDictionaryController.ClientMessageSettingsRequest request(String expectedVersion) throws Exception {
+        return request(expectedVersion, null);
+    }
+
+    /** As above, with every optional number set to {@code optionalNumber}. */
+    private static ApiAdminDictionaryController.ClientMessageSettingsRequest request(String expectedVersion, Integer optionalNumber) throws Exception {
         RecordComponent[] components = ApiAdminDictionaryController.ClientMessageSettingsRequest.class.getRecordComponents();
         Object[] values = new Object[components.length];
         Class<?>[] types = new Class<?>[components.length];
         for (int index = 0; index < components.length; index++) {
             Class<?> type = components[index].getType();
             types[index] = type;
-            values[index] = type == boolean.class ? Boolean.FALSE : type == int.class ? Integer.valueOf(0) : null;
+            values[index] = type == boolean.class ? Boolean.FALSE : type == int.class ? Integer.valueOf(0)
+                    : type == Integer.class ? optionalNumber : null;
             if ("businessWindows".equals(components[index].getName())) values[index] = "10:00-12:00";
             if ("expectedSettingsVersion".equals(components[index].getName())) values[index] = expectedVersion;
         }

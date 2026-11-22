@@ -20,6 +20,12 @@ public class FileUploadGuard {
             "text/csv",
             "text/plain",
             "application/csv",
+            // Browsers and spreadsheet programs label CSV/TSV differently; the content is still checked below.
+            "text/tab-separated-values",
+            "text/x-csv",
+            "application/x-csv",
+            "text/comma-separated-values",
+            "text/x-comma-separated-values",
             "application/vnd.ms-excel",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/octet-stream"
@@ -112,7 +118,7 @@ public class FileUploadGuard {
                 normalizedContentType = normalizedContentType.substring(0, parametersIndex).trim();
             }
             if (!IMPORT_CONTENT_TYPES.contains(normalizedContentType)) {
-                throw badRequest("MIME-тип файла импорта не поддерживается");
+                throw badRequest("Тип файла не распознан. Сохраните файл как CSV, TSV, XLS или XLSX");
             }
         }
 

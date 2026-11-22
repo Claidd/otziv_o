@@ -104,10 +104,18 @@ public class ReputationAiController {
 
     @GetMapping("/status")
     public ReputationAiStatus status(org.springframework.security.core.Authentication authentication) {
-        return statusFor(canSeeInfrastructure(authentication));
+        return statusFor(canSeeInfrastructure(authentication), isAdministrator(authentication));
     }
 
     private ReputationAiStatus statusFor(boolean infrastructureDetails) {
+        return statusFor(infrastructureDetails, false);
+    }
+
+    /**
+     * {@code warnings} speak to the owner in plain words; {@code technicalWarnings} name the settings to change and are
+     * filled for administrators only.
+     */
+    private ReputationAiStatus statusFor(boolean infrastructureDetails, boolean administrator) {
         boolean enabled = runtimeSwitch.isEnabled();
         boolean aiAvailable = aiProviderRouter.activeProviderAvailable();
         boolean searchAvailable = searchProviderRouter.activeProviderAvailable();
@@ -123,25 +131,30 @@ public class ReputationAiController {
         boolean openAiProxyEnabled = properties.getOpenai().getProxy().isEnabled()
                 && !isBlank(properties.getOpenai().getProxy().getHost());
         List<String> warnings = new ArrayList<>();
+        List<String> technicalWarnings = new ArrayList<>();
         if (!enabled) {
             warnings.add("AI и внешний поиск временно отключены оператором.");
         }
         if (enabled && (!aiAvailable || "local".equalsIgnoreCase(aiProviderRouter.activeProviderName()))) {
-            warnings.add("AI-провайдер недоступен. Для DeepSeek укажите REPUTATION_AI_PROVIDER=deepseek и DEEPSEEK_API_KEY.");
+            warnings.add("Нейросеть сейчас недоступна: отчёты не формируются. Сообщите администратору.");
+            technicalWarnings.add("AI-провайдер недоступен. Для DeepSeek укажите REPUTATION_AI_PROVIDER=deepseek и DEEPSEEK_API_KEY.");
         }
         if (enabled && isYandexProvider()
                 && (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName()))) {
-            warnings.add("Публичный поиск выключен. Для Yandex Search укажите REPUTATION_SEARCH_PROVIDER=yandex и ключи.");
+            warnings.add("Поиск по открытым источникам выключен: в отчётах будет меньше данных.");
+            technicalWarnings.add("Публичный поиск выключен. Для Yandex Search укажите REPUTATION_SEARCH_PROVIDER=yandex и ключи.");
         }
         if (enabled && isDeepSeekProvider()
                 && (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName()))) {
             warnings.add("Дополнительный сборщик карт и сайтов недоступен. DeepSeek Web Search продолжит работать, но охват 2ГИС, Яндекс Карт и Google Maps может быть ниже.");
         }
         if (isYandexProvider() && "completion".equalsIgnoreCase(properties.getYandex().getApiMode())) {
-            warnings.add("YandexGPT работает через legacy completion API без встроенного Web Search. Для полного отчёта используйте YANDEX_GPT_API_MODE=responses.");
+            warnings.add("Отчёты собираются без поиска в интернете, поэтому могут быть неполными.");
+            technicalWarnings.add("YandexGPT работает через legacy completion API без встроенного Web Search. Для полного отчёта используйте YANDEX_GPT_API_MODE=responses.");
         }
         if (isYandexProvider() && properties.getYandex().getModel().toLowerCase().contains("lite")) {
-            warnings.add("Для глубоких отчётов выбран YandexGPT Lite. Лучше использовать YandexGPT Pro: gpt://<folder-id>/yandexgpt/rc или yandexgpt.");
+            warnings.add("Выбрана облегчённая модель: подробные отчёты будут проще. Для полного качества нужна модель Pro.");
+            technicalWarnings.add("Для глубоких отчётов выбран YandexGPT Lite. Лучше использовать YandexGPT Pro: gpt://<folder-id>/yandexgpt/rc или yandexgpt.");
         }
 
         return new ReputationAiStatus(
@@ -167,7 +180,8 @@ public class ReputationAiController {
                 deepResearchProfiles(),
                 contentPackProfiles(),
                 warnings,
-                enabled
+                enabled,
+                administrator ? List.copyOf(technicalWarnings) : List.of()
         );
     }
 
@@ -608,6 +622,12 @@ public class ReputationAiController {
     }
 
     /** Proxy host/port, provider endpoints and raw provider errors are infrastructure details. */
+    private static boolean isAdministrator(org.springframework.security.core.Authentication authentication) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .anyMatch("ROLE_ADMIN"::equals);
+    }
+
     private static boolean canSeeInfrastructure(org.springframework.security.core.Authentication authentication) {
         return authentication != null && authentication.getAuthorities().stream()
                 .map(org.springframework.security.core.GrantedAuthority::getAuthority)

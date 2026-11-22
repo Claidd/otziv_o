@@ -13,13 +13,25 @@ public class ArchiveRestoreSpecialistRequiredException extends ArchiveRestoreCon
     public static final String CODE = "SPECIALIST_REQUIRED";
 
     private final transient List<ArchiveRecoveryWorkerOption> workers;
+    /** The specialist the automatic rule would pick, to preselect; null when the choice is not unambiguous. */
+    private final Long suggestedWorkerId;
 
     public ArchiveRestoreSpecialistRequiredException(String message, List<ArchiveRecoveryWorkerOption> workers) {
+        this(message, workers, null);
+    }
+
+    public ArchiveRestoreSpecialistRequiredException(String message, List<ArchiveRecoveryWorkerOption> workers,
+            Long suggestedWorkerId) {
         super(message);
         this.workers = workers == null ? List.of() : List.copyOf(workers);
+        this.suggestedWorkerId = suggestedWorkerId;
     }
 
     public List<ArchiveRecoveryWorkerOption> workers() {
         return workers;
+    }
+
+    public Long suggestedWorkerId() {
+        return suggestedWorkerId;
     }
 }

@@ -44,7 +44,7 @@ public class ReputationAiProviderSelectionService {
             default -> normalized;
         };
         if (!SUPPORTED_PROVIDERS.contains(normalized)) {
-            throw new IllegalArgumentException("Unsupported AI provider: " + provider);
+            throw new IllegalArgumentException("Неизвестный AI-провайдер: " + provider);
         }
         return normalized;
     }

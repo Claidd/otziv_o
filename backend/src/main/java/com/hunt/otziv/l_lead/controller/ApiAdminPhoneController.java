@@ -152,7 +152,8 @@ public class ApiAdminPhoneController {
                 .id(defaults.getId())
                 .number(request.number())
                 .fio(request.fio())
-                .birthday(request.birthday() != null ? request.birthday() : defaults.getBirthday())
+                .birthday(Boolean.TRUE.equals(request.clearBirthday()) ? null
+                        : request.birthday() != null ? request.birthday() : defaults.getBirthday())
                 .amountAllowed(request.amountAllowed() != null ? request.amountAllowed() : defaults.getAmountAllowed())
                 .amountSent(request.amountSent() != null ? request.amountSent() : defaults.getAmountSent())
                 .blockTime(request.blockTime() != null ? request.blockTime() : defaults.getBlockTime())
@@ -244,9 +245,10 @@ public class ApiAdminPhoneController {
         }
 
         Map<Long, List<DeviceTokenResponse>> grouped = new HashMap<>();
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
         for (AdminDeviceTokenRow token : deviceTokenRepository.findAdminRowsByTelephoneIds(telephoneIds)) {
             grouped.computeIfAbsent(token.telephoneId(), ignored -> new java.util.ArrayList<>())
-                    .add(new DeviceTokenResponse(token.token(), token.createdAt(), token.active()));
+                    .add(DeviceTokenResponse.of(token.token(), token.createdAt(), token.expiresAt(), token.active(), now));
         }
         return grouped;
     }
@@ -256,11 +258,14 @@ public class ApiAdminPhoneController {
             return List.of();
         }
 
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
         return deviceTokenRepository.findByTelephone_IdOrderByCreatedAtDesc(telephoneId).stream()
-                .map(deviceToken -> new DeviceTokenResponse(
+                .map(deviceToken -> DeviceTokenResponse.of(
                         deviceToken.getToken(),
                         deviceToken.getCreatedAt(),
-                        deviceToken.isActive()
+                        deviceToken.getExpiresAt(),
+                        deviceToken.isActive(),
+                        now
                 ))
                 .toList();
     }

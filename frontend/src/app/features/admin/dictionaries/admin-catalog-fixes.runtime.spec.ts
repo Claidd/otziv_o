@@ -46,6 +46,7 @@ describe('catalog fixes: categories and subcategories', () => {
   let http: HttpTestingController;
   let facade: AdminTaxonomyFacade;
   let canWrite: boolean;
+  let canDelete: boolean;
   const toast = { success: vi.fn(), error: vi.fn() };
 
   function reload(categories: AdminCategory[], subCategories: AdminSubCategory[]) {
@@ -63,12 +64,14 @@ describe('catalog fixes: categories and subcategories', () => {
     });
     http = TestBed.inject(HttpTestingController);
     canWrite = true;
+    canDelete = true;
     vi.clearAllMocks();
     facade = new AdminTaxonomyFacade({
       api: TestBed.inject(AdminTaxonomyApi),
       toast,
       isActive: () => true,
       canWrite: () => canWrite,
+      canDelete: () => canDelete,
       tab: () => 'categories',
       search: () => '',
     });
@@ -83,9 +86,10 @@ describe('catalog fixes: categories and subcategories', () => {
     vi.restoreAllMocks();
   });
 
-  it('refuses every change to a manager with a message instead of silently doing nothing', () => {
+  it('refuses every change to a read-only role with a message instead of silently doing nothing', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     canWrite = false;
+    canDelete = false;
     facade.openNewCategory();
     facade.editCategory(click(), auto);
     facade.openNewSubCategory();
@@ -101,13 +105,43 @@ describe('catalog fixes: categories and subcategories', () => {
     http.expectNone((request) => request.method !== 'GET');
     expect(confirm).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledTimes(8);
-    expect(toast.error).toHaveBeenLastCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Только просмотр',
-      'Категории и подкатегории меняют администратор и владелец.',
+      'Категории и подкатегории меняют администратор, владелец и менеджеры.',
     );
-    // The list itself stays readable for the manager.
+    expect(toast.error).toHaveBeenLastCalledWith(
+      'Удаление недоступно',
+      'Удаляют категории и подкатегории администратор и владелец.',
+    );
+    // The list itself stays readable.
     facade.selectCategory(beauty);
     expect(facade.selectedCategorySubCategories().map((item) => item.title)).toEqual(['Маникюр']);
+  });
+
+  it('lets a manager add and rename categories but not delete them', () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    canDelete = false;
+    facade.openNewCategory();
+    expect(facade.categoryEditorOpen()).toBe(true);
+    facade.categoryForm.controls.title.setValue('Ветеринария');
+    facade.saveCategory();
+    http
+      .expectOne((request) => request.method === 'POST' && request.url.endsWith('/categories'))
+      .flush({ id: 9, title: 'Ветеринария', subCategoryCount: 0, subCategories: [] });
+    reload([auto, beauty, bare, { id: 9, title: 'Ветеринария', subCategoryCount: 0, subCategories: [] }], [tyres, nails]);
+
+    facade.editCategory(click(), auto);
+    expect(facade.categoryEditorOpen()).toBe(true);
+    facade.deleteEditingCategory();
+    facade.editSubCategory(click(), tyres);
+    expect(facade.subCategoryEditorOpen()).toBe(true);
+    facade.deleteEditingSubCategory();
+    http.expectNone((request) => request.method === 'DELETE');
+    expect(confirm).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenLastCalledWith(
+      'Удаление недоступно',
+      'Удаляют категории и подкатегории администратор и владелец.',
+    );
   });
 
   it('names the category, counts the subcategories deleted with it and warns about companies and reviews', () => {
@@ -119,8 +153,7 @@ describe('catalog fixes: categories and subcategories', () => {
     expect(confirm).toHaveBeenCalledWith(
       'Удалить категорию «Автосервис»?\n' +
         'Вместе с ней удалятся 3 подкатегории.\n' +
-        'У компаний и отзывов с этой категорией поля «Категория» и «Подкатегория» станут пустыми.\n' +
-        'Если по категории уже есть опубликованные отзывы, удалить её не получится.\n' +
+        'Если категорию или её подкатегории используют компании или отзывы, удалить её не получится — сначала переведите их в другую категорию.\n' +
         'Отменить нельзя.',
     );
     http.expectNone((request) => request.method === 'DELETE');
@@ -159,8 +192,7 @@ describe('catalog fixes: categories and subcategories', () => {
     expect(confirm).toHaveBeenCalledWith(
       'Удалить категорию «Без подкатегорий»?\n' +
         'Подкатегорий у неё нет.\n' +
-        'У компаний и отзывов с этой категорией поле «Категория» станет пустым.\n' +
-        'Если по категории уже есть опубликованные отзывы, удалить её не получится.\n' +
+        'Если категорию или её подкатегории используют компании или отзывы, удалить её не получится — сначала переведите их в другую категорию.\n' +
         'Отменить нельзя.',
     );
     http
@@ -178,8 +210,7 @@ describe('catalog fixes: categories and subcategories', () => {
     facade.deleteEditingSubCategory();
     expect(confirm).toHaveBeenCalledWith(
       'Удалить подкатегорию «Шиномонтаж» из категории «Автосервис»?\n' +
-        'У компаний и отзывов с этой подкатегорией поле «Подкатегория» станет пустым.\n' +
-        'Если по подкатегории уже есть опубликованные отзывы, удалить её не получится.\n' +
+        'Если подкатегорию используют компании или отзывы, удалить её не получится — сначала переведите их в другую подкатегорию.\n' +
         'Отменить нельзя.',
     );
     http.expectNone((request) => request.method === 'DELETE');

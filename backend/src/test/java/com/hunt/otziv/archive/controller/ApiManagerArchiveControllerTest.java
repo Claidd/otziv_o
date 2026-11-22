@@ -42,7 +42,7 @@ class ApiManagerArchiveControllerTest {
         List<ArchiveRecoveryWorkerOption> options = List.of(
                 new ArchiveRecoveryWorkerOption(72L, "Новый специалист", true));
         ArchiveRestoreSpecialistRequiredException conflict = new ArchiveRestoreSpecialistRequiredException(
-                "Специалист заказа деактивирован — выберите действующего специалиста", options);
+                "Специалист заказа деактивирован — выберите действующего специалиста", options, 72L);
         when(service.restoreOrder(10L, "Новый", null, true, true, admin, admin)).thenThrow(conflict);
 
         assertThatThrownBy(() -> controller.restoreOrder(10L, "Новый", true, null, true, admin, admin))
@@ -53,7 +53,8 @@ class ApiManagerArchiveControllerTest {
         assertThat(response.getBody()).isEqualTo(new ArchiveRestoreSpecialistRequiredResponse(
                 "Специалист заказа деактивирован — выберите действующего специалиста",
                 "SPECIALIST_REQUIRED",
-                options
+                options,
+                72L
         ));
     }
 

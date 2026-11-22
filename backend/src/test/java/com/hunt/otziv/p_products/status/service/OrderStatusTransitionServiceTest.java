@@ -52,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -159,6 +160,18 @@ class OrderStatusTransitionServiceTest {
 
     @Mock
     private ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+
+    @Mock
+    private ObjectProvider<com.hunt.otziv.archive.service.OrderArchiveRestoreService> archiveRestoreServiceProvider;
+
+    @Mock
+    private ObjectProvider<com.hunt.otziv.p_products.editing.service.OrderEditService> orderEditServiceProvider;
+
+    @Mock
+    private com.hunt.otziv.archive.service.OrderArchiveRestoreService archiveRestoreService;
+
+    @Mock
+    private com.hunt.otziv.p_products.editing.service.OrderEditService orderEditService;
 
     @Mock
     private CommonBillingService commonBillingService;
@@ -387,6 +400,62 @@ class OrderStatusTransitionServiceTest {
 
         assertSame(newStatus, order.getStatus());
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    void anOrderLeavingTheLiveArchiveMovesFromAnInactiveSpecialistToTheSuggestedOne() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithWorker(105L, "Архив", 5L);
+        order.getWorker().setId(2L);
+        order.getWorker().getUser().setActive(false);
+        order.getCompany().setId(900L);
+        OrderStatus newStatus = status("Новый");
+        when(orderRepository.findByIdForMutation(105L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Новый")).thenReturn(newStatus);
+        when(archiveRestoreServiceProvider.getIfAvailable()).thenReturn(archiveRestoreService);
+        when(orderEditServiceProvider.getIfAvailable()).thenReturn(orderEditService);
+        when(archiveRestoreService.suggestForLiveOrder(105L, 900L, 2L))
+                .thenReturn(new com.hunt.otziv.archive.service.OrderArchiveRestoreService.Suggestion(73L, "COMPANY_SPECIALIST"));
+
+        assertTrue(service.changeStatusForOrder(105L, "Новый"));
+
+        verify(orderEditService).reassignWorkerOfOrderLeavingArchive(order, 73L);
+        verify(businessAuditService).recordSafely(eq("archive_live_worker_rerouted"), eq("order"), eq(105L), eq(105L),
+                isNull(), eq("2"), eq("73"), contains("rule=COMPANY_SPECIALIST"));
+        assertSame(newStatus, order.getStatus());
+    }
+
+    @Test
+    void anOrderLeavingTheLiveArchiveKeepsItsSpecialistWhenThePaymentRecipientIsFixed() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithWorker(106L, "Архив", 6L);
+        order.getWorker().setId(2L);
+        order.getWorker().getUser().setActive(false);
+        order.getCompany().setId(900L);
+        when(orderRepository.findByIdForMutation(106L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Новый")).thenReturn(status("Новый"));
+        when(archiveRestoreServiceProvider.getIfAvailable()).thenReturn(archiveRestoreService);
+        when(orderEditServiceProvider.getIfAvailable()).thenReturn(orderEditService);
+        when(contractorPaymentShadowService.hasFrozenLiveRoute(106L)).thenReturn(true);
+
+        assertTrue(service.changeStatusForOrder(106L, "Новый"));
+
+        verify(archiveRestoreService, never()).suggestForLiveOrder(any(), any(), any());
+        verify(orderEditService, never()).reassignWorkerOfOrderLeavingArchive(any(), any());
+    }
+
+    @Test
+    void anOrderLeavingTheLiveArchiveWithAWorkingSpecialistIsNotRerouted() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithWorker(107L, "Архив", 7L);
+        order.getCompany().setId(900L);
+        when(orderRepository.findByIdForMutation(107L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Новый")).thenReturn(status("Новый"));
+
+        assertTrue(service.changeStatusForOrder(107L, "Новый"));
+
+        verify(archiveRestoreServiceProvider, never()).getIfAvailable();
+        verify(orderEditService, never()).reassignWorkerOfOrderLeavingArchive(any(), any());
     }
 
     @Test
@@ -1396,6 +1465,8 @@ class OrderStatusTransitionServiceTest {
                 contractorPaymentShadowService,
                 contractorRouteAssignmentGuard,
                 commonBillingServiceProvider,
+                archiveRestoreServiceProvider,
+                orderEditServiceProvider,
                 recoveryGateService,
                 eventPublisher
         );
@@ -1497,6 +1568,7 @@ class OrderStatusTransitionServiceTest {
 
     private User user(Long chatId) {
         User user = new User();
+        user.setActive(true);
         user.setTelegramChatId(chatId);
         user.setWorkerTelegramGroupChatId(-chatId);
         return user;

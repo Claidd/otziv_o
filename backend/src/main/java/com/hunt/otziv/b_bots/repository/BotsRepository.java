@@ -251,4 +251,18 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     """)
     long countActiveByStatus(@Param("status") String status);
 
+    /**
+     * What makes an account part of the history: published reviews (live or archived) and open bad-review or recovery
+     * tasks. Deleting such an account would unlink the reviews and tasks (their keys are SET NULL) and leave archived
+     * reviews pointing at nothing, so it is switched off instead.
+     */
+    @Query(value = """
+            SELECT (SELECT COUNT(*) FROM reviews WHERE review_bot = :id AND review_publish = 1)
+                 + (SELECT COUNT(*) FROM archive_reviews WHERE review_bot = :id AND review_publish = 1)
+                 + (SELECT COUNT(*) FROM bad_review_tasks WHERE bad_review_task_bot = :id AND bad_review_task_status = 'NEW')
+                 + (SELECT COUNT(*) FROM review_recovery_tasks WHERE review_recovery_task_bot = :id
+                        AND review_recovery_task_status = 'PLANNED')
+            """, nativeQuery = true)
+    long countHistoryUsages(@Param("id") Long id);
+
 }

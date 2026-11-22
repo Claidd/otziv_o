@@ -372,7 +372,8 @@ describe('ManagerArchiveComponent', () => {
         workers: [
           { id: 72, label: 'Новый специалист', companyWorker: true },
           { id: 73, label: 'Другой специалист', companyWorker: false }
-        ]
+        ],
+        suggestedWorkerId: 72
       }
     })));
     const fixture = TestBed.createComponent(ManagerArchiveComponent);
@@ -405,6 +406,43 @@ describe('ManagerArchiveComponent', () => {
     expect(component.restoreWorkerOptions()).toBeNull();
     expect(toastService.success).toHaveBeenCalledWith('Заказ восстановлен', '#5 вернулся в live со статусом Новый');
     expect(element.querySelector('#archive-restore-worker')).toBeNull();
+  });
+
+  it('preselects the server suggestion, such as the transfer successor outside the company, but never an unknown id', () => {
+    const workOrder = archiveOrder({ id: 7, status: 'Архив' });
+    managerApi.getArchiveOrder.mockReturnValue(of(details(workOrder)));
+    const conflict = (suggestedWorkerId: unknown) => throwError(() => new HttpErrorResponse({
+      status: 409,
+      error: {
+        message: 'Специалист заказа деактивирован — выберите действующего специалиста',
+        code: 'SPECIALIST_REQUIRED',
+        workers: [
+          { id: 72, label: 'Первый', companyWorker: true },
+          { id: 73, label: 'Преемник', companyWorker: false }
+        ],
+        suggestedWorkerId
+      }
+    }));
+    managerApi.restoreArchiveOrder.mockReturnValueOnce(conflict(73));
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.openRestore(workOrder);
+    component.restoreTargetStatus.set('Новый');
+    component.confirmRestore();
+
+    expect(component.restoreWorkerId()).toBe(73);
+
+    component.closeRestore();
+    component.openRestore(workOrder);
+    component.restoreTargetStatus.set('Новый');
+    managerApi.restoreArchiveOrder.mockReturnValueOnce(conflict(99));
+    component.restoreWorkerId.set(null);
+    component.confirmRestore();
+
+    expect(component.restoreWorkerId()).toBeNull();
+    expect(component.restoreWorkerMissing()).toBe(true);
   });
 
   it('keeps restore disabled until a specialist is chosen when the choice is ambiguous', () => {

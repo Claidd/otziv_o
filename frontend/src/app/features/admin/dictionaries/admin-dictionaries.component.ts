@@ -107,7 +107,7 @@ const DICTIONARY_HELP: Record<DictionaryTabKey, DictionaryHelp> = {
       'Карандаш в строке открывает окно: переименовать или удалить запись.'
     ],
     usedIn: 'Карточка компании, отзывы и фильтры менеджера.',
-    caution: 'Удаление категории удаляет и её подкатегории, а у компаний и отзывов поле категории становится пустым. Категорию с опубликованными отзывами удалить не получится. Отменить нельзя.'
+    caution: 'Удаление категории удаляет и её подкатегории. Категорию или подкатегорию, которую используют компании или отзывы (в том числе архивные), удалить не получится — сначала переведите их в другую. Отменить нельзя.'
   },
   subcategories: {
     title: 'Подкатегории',
@@ -319,7 +319,8 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   private readonly taxonomyFeature = new AdminTaxonomyFacade({ api: inject(AdminTaxonomyApi), toast: this.toastService,
     isActive: () => ['categories', 'subcategories'].includes(this.activeTab()) && this.documentVisible(),
-    canWrite: () => this.canManageAllDictionaries(), tab: () => this.activeTab(), search: () => this.search() });
+    canWrite: () => this.canEditCategories(), canDelete: () => this.canManageAllDictionaries(),
+    tab: () => this.activeTab(), search: () => this.search() });
   private readonly productsFeature = new AdminProductsFacade({ api: inject(AdminProductsApi), toast: this.toastService,
     isActive: () => this.domainActive('products'), selectedId: this.selectedId, search: () => this.search() });
   private readonly textsFeature = new AdminCommunicationTextsFacade({ api: inject(AdminCommunicationTextsApi), toast: this.toastService,
@@ -552,6 +553,11 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   });
+  /** Managers add and rename categories and subcategories; deleting them stays with the owner and administrators. */
+  readonly canEditCategories = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  });
   readonly canApplyMaintenance = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN']);
@@ -606,14 +612,16 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly activeHelp = computed<DictionaryHelp>(() => {
     const help = DICTIONARY_HELP[this.activeTab()];
     if (this.canManageAllDictionaries()) return help;
-    // A manager opens only «Категории» and cannot change them: the help must not promise buttons that role lacks.
+    // A manager opens only «Категории», adds and renames them but does not delete: the help must not promise a button that role lacks.
     return {
       ...help,
-      howTo: 'выберите категорию — появятся её подкатегории.',
+      howTo: 'выберите категорию — появятся её подкатегории; карандаш в строке — переименовать.',
       steps: [
         'Выберите категорию в списке — рядом (на телефоне ниже) откроются её подкатегории.',
-        'Создают, переименовывают и удаляют категории администратор и владелец.'
-      ]
+        '«Новая категория» создаёт категорию, «Новая подкатегория» — подкатегорию выбранной категории.',
+        'Карандаш в строке открывает окно: переименовать запись или перенести подкатегорию в другую категорию. Удаляют записи администратор и владелец.'
+      ],
+      caution: 'Название категории видят все менеджеры в карточках компаний и в отзывах — переименовывайте аккуратно.'
     };
   });
   /** Tabs with a list that is searched on the server. */

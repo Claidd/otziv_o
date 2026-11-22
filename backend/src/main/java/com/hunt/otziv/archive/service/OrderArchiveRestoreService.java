@@ -52,10 +52,41 @@ public class OrderArchiveRestoreService {
             "Бан"
     );
 
+    /** How a restore returning an order to work treats an archived specialist who no longer works. */
+    private enum SpecialistRouting {
+        /** A person is present (the site's archive window): refuse with the list and a suggestion. */
+        ASK,
+        /** Nobody to ask (review-check link, archived common invoice, older app): pick by {@link #suggest}. */
+        AUTO
+    }
+
+    static final String RULE_ACTIVE = "ACTIVE";
+    static final String RULE_FIXED_RECIPIENT = "FIXED_RECIPIENT";
+    static final String RULE_TRANSFER_SUCCESSOR = "TRANSFER_SUCCESSOR";
+    static final String RULE_COMPANY_SPECIALIST = "COMPANY_SPECIALIST";
+    static final String RULE_ONLY_MANAGER_SPECIALIST = "ONLY_MANAGER_SPECIALIST";
+    static final String RULE_NO_UNAMBIGUOUS_CANDIDATE = "NO_UNAMBIGUOUS_CANDIDATE";
+    /** Bounded walk through the transfer history, as for the next order; guards against cycles too. */
+    private static final int MAX_TRANSFER_STEPS = 5;
+
+    /** A specialist chosen without a person and the rule that chose it. */
+    public record Suggestion(Long workerId, String rule) {
+    }
+
+    private record AutoDecision(Long newWorkerId, Long previousWorkerId, String rule) {
+    }
+
     private final OrderArchiveRestoreRepository repository;
     private final RestoredOrderInvoiceMembership membership;
     private final BankPaperPaymentBindings paperDocuments;
 
+    /**
+     * Automatic restore (old review-check link, older mobile app): an order returned to work whose archived
+     * specialist no longer works goes to the specialist {@link #suggest} picks — the successor from this company's
+     * transfer history, else the only specialist of the company, else the only active specialist of the company's
+     * manager. Without an unambiguous pick, or when the payment recipient is already fixed, it keeps the archived
+     * specialist as before; the restore is audited and «Контроль менеджера» shows the order.
+     */
     @Transactional
     public ArchiveRestoreResult restoreIndividualOrder(Long orderId, String targetStatus, String restoredBy, boolean confirm) {
         ArchiveRestoreResult result = restoreOrder(orderId, targetStatus, restoredBy, confirm);
@@ -64,10 +95,10 @@ public class OrderArchiveRestoreService {
     }
 
     /**
-     * Restore from the manager's archive window. Unlike the automatic restores (old review-check
-     * link, archived common invoice), a person is present to choose, so an order returned to work
-     * never lands on a deactivated specialist: without a choice the restore is refused with the
-     * list of specialists, and with a choice the order and its unfinished work move to that person.
+     * Restore from the manager's archive window. A person is present to choose, so an order returned
+     * to work never lands on a deactivated specialist: without a choice the restore is refused with the
+     * list of specialists and the server's suggestion, and with a choice the order and its unfinished
+     * work move to that person.
      */
     @Transactional
     public ArchiveRestoreResult restoreIndividualOrderWithActiveSpecialist(
@@ -77,11 +108,12 @@ public class OrderArchiveRestoreService {
             boolean confirm,
             Long targetWorkerId
     ) {
-        ArchiveRestoreResult result = restore(orderId, targetStatus, restoredBy, confirm, true, targetWorkerId);
+        ArchiveRestoreResult result = restore(orderId, targetStatus, restoredBy, confirm, SpecialistRouting.ASK, targetWorkerId);
         attachToInvoiceIfWorking(orderId, result);
         return result;
     }
 
+    /** Automatic restore of one order of an archived common invoice chain; the specialist rule of {@link #restoreIndividualOrder}. */
     @Transactional
     public ArchiveRestoreResult restoreOrder(
             Long orderId,
@@ -89,7 +121,7 @@ public class OrderArchiveRestoreService {
             String restoredBy,
             boolean confirm
     ) {
-        return restore(orderId, targetStatus, restoredBy, confirm, false, null);
+        return restore(orderId, targetStatus, restoredBy, confirm, SpecialistRouting.AUTO, null);
     }
 
     private ArchiveRestoreResult restore(
@@ -97,7 +129,7 @@ public class OrderArchiveRestoreService {
             String targetStatus,
             String restoredBy,
             boolean confirm,
-            boolean requireActiveSpecialist,
+            SpecialistRouting routing,
             Long targetWorkerId
     ) {
         if (!confirm) {
@@ -152,9 +184,15 @@ public class OrderArchiveRestoreService {
         }
 
         // Decided before any row is written: a refusal leaves the archive untouched.
-        Long newWorkerId = requireActiveSpecialist && workTarget
-                ? resolveNewSpecialist(orderId, targetWorkerId)
-                : null;
+        Long newWorkerId = null;
+        AutoDecision automatic = null;
+        if (workTarget && routing == SpecialistRouting.ASK) {
+            newWorkerId = resolveNewSpecialist(orderId, targetWorkerId);
+        } else if (workTarget) {
+            automatic = resolveAutomaticSpecialist(orderId);
+            newWorkerId = automatic.newWorkerId();
+        }
+        boolean automaticDecision = automatic != null && !RULE_ACTIVE.equals(automatic.rule());
 
         ArchiveCandidateCounts restored = repository.restoreOrder(orderId, targetStatusId);
         if (!selected.equals(restored)) {
@@ -170,7 +208,8 @@ public class OrderArchiveRestoreService {
         LocalDateTime restoredAt = LocalDateTime.now();
         String actor = restoredBy == null || restoredBy.isBlank() ? "unknown" : restoredBy.trim();
         String message = "restore completed; targetStatus=" + resolvedStatus + "; selected=" + selected
-                + (newWorkerId == null ? "" : "; newWorkerId=" + newWorkerId);
+                + (newWorkerId == null ? "" : "; newWorkerId=" + newWorkerId)
+                + (automaticDecision ? "; workerRule=" + automatic.rule() + "; previousWorkerId=" + automatic.previousWorkerId() : "");
         Long batchId = repository.insertRestoreBatch(
                 orderId,
                 restoredAt,
@@ -180,6 +219,13 @@ public class OrderArchiveRestoreService {
                 message
         );
         repository.markArchiveOrderRestored(orderId, batchId, restoredAt, actor);
+        if (automaticDecision) {
+            repository.auditRestoreWorkerDecision(orderId, automatic.previousWorkerId(), newWorkerId, automatic.rule(), actor);
+            if (newWorkerId == null) {
+                log.warn("Archive order {} returned to work with its inactive specialist {}: {}",
+                        orderId, automatic.previousWorkerId(), automatic.rule());
+            }
+        }
 
         ArchiveRestoreResult result = new ArchiveRestoreResult(
                 batchId,
@@ -215,9 +261,11 @@ public class OrderArchiveRestoreService {
             if (currentActive) {
                 return null;
             }
+            List<ArchiveRecoveryWorkerOption> options = repository.findRestoreWorkerOptions(orderId);
             throw new ArchiveRestoreSpecialistRequiredException(
                     currentWorkerId == null ? SPECIALIST_MISSING : SPECIALIST_DEACTIVATED,
-                    repository.findRestoreWorkerOptions(orderId)
+                    options,
+                    suggestedWorkerId(orderId, currentWorkerId, options)
             );
         }
 
@@ -225,7 +273,8 @@ public class OrderArchiveRestoreService {
         boolean eligible = options.stream().anyMatch(option -> Objects.equals(option.id(), targetWorkerId));
         if (!eligible) {
             // Deactivated or moved to another team since the list was shown: offer the fresh list.
-            throw new ArchiveRestoreSpecialistRequiredException(SPECIALIST_UNAVAILABLE, options);
+            throw new ArchiveRestoreSpecialistRequiredException(SPECIALIST_UNAVAILABLE, options,
+                    suggestedWorkerId(orderId, currentWorkerId, options));
         }
         // Same guard as changing the specialist in the order editor: issued bank documents or
         // requisites already given to the client fix who is paid, so the specialist stays.
@@ -239,6 +288,92 @@ public class OrderArchiveRestoreService {
         }
         log.info("Archive order {} returns to work with specialist {} instead of {}", orderId, targetWorkerId, currentWorkerId);
         return targetWorkerId;
+    }
+
+    /**
+     * The automatic counterpart of {@link #resolveNewSpecialist}: never refuses, because nobody can choose. A working
+     * archived specialist stays; a fixed payment recipient (bank documents, requisites given to the client) keeps the
+     * archived one; otherwise {@link #suggest} picks, and without an unambiguous pick the archived one stays.
+     */
+    private AutoDecision resolveAutomaticSpecialist(Long orderId) {
+        OrderArchiveRestoreRepository.ArchiveOrderWorker current = repository.findArchiveOrderWorker(orderId);
+        Long currentWorkerId = current == null ? null : current.workerId();
+        if (current != null && current.active() && currentWorkerId != null) {
+            return new AutoDecision(null, currentWorkerId, RULE_ACTIVE);
+        }
+        if (paperDocuments.hasDocument(orderId) || repository.hasFrozenLivePaymentRoute(orderId)) {
+            return new AutoDecision(null, currentWorkerId, RULE_FIXED_RECIPIENT);
+        }
+        List<ArchiveRecoveryWorkerOption> options = repository.findRestoreWorkerOptions(orderId);
+        Suggestion suggestion = suggest(options, transferSuccessor(orderId, currentWorkerId, options));
+        return suggestion == null
+                ? new AutoDecision(null, currentWorkerId, RULE_NO_UNAMBIGUOUS_CANDIDATE)
+                : new AutoDecision(suggestion.workerId(), currentWorkerId, suggestion.rule());
+    }
+
+    private Long suggestedWorkerId(Long orderId, Long currentWorkerId, List<ArchiveRecoveryWorkerOption> options) {
+        Suggestion suggestion = suggest(options, transferSuccessor(orderId, currentWorkerId, options));
+        return suggestion == null ? null : suggestion.workerId();
+    }
+
+    /**
+     * A live order leaving status «Архив» for work (the client approves or corrects the texts by the review-check link)
+     * while its specialist no longer works: the same automatic rule as an archive restore, over the live tables.
+     * Null when the pick is not unambiguous.
+     */
+    @Transactional(readOnly = true)
+    public Suggestion suggestForLiveOrder(Long orderId, Long companyId, Long currentWorkerId) {
+        List<ArchiveRecoveryWorkerOption> options = repository.findLiveWorkerOptions(orderId);
+        return suggest(options, companyTransferSuccessor(companyId, currentWorkerId, options));
+    }
+
+    private Long transferSuccessor(Long orderId, Long fromWorkerId, List<ArchiveRecoveryWorkerOption> options) {
+        if (fromWorkerId == null || options.isEmpty()) {
+            return null;
+        }
+        return companyTransferSuccessor(repository.findArchiveOrderCompany(orderId), fromWorkerId, options);
+    }
+
+    /**
+     * Who took over the specialist's work for this company: the latest transfer of this company away from that
+     * specialist, followed through further transfers while the receiver is not one of the eligible options.
+     */
+    private Long companyTransferSuccessor(Long companyId, Long fromWorkerId, List<ArchiveRecoveryWorkerOption> options) {
+        if (companyId == null || fromWorkerId == null || options.isEmpty()) {
+            return null;
+        }
+        Set<Long> eligible = options.stream().map(ArchiveRecoveryWorkerOption::id).collect(java.util.stream.Collectors.toSet());
+        Set<Long> visited = new java.util.HashSet<>();
+        Long worker = fromWorkerId;
+        for (int step = 0; step < MAX_TRANSFER_STEPS && worker != null && visited.add(worker); step++) {
+            Long next = repository.findTransferTarget(companyId, worker);
+            if (next == null || eligible.contains(next)) {
+                return next;
+            }
+            worker = next;
+        }
+        return null;
+    }
+
+    /**
+     * The one rule both the automatic restore and the site's suggestion use: the transfer successor when eligible, else
+     * the only specialist already attached to the company, else the only active specialist of the company's manager.
+     */
+    static Suggestion suggest(List<ArchiveRecoveryWorkerOption> options, Long transferSuccessor) {
+        if (options == null || options.isEmpty()) {
+            return null;
+        }
+        if (transferSuccessor != null && options.stream().anyMatch(option -> Objects.equals(option.id(), transferSuccessor))) {
+            return new Suggestion(transferSuccessor, RULE_TRANSFER_SUCCESSOR);
+        }
+        List<ArchiveRecoveryWorkerOption> companyWorkers = options.stream().filter(ArchiveRecoveryWorkerOption::companyWorker).toList();
+        if (companyWorkers.size() == 1) {
+            return new Suggestion(companyWorkers.getFirst().id(), RULE_COMPANY_SPECIALIST);
+        }
+        if (options.size() == 1) {
+            return new Suggestion(options.getFirst().id(), RULE_ONLY_MANAGER_SPECIALIST);
+        }
+        return null;
     }
 
     private void attachToInvoiceIfWorking(Long orderId, ArchiveRestoreResult result) {

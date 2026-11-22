@@ -87,6 +87,9 @@ import org.springframework.web.server.ResponseStatusException;
 @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
 public class ApiAdminDictionaryController {
 
+    static final String BOT_IN_HISTORY =
+            "У аккаунта есть опубликованные отзывы или открытые задачи — выключите его вместо удаления.";
+
     private final CategoryRepository categoryRepository;
     private final SubCategoryRepository subCategoryRepository;
     private final CityRepository cityRepository;
@@ -129,6 +132,7 @@ public class ApiAdminDictionaryController {
     @PostMapping("/categories")
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public CategoryResponse createCategory(@RequestBody TitleRequest request) {
         Category category = Category.builder()
                 .categoryTitle(requiredTitle(request.title()))
@@ -139,6 +143,7 @@ public class ApiAdminDictionaryController {
 
     @PutMapping("/categories/{id}")
     @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public CategoryResponse updateCategory(@PathVariable Long id, @RequestBody TitleRequest request) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> notFound("Категория не найдена"));
@@ -148,11 +153,11 @@ public class ApiAdminDictionaryController {
 
     @DeleteMapping("/categories/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public void deleteCategory(@PathVariable Long id) {
-        if (!categoryRepository.existsById(id)) {
-            throw notFound("Категория не найдена");
-        }
-        categoryRepository.deleteById(id);
+        // A category used by companies or reviews is refused with 409; see CategoryRepository.deleteUnusedCategory.
+        categoryRepository.deleteUnusedCategory(id);
     }
 
     @GetMapping("/subcategories")
@@ -172,6 +177,7 @@ public class ApiAdminDictionaryController {
     @PostMapping("/subcategories")
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public SubCategoryResponse createSubCategory(@RequestBody SubCategoryRequest request) {
         Category category = categoryRepository.findById(requiredId(request.categoryId(), "Категория обязательна"))
                 .orElseThrow(() -> notFound("Категория не найдена"));
@@ -184,6 +190,7 @@ public class ApiAdminDictionaryController {
 
     @PutMapping("/subcategories/{id}")
     @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public SubCategoryResponse updateSubCategory(@PathVariable Long id, @RequestBody SubCategoryRequest request) {
         SubCategory subCategory = subCategoryRepository.findById(id)
                 .orElseThrow(() -> notFound("Подкатегория не найдена"));
@@ -196,20 +203,21 @@ public class ApiAdminDictionaryController {
 
     @DeleteMapping("/subcategories/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public void deleteSubCategory(@PathVariable Long id) {
-        if (!subCategoryRepository.existsById(id)) {
-            throw notFound("Подкатегория не найдена");
-        }
-        subCategoryRepository.deleteById(id);
+        subCategoryRepository.deleteUnusedSubCategory(id);
     }
 
     @GetMapping("/cities")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public List<CityResponse> getCities(String keyword) {
+        // One grouped count for the whole list instead of one query per city.
+        Map<Long, Long> distanceCounts = cityDistanceService.distanceCountsByFromCity();
         return cityRepository.findAll().stream()
                 .filter(city -> matches(keyword, city.getTitle()))
                 .sorted(Comparator.comparing(City::getTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
-                .map(this::toCityResponse)
+                .map(city -> toCityResponse(city, distanceCounts.getOrDefault(city.getId(), 0L)))
                 .toList();
     }
 
@@ -379,7 +387,7 @@ public class ApiAdminDictionaryController {
                 .orElseThrow(() -> notFound("Категория продукта не найдена"));
 
         Product product = Product.builder()
-                .title(requiredTitle(request.title()))
+                .title(requiredTitle(request.title(), 45, "Название продукта — не больше 45 символов"))
                 .price(requiredPrice(request.price()))
                 .photo(request.photo())
                 .requiresPerformer(request.requiresPerformer())
@@ -403,7 +411,7 @@ public class ApiAdminDictionaryController {
                 .findById(requiredId(request.categoryId(), "Категория продукта обязательна"))
                 .orElseThrow(() -> notFound("Категория продукта не найдена"));
 
-        product.setTitle(requiredTitle(request.title()));
+        product.setTitle(requiredTitle(request.title(), 45, "Название продукта — не больше 45 символов"));
         product.setPrice(requiredPrice(request.price()));
         product.setPhoto(request.photo());
         product.setRequiresPerformer(request.requiresPerformer());
@@ -424,8 +432,7 @@ public class ApiAdminDictionaryController {
         if (!productRepository.existsById(id)) {
             throw notFound("Продукт не найден");
         }
-        // The database cascades a product delete into order lines and unlinks reviews,
-        // so a product that orders still use must stay.
+        // The database refuses deleting a product order lines use (V1_10_409); this check gives the clear answer.
         if (productRepository.countOrderUsagesByProductId(id) > 0) {
             throw conflict("Продукт уже есть в заказах, поэтому удалить его нельзя.");
         }
@@ -532,13 +539,13 @@ public class ApiAdminDictionaryController {
     @Transactional
     public BotResponse createBot(@RequestBody BotRequest request, Authentication authentication) {
         botCrudAccessService.requireGlobalAccess(authentication);
-        String login = requiredText(request.login(), "Логин обязателен");
+        String login = limitedText(requiredText(request.login(), "Логин обязателен"), 45, "Логин аккаунта — не больше 45 символов");
         assertLoginAvailable(login, null);
 
         Bot bot = Bot.builder()
                 .login(login)
                 .password(requiredText(request.password(), "Пароль обязателен"))
-                .fio(requiredText(request.fio(), "ФИО обязательно"))
+                .fio(limitedText(requiredText(request.fio(), "ФИО обязательно"), 50, "ФИО аккаунта — не больше 50 символов"))
                 .worker(requiredWorker(request.workerId()))
                 .botCity(optionalCity(request.cityId()))
                 .status(requiredBotStatus(request.statusId()))
@@ -558,14 +565,14 @@ public class ApiAdminDictionaryController {
             Authentication authentication
     ) {
         Bot bot = botCrudAccessService.requireLockedGlobalAccess(id, authentication).bot();
-        String login = requiredText(request.login(), "Логин обязателен");
+        String login = limitedText(requiredText(request.login(), "Логин обязателен"), 45, "Логин аккаунта — не больше 45 символов");
         assertLoginAvailable(login, id);
 
         bot.setLogin(login);
         if (request.password() != null && !request.password().isBlank()) {
             bot.setPassword(request.password().trim());
         }
-        bot.setFio(requiredText(request.fio(), "ФИО обязательно"));
+        bot.setFio(limitedText(requiredText(request.fio(), "ФИО обязательно"), 50, "ФИО аккаунта — не больше 50 символов"));
         bot.setWorker(requiredWorker(request.workerId()));
         bot.setBotCity(optionalCity(request.cityId()));
         // Publications, «Блок» and the 10/20 thresholds change the counter, the status and the activity in the
@@ -596,6 +603,9 @@ public class ApiAdminDictionaryController {
     @Transactional
     public void deleteBot(@PathVariable Long id, Authentication authentication) {
         Bot bot = botCrudAccessService.requireLockedGlobalAccess(id, authentication).bot();
+        if (botsRepository.countHistoryUsages(bot.getId()) > 0) {
+            throw conflict(BOT_IN_HISTORY);
+        }
         botsRepository.delete(bot);
     }
 
@@ -620,11 +630,12 @@ public class ApiAdminDictionaryController {
                         || matches(keyword, promoTextLabel(text.position())))
                 .toList();
 
+        Map<Long, Integer> positions = promoTextPositions(promoTexts);
         return new PromoTextManagementResponse(
                 textResponses,
                 managerOptions(),
                 promoTextAssignmentRepository.findAllWithDetails().stream()
-                        .map(this::toPromoAssignmentResponse)
+                        .map(assignment -> toPromoAssignmentResponse(assignment, positions))
                         .toList(),
                 PromoButtonCatalog.slots().stream()
                         .map(slot -> toPromoButtonResponse(slot, promoTexts))
@@ -638,7 +649,7 @@ public class ApiAdminDictionaryController {
     @CacheEvict(value = CacheConfig.PROMO_TEXTS, allEntries = true)
     public PromoTextResponse createPromoText(@RequestBody PromoTextRequest request) {
         PromoText promoText = PromoText.builder()
-                .promoText(toStoredPromoText(requiredText(request.text(), "Текст обязателен")))
+                .promoText(storedPromoTextWithinLimit(requiredText(request.text(), "Текст обязателен")))
                 .build();
         PromoText saved = promoTextRepository.save(promoText);
         return toPromoTextResponses(promoTextRepository.findAllByOrderByIdAsc()).stream()
@@ -653,7 +664,7 @@ public class ApiAdminDictionaryController {
     public PromoTextResponse updatePromoText(@PathVariable Long id, @RequestBody PromoTextRequest request) {
         PromoText promoText = promoTextRepository.findById(id)
                 .orElseThrow(() -> notFound("Промо-текст не найден"));
-        promoText.setPromoText(toStoredPromoText(requiredText(request.text(), "Текст обязателен")));
+        promoText.setPromoText(storedPromoTextWithinLimit(requiredText(request.text(), "Текст обязателен")));
         PromoText saved = promoTextRepository.save(promoText);
         return toPromoTextResponses(promoTextRepository.findAllByOrderByIdAsc()).stream()
                 .filter(text -> text.id().equals(saved.getId()))
@@ -681,8 +692,9 @@ public class ApiAdminDictionaryController {
         assignment.setPromoText(promoText);
 
         promoTextAssignmentRepository.save(assignment);
+        Map<Long, Integer> positions = promoTextPositions(promoTextRepository.findAllByOrderByIdAsc());
         return promoTextAssignmentRepository.findForSlot(manager.getId(), slot.sectionCode(), slot.buttonKey())
-                .map(this::toPromoAssignmentResponse)
+                .map(saved -> toPromoAssignmentResponse(saved, positions))
                 .orElseThrow(() -> notFound("Назначение промо-текста не найдено"));
     }
 
@@ -724,7 +736,7 @@ public class ApiAdminDictionaryController {
         Manager manager = managerRepository.findById(managerId)
                 .orElseThrow(() -> notFound("Менеджер не найден"));
 
-        manager.setPayText(safe(request.payText()));
+        manager.setPayText(limitedText(safe(request.payText()), 1000, "Текст оплаты — не больше 1000 символов"));
         manager.setBeginText(safe(request.beginText()));
         manager.setOfferText(safe(request.offerText()));
         manager.setReminderText(safe(request.reminderText()));
@@ -871,9 +883,120 @@ public class ApiAdminDictionaryController {
                     + "Значения обновлены: проверьте их и сохраните снова.");
         }
 
-        String businessWindows = requiredSettingText(request.businessWindows(), "Укажите рабочие окна автоответчика");
-        if (!ClientMessageSlotPlanner.isValidWindowsSpec(businessWindows)) {
-            throw badRequest("Рабочие окна должны быть в формате 10:00-12:00,14:00-17:00 без пересечений");
+        // Every value is checked before anything is written: a mistake in the last field used to leave the earlier
+        // fields saved. All mistakes come back in one answer.
+        List<String> errors = new ArrayList<>();
+        Map<String, Integer> ints = new LinkedHashMap<>();
+        Map<String, String> texts = new LinkedHashMap<>();
+        String businessWindows = checked(errors, () -> {
+            String windows = requiredSettingText(request.businessWindows(), "Укажите рабочие окна автоответчика");
+            if (!ClientMessageSlotPlanner.isValidWindowsSpec(windows)) {
+                throw badRequest("Рабочие окна должны быть в формате 10:00-12:00,14:00-17:00 без пересечений");
+            }
+            return windows;
+        });
+        if (businessWindows != null) {
+            texts.put(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS, businessWindows);
+        }
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS, request.reviewCheckIntervalDays(), 1, 365, "Интервал проверки отзывов");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_DAYS, request.reviewCheckAutoArchiveDays(), 1, 3650, "Автоархив проверки отзывов");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS, request.clientTextReminderIntervalDays(), 1, 365, "Интервал ожидания текста клиента");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS, request.paymentReminderIntervalDays(), 1, 365, "Интервал напоминания об оплате");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_RETRY_DELAY_HOURS, request.reviewCheckRetryDelayHours(), 1, 168, "Повтор ссылки проверки после сбоя");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS, request.paymentInvoiceRetryDelayHours(), 1, 168, "Повтор счета после сбоя");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_TRANSIENT_RETRY_MINUTES, request.transientRetryMinutes(), 1, 1440, "Повтор временной ошибки");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD, request.manualControlFailureThreshold(), 1, 100, "Порог ошибок ручного контроля");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES, request.manualControlAfterMinutes(), 1, 1440, "Порог времени ручного контроля");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS, request.badReviewInvoiceRetryDelayHours(), 1, 168, "Повтор счета после плохого отзыва");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS, request.badReviewAutoBanDelayDays(), 1, 365, "Автобан после плохих отзывов");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS, request.reviewRecoveryNoticeRetryDelayHours(), 1, 168, "Повтор уведомления о восстановлении");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, request.paymentOverdueDays(), 1, 365, "Срок просрочки оплаты");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS, request.archiveReorderMonths(), 1, 36, "Интервал архивного предложения");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_JITTER_DAYS, request.archiveReorderJitterDays(), 0, 30, "Разброс архивного предложения");
+        checkInt(errors, ints, AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, request.archiveOrderRetentionDays(), 1, 3650, "Архив live-заказов");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD, request.errorProtectionThreshold(), 1, 10000, "Порог массовых ошибок");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_WINDOW_MINUTES, request.errorProtectionWindowMinutes(), 1, 1440, "Окно массовых ошибок");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES, request.errorProtectionCooldownMinutes(), 1, 1440, "Пауза после массовых ошибок");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS, request.whatsAppAuthRetryHours(), 1, 48, "Повтор WhatsApp QR/авторизации");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS, request.whatsAppAuthAlertCooldownHours(), 1, 168, "Пауза Telegram-алерта WhatsApp");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_RETENTION_DAYS, request.retentionDays(), 1, 3650, "Хранение журнала");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_TICK_BATCH_SIZE, request.tickBatchSize(), 1, 100, "Размер пачки");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_CANDIDATE_LIMIT, request.candidateLimit(), 1, 5000, "Лимит кандидатов");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_DAILY_LIMIT, request.dailyLimit(), 1, 5000, "Дневной лимит");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_DEFAULT_GAP_SECONDS, request.defaultGapSeconds(), 30, 86400, "Общая пауза");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_WHATSAPP_GAP_SECONDS, request.whatsAppGapSeconds(), 30, 86400, "Пауза WhatsApp");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_TELEGRAM_GAP_SECONDS, request.telegramGapSeconds(), 30, 86400, "Пауза Telegram");
+        checkInt(errors, ints, AppSettingService.CLIENT_MESSAGES_MAX_GAP_SECONDS, request.maxGapSeconds(), 30, 86400, "Пауза MAX");
+        checkInt(errors, ints,
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_COUNT,
+                request.unansweredFastClickWarningCount(),
+                3,
+                100,
+                "Предупреждение быстрых закрытий"
+        );
+        checkInt(errors, ints,
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_SECONDS,
+                request.unansweredFastClickWarningSeconds(),
+                3,
+                300,
+                "Окно предупреждения быстрых закрытий"
+        );
+        checkInt(errors, ints,
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_COUNT,
+                request.unansweredFastClickCriticalCount(),
+                3,
+                500,
+                "Критический порог быстрых закрытий"
+        );
+        checkInt(errors, ints,
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_SECONDS,
+                request.unansweredFastClickCriticalSeconds(),
+                3,
+                3600,
+                "Критическое окно быстрых закрытий"
+        );
+        checkInt(errors, ints,
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH,
+                request.unansweredAutoIgnoreMaxLength(),
+                1,
+                500,
+                "Максимальная длина фразы без ответа"
+        );
+
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, () -> requiredSettingText(request.reviewCheckStatuses(), "Укажите статусы проверки отзывов"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, () -> requiredSettingText(request.clientTextReminderStatuses(), "Укажите статусы ожидания текста клиента"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, () -> requiredSettingText(request.paymentReminderStatuses(), "Укажите статусы напоминаний об оплате"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_STATUSES, () -> requiredSettingText(request.paymentOverdueStatuses(), "Укажите статусы просрочки оплаты"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_CLOSED_ORDER_STATUSES, () -> requiredSettingText(request.closedOrderStatuses(), "Укажите закрытые статусы заказов"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_TARGET_STATUS, () -> requiredSettingText(request.paymentOverdueTargetStatus(), "Укажите целевой статус просрочки"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_ARCHIVE_COMPANY_STATUS, () -> requiredSettingText(request.archiveCompanyStatus(), "Укажите архивный статус компании"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES, () -> requiredSettingText(request.archiveInactiveOrderStatuses(), "Укажите неактивные статусы заказов"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, () -> requiredSettingText(request.openNextOrderRequestStatuses(), "Укажите открытые статусы заявок"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_REVIEW_LINK_BASE_URL, () -> requiredSettingText(request.reviewLinkBaseUrl(), "Укажите базовую ссылку проверки отзывов"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_REVIEW_REMINDER_TEXT, () -> requiredSettingText(request.reviewReminderText(), "Укажите текст проверки отзывов"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_TEXT, () -> requiredSettingText(request.clientTextReminderText(), "Укажите текст ожидания текста клиента"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT, () -> requiredSettingText(request.publicationStartedText(), "Укажите текст передачи в публикацию"));
+        checkText(errors, texts, AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT, () -> requiredSettingText(request.publicationProgressReportText(), "Укажите текст отчёта о публикации отзыва"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT, () -> requiredSettingText(request.paymentReminderText(), "Укажите текст оплаты"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT, () -> requiredSettingText(request.paymentLinkCopyText(), "Укажите текст счета по платежной ссылке"));
+        String paymentSuccessText = request.paymentSuccessText() == null
+                ? appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_SUCCESS_TEXT
+                )
+                : request.paymentSuccessText();
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT, () -> requiredSettingText(paymentSuccessText, "Укажите текст успешной оплаты"));
+        String reviewRecoveryNoticeText = request.reviewRecoveryNoticeText() == null
+                ? appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT
+                )
+                : request.reviewRecoveryNoticeText();
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT, () -> requiredSettingText(reviewRecoveryNoticeText, "Укажите текст уведомления о восстановлении"));
+        checkText(errors, texts, AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT, () -> requiredSettingText(request.archiveOfferText(), "Укажите текст архивного предложения"));
+        checkText(errors, texts, AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES, () -> normalizedSettingList(request.unansweredAutoIgnorePhrases(), "Фразы без ответа"));
+        if (!errors.isEmpty()) {
+            throw badRequest("Настройки не сохранены: " + String.join("; ", errors));
         }
 
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, request.workerEnabled());
@@ -938,107 +1061,8 @@ public class ApiAdminDictionaryController {
                         || request.unansweredReplyQualityShadowEnabled()
         );
 
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS, request.reviewCheckIntervalDays(), 1, 365, "Интервал проверки отзывов");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_DAYS, request.reviewCheckAutoArchiveDays(), 1, 3650, "Автоархив проверки отзывов");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS, request.clientTextReminderIntervalDays(), 1, 365, "Интервал ожидания текста клиента");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS, request.paymentReminderIntervalDays(), 1, 365, "Интервал напоминания об оплате");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_RETRY_DELAY_HOURS, request.reviewCheckRetryDelayHours(), 1, 168, "Повтор ссылки проверки после сбоя");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS, request.paymentInvoiceRetryDelayHours(), 1, 168, "Повтор счета после сбоя");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_TRANSIENT_RETRY_MINUTES, request.transientRetryMinutes(), 1, 1440, "Повтор временной ошибки");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD, request.manualControlFailureThreshold(), 1, 100, "Порог ошибок ручного контроля");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES, request.manualControlAfterMinutes(), 1, 1440, "Порог времени ручного контроля");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS, request.badReviewInvoiceRetryDelayHours(), 1, 168, "Повтор счета после плохого отзыва");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS, request.badReviewAutoBanDelayDays(), 1, 365, "Автобан после плохих отзывов");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS, request.reviewRecoveryNoticeRetryDelayHours(), 1, 168, "Повтор уведомления о восстановлении");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, request.paymentOverdueDays(), 1, 365, "Срок просрочки оплаты");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS, request.archiveReorderMonths(), 1, 36, "Интервал архивного предложения");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_JITTER_DAYS, request.archiveReorderJitterDays(), 0, 30, "Разброс архивного предложения");
-        saveIntSetting(AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, request.archiveOrderRetentionDays(), 1, 3650, "Архив live-заказов");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD, request.errorProtectionThreshold(), 1, 10000, "Порог массовых ошибок");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_WINDOW_MINUTES, request.errorProtectionWindowMinutes(), 1, 1440, "Окно массовых ошибок");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES, request.errorProtectionCooldownMinutes(), 1, 1440, "Пауза после массовых ошибок");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS, request.whatsAppAuthRetryHours(), 1, 48, "Повтор WhatsApp QR/авторизации");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS, request.whatsAppAuthAlertCooldownHours(), 1, 168, "Пауза Telegram-алерта WhatsApp");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_RETENTION_DAYS, request.retentionDays(), 1, 3650, "Хранение журнала");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_TICK_BATCH_SIZE, request.tickBatchSize(), 1, 100, "Размер пачки");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_CANDIDATE_LIMIT, request.candidateLimit(), 1, 5000, "Лимит кандидатов");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_DAILY_LIMIT, request.dailyLimit(), 1, 5000, "Дневной лимит");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_DEFAULT_GAP_SECONDS, request.defaultGapSeconds(), 30, 86400, "Общая пауза");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_WHATSAPP_GAP_SECONDS, request.whatsAppGapSeconds(), 30, 86400, "Пауза WhatsApp");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_TELEGRAM_GAP_SECONDS, request.telegramGapSeconds(), 30, 86400, "Пауза Telegram");
-        saveIntSetting(AppSettingService.CLIENT_MESSAGES_MAX_GAP_SECONDS, request.maxGapSeconds(), 30, 86400, "Пауза MAX");
-        saveIntSetting(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_COUNT,
-                request.unansweredFastClickWarningCount(),
-                3,
-                100,
-                "Предупреждение быстрых закрытий"
-        );
-        saveIntSetting(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_SECONDS,
-                request.unansweredFastClickWarningSeconds(),
-                3,
-                300,
-                "Окно предупреждения быстрых закрытий"
-        );
-        saveIntSetting(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_COUNT,
-                request.unansweredFastClickCriticalCount(),
-                3,
-                500,
-                "Критический порог быстрых закрытий"
-        );
-        saveIntSetting(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_SECONDS,
-                request.unansweredFastClickCriticalSeconds(),
-                3,
-                3600,
-                "Критическое окно быстрых закрытий"
-        );
-        saveIntSetting(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH,
-                request.unansweredAutoIgnoreMaxLength(),
-                1,
-                500,
-                "Максимальная длина фразы без ответа"
-        );
-
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS, businessWindows);
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, requiredSettingText(request.reviewCheckStatuses(), "Укажите статусы проверки отзывов"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, requiredSettingText(request.clientTextReminderStatuses(), "Укажите статусы ожидания текста клиента"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, requiredSettingText(request.paymentReminderStatuses(), "Укажите статусы напоминаний об оплате"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_STATUSES, requiredSettingText(request.paymentOverdueStatuses(), "Укажите статусы просрочки оплаты"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_CLOSED_ORDER_STATUSES, requiredSettingText(request.closedOrderStatuses(), "Укажите закрытые статусы заказов"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_TARGET_STATUS, requiredSettingText(request.paymentOverdueTargetStatus(), "Укажите целевой статус просрочки"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_COMPANY_STATUS, requiredSettingText(request.archiveCompanyStatus(), "Укажите архивный статус компании"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES, requiredSettingText(request.archiveInactiveOrderStatuses(), "Укажите неактивные статусы заказов"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, requiredSettingText(request.openNextOrderRequestStatuses(), "Укажите открытые статусы заявок"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_LINK_BASE_URL, requiredSettingText(request.reviewLinkBaseUrl(), "Укажите базовую ссылку проверки отзывов"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_REMINDER_TEXT, requiredSettingText(request.reviewReminderText(), "Укажите текст проверки отзывов"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_TEXT, requiredSettingText(request.clientTextReminderText(), "Укажите текст ожидания текста клиента"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT, requiredSettingText(request.publicationStartedText(), "Укажите текст передачи в публикацию"));
-        appSettingService.setString(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT, requiredSettingText(request.publicationProgressReportText(), "Укажите текст отчёта о публикации отзыва"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT, requiredSettingText(request.paymentReminderText(), "Укажите текст оплаты"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT, requiredSettingText(request.paymentLinkCopyText(), "Укажите текст счета по платежной ссылке"));
-        String paymentSuccessText = request.paymentSuccessText() == null
-                ? appSettingService.getString(
-                        AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
-                        ScheduledClientMessageService.DEFAULT_PAYMENT_SUCCESS_TEXT
-                )
-                : request.paymentSuccessText();
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT, requiredSettingText(paymentSuccessText, "Укажите текст успешной оплаты"));
-        String reviewRecoveryNoticeText = request.reviewRecoveryNoticeText() == null
-                ? appSettingService.getString(
-                        AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT,
-                        ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT
-                )
-                : request.reviewRecoveryNoticeText();
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT, requiredSettingText(reviewRecoveryNoticeText, "Укажите текст уведомления о восстановлении"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT, requiredSettingText(request.archiveOfferText(), "Укажите текст архивного предложения"));
-        appSettingService.setString(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES,
-                normalizedSettingList(request.unansweredAutoIgnorePhrases(), "Фразы без ответа")
-        );
+        ints.forEach(appSettingService::setInt);
+        texts.forEach(appSettingService::setString);
 
         return clientMessageSettings();
     }
@@ -1130,13 +1154,17 @@ public class ApiAdminDictionaryController {
     }
 
     private CityResponse toCityResponse(City city) {
+        return toCityResponse(city, cityDistanceService.distanceCountFrom(city.getId()));
+    }
+
+    private CityResponse toCityResponse(City city, long distanceCount) {
         return new CityResponse(
                 city.getId(),
                 safe(city.getTitle()),
                 city.getLatitude(),
                 city.getLongitude(),
                 city.isDistanceMatrixReady(),
-                cityDistanceService.distanceCountFrom(city.getId())
+                distanceCount
         );
     }
 
@@ -1222,7 +1250,16 @@ public class ApiAdminDictionaryController {
         return response;
     }
 
-    private PromoAssignmentResponse toPromoAssignmentResponse(PromoTextAssignment assignment) {
+    /** Position (1-based, by id) of every promo text, computed once per request instead of once per assignment. */
+    private static Map<Long, Integer> promoTextPositions(List<PromoText> promoTexts) {
+        Map<Long, Integer> positions = new LinkedHashMap<>();
+        for (int index = 0; index < promoTexts.size(); index++) {
+            positions.put(promoTexts.get(index).getId(), index + 1);
+        }
+        return positions;
+    }
+
+    private PromoAssignmentResponse toPromoAssignmentResponse(PromoTextAssignment assignment, Map<Long, Integer> positions) {
         Slot slot = PromoButtonCatalog.find(assignment.getSectionCode(), assignment.getButtonKey())
                 .orElse(new Slot(
                         assignment.getSectionCode(),
@@ -1245,7 +1282,7 @@ public class ApiAdminDictionaryController {
                 slot.buttonLabel(),
                 slot.outputIndex() + 1,
                 promoText == null ? null : promoText.getId(),
-                promoText == null ? "" : promoTextLabel(positionOfPromoText(promoText.getId()))
+                promoText == null ? "" : promoTextLabel(positions.getOrDefault(promoText.getId(), 0))
         );
     }
 
@@ -1684,14 +1721,30 @@ public class ApiAdminDictionaryController {
         ).withSettingsVersion();
     }
 
-    private int saveIntSetting(String key, Integer value, int min, int max, String title) {
+    private <T> T checked(List<String> errors, java.util.function.Supplier<T> value) {
+        try {
+            return value.get();
+        } catch (ResponseStatusException invalid) {
+            errors.add(invalid.getReason());
+            return null;
+        }
+    }
+
+    private void checkText(List<String> errors, Map<String, String> texts, String key, java.util.function.Supplier<String> value) {
+        String text = checked(errors, value);
+        if (text != null) {
+            texts.put(key, text);
+        }
+    }
+
+    private void checkInt(List<String> errors, Map<String, Integer> ints, String key, Integer value, int min, int max, String title) {
         if (value == null) {
-            throw badRequest(title + ": значение обязательно");
+            errors.add(title + ": значение обязательно");
+        } else if (value < min || value > max) {
+            errors.add(title + ": допустимо от " + min + " до " + max);
+        } else {
+            ints.put(key, value);
         }
-        if (value < min || value > max) {
-            throw badRequest(title + ": допустимо от " + min + " до " + max);
-        }
-        return appSettingService.setInt(key, value);
     }
 
     private String requiredText(String value, String message) {
@@ -1730,11 +1783,23 @@ public class ApiAdminDictionaryController {
     }
 
     private String requiredTitle(String value) {
+        return requiredTitle(value, 255, "Название — не больше 255 символов");
+    }
+
+    private String requiredTitle(String value, int maxLength, String tooLongMessage) {
         String title = safe(value).trim();
         if (title.isBlank()) {
             throw badRequest("Название обязательно");
         }
-        return title;
+        return limitedText(title, maxLength, tooLongMessage);
+    }
+
+    /** The column length, said in Russian before the database would refuse it with a technical error. */
+    private String limitedText(String value, int maxLength, String message) {
+        if (value != null && value.length() > maxLength) {
+            throw badRequest(message);
+        }
+        return value;
     }
 
     private Long requiredId(Long value, String message) {
@@ -1765,8 +1830,8 @@ public class ApiAdminDictionaryController {
         if (city.getLatitude() != null && city.getLongitude() != null) {
             cityDistanceService.rebuildForCity(city.getId());
         } else {
-            city.setDistanceMatrixReady(false);
-            cityRepository.save(city);
+            // Erased coordinates also erase the distances computed from the old ones.
+            cityDistanceService.clearForCity(city);
         }
     }
 
@@ -1858,16 +1923,6 @@ public class ApiAdminDictionaryController {
         return promoTexts.get(index).getId();
     }
 
-    private int positionOfPromoText(Long promoTextId) {
-        List<PromoText> promoTexts = promoTextRepository.findAllByOrderByIdAsc();
-        for (int index = 0; index < promoTexts.size(); index++) {
-            if (promoTexts.get(index).getId().equals(promoTextId)) {
-                return index + 1;
-            }
-        }
-        return 0;
-    }
-
     private String promoTextLabel(int position) {
         return switch (position) {
             case 1 -> "предложение";
@@ -1895,6 +1950,15 @@ public class ApiAdminDictionaryController {
 
     private String toDisplayPromoText(String value) {
         return safe(value).replace("lineSep", System.lineSeparator());
+    }
+
+    /** text_promo.promo_text holds 2555 characters of the stored form, where a line break takes the 7 of «lineSep». */
+    private String storedPromoTextWithinLimit(String value) {
+        String stored = toStoredPromoText(value);
+        if (stored.length() > 2555) {
+            throw badRequest("Промо-текст слишком длинный: " + stored.length() + " из 2555 знаков (перенос строки занимает 7)");
+        }
+        return stored;
     }
 
     private String toStoredPromoText(String value) {

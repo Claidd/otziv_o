@@ -144,6 +144,7 @@ public class CommonInvoiceArchiveService {
             if (repository.isOrderAlreadyRestored(order.orderId())) {
                 continue;
             }
+            // The automatic specialist rule depends on the company only, so orders of one company get the same specialist.
             restoredOrders.add(orderArchiveRestoreService.restoreOrder(
                     order.orderId(),
                     restoreArchivedOrderTarget(order),

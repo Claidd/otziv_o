@@ -26,6 +26,8 @@ public class CityDistanceService {
     @Transactional
     public RebuildResult rebuildForCityIdsFrom(long minCityId) {
         List<City> cities = citiesWithCoordinates(minCityId);
+        // A city whose coordinates were erased keeps no distances, whatever its id.
+        cityDistanceRepository.deleteDistancesOfCitiesWithoutCoordinates();
         cityDistanceRepository.deleteByFromCityIdGreaterThanEqualAndToCityIdGreaterThanEqual(minCityId, minCityId);
 
         int saved = saveDistances(cities, cities);
@@ -42,7 +44,11 @@ public class CityDistanceService {
     @Transactional
     public RebuildResult rebuildForCity(Long cityId) {
         City city = cityRepository.findById(cityId);
-        if (city == null || !hasCoordinates(city)) {
+        if (city == null) {
+            return new RebuildResult(0, 1, 0);
+        }
+        if (!hasCoordinates(city)) {
+            clearForCity(city);
             return new RebuildResult(0, 1, 0);
         }
         List<City> cities = citiesWithCoordinates(0);
@@ -53,6 +59,17 @@ public class CityDistanceService {
         city.setDistanceMatrixReady(true);
         cityRepository.save(city);
         return new RebuildResult(1, 0, saved);
+    }
+
+    /** Coordinates erased: the city's old distances in both directions go, and it is no longer ready for routing. */
+    @Transactional
+    public void clearForCity(City city) {
+        if (city == null || city.getId() == null) {
+            return;
+        }
+        cityDistanceRepository.deleteByFromCityIdOrToCityId(city.getId(), city.getId());
+        city.setDistanceMatrixReady(false);
+        cityRepository.save(city);
     }
 
     @Transactional(readOnly = true)
@@ -68,6 +85,16 @@ public class CityDistanceService {
                     }
                 });
         return result;
+    }
+
+    /** Distances stored from each city, for the whole list in one query. */
+    @Transactional(readOnly = true)
+    public Map<Long, Long> distanceCountsByFromCity() {
+        Map<Long, Long> counts = new LinkedHashMap<>();
+        for (Object[] row : cityDistanceRepository.countGroupedByFromCity()) {
+            counts.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+        }
+        return counts;
     }
 
     @Transactional(readOnly = true)

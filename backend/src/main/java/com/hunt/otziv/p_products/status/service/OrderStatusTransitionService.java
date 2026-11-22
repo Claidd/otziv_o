@@ -93,6 +93,9 @@ public class OrderStatusTransitionService {
             Map.entry(STATUS_ARCHIVE, Set.of(STATUS_TO_CHECK, STATUS_IN_CHECK, STATUS_CORRECTION, STATUS_TO_PUBLISH)),
             Map.entry(STATUS_BAN, Set.of(STATUS_NOT_PAID, STATUS_TO_PAY, STATUS_REMINDER))
     );
+    /** Leaving «Архив» for these, the order waits for its specialist again. */
+    private static final Set<String> LIVE_ARCHIVE_WORK_TARGETS = Set.of(
+            STATUS_NEW, STATUS_TO_CHECK, STATUS_IN_CHECK, STATUS_CORRECTION, STATUS_TO_PUBLISH);
     private static final Set<String> COMPLETED_ORDER_REOPEN_STATUSES = Set.of(
             "Новый",
             STATUS_TO_CHECK,
@@ -139,6 +142,8 @@ public class OrderStatusTransitionService {
     private final ContractorPaymentShadowService contractorPaymentShadowService;
     private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+    private final ObjectProvider<com.hunt.otziv.archive.service.OrderArchiveRestoreService> archiveRestoreServiceProvider;
+    private final ObjectProvider<com.hunt.otziv.p_products.editing.service.OrderEditService> orderEditServiceProvider;
     private final ReviewRecoveryGateService recoveryGateService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -298,6 +303,9 @@ public class OrderStatusTransitionService {
                 );
             }
             synchronizeAndRequireCompleteCounter(order, title);
+            if (STATUS_ARCHIVE.equals(oldStatus) && LIVE_ARCHIVE_WORK_TARGETS.contains(title)) {
+                routeWorkerOfOrderLeavingArchive(order, actor);
+            }
             // A real, validated business transition starts a new lineage even for a legacy order.
             // No-op requests returned above; existing unconfirmed operations retain their identity.
             long previousMessageGeneration = order.getClientMessageGeneration();
@@ -436,6 +444,44 @@ public class OrderStatusTransitionService {
                 HttpStatus.CONFLICT,
                 "Заказ внутри общего счета архивируется только вместе с общим счетом"
         );
+    }
+
+    /**
+     * A live order in «Архив» returning to work (the client approves or corrects texts by the review-check link, or a
+     * manager moves it back) whose specialist no longer works goes to the specialist the archive restore rule picks.
+     * Without an unambiguous pick, or when the payment recipient is fixed, it keeps the specialist; «Контроль
+     * менеджера» then shows it under «Заказы у отключённых специалистов».
+     */
+    private void routeWorkerOfOrderLeavingArchive(Order order, org.springframework.security.core.Authentication actor) {
+        com.hunt.otziv.u_users.model.Worker current = order.getWorker();
+        if (current != null && current.getUser() != null && current.getUser().isActive()) {
+            return;
+        }
+        Long currentWorkerId = current == null ? null : current.getId();
+        Long companyId = order.getCompany() == null ? null : order.getCompany().getId();
+        com.hunt.otziv.archive.service.OrderArchiveRestoreService archiveRestore =
+                archiveRestoreServiceProvider == null ? null : archiveRestoreServiceProvider.getIfAvailable();
+        com.hunt.otziv.p_products.editing.service.OrderEditService editor =
+                orderEditServiceProvider == null ? null : orderEditServiceProvider.getIfAvailable();
+        if (companyId == null || archiveRestore == null || editor == null) {
+            return;
+        }
+        // Checked here, not by catching the guard: an exception leaving a transactional call marks the transition for rollback.
+        if (paperDocuments.hasDocument(order.getId()) || contractorPaymentShadowService.hasFrozenLiveRoute(order.getId())) {
+            log.warn("Order {} leaves the archive with its inactive specialist {}: the payment recipient is fixed", order.getId(), currentWorkerId);
+            return;
+        }
+        var suggestion = archiveRestore.suggestForLiveOrder(order.getId(), companyId, currentWorkerId);
+        if (suggestion == null) {
+            log.warn("Order {} leaves the archive with its inactive specialist {}: no unambiguous successor", order.getId(), currentWorkerId);
+            return;
+        }
+        editor.reassignWorkerOfOrderLeavingArchive(order, suggestion.workerId());
+        businessAuditService.recordSafely("archive_live_worker_rerouted", "order", order.getId(), order.getId(), null,
+                currentWorkerId == null ? null : currentWorkerId.toString(), suggestion.workerId().toString(),
+                "rule=" + suggestion.rule() + (actor == null ? ";actor=system" : ";actor=" + actor.getName()));
+        log.info("Order {} leaves the archive with specialist {} instead of inactive {} ({})",
+                order.getId(), suggestion.workerId(), currentWorkerId, suggestion.rule());
     }
 
     private void ensureCompletedOrderNotReopened(Order order, String targetStatus) {

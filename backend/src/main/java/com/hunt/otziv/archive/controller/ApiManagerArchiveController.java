@@ -65,7 +65,8 @@ public class ApiManagerArchiveController {
     ) {
         try {
             // specialistChoice: the client can show the specialist list (the site does; the released Android app does
-            // not yet). Without it the order keeps its archived specialist, as before, so the app is not blocked.
+            // not yet). Without it the automatic rule picks the specialist (OrderArchiveRestoreService.suggest), so the
+            // app is not blocked and the order does not land on a deactivated specialist when the pick is unambiguous.
             return managerArchiveService.restoreOrder(orderId, targetStatus, targetWorkerId,
                     specialistChoice || targetWorkerId != null, confirm, principal, authentication);
         } catch (ArchiveRestoreSpecialistRequiredException exception) {
@@ -91,7 +92,8 @@ public class ApiManagerArchiveController {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ArchiveRestoreSpecialistRequiredResponse(
                 exception.getMessage(),
                 ArchiveRestoreSpecialistRequiredException.CODE,
-                exception.workers()
+                exception.workers(),
+                exception.suggestedWorkerId()
         ));
     }
 

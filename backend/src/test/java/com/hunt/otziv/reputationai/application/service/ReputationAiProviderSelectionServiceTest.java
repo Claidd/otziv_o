@@ -35,6 +35,6 @@ class ReputationAiProviderSelectionServiceTest {
     void rejectsUnsupportedProvider() {
         assertThatThrownBy(() -> service.select("unknown"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unsupported AI provider");
+                .hasMessageContaining("Неизвестный AI-провайдер");
     }
 }

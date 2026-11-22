@@ -7,6 +7,7 @@ public record AdminDeviceTokenRow(
         Long telephoneId,
         String token,
         LocalDateTime createdAt,
-        boolean active
+        boolean active,
+        LocalDateTime expiresAt
 ) {
 }

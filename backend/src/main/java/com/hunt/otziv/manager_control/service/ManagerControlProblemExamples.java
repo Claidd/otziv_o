@@ -103,6 +103,11 @@ public class ManagerControlProblemExamples {
 
     static final Set<String> PAYMENT_AUTOMATION_STATUSES = Set.of("Опубликовано", "Выставлен счет", "Напоминание", "Не оплачено");
 
+    /** Work statuses where the order waits for its specialist; held by one who no longer works, nobody does it. */
+    static final Set<String> INACTIVE_WORKER_ORDER_STATUSES = Set.of("Новый", "В проверку", "На проверке", "Коррекция", "Публикация");
+
+    static final String ENTITY_INACTIVE_WORKER_ORDER = "INACTIVE_WORKER_ORDER";
+
     static final Set<ClientMessageScenario> PAYMENT_AUTOMATION_SCENARIOS = Set.of(ClientMessageScenario.PAYMENT_INVOICE_RETRY, ClientMessageScenario.PAYMENT_REMINDER, ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION);
 
     static final Set<String> REVIEW_CHECK_AUTOMATION_STATUSES = Set.of("На проверке");
@@ -181,6 +186,9 @@ public class ManagerControlProblemExamples {
         }
         if ("PAYMENT_INTEGRITY".equals(item.getReasonCode())) {
             return paymentIntegrityIssueExamples(manager, today, limit);
+        }
+        if ("INACTIVE_WORKER_ORDERS".equals(item.getReasonCode())) {
+            return inactiveWorkerOrderExamples(manager, today, limit);
         }
         if ("PUBLICATION_DATE_ISSUES".equals(item.getReasonCode())) {
             return publicationDateIssueExamples(manager, limit);
@@ -263,6 +271,19 @@ public class ManagerControlProblemExamples {
             String paidAt = order.getPayDay() == null ? "ранее" : order.getPayDay().toString();
             String reason = "Проблема: заказ №" + order.getId() + " полностью оплачен " + paidAt + ", но повторно находится в статусе «" + status + "». " + "Есть риск повторного счета клиенту. Решение: нажмите «Починить» — " + "система остановит платежные очереди, закроет только лишние неоплаченные ссылки " + "и восстановит статус «Оплачено». Следующий заказ не изменяется.";
             return new ManagerControlConcreteItemResponse(null, ENTITY_ORDER_PAYMENT_INTEGRITY, order.getId(), orderTitle(order, "Заказ #" + order.getId()), "Оплачен " + paidAt + " · заказ №" + order.getId(), status, order.getPayDay() == null ? null : daysSince(order.getPayDay(), today), reason, orderTargetUrl(order), null, orderChatUrl(order), null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null).withSla(order.getStatusChangedAt(), null, null, null);
+        }).toList();
+    }
+
+    List<ManagerControlConcreteItemResponse> inactiveWorkerOrderExamples(Manager manager, LocalDate today, int limit) {
+        return orderRepository.findWorkOrdersOnInactiveWorkerByManager(manager, INACTIVE_WORKER_ORDER_STATUSES, PageRequest.of(0, Math.max(1, limit))).stream().map(order -> {
+            String status = order.getStatus() == null ? "" : safe(order.getStatus().getTitle());
+            boolean noWorker = order.getWorker() == null || order.getWorker().getUser() == null;
+            String worker = noWorker ? "" : safe(order.getWorker().getUser().getFio());
+            String reason = "Проблема: заказ №" + order.getId() + " в статусе «" + status + "» "
+                    + (noWorker ? "без специалиста" : "закреплён за отключённым специалистом" + (worker.isBlank() ? "" : " (" + worker + ")"))
+                    + " — его никто не выполнит. Решение: откройте заказ и смените специалиста в карточке.";
+            LocalDateTime observedAt = order.getStatusChangedAt();
+            return new ManagerControlConcreteItemResponse(null, ENTITY_INACTIVE_WORKER_ORDER, order.getId(), orderTitle(order, "Заказ #" + order.getId()), "Нет действующего специалиста · заказ №" + order.getId(), status, observedAt == null ? null : daysSince(observedAt.toLocalDate(), today), reason, orderTargetUrl(order), null, orderChatUrl(order), null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null).withSla(observedAt, null, null, null);
         }).toList();
     }
 

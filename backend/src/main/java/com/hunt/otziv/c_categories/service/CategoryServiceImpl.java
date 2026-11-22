@@ -21,11 +21,14 @@ import java.util.stream.Collectors;
 public class CategoryServiceImpl implements CategoryService{
     private final CategoryRepository categoryRepository;
     private final SubCategoryRepository subCategoryRepository;
+    private final CategoryDeletionGuard deletionGuard;
 
     @Autowired
-    public CategoryServiceImpl(CategoryRepository categoryRepository, SubCategoryRepository subCategoryRepository) {
+    public CategoryServiceImpl(CategoryRepository categoryRepository, SubCategoryRepository subCategoryRepository,
+                               CategoryDeletionGuard deletionGuard) {
         this.categoryRepository = categoryRepository;
         this.subCategoryRepository = subCategoryRepository;
+        this.deletionGuard = deletionGuard;
     }
 
     @Override
@@ -74,7 +77,7 @@ public class CategoryServiceImpl implements CategoryService{
 
     @Override
     public void deleteCategory(Long id) {
-        categoryRepository.deleteById(id);
+        deletionGuard.deleteCategory(id);
     } // Удаление категорий
 
     @Override
