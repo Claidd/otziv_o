@@ -170,6 +170,12 @@ public class ClientMessageOrderStatusService {
             statusState = "scheduled";
             tone = "wait";
             label = "Отправлено вручную, автоответчик ждёт";
+        } else if (state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.isSwitchedOffCode(state.getLastErrorCode())) {
+            // Not «запланирован»: nothing goes out until the switch is on again (manager control asks for manual work).
+            statusState = "none";
+            tone = "muted";
+            label = "Выключено в настройках автоответчика";
         } else if (requiresManualControl(state)) {
             statusState = "manual_control";
             tone = "danger";
@@ -258,6 +264,10 @@ public class ClientMessageOrderStatusService {
         if (isOperationalSkip(code)) {
             return false;
         }
+        // The daily limit or a closed sending window postpone on purpose; after real failures they do not hide them.
+        if (com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.isIntentionalWaitCode(code) && state.getConsecutiveFailures() == 0) {
+            return false;
+        }
 
         if (state.getStatus() == ScheduledMessageStateStatus.DISABLED) {
             return true;
@@ -314,7 +324,11 @@ public class ClientMessageOrderStatusService {
                 || code.contains("auto_archive")
                 || code.contains("auto_ban")
                 || code.contains("client_message_state_auto_recovered")
-                || code.equals(MANUAL_CONTACT_RESERVED);
+                || code.equals(MANUAL_CONTACT_RESERVED)
+                // Switched off in the settings, or decided by an administrator in the monitor: not an autoresponder
+                // failure. Other waits on purpose are checked with the failure counter in requiresManualControl.
+                || com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.isSwitchedOffCode(code)
+                || com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.isManualDecisionCode(code);
     }
 
     private boolean isManualContactHold(ScheduledClientMessageState state) {

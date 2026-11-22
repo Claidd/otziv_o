@@ -1,21 +1,25 @@
 <section class="transfer-workspace">
     <section class="transfer-panel">
       <header class="panel-head">
-        <div>
-          <h2>Передача текущей работы</h2>
-          <p>Компании, текущие заказы, неопубликованные отзывы и открытые плохие отзывы</p>
+        <span class="panel-icon material-icons-sharp" aria-hidden="true">sync_alt</span>
+        <div class="panel-title">
+          <p class="panel-kicker">Шаг 1 · выбор</p>
+          <h3>Кто передаёт и кому</h3>
         </div>
-        <span class="material-icons-sharp">sync_alt</span>
       </header>
 
       @if (error()) {
-        <p class="error">{{ error() }}</p>
+        <p class="transfer-error" role="alert">
+          <span class="material-icons-sharp" aria-hidden="true">error</span>
+          <span>{{ error() }}</span>
+        </p>
       }
 
+      <!-- While a check or a transfer runs the lists and the comment are locked: its answer belongs to the pair that was sent. -->
       <div class="transfer-form">
-        <label>
-          <span>От специалиста</span>
-          <select [ngModel]="fromWorkerId()" (ngModelChange)="setFromWorkerId($event)" [disabled]="optionsLoading()">
+        <label class="transfer-field">
+          <span class="field-caption">От специалиста</span>
+          <select [ngModel]="fromWorkerId()" (ngModelChange)="setFromWorkerId($event)" [disabled]="optionsLoading() || busy()">
             <option [ngValue]="null">Выберите специалиста</option>
             @for (worker of sortedWorkers(); track trackWorker($index, worker)) {
               <option [ngValue]="worker.id">{{ workerLabel(worker) }}</option>
@@ -23,13 +27,13 @@
           </select>
         </label>
 
-        <button class="swap-button" type="button" (click)="swapWorkers()" [disabled]="applyLoading() || previewLoading()">
-          <span class="material-icons-sharp">swap_horiz</span>
+        <button class="swap-button" type="button" (click)="swapWorkers()" [disabled]="busy()" title="Поменять местами" aria-label="Поменять специалистов местами">
+          <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
         </button>
 
-        <label>
-          <span>К специалисту</span>
-          <select [ngModel]="toWorkerId()" (ngModelChange)="setToWorkerId($event)" [disabled]="optionsLoading()">
+        <label class="transfer-field">
+          <span class="field-caption">К специалисту</span>
+          <select [ngModel]="toWorkerId()" (ngModelChange)="setToWorkerId($event)" [disabled]="optionsLoading() || busy()">
             <option [ngValue]="null">Выберите специалиста</option>
             @for (worker of sortedWorkers(); track trackWorker($index, worker)) {
               <option [ngValue]="worker.id">{{ workerLabel(worker) }}</option>
@@ -38,14 +42,19 @@
         </label>
       </div>
 
-      <label class="comment-field">
-        <span>Комментарий</span>
-        <textarea rows="3" [ngModel]="comment()" (ngModelChange)="setComment($event)"></textarea>
+      <p class="list-hint">В списках только активные специалисты: работу уходящего сотрудника передайте до его отключения.</p>
+
+      <label class="transfer-field">
+        <span class="field-caption">Комментарий <small>(необязательно, до {{ commentMaxLength }} символов)</small></span>
+        <textarea rows="3" [maxlength]="commentMaxLength" [ngModel]="comment()" (ngModelChange)="setComment($event)" [disabled]="busy()"></textarea>
       </label>
 
-      <div class="actions">
-        <button type="button" class="primary" (click)="previewTransfer()" [disabled]="!canPreview()">
-          <span class="material-icons-sharp">fact_check</span>
+      <div class="transfer-actions">
+        @if (previewHint(); as hint) {
+          <p class="action-hint" id="transfer-preview-hint">{{ hint }}</p>
+        }
+        <button type="button" class="transfer-primary" [class.transfer-primary--quiet]="!!preview()" (click)="previewTransfer()" [disabled]="!canPreview()" [attr.aria-describedby]="previewHint() ? 'transfer-preview-hint' : null">
+          <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
           {{ previewLoading() ? 'Проверяю' : 'Проверить' }}
         </button>
       </div>
@@ -54,11 +63,15 @@
     @if (preview(); as previewData) {
       <section class="transfer-panel preview-panel">
         <header class="panel-head">
-          <div>
-            <h2>{{ previewData.fromWorker.label }} -> {{ previewData.toWorker.label }}</h2>
-            <p>Предпросмотр операции</p>
+          <span class="panel-icon material-icons-sharp" aria-hidden="true">assignment_ind</span>
+          <div class="panel-title">
+            <p class="panel-kicker">Шаг 2 · проверка</p>
+            <h3 class="route-title">
+              <span>{{ previewData.fromWorker.label }}</span>
+              <span class="route-arrow"> → </span>
+              <span>{{ previewData.toWorker.label }}</span>
+            </h3>
           </div>
-          <span class="material-icons-sharp">assignment_ind</span>
         </header>
 
         <div class="metric-grid">
@@ -67,33 +80,40 @@
             <strong>{{ previewData.companyCount }}</strong>
           </article>
           <article>
-            <span>Текущие заказы</span>
+            <span>Незавершённые заказы</span>
             <strong>{{ previewData.activeOrderCount }}</strong>
           </article>
           <article>
-            <span>Отзывы</span>
+            <span>Неопубликованные отзывы</span>
             <strong>{{ previewData.unpublishedReviewCount }}</strong>
           </article>
           <article>
-            <span>Плохие отзывы</span>
+            <span>Новые задачи по плохим отзывам</span>
             <strong>{{ previewData.badReviewTaskCount }}</strong>
           </article>
           <article>
-            <span>Восстановление отзывов</span>
+            <span>Запланированные восстановления</span>
             <strong>{{ previewData.reviewRecoveryTaskCount }}</strong>
           </article>
           <article>
-            <span>Уже привязан</span>
+            <span>Компании, где новый уже есть</span>
             <strong>{{ previewData.targetAlreadyAssignedCompanyCount }}</strong>
           </article>
         </div>
+
+        @if (previewData.companyCount > 0 && !nothingToMove()) {
+          <p class="transfer-note">
+            <span class="material-icons-sharp" aria-hidden="true">info</span>
+            <span>Незавершённые заказы перейдут вместе с неопубликованными отзывами и открытыми задачами. Новый специалист добавится в компании, прежний в них останется.</span>
+          </p>
+        }
 
         @if (previewData.warnings.length) {
           <div class="warning-list">
             @for (warning of previewData.warnings; track trackWarning($index, warning)) {
               <p>
-                <span class="material-icons-sharp">warning</span>
-                {{ warning.message }}
+                <span class="material-icons-sharp" aria-hidden="true">warning</span>
+                <span>{{ warningText(warning, previewData) }}</span>
               </p>
             }
           </div>
@@ -101,25 +121,43 @@
 
         @if (previewData.sampleCompanies.length) {
           <div class="company-samples">
-            <h3>Компании</h3>
-            @for (company of previewData.sampleCompanies; track trackCompany($index, company)) {
-              <div class="company-row">
-                <strong>{{ company.title || ('Компания #' + company.id) }}</strong>
-                <span>{{ company.city || '-' }} · {{ company.statusTitle || '-' }} · {{ company.telephone || '-' }}</span>
-              </div>
-            }
+            <h4>
+              Компании
+              @if (sampleNote(); as note) {
+                <small>· {{ note }}</small>
+              }
+            </h4>
+            <div class="company-list">
+              @for (company of previewData.sampleCompanies; track trackCompany($index, company)) {
+                <div class="company-row">
+                  <strong>{{ company.title || ('Компания #' + company.id) }}</strong>
+                  <span>{{ company.city || '-' }} · {{ company.statusTitle || '-' }} · {{ company.telephone || '-' }}</span>
+                </div>
+              }
+            </div>
           </div>
         }
 
         <div class="confirm-row">
-          <label>
-            <span>Подтверждение</span>
-            <input [ngModel]="confirmation()" (ngModelChange)="setConfirmation($event)" placeholder="ПЕРЕНЕСТИ">
+          <label class="transfer-field">
+            <span class="field-caption">Шаг 3 · подтверждение</span>
+            @if (applyStopReason(); as reason) {
+              <small class="field-hint">{{ reason }}</small>
+            } @else {
+              <small class="field-hint">Чтобы выполнить перенос, введите слово <b>ПЕРЕНЕСТИ</b>.</small>
+            }
+            <input [ngModel]="confirmation()" (ngModelChange)="setConfirmation($event)" placeholder="ПЕРЕНЕСТИ" autocomplete="off" [disabled]="busy() || applyStopReason() !== null">
           </label>
-          <button type="button" class="danger" (click)="applyTransfer()" [disabled]="!canApply()">
-            <span class="material-icons-sharp">done_all</span>
+          <button type="button" class="transfer-primary" (click)="applyTransfer()" [disabled]="!canApply()">
+            <span class="material-icons-sharp" aria-hidden="true">done_all</span>
             {{ applyLoading() ? 'Переношу' : 'Перенести' }}
           </button>
+          @if (applyError(); as message) {
+            <p class="transfer-error confirm-error" role="alert">
+              <span class="material-icons-sharp" aria-hidden="true">error</span>
+              <span>{{ message }}</span>
+            </p>
+          }
         </div>
       </section>
     }
@@ -127,11 +165,16 @@
     @if (result(); as resultData) {
       <section class="transfer-panel result-panel">
         <header class="panel-head">
-          <div>
-            <h2>Перенос выполнен</h2>
-            <p>Операция #{{ resultData.auditId || '-' }}</p>
+          <span class="panel-icon material-icons-sharp" aria-hidden="true">verified</span>
+          <div class="panel-title">
+            <p class="panel-kicker">Готово · перенос выполнен</p>
+            <h3 class="route-title">
+              <span>{{ resultData.fromWorker.label }}</span>
+              <span class="route-arrow"> → </span>
+              <span>{{ resultData.toWorker.label }}</span>
+            </h3>
           </div>
-          <span class="material-icons-sharp">verified</span>
+          <span class="panel-chip">Операция #{{ resultData.auditId || '-' }}</span>
         </header>
         <div class="metric-grid">
           <article>
@@ -139,7 +182,7 @@
             <strong>{{ resultData.companyCount }}</strong>
           </article>
           <article>
-            <span>Связи добавлены</span>
+            <span>Новый добавлен в компании</span>
             <strong>{{ resultData.companyLinksAdded }}</strong>
           </article>
           <article>
@@ -151,37 +194,59 @@
             <strong>{{ resultData.unpublishedReviewCount }}</strong>
           </article>
           <article>
-            <span>Плохие отзывы</span>
+            <span>Задачи по плохим отзывам</span>
             <strong>{{ resultData.badReviewTaskCount }}</strong>
           </article>
           <article>
-            <span>Восстановление отзывов</span>
+            <span>Восстановления</span>
             <strong>{{ resultData.reviewRecoveryTaskCount }}</strong>
           </article>
         </div>
+        <p class="result-note">Прежний специалист остался привязан к компаниям.</p>
       </section>
     }
 
     <section class="transfer-panel recent-panel">
       <header class="panel-head">
-        <div>
-          <h2>Последние операции</h2>
-          <p>{{ recentLoading() ? 'Загрузка' : recentTransfers().length + ' записей' }}</p>
+        <span class="panel-icon material-icons-sharp" aria-hidden="true">history</span>
+        <div class="panel-title">
+          <p class="panel-kicker">История</p>
+          <h3>Последние операции</h3>
         </div>
-        <span class="material-icons-sharp">history</span>
+        <span class="panel-chip">{{ recentChip() }}</span>
       </header>
+
+      @if (recentError(); as message) {
+        <div class="transfer-error recent-error" role="alert">
+          <span class="material-icons-sharp" aria-hidden="true">error</span>
+          <span class="recent-error-text">{{ message }}</span>
+          <button type="button" class="transfer-secondary" (click)="loadRecent()" [disabled]="recentLoading()">
+            <span class="material-icons-sharp" aria-hidden="true">refresh</span>
+            Повторить
+          </button>
+        </div>
+      }
 
       <div class="recent-list">
         @for (transfer of recentTransfers(); track trackTransfer($index, transfer)) {
           <article>
-            <div>
+            <div class="recent-main">
               <strong>{{ transferTitle(transfer) }}</strong>
               <span>{{ transfer.createdAt | date:'dd.MM.yyyy HH:mm' }} · {{ transfer.actorName }}</span>
             </div>
-            <p>{{ transfer.companyCount }} компаний · {{ transfer.orderCount }} заказов · {{ transfer.reviewCount }} отзывов · {{ transfer.badReviewTaskCount }} плохих · {{ transfer.reviewRecoveryTaskCount }} восстановлений</p>
+            <p class="recent-stats">
+              @for (stat of transferStats(transfer); track $index) {
+                <span><b>{{ stat.value }}</b> {{ stat.word }}</span>
+              }
+            </p>
+            @if (transferComment(transfer); as note) {
+              <p class="recent-comment">{{ note }}</p>
+            }
           </article>
         } @empty {
-          <p class="empty">Операций пока нет</p>
+          @if (!recentLoading() && !recentError()) {
+            <p class="empty">Операций пока нет</p>
+          }
         }
       </div>
     </section>

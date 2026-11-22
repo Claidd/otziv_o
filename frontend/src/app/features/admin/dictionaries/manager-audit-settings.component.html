@@ -1,49 +1,53 @@
 <section class="audit-settings">
   <header class="audit-hero">
-    <div>
+    <div class="audit-hero-title">
       <p class="eyebrow">Контроль менеджеров</p>
       <h2>Настройки аудита</h2>
-      <p>
-        Здесь определяется, кому система формирует ежедневный аудит, как проверяет понимание
-        замечаний и когда напоминает о незавершённом разборе.
-      </p>
     </div>
-    <button type="button" class="secondary-button" (click)="load()" [disabled]="loading() || saving()">
-      <span class="material-icons-sharp">refresh</span>
+    <p class="audit-hero-text">
+      Здесь определяется, кому система формирует ежедневный аудит, как проверяет понимание
+      замечаний и когда напоминает о незавершённом разборе.
+    </p>
+    <button type="button" class="secondary-button" (click)="refresh()" [disabled]="loading() || saving()">
+      <span class="material-icons-sharp" aria-hidden="true">refresh</span>
       Обновить
     </button>
   </header>
 
-  @if (error()) {
+  @if (error() && !errorAtSave()) {
     <div class="audit-error" role="alert">
-      <span class="material-icons-sharp">error_outline</span>
+      <span class="material-icons-sharp" aria-hidden="true">error_outline</span>
       <span>{{ error() }}</span>
     </div>
   }
 
   @if (loading()) {
     <div class="audit-loading">
-      <span class="material-icons-sharp">hourglass_top</span>
+      <span class="material-icons-sharp" aria-hidden="true">hourglass_top</span>
       Загружаем настройки аудита…
     </div>
   } @else if (settings()) {
     <div class="audit-summary">
-      <article [class.disabled]="!form.controls.enabled.value">
-        <span class="material-icons-sharp">fact_check</span>
+      <article [class.disabled]="!settings()!.enabled">
+        <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
         <div>
-          <strong>{{ form.controls.enabled.value ? 'Аудит работает' : 'Аудит выключен' }}</strong>
-          <small>Общий режим</small>
+          <strong>{{ settings()!.enabled ? 'Аудит работает' : 'Аудит выключен' }}</strong>
+          @if (summaryUnsaved()) {
+            <small class="summary-unsaved">Переключатель изменён, но ещё не сохранён</small>
+          } @else {
+            <small>Общий режим</small>
+          }
         </div>
       </article>
       <article>
-        <span class="material-icons-sharp">groups</span>
+        <span class="material-icons-sharp" aria-hidden="true">groups</span>
         <div>
           <strong>{{ enabledManagers() }} из {{ settings()!.managers.length }}</strong>
           <small>Менеджеров участвуют</small>
         </div>
       </article>
       <article>
-        <span class="material-icons-sharp">forum</span>
+        <span class="material-icons-sharp" aria-hidden="true">forum</span>
         <div>
           <strong>{{ connectedGroups() }}</strong>
           <small>Telegram-групп подключено</small>
@@ -58,7 +62,7 @@
             <p class="eyebrow">Главное</p>
             <h3>Формирование и контроль</h3>
           </div>
-          <span class="material-icons-sharp">tune</span>
+          <span class="material-icons-sharp" aria-hidden="true">tune</span>
         </div>
 
         <label class="switch-row">
@@ -83,6 +87,7 @@
           <span>
             <strong>Ограничивать доступ при непрохождении</strong>
             <small>После истечения срока рабочие разделы блокируются до завершения аудита.</small>
+            <small class="mode-note">{{ rolloutNote('restriction') }}</small>
           </span>
           <input type="checkbox" formControlName="restrictionEnabled">
           <i aria-hidden="true"></i>
@@ -95,36 +100,37 @@
             <p class="eyebrow">Сроки</p>
             <h3>Чтение и напоминания</h3>
           </div>
-          <span class="material-icons-sharp">schedule</span>
+          <span class="material-icons-sharp" aria-hidden="true">schedule</span>
         </div>
         <div class="field-grid">
           <label>
             <span>Минимальное чтение, сек.</span>
-            <input type="number" formControlName="minimumReadSeconds">
-            <small>От 30 до 300 секунд</small>
+            <input type="number" formControlName="minimumReadSeconds" [attr.aria-invalid]="invalid('minimumReadSeconds') || null">
+            <small [class.field-error]="invalid('minimumReadSeconds')">От 30 до 300 секунд</small>
           </label>
           <label>
             <span>Чтение в тестовом режиме, сек.</span>
-            <input type="number" formControlName="testMinimumReadSeconds">
-            <small>От 3 до 30 секунд</small>
+            <input type="number" formControlName="testMinimumReadSeconds" [attr.aria-invalid]="invalid('testMinimumReadSeconds') || null">
+            <small [class.field-error]="invalid('testMinimumReadSeconds')">От 3 до 30 секунд</small>
           </label>
           <label>
             <span>Первое напоминание, мин.</span>
-            <input type="number" formControlName="reminderOneMinutes">
-            <small>После начала аудита</small>
+            <input type="number" formControlName="reminderOneMinutes" [attr.aria-invalid]="invalid('reminderOneMinutes') || null">
+            <small [class.field-error]="invalid('reminderOneMinutes')">От 5 до 1440 минут после начала аудита</small>
           </label>
           <label>
             <span>Срок прохождения, мин.</span>
-            <input type="number" formControlName="reminderThreeMinutes">
-            <small>Должен быть больше первого напоминания</small>
+            <input type="number" formControlName="reminderThreeMinutes" [attr.aria-invalid]="invalid('reminderThreeMinutes') || null">
+            <small [class.field-error]="invalid('reminderThreeMinutes')">От 10 до 4320 минут, больше первого напоминания</small>
           </label>
         </div>
+        <p class="setting-note">{{ rolloutNote('reminders') }}</p>
       </article>
 
       <article class="audit-card" formGroupName="evidence">
         <div class="card-heading">
           <div><p class="eyebrow">Разбор проблем</p><h3>Рекомендации в карточках</h3></div>
-          <span class="material-icons-sharp">troubleshoot</span>
+          <span class="material-icons-sharp" aria-hidden="true">troubleshoot</span>
         </div>
         <div class="field-grid">
           <label>
@@ -138,8 +144,8 @@
           </label>
           <label>
             <span>Максимум запросов в час</span>
-            <input type="number" formControlName="diagnosisMaxRequestsPerHour" min="1" max="1000">
-            <small>Лимит фоновой диагностики на один процесс</small>
+            <input type="number" formControlName="diagnosisMaxRequestsPerHour" min="1" max="1000" [attr.aria-invalid]="invalid('evidence.diagnosisMaxRequestsPerHour') || null">
+            <small [class.field-error]="invalid('evidence.diagnosisMaxRequestsPerHour')">От 1 до 1000. Лимит фоновой диагностики на один процесс</small>
           </label>
           @if (form.controls.evidence.controls.diagnosisMode.value === 'PILOT') {
             <label class="full-field">
@@ -151,9 +157,23 @@
               </select>
               <small>Можно выбрать несколько менеджеров.</small>
             </label>
+            @for (id of hiddenPilotIds('diagnosisPilotManagerIds'); track id) {
+              <p class="hidden-pilot full-field">
+                <span>Менеджер №{{ id }} неактивен или без роли менеджера, но остаётся в пилоте.</span>
+                <button type="button" class="link-button" (click)="removePilotId('diagnosisPilotManagerIds', id)">Убрать</button>
+              </p>
+            }
           }
-          <label><span>Лимит ответа, токенов</span><input type="number" formControlName="diagnosisMaxOutputTokens" min="1500" max="12000"></label>
-          <label><span>Таймаут диагностики, сек.</span><input type="number" formControlName="diagnosisTimeoutSeconds" min="10" max="60"></label>
+          <label>
+            <span>Лимит ответа, токенов</span>
+            <input type="number" formControlName="diagnosisMaxOutputTokens" min="1500" max="12000" [attr.aria-invalid]="invalid('evidence.diagnosisMaxOutputTokens') || null">
+            <small [class.field-error]="invalid('evidence.diagnosisMaxOutputTokens')">От 1500 до 12000</small>
+          </label>
+          <label>
+            <span>Таймаут диагностики, сек.</span>
+            <input type="number" formControlName="diagnosisTimeoutSeconds" min="10" max="60" [attr.aria-invalid]="invalid('evidence.diagnosisTimeoutSeconds') || null">
+            <small [class.field-error]="invalid('evidence.diagnosisTimeoutSeconds')">От 10 до 60 секунд</small>
+          </label>
         </div>
         <label class="switch-row">
           <span><strong>Рассуждение при диагностике</strong><small>Помогает разобрать причину; увеличивает время и расход токенов.</small></span>
@@ -165,7 +185,7 @@
       <article class="audit-card" formGroupName="evidence">
         <div class="card-heading">
           <div><p class="eyebrow">Проверка понимания</p><h3>Ответы по исходным фактам</h3></div>
-          <span class="material-icons-sharp">fact_check</span>
+          <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
         </div>
         <div class="field-grid">
           <label class="full-field">
@@ -186,10 +206,28 @@
               </select>
               <small>Выбор независим от пилота рекомендаций в карточках.</small>
             </label>
+            @for (id of hiddenPilotIds('answerPilotManagerIds'); track id) {
+              <p class="hidden-pilot full-field">
+                <span>Менеджер №{{ id }} неактивен или без роли менеджера, но остаётся в пилоте.</span>
+                <button type="button" class="link-button" (click)="removePilotId('answerPilotManagerIds', id)">Убрать</button>
+              </p>
+            }
           }
-          <label><span>Лимит проверки ответа, токенов</span><input type="number" formControlName="answerMaxTokens" min="2000" max="16000"></label>
-          <label><span>Таймаут проверки ответа, сек.</span><input type="number" formControlName="answerTimeoutSeconds" min="5" max="240"></label>
-          <label><span>Допустимый возраст текущих фактов, мин.</span><input type="number" formControlName="evidenceMaxAgeMinutes" min="1" max="120"><small>Более старые данные требуют обновления.</small></label>
+          <label>
+            <span>Лимит проверки ответа, токенов</span>
+            <input type="number" formControlName="answerMaxTokens" min="2000" max="16000" [attr.aria-invalid]="invalid('evidence.answerMaxTokens') || null">
+            <small [class.field-error]="invalid('evidence.answerMaxTokens')">От 2000 до 16000</small>
+          </label>
+          <label>
+            <span>Таймаут проверки ответа, сек.</span>
+            <input type="number" formControlName="answerTimeoutSeconds" min="5" max="240" [attr.aria-invalid]="invalid('evidence.answerTimeoutSeconds') || null">
+            <small [class.field-error]="invalid('evidence.answerTimeoutSeconds')">От 5 до 240 секунд</small>
+          </label>
+          <label>
+            <span>Допустимый возраст текущих фактов, мин.</span>
+            <input type="number" formControlName="evidenceMaxAgeMinutes" min="1" max="120" [attr.aria-invalid]="invalid('evidence.evidenceMaxAgeMinutes') || null">
+            <small [class.field-error]="invalid('evidence.evidenceMaxAgeMinutes')">От 1 до 120 минут. Более старые данные требуют обновления.</small>
+          </label>
         </div>
         <label class="switch-row">
           <span><strong>Рассуждение при проверке ответа</strong><small>Отдельная настройка оценки смысла, цитат и подтверждений.</small></span>
@@ -201,17 +239,33 @@
 
       <details class="audit-card advanced-card">
         <summary>
-          <span><span class="material-icons-sharp">settings_suggest</span><strong>Генерация вопросов</strong></span>
+          <span><span class="material-icons-sharp" aria-hidden="true">settings_suggest</span><strong>Генерация вопросов</strong></span>
           <small>Количество, бюджет и ожидание модели</small>
         </summary>
         <div class="field-grid advanced-grid">
-          <label><span>Максимум вопросов</span><input type="number" formControlName="maxQuestionCount" min="1" max="12"><small>По действующим замечаниям</small></label>
-          <label><span>Лимит генерации, токенов</span><input type="number" formControlName="questionGenerationMaxTokens" min="2000" max="16000"></label>
-          <label><span>Лимит повторной генерации, токенов</span><input type="number" formControlName="questionGenerationRetryMaxTokens" min="2000" max="24000"></label>
+          <label>
+            <span>Максимум вопросов</span>
+            <input type="number" formControlName="maxQuestionCount" min="1" max="12" [attr.aria-invalid]="invalid('maxQuestionCount') || null">
+            <small [class.field-error]="invalid('maxQuestionCount')">От 1 до 12, по действующим замечаниям</small>
+          </label>
+          <label>
+            <span>Лимит генерации, токенов</span>
+            <input type="number" formControlName="questionGenerationMaxTokens" min="2000" max="16000" [attr.aria-invalid]="invalid('questionGenerationMaxTokens') || null">
+            <small [class.field-error]="invalid('questionGenerationMaxTokens')">От 2000 до 16000</small>
+          </label>
+          <label>
+            <span>Лимит повторной генерации, токенов</span>
+            <input type="number" formControlName="questionGenerationRetryMaxTokens" min="2000" max="24000" [attr.aria-invalid]="invalid('questionGenerationRetryMaxTokens') || null">
+            <small [class.field-error]="invalid('questionGenerationRetryMaxTokens')">От 2000 до 24000, не меньше основного лимита</small>
+          </label>
         </div>
-        <div formGroupName="evidence">
+        <div formGroupName="evidence" class="advanced-evidence">
           <div class="field-grid advanced-grid">
-            <label><span>Таймаут генерации, сек.</span><input type="number" formControlName="questionTimeoutSeconds" min="5" max="240"></label>
+            <label>
+              <span>Таймаут генерации, сек.</span>
+              <input type="number" formControlName="questionTimeoutSeconds" min="5" max="240" [attr.aria-invalid]="invalid('evidence.questionTimeoutSeconds') || null">
+              <small [class.field-error]="invalid('evidence.questionTimeoutSeconds')">От 5 до 240 секунд</small>
+            </label>
           </div>
           <label class="switch-row">
             <span><strong>Рассуждение при генерации вопросов</strong><small>Отдельно от диагностики и оценки ответов.</small></span>
@@ -222,11 +276,17 @@
 
       <div class="save-bar">
         <div>
-          <strong>Изменения применяются сразу</strong>
-          <small>При полном выключении текущие незавершённые аудиты будут закрыты.</small>
+          <strong>Настройки выше сохраняются этой кнопкой</strong>
+          <small>Переключатели по менеджерам ниже применяются сразу. При полном выключении аудита текущие незавершённые аудиты будут закрыты.</small>
+          @if (error() && errorAtSave()) {
+            <p class="save-error" role="alert">
+              <span class="material-icons-sharp" aria-hidden="true">error_outline</span>
+              <span>{{ error() }}</span>
+            </p>
+          }
         </div>
-        <button type="submit" class="primary-button" [disabled]="saving() || form.invalid">
-          <span class="material-icons-sharp">save</span>
+        <button type="submit" class="primary-button" [disabled]="saving()">
+          <span class="material-icons-sharp" aria-hidden="true">save</span>
           {{ saving() ? 'Сохраняем…' : 'Сохранить настройки' }}
         </button>
       </div>
@@ -237,13 +297,14 @@
         <div>
           <p class="eyebrow">Персональное включение</p>
           <h3>Аудит по менеджерам</h3>
-          <p>Выключенный менеджер полностью исключается из формирования и отправки аудита.</p>
+          <p>Выключенный менеджер полностью исключается из формирования и отправки аудита. Переключатель сохраняется сразу.</p>
         </div>
         <label class="manager-search">
-          <span class="material-icons-sharp">search</span>
+          <span class="material-icons-sharp" aria-hidden="true">search</span>
           <input
             type="search"
             placeholder="Найти менеджера"
+            aria-label="Найти менеджера"
             [value]="managerSearch()"
             (input)="managerSearch.set($any($event.target).value)"
           >

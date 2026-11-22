@@ -26,6 +26,33 @@ class TelegramDeliveryFailureTest {
         assertEquals("chat_migrated", TelegramDeliveryFailure.describe(failure).reason());
     }
 
+    @Test void onlyAnExplicitChatAccessAnswerIsADefinitiveRefusal() {
+        var failure = mock(TelegramApiRequestException.class);
+        when(failure.getErrorCode()).thenReturn(403);
+        when(failure.getApiResponse()).thenReturn("Forbidden: bot is not a member of the supergroup chat");
+        var removed = TelegramDeliveryFailure.describe(failure);
+        assertEquals("bot_removed", removed.reason());
+        assertTrue(removed.definitiveRefusal());
+        when(failure.getApiResponse()).thenReturn("Forbidden: bot was blocked by the user");
+        assertTrue(TelegramDeliveryFailure.describe(failure).definitiveRefusal());
+        when(failure.getErrorCode()).thenReturn(400);
+        when(failure.getApiResponse()).thenReturn("Bad Request: chat not found");
+        assertTrue(TelegramDeliveryFailure.describe(failure).definitiveRefusal());
+        when(failure.getApiResponse()).thenReturn("Bad Request: not enough rights to send text messages to the chat");
+        assertTrue(TelegramDeliveryFailure.describe(failure).definitiveRefusal());
+
+        // Other rejections and every ambiguous answer keep the outcome unknown.
+        when(failure.getApiResponse()).thenReturn("Bad Request: message is too long");
+        assertFalse(TelegramDeliveryFailure.describe(failure).definitiveRefusal());
+        when(failure.getErrorCode()).thenReturn(502);
+        when(failure.getApiResponse()).thenReturn("Bad Gateway: chat not found");
+        assertFalse(TelegramDeliveryFailure.describe(failure).definitiveRefusal());
+        when(failure.getErrorCode()).thenReturn(429);
+        assertFalse(TelegramDeliveryFailure.describe(failure).definitiveRefusal());
+        assertFalse(new TelegramDeliveryFailure(null, "chat_not_found").definitiveRefusal());
+        assertFalse(TelegramDeliveryFailure.describe(new TelegramApiException("timeout")).definitiveRefusal());
+    }
+
     @Test void rateLimitServerAndUnreadableResponsesStayDistinct() {
         var failure = mock(TelegramApiRequestException.class);
         when(failure.getErrorCode()).thenReturn(429);

@@ -648,6 +648,11 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         if (worker == null || worker.getId() == null || worker.getWorkerTelegramGroupChatId() == null) {
             return null;
         }
+        // Only the specialist who was asked is reminded, and only while active: after the order moved to another
+        // specialist (or the asked one was deactivated) a reminder would reach someone the request never went to.
+        if (!worker.isActive() || !Objects.equals(worker.getId(), item.getWorkerNotificationUserId())) {
+            return null;
+        }
         LocalDateTime sentAt = item.getWorkerNotificationSentAt();
         boolean overdue = !checkedAt.isBefore(sentAt.plusHours(3));
         long waitingMinutes = Math.max(0, Duration.between(sentAt, checkedAt).toMinutes());

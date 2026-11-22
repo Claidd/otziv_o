@@ -25,7 +25,12 @@ public class ManagerAutomationFailurePolicy {
             "missing_group_id",
             "message_empty",
             "missing_message",
-            "company_missing"
+            "company_missing",
+            // The silence archive could not read the chat for 2 days: the manager decides at once.
+            "archive_check_undecided",
+            // The bot was removed from the client's group or may not write there: only a person can fix the chat.
+            "telegram_chat_unavailable",
+            "max_chat_unavailable"
     );
 
     private static final String MANUAL_CONTACT_RESERVED = "manual_contact_reserved";
@@ -51,6 +56,10 @@ public class ManagerAutomationFailurePolicy {
             return false;
         }
         LocalDateTime effectiveNow = now == null ? LocalDateTime.now() : now;
+        // The owner's rule: the system re-sends an unconfirmed message once after 24 h before a manager is asked.
+        if (com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.awaitsAutomaticResend(state, effectiveNow)) {
+            return false;
+        }
         if (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)
                 || ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(code)
                 || ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED.equals(code)) {
@@ -86,6 +95,7 @@ public class ManagerAutomationFailurePolicy {
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) return false;
         String code = normalize(state.getLastErrorCode());
         if ((!code.isBlank() && isExpectedControlState(code)) || isTransientWait(state)) return false;
+        if (com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.awaitsAutomaticResend(state, now)) return false;
         if (ClientMessageStateSafety.TRANSACTION_IN_PROGRESS.equals(code))
             return state.getLockedUntil() == null || !state.getLockedUntil().isAfter(now);
         return state.getConsecutiveFailures() > 0 || requiresDeliveryReceipt(state)
@@ -116,6 +126,8 @@ public class ManagerAutomationFailurePolicy {
                 || code.contains("status_change")
                 || code.contains("auto_archive")
                 || code.contains("auto_ban")
+                // The scenario or the whole autoresponder is switched off: a setting, not a failure to «repair».
+                || com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.isSwitchedOffCode(code)
                 || "client_message_state_auto_recovered".equals(code);
     }
 

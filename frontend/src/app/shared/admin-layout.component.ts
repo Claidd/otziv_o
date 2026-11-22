@@ -60,7 +60,10 @@ function shellLinksById(ids: string[]): ShellLink[] {
 @Component({
   selector: 'app-admin-layout',
   imports: [MobileBottomNavComponent, MobileStatusSheetComponent, PersonalRemindersComponent, RouterLink],
-  templateUrl: './admin-layout.component.html'
+  templateUrl: './admin-layout.component.html',
+  // Pages write <app-admin-layout title="…">: the static attribute is passed to the input and would also stay on the
+  // host element, where the browser shows it as a tooltip over every part of the page.
+  host: { '[attr.title]': 'null' }
 })
 export class AdminLayoutComponent {
   private readonly auth = inject(AuthService);

@@ -1103,6 +1103,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\coordinated_mysql_kerberos_refresh.py",
     "infrastructure\scripts\prod\coordinated_mysql_partition_refresh.py",
     "infrastructure\scripts\prod\coordinated_mysql_libxml2_refresh.py",
+    "infrastructure\scripts\prod\coordinated_mysql_base_refresh.py",
     "infrastructure\scripts\prod\coordinated_mysql_cutover.py",
     "infrastructure\scripts\prod\coordinated_ssl_refresh.py",
     "infrastructure\scripts\prod\coordinated_postgres_zlib_refresh.py",

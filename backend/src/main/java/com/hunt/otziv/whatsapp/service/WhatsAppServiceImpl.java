@@ -215,7 +215,7 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             }
             return new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus(operationId, state, messageId, envelopeHash);
         } catch (RestClientResponseException error) {
-            if (error.getStatusCode().value() == 404) {
+            if (error.getStatusCode().value() == 404 && "operation_not_found".equals(httpSendErrorCode(error.getResponseBodyAsString()))) {
                 return new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus(operationId, "NOT_FOUND", null);
             }
             throw new IllegalStateException("Operation status unavailable", error);
@@ -653,6 +653,9 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             JsonNode node = MAPPER.readTree(body);
             String status = firstText(node, "status");
             String code = firstText(node, "code");
+            if (node.path("dispatched").isBoolean() && node.path("dispatched").booleanValue()) {
+                return "operation_unknown";
+            }
             if (looksLikeAuthUnavailable(status) || looksLikeAuthUnavailable(code) || looksLikeAuthUnavailable(body)) {
                 return "whatsapp_not_ready";
             }

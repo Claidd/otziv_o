@@ -362,6 +362,17 @@ export class CommonBillingApi {
     );
   }
 
+  /** Owner or administrator: undo a paper invoice payment confirmed by mistake (no bank receipt). */
+  cancelPaperInvoicePayment(
+    invoiceId: number,
+    request: ManualPaymentConfirmationRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/paper-invoice/paid/cancel`,
+      request
+    );
+  }
+
   remind(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/remind`,

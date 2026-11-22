@@ -6,6 +6,7 @@ import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import java.time.LocalDateTime;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
@@ -30,10 +31,17 @@ public class ScheduledDeliveryRecovery {
 
     public void recover(LocalDateTime now, LocalDateTime cutoff, Function<String, String> operationId,
             BiConsumer<String, ClientMessageSendResult> finalizeReceipt, Consumer<String> authorizedFollowup) {
+        recover(now, cutoff, operationId, finalizeReceipt, authorizedFollowup, (envelope, preparedAt) -> false);
+    }
+
+    public void recover(LocalDateTime now, LocalDateTime cutoff, Function<String, String> operationId,
+            BiConsumer<String, ClientMessageSendResult> finalizeReceipt, Consumer<String> authorizedFollowup,
+            BiPredicate<String, LocalDateTime> restoreRefusal) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Receipt lookup must run outside a business transaction");
         }
-        for (Long stateId : states.findRecoverablePreparedIds(cutoff, PageRequest.of(0, 20))) {
+        for (Long stateId : states.findRecoverablePreparedIdsWithBackoff(cutoff, now.minusDays(1), now.minusHours(1),
+                now.minusDays(7), now.minusHours(6), PageRequest.of(0, 20))) {
             try {
                 RecoverySnapshot snapshot = transactions.callInNewTransaction(() -> {
                     var state = states.findByIdForUpdate(stateId).orElse(null);
@@ -64,6 +72,7 @@ public class ScheduledDeliveryRecovery {
                         || com.hunt.otziv.client_messages.api.ClientMessageDelivery.isDeliveryRejected(receipt))) {
                     finalizeReceipt.accept(snapshot.envelope(), receipt);
                 } else if (snapshot.followupAllowed()) {
+                    if (restoreRefusal.test(snapshot.envelope(), snapshot.preparedAt())) continue;
                     authorizedFollowup.accept(snapshot.envelope());
                 }
             } catch (RuntimeException failure) {

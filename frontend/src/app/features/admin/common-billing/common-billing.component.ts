@@ -1137,6 +1137,46 @@ export class CommonBillingComponent implements OnDestroy {
     );
   }
 
+  /** A paper invoice closed by a manual confirmation (not by the bank receipt): owner and administrator may undo it. */
+  readonly canCancelPaperPayment = computed(() => {
+    const invoice = this.currentInvoice();
+    this.auth.tokenParsed();
+    return Boolean(invoice && invoice.status === 'PAID'
+      && invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+      && invoice.closedBy !== 'tochka-bank'
+      && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+      && this.invoiceOrders().length > 0
+      && this.invoiceOrders().every(order => order.paid && order.paymentMethod === 'OWNER_PAPER_INVOICE'));
+  });
+
+  cancelPaperInvoicePayment(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || this.mutating() || !this.canCancelPaperPayment()) {
+      return;
+    }
+    if (!window.confirm(
+      `Отменить оплату общего счёта #${invoice.id}?\n\nИспользуйте, только если деньги по бумажному счёту не приходили. `
+      + 'Заказы вернутся в «Напоминание», чеки и начисления откатятся, нетронутые следующие заказы удалятся. '
+      + 'Бумажный счёт останется выставленным.'
+    )) {
+      return;
+    }
+    const reason = window.prompt('Причина отмены оплаты (например: «отмечено по ошибке, оплаты не было»).');
+    if (reason === null) {
+      return;
+    }
+    if (reason.trim().length < 5) {
+      this.toastService.error('Оплата не отменена', 'Укажите причину — хотя бы несколько слов.');
+      return;
+    }
+    this.invoiceAction(
+      invoice.id,
+      'paper-invoice-payment-cancel',
+      () => this.commonBillingApi.cancelPaperInvoicePayment(invoice.id, { comment: reason.trim(), receiptUrl: '' }),
+      'Оплата отменена: счёт снова ожидает оплату'
+    );
+  }
+
   changePaperInvoiceMode(legacyPaper = false): void {
     const invoice = this.currentInvoice();
     if (invoice && !legacyPaper) {

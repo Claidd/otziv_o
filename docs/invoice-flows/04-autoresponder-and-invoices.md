@@ -108,42 +108,42 @@ claim и dispatch marker. Отсутствие записи у провайде�
 
 ## Настройки автоответчика, влияющие на счета — таблица: поле → смысл → значение по умолчанию → где читается
 
-Хранилище — таблица ключ/значение через `AppSettingService`; кеш процесса 5 минут (`ASS:251-252`), свежие чтения — `getBooleanFreshFailClosed`/`getStringFresh` (`ASS:280-292`). Поле = имя в `autoresponderForm` и DTO (`ADC:2110-2170`).
+Хранилище — таблица ключ/значение через `AppSettingService`; кеш процесса 5 минут (`ASS:251-252`), свежие чтения — `getBooleanFreshFailClosed`/`getStringFresh` (`ASS:280-292`). Поле = имя в `autoresponderForm` и DTO (`ADC:2166-2226`).
 
 | Поле (ключ `client.messages.*`) | Смысл | По умолчанию | Где читается |
 |---|---|---|---|
-| `workerEnabled` (`worker.enabled`) | Главный выключатель фона | `true` (`ADC:1386`) | `SCMS:271` (кеш), `CMAP:15`, `CMAP:23` (свежо), `CIOE:80`, `SCMS:408` |
-| — (`paused-until`, `pause-reason`) | Пауза до момента. В форме поля нет; записывает только защита от массовых ошибок (`SCMS:4812-4816`) | пусто | `SCMS:276-284`, `CMAP:16-17`, `CMAP:24-25`, `CIOE:90-99`; показ `FE/features/admin/dictionaries/admin-dictionaries.component.html:234-236` |
-| `liveEnabled` (`live.enabled`) | Реальная отправка, иначе dry-run | `true` (`ADC:1387`) | `SCMS:2555-2562`, `CIDS:402`, `CIDS:475-478` |
-| `immediateEnabled` (`immediate.enabled`) | Моментальные сообщения по событию: первый счёт, счёт после плохой задачи, «оплата прошла» | `true` (`ADC:1388`) | `OSTS:1151`, `SCMS:2032`, `BE/common_billing/service/CommonInvoiceSettlementService.java:2226-2228`, `CIDS:263-267`, `BE/bad_reviews/service/BadReviewTaskServiceImpl.java:340` |
-| `paymentReminderEnabled` (`payment-reminder.enabled`) | Напоминания об оплате (заказ, общий, бумажный счёт) | `true` (`ADC:1393`) | `CMAP:31`, `SCMS:1608`, `SCMS:1702`, `CommonInvoiceSettlementService.java:2230-2232`, `CIOE:81` |
+| `workerEnabled` (`worker.enabled`) | Главный выключатель фона | `true` (`ADC:1432`) | `SCMS:271` (кеш), `CMAP:15`, `CMAP:23` (свежо), `CIOE:80`, `SCMS:408` |
+| — (`paused-until`, `pause-reason`) | Пауза до момента. В форме поля нет; записывает только защита от массовых ошибок (`SCMS:4812-4816`) | пусто | `SCMS:276-284`, `CMAP:16-17`, `CMAP:24-25`, `CIOE:90-99`; показ `FE/features/admin/dictionaries/admin-dictionaries.component.html:347-349` |
+| `liveEnabled` (`live.enabled`) | Реальная отправка, иначе dry-run | `true` (`ADC:1433`) | `SCMS:2555-2562`, `CIDS:402`, `CIDS:475-478` |
+| `immediateEnabled` (`immediate.enabled`) | Моментальные сообщения по событию: первый счёт, счёт после плохой задачи, «оплата прошла» | `true` (`ADC:1434`) | `OSTS:1151`, `SCMS:2032`, `BE/common_billing/service/CommonInvoiceSettlementService.java:2226-2228`, `CIDS:263-267`, `BE/bad_reviews/service/BadReviewTaskServiceImpl.java:340` |
+| `paymentReminderEnabled` (`payment-reminder.enabled`) | Напоминания об оплате (заказ, общий, бумажный счёт) | `true` (`ADC:1439`) | `CMAP:31`, `SCMS:1608`, `SCMS:1702`, `CommonInvoiceSettlementService.java:2230-2232`, `CIOE:81` |
 | `paymentReminderIntervalDays` | Интервал напоминаний, дни (1–365) | `2` (`SCMS:117`) | `SCMS:4479-4486`, `CommonInvoiceSettlementService.java:2234-2245` |
 | `paymentReminderStatuses` | Статусы заказа для напоминаний | `Выставлен счет,Напоминание` (`SCMS:98`) | `SCMS:1448`, `SCMS:1606`, `SCMS:1706`, `SCMS:3008` |
-| `paymentOverdueEnabled` (`payment-overdue.enabled`) | Вести задачу просрочки | `true` (`ADC:1397`) | `CMAP:34`, `SCMS:1611`, `SCMS:1712`, `CIOE:82` |
-| `paymentOverdueLiveEnabled` (`payment-overdue.live-enabled`) | Реально переводить в «Не оплачено» | `false` (`ADC:1398`) | `SCMS:3487`, `SCMS:259`, `CIOE:83` |
+| `paymentOverdueEnabled` (`payment-overdue.enabled`) | Вести задачу просрочки | `true` (`ADC:1443`) | `CMAP:34`, `SCMS:1611`, `SCMS:1712`, `CIOE:82` |
+| `paymentOverdueLiveEnabled` (`payment-overdue.live-enabled`) | Реально переводить в «Не оплачено» | `false` (`ADC:1444`) | `SCMS:3487`, `SCMS:259`, `CIOE:83` |
 | `paymentOverdueDays` (`payment-overdue-days`) | Срок оплаты, дни (1–365) | `30` (`SCMS:128`) | `SCMS:1546-1548`, `SCMS:1713`, `CIOE:101-109` (минимум 3), `ClientMessageMaintenancePreviewService.java:122-125` (запасное значение 60) |
 | `paymentOverdueStatuses` | Статусы, из которых идёт просрочка | `Выставлен счет,Напоминание` (`SCMS:99`) | `SCMS:1716`, `SCMS:3465` |
 | `paymentOverdueTargetStatus` (`payment-overdue.target-status`) | Целевой статус автоперевода одиночного заказа | `Не оплачено` (`SCMS:101`) | только `SCMS:3483-3486`; общий счёт и актуализация пишут «Не оплачено» жёстко (`CIAW:215`, `ClientMessageMaintenancePreviewService.java:142`) |
 | `closedOrderStatuses` | Статусы, при которых платёжные задачи закрываются | `Оплачено,Архив,Бан,Не оплачено` (`SCMS:100`) | `SCMS:1820`, `SCMS:3461`, `SCMS:4632-4640` |
 | `paymentInvoiceRetryDelayHours` | Повтор первого счёта после сбоя, часы | `2` (`SCMS:122`) | `SCMS:4506-4513`, `PIRS:57-60` |
-| `badReviewInvoiceEnabled` | Счёт с новой суммой после плохой задачи | `true` (`ADC:1394`) | `CMAP:35`, `SCMS:2033`, `SCMS:2139-2140`, `CIDS:466-468`, `CIMem:350` |
+| `badReviewInvoiceEnabled` | Счёт с новой суммой после плохой задачи | `true` (`ADC:1440`) | `CMAP:35`, `SCMS:2033`, `SCMS:2139-2140`, `CIDS:466-468`, `CIMem:350` |
 | `badReviewInvoiceRetryDelayHours` | Повтор такого счёта, часы | `2` (`SCMS:123`) | `SCMS:4515-4522`, `PIRS:109-112` |
-| `badReviewAutoBanEnabled` | Автобан после финального счёта за плохие | `true` (`ADC:1395`) | `CMAP:36`, `SCMS:2943-2953`, `SCMS:3344` |
+| `badReviewAutoBanEnabled` | Автобан после финального счёта за плохие | `true` (`ADC:1441`) | `CMAP:36`, `SCMS:2943-2953`, `SCMS:3344` |
 | `badReviewAutoBanDelayDays` | Ожидание перед автобаном, дни | `2` (`SCMS:125`) | `PIRS:519-524`, `SCMS:4533-4540` |
 | `businessWindows` (`business-windows`) | Рабочие окна, время Иркутска | `10:00-12:00,14:00-17:00,19:00-21:00` (`ClientMessageSlotPlanner.java:15-16`) | `SCMS:4593-4601`, `SCMS:326-330`, `PIRS:532-540` |
 | `dailyLimit` | Общий дневной лимит фоновых сообщений | `140` (`SCMS:134`) | `SCMS:4195-4204` |
 | `defaultGapSeconds` / `whatsAppGapSeconds` / `telegramGapSeconds` / `maxGapSeconds` | Интервал между отправками по каналу (30–86400 с) | `180` / `180` / `90` / `90` (`SCMS:135-138`) | `SCMS:4399-4411` |
 | `tickBatchSize`, `candidateLimit` | Задач за тик; кандидатов за сверку | `5`, `200` (`SCMS:133`, `SCMS:130`) | `SCMS:332`, `SCMS:4578-4580` |
 | `transientRetryMinutes` | Повтор временной ошибки | `15` (`SCMS:141`) | `SCMS:4185-4193` |
-| `errorProtectionEnabled` / `...Threshold` / `...WindowMinutes` / `...CooldownMinutes` | Автопауза при массовых ошибках | `true` / `20` / `10` / `60` (`ADC:1400`, `SCMS:144-146`) | `SCMS:4777-4818` |
-| `reviewCheckAutoArchiveEnabled` | «Архив после 7 напоминаний» (оба сценария молчания) | `true` (`ADC:1391`) | `SCMS:774`, `SCMS:881`, `SCMS:4233` |
-| `archiveReorderEnabled`, `archiveReorderMonths`, `archiveReorderJitterDays` | Предложение нового заказа компании «На стопе» | `true`, `3`, `10` (`ADC:1399`, `SCMS:126-127`) | `CMAP:30`, `SCMS:904`, `SCMS:4551-4567` |
+| `errorProtectionEnabled` / `...Threshold` / `...WindowMinutes` / `...CooldownMinutes` | Автопауза при массовых ошибках | `true` / `20` / `10` / `60` (`ADC:1446`, `SCMS:144-146`) | `SCMS:4777-4818` |
+| `reviewCheckAutoArchiveEnabled` | «Архив после 7 напоминаний» (оба сценария молчания) | `true` (`ADC:1437`) | `SCMS:774`, `SCMS:881`, `SCMS:4233` |
+| `archiveReorderEnabled`, `archiveReorderMonths`, `archiveReorderJitterDays` | Предложение нового заказа компании «На стопе» | `true`, `3`, `10` (`ADC:1445`, `SCMS:126-127`) | `CMAP:30`, `SCMS:904`, `SCMS:4551-4567` |
 | `paymentInstructionSource` (`payment-instruction-source`) | Источник реквизитов в счёте/напоминании | `MANAGER_TEXT` (`SCMS:110`) | `SCMS:4619-4625`; запись — `BE/payments/service/TbankRuntimeSettingsService.java:76`, а не `PUT /settings/client-messages` |
 | `overdueExtensionDays` (поле общего счёта, не настройка) | Отсрочка менеджера для одного общего счёта, 0–60 дней | `0` | `CommonInvoiceOverdueTerm.java:23`, `:52-72`; `CIOE:264-266` |
 
 Параметры сервера (не на экране): `client.messages.tick-delay-ms` = 30000 (`SCMS:263-266`); `client.messages.reconcile-interval` = PT5M (`SCMS:218-219`); `common-billing.reminders.fixed-delay` = PT5M (`CommonBillingReminderScheduler.java:16`); `common-billing.message-queue-delay-ms` = 5000 (`CIMW:23`); `common-billing.overdue-escalation.cron` = `0 7/15 10-19 * * *`, Иркутск (`CIOE:185-188`); `manager.common-invoice-overdue-notice.cron` = `0 */15 10-19 * * *` и ключ `manager.common-invoice-overdue-notice.enabled` = `true` (`ThematicStaffNotificationJob.java:67`, `:74-81`); `payment.attention.interval-ms` = 300000 (`PaymentAttentionReminderJob.java:44-45`).
 
-Экран: права `ADMIN`/`OWNER` (`ADC:823-831`); форма и значения по умолчанию в интерфейсе — `FE/features/admin/dictionaries/admin-client-message-settings.facade.ts:40-55`, `:85`, `:106`, `:127-139`, `:142-154`; сохраняется весь набор одним запросом (`facade.ts:513-670`). Включение `liveEnabled` сразу возвращает dry-run задачи в очередь (`ADC:843-845`).
+Экран: права `ADMIN`/`OWNER` (`ADC:853-861`); форма и значения по умолчанию в интерфейсе — `FE/features/admin/dictionaries/admin-client-message-settings.facade.ts:163-305`; сохраняется весь набор одним запросом (`facade.ts:713-921`). До первого чтения настроек форма заблокирована (`facade.ts:322`, `:1051`), а «Сохранить» до загрузки отказывает (`facade.ts:721-725`): иначе значения по умолчанию интерфейса перезаписали бы все настройки. Повторное чтение заполняет только нетронутые поля (`facade.ts:353-369`). Переход `workerEnabled` или `liveEnabled` из сохранённого «вкл» в «выкл» требует подтверждения со списком того, что остановится (`facade.ts:887`, `:950-977`). Набранная, но не добавленная фраза или неприменённая правка фразы останавливают сохранение (`facade.ts:924`). После отказа сервера настройки перечитываются для обзора, введённые значения остаются в форме (`facade.ts:918`): сервер записывает значения по одному, и часть изменений могла сохраниться. Включение `liveEnabled` сразу возвращает dry-run задачи в очередь (`ADC:881-883`).
 
 ## Путь неоплаченного счёта по времени — по шагам
 
@@ -276,15 +276,49 @@ claim и dispatch marker. Отсутствие записи у провайде�
 | «Бан» общего счёта | `POST .../ban` | `ADMIN`, `OWNER`, `MANAGER`; менеджеру — после выполнения всех плохих задач (`CBAC:321-326`, `CIAW:401-407`) | — |
 | Повтор, отключение, закрытие задачи автоответчика | `POST /api/admin/client-messages/monitor/{id}/retry-now`, `/disable`, `/done` | `ADMIN`, `OWNER` (`ClientMessageMonitorController.java:83-99`); задачи с неизвестным исходом отклоняются (`ClientMessageMonitorService.java:269-312`) | экран справочников |
 | Немедленная обработка задачи из «Контроля» | `ScheduledClientMessageService.retryNow` | отказ при выключенном worker или паузе (`SCMS:408-424`); вызывается из `BE/manager_control/service/ManagerControlAutomationRepairWorkflow.java:115` | — |
-| Актуализация «просроченные счета» | `POST /api/admin/client-messages/maintenance/payment-overdue` | только `ADMIN` (`ClientMessageMonitorController.java:44-48`) | кнопка с подтверждением: `admin-dictionaries.component.html:423`, `FE/features/admin/dictionaries/admin-message-monitor.facade.ts:254-284` |
+| Актуализация «просроченные счета» | `POST /api/admin/client-messages/maintenance/payment-overdue` | только `ADMIN` (`ClientMessageMonitorController.java:44-48`) | кнопка с подтверждением: `admin-dictionaries.component.html:541-545`, `FE/features/admin/dictionaries/admin-message-monitor.facade.ts:325-360` |
 
 **Факт о сервере.** Роль на переход «Не оплачено» не проверяется ни в `OrderStatusTransitionService` (`OSTS:263-335`, `OSTS:487-496`), ни в `CommonInvoiceArchiveWorkflow.markUnpaid` (`CIAW:102-109`): менеджер по-прежнему может выполнить переход прямым запросом к API. Файлы `OrderStatusCommandService`, `OrderStatusTransitionService` и `CommonInvoiceArchiveWorkflow` в рабочем дереве не изменены; в `CommonBillingAdminController` (его правит параллельная задача) аннотация маршрута `/unpaid` на момент сверки — `hasAnyRole('ADMIN', 'OWNER', 'MANAGER')` (`CBAC:314`). Изменение от 2026-11-10 касается только интерфейсов. Допустимые исходные статусы для «Не оплачено» — `OSTS:91`; для общего счёта — `INVOICED`, `REMINDER`, `PARTIALLY_PAID` (`CIAW:76`).
 
-**Админ-актуализация `payment-overdue`** (`ClientMessageMaintenancePreviewService.java:121-156`):
-- берёт до 200 заказов в «Выставлен счет»/«Напоминание» (`:32`, `:126-136`) старше `paymentOverdueDays`; запасное значение здесь 60, а не 30 (`:122-125`);
-- вызывает `changeStatusForOrder(id, "Не оплачено")` по одному, статус жёстко задан (`:139-147`);
-- не читает выключатель, паузу, `paymentOverdueLiveEnabled`, окна и лимит; не проверяет удержание бумажного счёта, проверку ручной оплаты и восстановление отзывов — это ручное действие администратора;
-- заказы активного общего счёта отклоняются правилом перехода и попадают в счётчик «не удалось» (`OSTS:415-420`, `:148-155`).
+**Админ-актуализация `payment-overdue`** (`ClientMessageMaintenancePreviewService.java:131-187`):
+- берёт до 200 заказов в «Выставлен счет»/«Напоминание» (`:39`, `:138-150`) старше `paymentOverdueDays`; запасное значение здесь 60, а не 30 (`:132-135`);
+- сам запрос пропускает бумажный счёт на удержании (`paper_invoice_automation_hold`) и уже оплаченный заказ (`:144-145`);
+- перед переходом пропускает заказ с идущей проверкой ручной оплаты, восстановлением отзывов или в активном общем счёте — как фоновый перевод (`overdueTransferBlocked`, `:180-187`); такие заказы попадают в счётчик «пропущено» (`:159-162`, `:175`);
+- вызывает `changeStatusForOrder(id, "Не оплачено")` по одному, статус жёстко задан (`:163`);
+- не читает выключатель, паузу, `paymentOverdueLiveEnabled`, окна и лимит — это ручное действие администратора.
+
+**Решения администратора в мониторинге** (`ClientMessageMonitorService.java:270-340`):
+- «Закрыть» пишет код `manual_done`, «Отключить» — `manual_disabled`, оба сбрасывают счётчик сбоев: это решение, а не ошибка (`:286-323`);
+- сверка очереди и события заказа не открывают такую задачу снова (`ClientMessageStateSafety.isManualDecision`), очистка старых задач её не удаляет (`ScheduledClientMessageStateRepository.deleteTerminalOlderThan`);
+- «Повторить» отклоняется (409) для старой задачи без проверяемой подготовки, задачи с неподтверждённой квитанцией и доставки, которую нельзя повторять (`rejectNotRetryable`, `:328`).
+
+## Согласование с «Контролем менеджеров» (21.11.2026)
+
+Автоответчик, монитор и «Контроль менеджеров» одинаково отличают сбой от намеренного ожидания. Общие правила — в `BE/client_messages/api/ClientMessageStateDecisions.java`:
+
+| Состояние задачи | Коды | Монитор заказа | Карточка «Контроля» | «Починить» |
+|---|---|---|---|---|
+| Намеренное ожидание (повтор назначен) | `manual_contact_reserved`, `daily_limit`, `rate_limited`, `outside_messaging_window`, `messaging_window_closed`, `review_recovery_active` | не «Контроль» (`ClientMessageOrderStatusService.isOperationalSkip`, `:308`) | очередь исправна, карточки нет; если карточка есть — «Очередь автоответчика исправна: <причина>. Следующий слот отправки…» без «Починить» (`ManagerControlProblemExamples.java:306-372`, `ManagerControlOrderAutomationDiagnostics.java:236`, SQL просрочек в `OrderRepository`) | не нужен |
+| Сценарий или весь автоответчик выключен / на паузе | `automation_paused`, `bad_review_invoice_disabled`, `bad_review_auto_ban_disabled` | не «Контроль» | ошибкой автоматизации не считается (`ManagerAutomationFailurePolicy.java:108`); карточка заказа остаётся: называет выключенный переключатель и шаг, который менеджер делает сам, например «…выключен переключатель «Напоминать о проверке шаблонов». Напомните клиенту проверить шаблоны отзывов…» | 409 с тем же объяснением; задача не создаётся и не перезапускается (`ScheduledClientMessageService.scenarioStopReason`, `ManagerControlAutomationRepairWorkflow.switchedOff`; напоминания о текстах — `ManagerControlRepairWorkflow.java`) |
+| Решение администратора | `manual_done`, `manual_disabled` | не «Контроль» | очередь исправна, карточки нет | закрывает карточку без включения задачи |
+
+Сообщение отложенной задачи называет причину словами страницы настроек: «Не отправлено: в настройках автоответчика (Справочники → Автоответчик) выключен переключатель «…»», «…выключен переключатель «Фоновая очередь задач работает»» или «…автоответчик на паузе: защита от массовых ошибок остановила отправку…» (`ClientMessageAutomationPolicy.stopReason`, `ScheduledClientMessageService.switchedOffMessage`). Названия переключателей, шаг для менеджера по каждому сценарию и кто включает обратно — `BE/client_messages/api/ClientMessageScenarioSwitches.java`. Переключатели общие для всех клиентов: у компании или заказа своих нет, менеджер их не меняет. Для одной компании клиент командой из чата («отключить уведомления о публикациях») выключает только уведомления о публикациях (`PublicationProgressPreferenceService`); статус компании «На стопе» ставит менеджер.
+
+**Вопросы клиентов.** Напоминания автоответчика из-за открытого вопроса клиента не останавливаются (решение владельца 21.11.2026). Сам вопрос становится замечанием «неотвеченное сообщение» сразу (`manager-control.unanswered-client-messages.warning-minutes` = 0); короткие подтверждения («спасибо», «ок») не считаются вопросом (`ClientChatAutoIgnoreService`). Ответ менеджера прямо в мессенджере закрывает замечание сам (`ClientChatMessageTrackerService.closeIfAlreadyAnswered`, причина `OUTGOING_STAFF_MESSAGE`); сообщения автоответчика ответом не считаются.
+
+**Неподтверждённая отправка (решение владельца 22.11.2026).** «Исход неизвестен» не висит вечно и не закрывается молча:
+- Откат обработки, пока задача взята (`CLAIMED`), — доказанная неотправка: транспорт вызывается только после сохранённой подготовки `PREPARED`. Задача возвращается в очередь с кодом `rolled_back_before_send` (`ScheduledClientMessageService.quarantineRolledBackState`), а не в `UNKNOWN`.
+- Отказ WhatsApp (ACK −1) увеличивает `dispatch_generation`: следующая подготовка получает новый номер операции, шлюз не повторяет старую запись «неизвестно».
+- Проход восстановления (`ScheduledDeliveryRecovery`) сверяет квитанцию: первые сутки каждые 5 минут, до недели — раз в час, дальше — раз в 6 часов (`findRecoverablePreparedIdsWithBackoff`).
+- Через 24 часа без квитанции и без текста в истории чата автоответчик один раз отправляет это сообщение заново новой операцией с записью в `client_reminder_restart_audit` (`autoResendUnconfirmed`, поле `uncertain_auto_resend_at`, миграция `V1_10_407`). Перед отправкой `processState` заново проверяет переключатели, паузу, окна, лимиты и этап заказа, поэтому устаревшая задача закрывается без отправки. Предложения нового заказа (свой путь повторного уведомления) и счёт после плохого отзыва (своё восстановление) так не повторяются.
+- Карточка «Контроля» для такой отправки появляется только после автоповтора или через 25 часов (`ClientMessageStateDecisions.awaitsAutomaticResend`). В карточке менеджер нажимает «Сверка отправки» и выбирает: «Сообщение есть в чате» — отправка засчитывается; «Сообщения нет — отправить снова» — новая операция, не раньше чем через час после отправки; «Не отправлять» — задача закрывается как `manual_done` (`UncertainClientMessageDelivery.decide`, `ManagerControlManualDeliveryHandoffWorkflow`). Квитанция, найденная перед решением, побеждает его; одно решение на операцию. Прошлые дни контроля не пересчитываются, поэтому решение закрывает и остальные открытые карточки этой же задачи (`closeOtherCardsOfTheSameTask`); на закрытой карточке кнопки «Сверка отправки» нет.
+- Уточнения после проверки 22.11.2026: подтверждённый отказ WhatsApp, найденный при решении, засчитывает «есть в чате» и «отправить снова» как уже обработанные системой, но «Не отправлять» всё равно закрывает задачу. Решение засчитывается и закрывает карточку при любом выборе, «отправить снова» тоже: если новая отправка опять не подтвердится, сегодняшний контроль получит новую карточку. Подтверждение «есть в чате» не шлёт оповещение «WhatsApp снова авторизован» и пишет канал задачи. Карточку заказа может решить только его текущий менеджер или администратор (`ManagerControlAccessPolicy.requireOwnOrder`).
+- Счёт после публикации (`PAYMENT_INVOICE_RETRY`) и повтор ссылки на проверку (`REVIEW_CHECK_DELIVERY_RETRY`) держат один номер операции до подтверждения (`OrderNotificationOccurrences`), чтобы клиент не получил второй счёт. Поэтому они не повторяются автоматически, карточка появляется сразу, а «Сообщения нет — отправить снова» отвечает 409 с подсказкой: отправить вручную из карточки заказа и выбрать «Сообщение есть в чате».
+- Намеренное ожидание (`daily_limit`, окно отправки и т. п.) считается исправной очередью, только пока плановая попытка просрочена меньше чем на 60 минут (`ClientMessageStateDecisions.isIntentionalWait(state, now)`): если автоответчик остановлен целиком, заказ снова виден менеджеру.
+
+**Автоархив в Telegram.** У бота нет API истории, но он получает все сообщения группы, если режим приватности выключен или он администратор. Тогда сохранённая переписка считается полной историей (`TelegramReviewArchiveHistory`). Если бот удалён из группы или видит не всё, проверка честно говорит об этом. Через 2 дня после срока нерешённая проверка ставит задаче код `archive_check_undecided`, и менеджер сразу получает замечание: архив вручную или продолжение работы.
+
+**Живой ответ менеджера.** Ответ клиенту из карточки «неотвеченное сообщение» или прямо в мессенджере напоминания автоответчика не откладывает (решение владельца 21.11.2026). Цикл заказа резервирует только отправка менеджера из карточки заказа (`CONTROL`).
 
 ## Сценарии — таблица: условие → что делает система → где в коде → каким тестом покрыто (или «нет теста»)
 
@@ -348,12 +382,12 @@ claim и dispatch marker. Отсутствие записи у провайде�
 
 ## Не проверено / открытые вопросы
 
-- **Ручная пауза.** В серверном коде `client.messages.paused-until` записывает только защита от массовых ошибок (`SCMS:4812-4816`); `PUT /settings/client-messages` этот ключ не пишет (`ADC:829-996`). Существует ли ручная постановка паузы вне этого (прямая правка `app_settings`, скрипты) — не проверено.
+- **Ручная пауза.** В серверном коде `client.messages.paused-until` записывает только защита от массовых ошибок (`SCMS:4812-4816`); `PUT /settings/client-messages` этот ключ не пишет (`ADC:859-1042`). Существует ли ручная постановка паузы вне этого (прямая правка `app_settings`, скрипты) — не проверено.
 - **Возобновление после отклонённой проверки ручной оплаты.** Задачи закрываются `manual_payment_review` (`SCMS:2954-2959`), а сверка переоткрывает только закрытые задачи без отправок (`SCMS:1947-1963`). Кто заново ставит напоминание и просрочку заказу, у которого напоминания уже уходили, не прослежено.
 - **Моментальный счёт после плохой задачи при выключенном worker или паузе.** По коду он не проверяет worker, паузу, окна и лимит (`SCMS:2032-2034`, `SCMS:2073`, `SCMS:2197-2202`); теста на это поведение не найдено, намеренность не подтверждена. То же для первого счёта общего счёта (`CIMW:69`).
 - **Отправка новых реквизитов одиночного заказа** (`PaymentRouteChangeNotificationWorker.java:50-120`): обращений к настройкам автоответчика в этом классе и в `BE/p_products/status/service/OrderStatusNotificationService.java:149-180` не найдено; проверка live-режима глубже в `ClientChatMessageSender` и транспорте не прослежена.
 - **Создание следующего заказа после оплаты** (`OrderTransactionServiceImpl.java:154`, `CommonInvoiceSettlementService.java:1873`, `BE/p_products/next_order/`): чтений настроек автоответчика в модуле `next_order` не найдено; сценарий целиком не разбирался.
-- **Расхождения значений по умолчанию.** `paymentOverdueDays`: 30 в автоответчике (`SCMS:128`) и 60 как запасное значение актуализации (`ClientMessageMaintenancePreviewService.java:122-125`). `clientTextReminderIntervalDays`: 2 на сервере (`SCMS:118`) и 3 в форме (`admin-client-message-settings.facade.ts:81-84`). Фактические значения в рабочей БД не читались.
+- **Расхождения значений по умолчанию.** `paymentOverdueDays`: 30 в автоответчике (`SCMS:128`) и 60 как запасное значение актуализации (`ClientMessageMaintenancePreviewService.java:122-125`). `clientTextReminderIntervalDays` теперь совпадает: 2 и на сервере (`SCMS:118`), и в форме. Фактические значения в рабочей БД не читались.
 - **Просрочка одиночного заказа считается от входа в «Напоминание»**, а не от выставления счёта (`SCMS:1546-1548`, `SCMS:4700-4702`). Это следует из кода; подтверждения, что так задумано, и теста нет.
 - **Физический архив заказов** (`archive.orders.*`, статусы «Архив», «Оплачено», «Бан»: `BE/archive/repository/OrderArchiveDryRunRepository.java:121-131`) — отдельный механизм хранения; его связь с настройками автоответчика не проверялась.
 - **Мобильный экран настроек автоответчика** (`MOB/shared/mobile-dictionaries.component.ts`) не читался.

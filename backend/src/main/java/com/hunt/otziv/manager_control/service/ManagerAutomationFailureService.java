@@ -1,5 +1,6 @@
 package com.hunt.otziv.manager_control.service;
 
+import com.hunt.otziv.client_messages.api.ClientMessageStateDecisions;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
@@ -197,13 +198,26 @@ public class ManagerAutomationFailureService {
         String errorMessage = safe(state.getLastErrorMessage());
         boolean paymentInstructionFailure = "payment_instruction_failed".equalsIgnoreCase(errorCode);
         boolean existingPaymentConflict = paymentInstructionFailure && isExistingPaymentConflict(errorMessage);
+        boolean refused = ClientMessageStateDecisions.isQueuedAfterWhatsAppRefusal(state);
         boolean telegramGroupMissing = isTelegramGroupMissing(company);
         if (policy.isTransientWait(state) && !telegramGroupMissing) return Optional.empty();
         List<String> reasonParts = new ArrayList<>();
-        if (policy.requiresDeliveryReceipt(state)) {
-            reasonParts.add("Результат предыдущей отправки клиенту не подтверждён. Нажмите «Проверить отправку»: "
-                    + "система проверит журнал операции и доступную историю исходного чата. "
-                    + "Рабочая текущая ссылка сама по себе не подтверждает старую отправку. Повторное сообщение для проверки не отправляется");
+        if (refused) {
+            reasonParts.add("Шлюз WhatsApp отказал до отправки. Сообщение осталось в очереди.");
+        } else if (policy.requiresDeliveryReceipt(state)) {
+            if (state.getScenario() == ClientMessageScenario.REVIEW_RECOVERY_NOTICE && state.getOrderId() != null) {
+                reasonParts.add("В истории чата проверьте уведомление о восстановлении отзывов по заказу №"
+                        + state.getOrderId() + ". Сообщения по другим заказам не подтверждают эту отправку.");
+            }
+            reasonParts.add("Результат предыдущей отправки клиенту не подтверждён: WhatsApp не прислал квитанцию, "
+                    + "а в доступной истории чата сообщение не найдено");
+            // The most likely cause, from what the system knows about the chat: no access, or a lost receipt.
+            boolean chatUnavailable = contactHealth != null && company != null
+                    && contactHealth.requiresManagerAttention(company.getId());
+            reasonParts.add(chatUnavailable
+                    ? com.hunt.otziv.client_messages.api.ClientMessageFailureCauses.of("whatsapp_group_unavailable").map(com.hunt.otziv.client_messages.api.ClientMessageFailureCauses.Cause::text).orElse("")
+                    : "Причина: WhatsApp принял сообщение, но не прислал подтверждение; чаще всего оно всё же дошло. "
+                            + "Что сделать: откройте чат клиента и нажмите «Сверка отправки»");
         } else if (existingPaymentConflict) {
             reasonParts.add("Почему в замечаниях: действующая платежная ссылка уже существует, но автоматика "
                     + "не смогла повторно использовать ее для напоминания; новое сообщение клиенту не отправилось");
@@ -214,7 +228,7 @@ public class ManagerAutomationFailureService {
         }
         if (telegramGroupMissing) {
             reasonParts.add("Группа Telegram не привязана к компании");
-        } else if (!paymentInstructionFailure && !policy.requiresDeliveryReceipt(state)) {
+        } else if (!refused && !paymentInstructionFailure && !policy.requiresDeliveryReceipt(state)) {
             reasonParts.add(switch (errorCode.toLowerCase(java.util.Locale.ROOT)) {
                 case "whatsapp_group_missing", "missing_group_id" -> "Группа WhatsApp не привязана к компании; проверьте чат в карточке компании";
                 case "whatsapp_group_unavailable" -> "WhatsApp не доставил сообщение в группу клиента: номер менеджера, похоже, "
@@ -222,17 +236,18 @@ public class ManagerAutomationFailureService {
                         + "новые сообщения в эту группу приостановлены. Попросите клиента снова добавить номер "
                         + "или прислать новую ссылку и сохраните её в карточке компании";
                 case "max_group_missing" -> "Группа MAX не привязана к компании; проверьте чат в карточке компании";
-                case "whatsapp_client_missing", "unknown_client", "missing_client" -> "Канал связи с клиентом недоступен; передайте проверку подключения администратору";
+                case "whatsapp_client_missing", "unknown_client", "missing_client" -> com.hunt.otziv.client_messages.api.ClientMessageFailureCauses.of(errorCode).map(com.hunt.otziv.client_messages.api.ClientMessageFailureCauses.Cause::text).orElse("");
                 case "empty_client_url", "chat_platform_unknown" -> "Не удалось определить чат клиента; проверьте ссылку в карточке компании";
                 case "message_empty", "missing_message" -> "Не подготовлен текст сообщения; проверьте исходную задачу";
                 case "company_missing" -> "Данные компании недоступны; передайте проверку администратору";
-                default -> "Проверьте состояние связанной задачи; подробности сбоя сохранены для администратора";
+                // Every known failure code gets its cause and the next step; only an unknown one stays generic.
+                default -> com.hunt.otziv.client_messages.api.ClientMessageFailureCauses.of(errorCode).map(com.hunt.otziv.client_messages.api.ClientMessageFailureCauses.Cause::text)
+                        .orElse("Проверьте состояние связанной задачи; подробности сбоя сохранены для администратора");
             });
         }
         if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(errorCode)) {
-            reasonParts.add("Отправка не подтверждена и автоматический повтор запрещён. "
-                    + "Кнопка «Проверить отправку» сверит существующее сообщение без нового контакта с клиентом. "
-                    + "Карточка изменится только по подтверждённому результату.");
+            reasonParts.add("Отправка ранее передана на ручную проверку. Откройте чат клиента и нажмите «Сверка отправки»: "
+                    + "«Сообщение есть в чате», «Сообщения нет — отправить снова» или «Не отправлять».");
         }
         if (state.getConsecutiveFailures() > 0)
             reasonParts.add("неудачных попыток подряд: " + state.getConsecutiveFailures());
@@ -249,11 +264,14 @@ public class ManagerAutomationFailureService {
             reasonParts.add("Когда номер вернут в группу или новая ссылка будет сохранена, нажмите «Починить»: "
                     + "система снимет приостановку и отправит сообщение один раз. Если номер всё ещё не в группе, "
                     + "WhatsApp снова откажет, и карточка вернётся");
+        } else if (refused) {
+            reasonParts.add("Автоответчик проверит актуальность заказа и повторит попытку в разрешённое время. Отправлять вручную не нужно.");
         } else if (policy.isLegacyPreparationFailure(state)) {
             reasonParts.add("Нажмите «Починить»: система проверит цикл заказа и журнал операций. "
                     + "Задача вернется в очередь только при подтверждении, что отправка еще не начиналась");
         } else if (policy.requiresDeliveryReceipt(state)) {
-            reasonParts.add("Требуется восстановить подтверждение доставки. Повторная отправка заблокирована, чтобы не продублировать сообщение клиенту");
+            reasonParts.add("«Проверить отправку» ещё раз ищет квитанцию; «Сверка отправки» — ваше решение по чату: "
+                    + "«Сообщение есть в чате», «Сообщения нет — отправить снова» или «Не отправлять»");
         } else if (existingPaymentConflict) {
             reasonParts.add("Нажмите «Починить»: система проверит состояние существующего платежа в T-Bank "
                     + "и, если он по-прежнему ожидает оплату, повторно отправит клиенту эту же ссылку; "
@@ -272,7 +290,7 @@ public class ManagerAutomationFailureService {
                 invoice == null ? null : invoice.getId(),
                 title,
                 subtitle,
-                policy.requiresDeliveryReceipt(state) ? (contactHealth != null && company != null
+                refused ? "Не отправлено" : policy.requiresDeliveryReceipt(state) ? (contactHealth != null && company != null
                         && contactHealth.requiresManagerAttention(company.getId()) ? "Доставка не подтверждена" : "Сверка доставки · система")
                         : "Ошибка автоматизации · " + state.getConsecutiveFailures(),
                 String.join(" · ", reasonParts),

@@ -104,6 +104,35 @@ class OrderPaymentCancellationServiceTest {
     }
 
     @Test
+    void paperInvoicePaidByMistakeReopensTheOrderAndDeletesItsUntouchedNextOrderWithoutAnOwnInvoice() {
+        Order source = order(10L, "Оплачено");
+        source.setAmount(3);
+        Order created = order(20L, "Новый");
+        NextOrderRequest request = new NextOrderRequest();
+        request.setStatus(NextOrderRequestStatus.CREATED);
+        request.setSourceOrder(source);
+        request.setCreatedOrder(created);
+        OrderStatus reminder = status("Напоминание");
+        Principal principal = () -> "owner";
+
+        stubFinancialRollback(source, new BigDecimal("1000.00"));
+        when(nextOrderRequestRepository.findBySourceOrderId(10L)).thenReturn(Optional.of(request));
+        when(commonBillingService.detachOrderForDeletion(20L)).thenReturn(true);
+        when(orderDeletionService.deleteOrder(any(), any())).thenReturn(true);
+        when(orderStatusService.getOrderStatusByTitle("Напоминание")).thenReturn(reminder);
+
+        service.reopenPaperInvoiceOrder(10L, 100000L, principal, "Отмечено по ошибке, оплаты не было");
+
+        verify(commonBillingService).detachOrderForDeletion(20L);
+        verify(orderDeletionService).deleteOrder(20L, principal);
+        assertEquals("Напоминание", source.getStatus().getTitle());
+        // The order stays in its common invoice: no own payment link, no separate invoice, no recipient check.
+        verify(paymentLinkService, never()).createForOrder(any());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleInitialInvoice(any());
+        verify(contractorRouteAssignmentGuard, never()).requirePaymentCancellationAllowed(any());
+    }
+
+    @Test
     void deactivatedRewardsAreSynchronizedBeforeReplacementPaymentLink() {
         Order source = order(11L, "Оплачено");
         source.setAmount(2);

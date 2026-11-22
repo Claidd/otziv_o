@@ -7,11 +7,9 @@ import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationG
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Objects;
 
@@ -116,16 +114,14 @@ public class ReviewEditService {
         if (orderId == null || reviewId == null) {
             return null;
         }
-        try {
-            // The review id determines the only parent row we ever lock. A
-            // mismatched caller-supplied order id is rejected afterwards, so
-            // crossed (order A, review B) requests cannot create A<->B cycles.
-            orderAggregateMutationLockService.lockForReview(reviewId);
-        } catch (ResponseStatusException exception) {
-            if (exception.getStatusCode() == HttpStatus.NOT_FOUND) {
-                return null;
-            }
-            throw exception;
+        // The review id determines the only parent row we ever lock. A
+        // mismatched caller-supplied order id is rejected afterwards, so
+        // crossed (order A, review B) requests cannot create A<->B cycles.
+        // The non-throwing variant matters: catching a 404 thrown through the
+        // MANDATORY lock proxy would leave this transaction rollback-only, and
+        // the "not found" answer would turn into a 500 at commit.
+        if (orderAggregateMutationLockService.lockIfLiveForReview(reviewId).isEmpty()) {
+            return null;
         }
         Review review = reviewRepository.findById(reviewId).orElse(null);
         if (review == null || review.getOrderDetails() == null || review.getOrderDetails().getOrder() == null) {

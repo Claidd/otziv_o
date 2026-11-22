@@ -198,6 +198,17 @@ public class CommonBillingAdminController {
         return commonBillingService.markPaperInvoicePaid(invoiceId, request, principal);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/paper-invoice/paid/cancel")
+    public CommonInvoiceDetailsResponse cancelPaperInvoicePayment(
+            @PathVariable Long invoiceId,
+            @RequestBody ManualPaymentConfirmationRequest request,
+            Principal principal
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.cancelPaperInvoicePayment(invoiceId, request, principal);
+    }
+
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/remind")
     public CommonInvoiceDetailsResponse remind(@PathVariable Long invoiceId,

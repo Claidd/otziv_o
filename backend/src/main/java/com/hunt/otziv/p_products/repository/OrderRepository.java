@@ -1142,7 +1142,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                   FROM ScheduledClientMessageState state
                   WHERE state.orderId = o.id
                     AND state.scenario IN :paymentScenarios
-                    AND state.consecutiveFailures = 0
+                    AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                    AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                     AND (
                         state.lastErrorCode IS NULL
                         OR TRIM(state.lastErrorCode) = ''
@@ -1154,12 +1155,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                     )
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
                       OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                   )
               )
           )
@@ -1182,7 +1185,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                   FROM ScheduledClientMessageState state
                   WHERE state.orderId = o.id
                     AND state.scenario IN :reviewCheckScenarios
-                    AND state.consecutiveFailures = 0
+                    AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                    AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                     AND (
                         state.lastErrorCode IS NULL
                         OR TRIM(state.lastErrorCode) = ''
@@ -1194,12 +1198,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                     )
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
                       OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                   )
               )
           )
@@ -1222,7 +1228,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                   FROM ScheduledClientMessageState state
                   WHERE state.orderId = o.id
                     AND state.scenario IN :deliveryRetryScenarios
-                    AND state.consecutiveFailures = 0
+                    AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                    AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                     AND (
                         state.lastErrorCode IS NULL
                         OR TRIM(state.lastErrorCode) = ''
@@ -1234,12 +1241,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                     )
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
                         OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                     )
               )
           )
@@ -1263,7 +1272,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                   FROM ScheduledClientMessageState state
                   WHERE state.orderId = o.id
                     AND state.scenario IN :clientTextScenarios
-                    AND state.consecutiveFailures = 0
+                    AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                    AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                     AND (
                         state.lastErrorCode IS NULL
                         OR TRIM(state.lastErrorCode) = ''
@@ -1275,12 +1285,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                     )
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
                         OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                     )
               )
           )
@@ -1354,7 +1366,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                           FROM ScheduledClientMessageState state
                           WHERE state.orderId = o.id
                             AND state.scenario IN :paymentScenarios
-                            AND state.consecutiveFailures = 0
+                            AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                            AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                             AND (
                                 state.lastErrorCode IS NULL
                                 OR TRIM(state.lastErrorCode) = ''
@@ -1366,12 +1379,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                             )
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
                               OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                           )
                       )
                   )
@@ -1394,7 +1409,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                           FROM ScheduledClientMessageState state
                           WHERE state.orderId = o.id
                             AND state.scenario IN :reviewCheckScenarios
-                            AND state.consecutiveFailures = 0
+                            AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                            AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                             AND (
                                 state.lastErrorCode IS NULL
                                 OR TRIM(state.lastErrorCode) = ''
@@ -1406,12 +1422,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                             )
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
                               OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                           )
                       )
                   )
@@ -1434,7 +1452,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                           FROM ScheduledClientMessageState state
                           WHERE state.orderId = o.id
                             AND state.scenario IN :deliveryRetryScenarios
-                            AND state.consecutiveFailures = 0
+                            AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                            AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                             AND (
                                 state.lastErrorCode IS NULL
                                 OR TRIM(state.lastErrorCode) = ''
@@ -1446,12 +1465,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                             )
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
                                 OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                             )
                       )
                   )
@@ -1475,7 +1496,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                           FROM ScheduledClientMessageState state
                           WHERE state.orderId = o.id
                             AND state.scenario IN :clientTextScenarios
-                            AND state.consecutiveFailures = 0
+                            AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                            AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                             AND (
                                 state.lastErrorCode IS NULL
                                 OR TRIM(state.lastErrorCode) = ''
@@ -1487,12 +1509,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                             )
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
                                 OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                             )
                       )
                   )
@@ -1547,7 +1571,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                           FROM ScheduledClientMessageState state
                           WHERE state.orderId = o.id
                             AND state.scenario IN :paymentScenarios
-                            AND state.consecutiveFailures = 0
+                            AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                            AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                             AND (
                                 state.lastErrorCode IS NULL
                                 OR TRIM(state.lastErrorCode) = ''
@@ -1559,12 +1584,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                             )
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
                               OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                           )
                       )
                   )
@@ -1587,7 +1614,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                           FROM ScheduledClientMessageState state
                           WHERE state.orderId = o.id
                             AND state.scenario IN :reviewCheckScenarios
-                            AND state.consecutiveFailures = 0
+                            AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                            AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                             AND (
                                 state.lastErrorCode IS NULL
                                 OR TRIM(state.lastErrorCode) = ''
@@ -1599,12 +1627,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                             )
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
                               OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                           )
                       )
                   )
@@ -1627,7 +1657,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                           FROM ScheduledClientMessageState state
                           WHERE state.orderId = o.id
                             AND state.scenario IN :deliveryRetryScenarios
-                            AND state.consecutiveFailures = 0
+                            AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                            AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                             AND (
                                 state.lastErrorCode IS NULL
                                 OR TRIM(state.lastErrorCode) = ''
@@ -1639,12 +1670,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                             )
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
                                 OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                             )
                       )
                   )
@@ -1668,7 +1701,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                           FROM ScheduledClientMessageState state
                           WHERE state.orderId = o.id
                             AND state.scenario IN :clientTextScenarios
-                            AND state.consecutiveFailures = 0
+                            AND (state.consecutiveFailures = 0 OR LOWER(state.lastErrorCode) IN ('manual_done', 'manual_disabled'))
+                            AND (state.lastErrorCode IS NULL OR LOWER(state.lastErrorCode) NOT IN ('manual_done', 'manual_disabled') OR o.statusChangedAt IS NULL OR state.lastAttemptAt >= o.statusChangedAt)
                             AND (
                                 state.lastErrorCode IS NULL
                                 OR TRIM(state.lastErrorCode) = ''
@@ -1680,12 +1714,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                        OR LOWER(state.lastErrorCode) IN ('manual_contact_reserved', 'daily_limit', 'outside_messaging_window', 'messaging_window_closed', 'review_recovery_active', 'manual_done', 'manual_disabled')
                             )
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
                                 OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
+                        OR LOWER(state.lastErrorCode) = 'manual_disabled'
                             )
                       )
                   )

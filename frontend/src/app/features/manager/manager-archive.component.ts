@@ -11,6 +11,8 @@ import {
   ArchivePaymentCheckItem,
   ArchiveReviewItem,
   ArchiveRestoreResult,
+  ArchiveRestoreSpecialistRequiredError,
+  ArchiveRestoreWorkerOption,
   ArchiveZpItem,
   ManagerApi,
   ManagerPage,
@@ -54,6 +56,28 @@ const LIVE_ARCHIVE_STATUS_ACTIONS: LiveArchiveStatusAction[] = [
 ];
 
 const RESTORE_STATUS_OPTIONS = ['Новый', 'Коррекция', 'На проверке'] as const;
+
+const SPECIALIST_REQUIRED_FALLBACK = 'Специалист заказа деактивирован — выберите действующего специалиста';
+
+/** The restore answers 409 SPECIALIST_REQUIRED when the archived specialist no longer works. */
+function specialistRequiredError(err: unknown): ArchiveRestoreSpecialistRequiredError | null {
+  if (typeof err !== 'object' || err === null || (err as { status?: unknown }).status !== 409) {
+    return null;
+  }
+  const body = (err as { error?: unknown }).error;
+  if (typeof body !== 'object' || body === null) {
+    return null;
+  }
+  const payload = body as Partial<ArchiveRestoreSpecialistRequiredError>;
+  if (String(payload.code ?? '').toUpperCase() !== 'SPECIALIST_REQUIRED') {
+    return null;
+  }
+  return {
+    message: typeof payload.message === 'string' && payload.message.trim() ? payload.message : SPECIALIST_REQUIRED_FALLBACK,
+    code: 'SPECIALIST_REQUIRED',
+    workers: Array.isArray(payload.workers) ? payload.workers : []
+  };
+}
 
 const EMPTY_ARCHIVE_PAGE: ManagerPage<ArchiveOrderListItem> = {
   content: [],
@@ -117,6 +141,11 @@ export class ManagerArchiveComponent implements OnDestroy {
   readonly restoreLoading = signal(false);
   readonly restoring = signal(false);
   readonly restoreTargetStatus = signal('Архив');
+  /** Set once the server asked for a new specialist; null while the archived one is fine. */
+  readonly restoreWorkerOptions = signal<ArchiveRestoreWorkerOption[] | null>(null);
+  readonly restoreWorkerId = signal<number | null>(null);
+  readonly restoreWorkerNotice = signal<string | null>(null);
+  readonly restoreWorkerMissing = computed(() => this.restoreWorkerOptions() !== null && !this.restoreWorkerId());
   readonly activeArchiveOrderId = signal<number | null>(null);
   readonly liveStatusMutationKey = signal<string | null>(null);
   readonly recoveryTaskMutationKey = signal<string | null>(null);
@@ -442,24 +471,44 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   confirmRestore(): void {
     const order = this.restoreOrder();
-    if (!order || this.restoreLoading() || this.restoring() || this.recoveryTaskMutationKey()) {
+    if (!order || this.restoreLoading() || this.restoring() || this.recoveryTaskMutationKey() || this.restoreWorkerMissing()) {
       return;
     }
 
     this.restoring.set(true);
     this.restoreError.set(null);
 
-    this.managerApi.restoreArchiveOrder(order.id, this.restoreTargetStatus()).subscribe({
+    // The specialist goes along only after the server asked for one; otherwise the archived one stays.
+    const workerId = this.restoreWorkerOptions() ? this.restoreWorkerId() : null;
+    const request = workerId
+      ? this.managerApi.restoreArchiveOrder(order.id, this.restoreTargetStatus(), workerId)
+      : this.managerApi.restoreArchiveOrder(order.id, this.restoreTargetStatus());
+
+    // Another archived order may be open by the time the answer comes: its panel must not take this one's result.
+    const stillOpen = () => this.restoreOrder()?.id === order.id;
+    request.subscribe({
       next: (result) => {
-        this.restoreResult.set(result);
         this.restoring.set(false);
+        if (stillOpen()) {
+          this.restoreResult.set(result);
+          this.clearRestoreWorkerChoice();
+        }
         this.toastService.success('Заказ восстановлен', `#${result.orderId} вернулся в live со статусом ${result.targetStatus}`);
         this.loadOrders();
       },
       error: (err) => {
-        const message = apiErrorMessage(err, 'Не удалось восстановить архивный заказ');
-        this.restoreError.set(message);
         this.restoring.set(false);
+        const specialistRequired = specialistRequiredError(err);
+        if (specialistRequired) {
+          if (stillOpen()) {
+            this.askRestoreSpecialist(specialistRequired);
+          } else {
+            this.toastService.info('Восстановление не выполнено', `Заказ #${order.id}: ${specialistRequired.message}`);
+          }
+          return;
+        }
+        const message = apiErrorMessage(err, 'Не удалось восстановить архивный заказ');
+        if (stillOpen()) this.restoreError.set(message);
         this.toastService.error('Восстановление не выполнено', message);
       }
     });
@@ -647,6 +696,26 @@ export class ManagerArchiveComponent implements OnDestroy {
     });
   }
 
+  private askRestoreSpecialist(error: ArchiveRestoreSpecialistRequiredError): void {
+    const workers = error.workers;
+    const current = this.restoreWorkerId();
+    const companyWorkers = workers.filter((worker) => worker.companyWorker);
+    this.restoreWorkerOptions.set(workers);
+    this.restoreWorkerNotice.set(error.message);
+    // Same prefill as recovery tasks: only an unambiguous company specialist is suggested.
+    this.restoreWorkerId.set(
+      current != null && workers.some((worker) => worker.id === current)
+        ? current
+        : companyWorkers.length === 1 ? companyWorkers[0].id : null
+    );
+  }
+
+  private clearRestoreWorkerChoice(): void {
+    this.restoreWorkerOptions.set(null);
+    this.restoreWorkerId.set(null);
+    this.restoreWorkerNotice.set(null);
+  }
+
   private liveStatusKey(order: ArchiveOrderListItem, status: string): string {
     return `archive-live-${order.id}-${status}`;
   }
@@ -737,6 +806,7 @@ export class ManagerArchiveComponent implements OnDestroy {
     this.restoreOrder.set(fallbackOrder ?? null);
     this.restoreDetails.set(null);
     this.recoveryWorkerId.set(null);
+    this.clearRestoreWorkerChoice();
     this.restoreResult.set(null);
     this.restoreError.set(null);
     this.restoreTargetStatus.set(this.restoreStatusOptions(fallbackOrder)[0]);
@@ -771,6 +841,7 @@ export class ManagerArchiveComponent implements OnDestroy {
     this.restoreOrder.set(null);
     this.restoreDetails.set(null);
     this.recoveryWorkerId.set(null);
+    this.clearRestoreWorkerChoice();
     this.restoreResult.set(null);
     this.restoreError.set(null);
     this.restoreLoading.set(false);

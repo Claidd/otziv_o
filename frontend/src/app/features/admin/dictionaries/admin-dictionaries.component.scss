@@ -1,165 +1,7 @@
-:host {
-  display: block;
-}
-
-.dictionary-workspace {
-  display: grid;
-  gap: 1rem;
-  font-family: 'laptev_brush', var(--otziv-font-family);
-}
-
-.dictionary-toolbar,
-.dictionary-tabs,
-.dictionary-actions {
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.dictionary-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 0.55rem;
-}
-
-.dictionary-tabs {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  gap: 0.35rem;
-  width: 100%;
-  padding-bottom: 0.2rem;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(121, 151, 191, 0.72) transparent;
-  -ms-overflow-style: auto;
-}
-
-.dictionary-tabs::-webkit-scrollbar {
-  height: 0.35rem;
-}
-
-.dictionary-tabs::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.dictionary-tabs::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(121, 151, 191, 0.72);
-}
-
-.dictionary-tabs:hover,
-.dictionary-card:hover,
-.dictionary-stats .stat-card:hover {
+.dictionary-card:hover {
   box-shadow: none;
 }
 
-.dictionary-tabs button {
-  display: inline-flex;
-  flex: 0 0 auto;
-  min-width: 0;
-  min-height: 2.1rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.22rem;
-  border: 1px solid rgba(103, 116, 131, 0.24);
-  border-radius: 999px;
-  padding: 0 0.72rem;
-  max-width: 13rem;
-  color: var(--otziv-dark);
-  background: var(--otziv-white);
-  font-size: 0.74rem;
-  font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dictionary-tabs button.active {
-  border-color: transparent;
-  color: white;
-  background: #c461dc;
-}
-
-.dictionary-tabs .material-icons-sharp {
-  font-size: 1rem;
-}
-
-.dictionary-tabs small {
-  color: var(--otziv-info);
-  font-size: 0.68rem;
-}
-
-.dictionary-tabs button.active small {
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.dictionary-actions {
-  display: flex;
-  width: auto;
-  flex: 0 0 auto;
-  justify-content: flex-end;
-}
-
-.dictionary-search {
-  position: relative;
-  display: grid;
-  flex: 0 1 16rem;
-  min-width: 9.5rem;
-  min-height: 2rem;
-  align-items: center;
-  border: 1px solid rgba(103, 116, 131, 0.24);
-  border-radius: var(--otziv-small-radius);
-  padding: 0 0.75rem;
-  background: var(--otziv-white);
-}
-
-.dictionary-search > .material-icons-sharp {
-  display: none;
-}
-
-.dictionary-search input {
-  width: 100%;
-  min-height: 1.45rem;
-  border: 0;
-  outline: 0;
-  padding: 0;
-  color: var(--otziv-dark);
-  background: transparent;
-  font: inherit;
-  text-align: right;
-}
-
-.dictionary-workspace button.dictionary-action.dictionary-action,
-.dictionary-workspace button.dictionary-icon-action.dictionary-icon-action {
-  display: inline-flex;
-  min-height: 1.9rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(103, 116, 131, 0.24);
-  border-radius: var(--otziv-small-radius);
-  padding: 0;
-  color: var(--otziv-dark);
-  background: var(--otziv-white);
-  font-size: 0.74rem;
-  font-weight: 800;
-}
-
-.dictionary-workspace button.dictionary-action.dictionary-action {
-  gap: 0.3rem;
-  min-width: 6.25rem;
-  padding: 0 0.72rem;
-}
-
-.dictionary-workspace button.dictionary-action.create {
-  border-color: rgba(27, 156, 133, 0.32);
-  color: var(--otziv-success);
-}
-
-.dictionary-workspace button.dictionary-icon-action.dictionary-icon-action {
-  width: 1.9rem;
-}
 .dictionary-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.14fr) minmax(19rem, 0.86fr);
@@ -211,7 +53,6 @@
 }
 
 .panel-heading,
-.table-head,
 .editor-title {
   display: flex;
   align-items: center;
@@ -222,24 +63,13 @@
 }
 
 .panel-heading h2,
-.table-head h2,
 .editor-title h2 {
   margin: 0.1rem 0 0;
   font-size: 1.15rem;
   line-height: 1;
 }
 
-.panel-actions {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.55rem;
-}
-
-.total-badge,
-.table-head > span,
-.editor-title > span {
+.total-badge {
   display: inline-grid;
   min-width: 2.1rem;
   min-height: 1.7rem;
@@ -251,21 +81,6 @@
   font-size: 0.72rem;
   font-weight: 900;
   white-space: nowrap;
-}
-
-.dictionary-workspace button.compact-action.compact-action {
-  min-height: 2.15rem;
-  border: 1px solid rgba(27, 156, 133, 0.58);
-  border-radius: 0.35rem;
-  padding: 0 0.8rem;
-  color: var(--otziv-success);
-  background: rgba(27, 156, 133, 0.05);
-  box-shadow: none;
-  white-space: nowrap;
-}
-
-.dictionary-workspace button.compact-action .material-icons-sharp {
-  font-size: 1rem;
 }
 
 .table-scroll {
@@ -591,14 +406,12 @@ tr.selected td:first-child {
 }
 
 :is(.editor-card, .category-form, .subcategory-form) label[data-tooltip] > span:first-child,
-.readonly-setting[data-tooltip] > span:first-child,
-.dictionary-search[data-tooltip] input {
+.readonly-setting[data-tooltip] > span:first-child {
   padding-right: 1.75rem;
 }
 
 :is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]::before,
-.readonly-setting[data-tooltip]::before,
-.dictionary-search[data-tooltip]::before {
+.readonly-setting[data-tooltip]::before {
   content: "help";
   position: absolute;
   top: 0;
@@ -619,15 +432,8 @@ tr.selected td:first-child {
   pointer-events: none;
 }
 
-.dictionary-search[data-tooltip]::before {
-  top: 50%;
-  right: 0.75rem;
-  transform: translateY(-50%);
-}
-
 :is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]::after,
-.readonly-setting[data-tooltip]::after,
-.dictionary-search[data-tooltip]::after {
+.readonly-setting[data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
   top: calc(100% + 0.45rem);
@@ -653,8 +459,7 @@ tr.selected td:first-child {
 }
 
 :is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]:is(:hover, .tooltip-open)::after,
-.readonly-setting[data-tooltip]:is(:hover, .tooltip-open)::after,
-.dictionary-search[data-tooltip]:is(:hover, .tooltip-open)::after {
+.readonly-setting[data-tooltip]:is(:hover, .tooltip-open)::after {
   opacity: 1;
   visibility: visible;
 }
@@ -680,6 +485,7 @@ tr.selected td:first-child {
 .editor-card input[type='date'],
 .editor-card input[type='datetime-local'],
 .editor-card input[type='time'],
+.editor-card input[type='password'],
 .editor-card textarea,
 .editor-card select,
 .category-form input[type='text'],
@@ -726,12 +532,10 @@ tr.selected td:first-child {
 .contractor-system-settings {
   display: grid;
   gap: 0.9rem;
-  border: 1px solid rgba(196, 97, 220, 0.3);
+  border: 1px solid var(--otziv-surface-border-blue);
   border-radius: 1rem;
   padding: 1rem;
-  background:
-    linear-gradient(135deg, rgba(196, 97, 220, 0.08), rgba(108, 155, 207, 0.05)),
-    var(--otziv-white);
+  background: var(--otziv-action-fill) top / 100% 3px no-repeat, var(--otziv-surface-gradient-blue);
 }
 
 .contractor-system-head {
@@ -769,8 +573,8 @@ tr.selected td:first-child {
   border: 1px solid rgba(103, 116, 131, 0.3);
   border-radius: 0.5rem;
   padding: 0 0.7rem;
-  color: #536173;
-  background: rgba(255, 255, 255, 0.82);
+  color: var(--otziv-info);
+  background: var(--otziv-white);
   box-shadow: none;
   font-size: 0.72rem;
   font-weight: 900;
@@ -796,7 +600,7 @@ tr.selected td:first-child {
   border-radius: 0.8rem;
   padding: 0.7rem 0.8rem;
   color: var(--otziv-dark);
-  background: rgba(255, 255, 255, 0.68);
+  background: var(--otziv-white);
   text-decoration: none;
   transition: border-color 150ms ease, background 150ms ease;
 }
@@ -831,7 +635,7 @@ tr.selected td:first-child {
 .editor-card .contractor-system-main-switch {
   min-width: min(100%, 23rem);
   color: var(--otziv-dark);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--otziv-white);
   font-weight: 900;
 }
 
@@ -843,7 +647,7 @@ tr.selected td:first-child {
 .contractor-system-mode {
   border-radius: 999px;
   padding: 0.4rem 0.65rem;
-  color: #536173;
+  color: var(--otziv-info);
   background: rgba(103, 116, 131, 0.1);
   font-size: 0.7rem;
   font-weight: 900;
@@ -877,7 +681,7 @@ tr.selected td:first-child {
   border: 1px solid rgba(103, 116, 131, 0.13);
   border-radius: 0.75rem;
   padding: 0.7rem;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--otziv-white);
 }
 
 .contractor-system-metrics small {
@@ -898,7 +702,7 @@ tr.selected td:first-child {
   gap: 0.45rem;
   border-radius: 0.8rem;
   padding: 0.75rem;
-  color: #536173;
+  color: var(--otziv-info);
   background: rgba(108, 155, 207, 0.09);
 }
 
@@ -1044,7 +848,7 @@ tr.selected td:first-child {
 
 .contractor-system-confirmation-form .actions button.secondary {
   border-color: rgba(103, 116, 131, 0.32);
-  color: #536173;
+  color: var(--otziv-info);
   background: rgba(103, 116, 131, 0.06);
 }
 
@@ -1479,37 +1283,6 @@ tr.selected td:first-child {
   margin-top: 0.15rem;
 }
 
-.dictionary-inline-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.65rem;
-  margin-bottom: 0.75rem;
-}
-
-.dictionary-inline-actions button,
-.city-coordinate-import {
-  display: inline-flex;
-  min-height: 2.45rem;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid rgba(103, 116, 131, 0.38);
-  border-radius: 0.35rem;
-  padding: 0 0.8rem;
-  color: #536173;
-  background: rgba(103, 116, 131, 0.05);
-  font-family: inherit;
-  font-weight: 900;
-}
-
-.city-coordinate-import {
-  cursor: pointer;
-}
-
-.city-coordinate-import input {
-  display: none;
-}
-
 .muted {
   color: var(--otziv-info);
   font-weight: 800;
@@ -1526,7 +1299,7 @@ tr.selected td:first-child {
 
 .dictionary-workspace .actions button.secondary {
   border-color: rgba(103, 116, 131, 0.38);
-  color: #536173;
+  color: var(--otziv-info);
   background: rgba(103, 116, 131, 0.05);
 }
 
@@ -1652,7 +1425,7 @@ tr.selected td:first-child {
   border: 1px solid rgba(103, 116, 131, 0.28);
   border-radius: 0.35rem;
   padding: 0;
-  color: #536173;
+  color: var(--otziv-info);
   background: rgba(103, 116, 131, 0.06);
   box-shadow: none;
   text-decoration: none;
@@ -1673,7 +1446,7 @@ tr.selected td:first-child {
 
 .row-icon-link {
   border-color: rgba(103, 116, 131, 0.38);
-  color: #536173;
+  color: var(--otziv-info);
   background: rgba(103, 116, 131, 0.05);
 }
 
@@ -1712,10 +1485,6 @@ tr.selected td:first-child {
 .empty-picker p {
   max-width: 20rem;
   font-size: 0.82rem;
-}
-
-.empty-picker .compact-action {
-  margin-top: 0.4rem;
 }
 
 .error.compact {
@@ -1766,103 +1535,6 @@ tr.selected td:first-child {
 .dictionary-modal .subcategory-form {
   border-bottom: 0;
   padding-bottom: 0;
-}
-
-.dictionary-stats {
-  display: grid;
-  gap: 0.9rem;
-  margin-top: 0.95rem;
-}
-
-.dictionary-stats .stat-card {
-  display: flex;
-  min-height: 5.6rem;
-  align-items: center;
-  justify-content: space-between;
-  border: 0;
-  border-radius: 1.05rem;
-  padding: 0.9rem 1.05rem;
-  background: var(--otziv-white);
-  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
-  text-align: left;
-}
-
-.dictionary-stats .stat-card span {
-  display: block;
-  margin-bottom: 0.4rem;
-  color: var(--otziv-info);
-  font-size: 0.8rem;
-  font-weight: 900;
-}
-
-.dictionary-stats .stat-card strong {
-  color: currentColor;
-  font-size: 1.35rem;
-  font-weight: 900;
-}
-
-.dictionary-stats .tracked-city-accounts small {
-  display: block;
-  margin-top: 0.35rem;
-  color: var(--otziv-info);
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
-.dictionary-stats .stat-card i {
-  display: grid;
-  width: 3.2rem;
-  height: 3.2rem;
-  place-items: center;
-  border: 0.42rem solid currentColor;
-  border-radius: 50%;
-  font-size: 1rem;
-}
-
-.dictionary-stats .stat-card.blue {
-  color: var(--otziv-primary);
-}
-
-.dictionary-stats .stat-card.green {
-  color: var(--otziv-success);
-}
-
-.dictionary-stats .stat-card.teal {
-  color: #2f9f95;
-}
-
-.dictionary-stats .stat-card.yellow {
-  color: var(--otziv-warning);
-}
-
-.dictionary-stats .stat-card.pink {
-  color: var(--otziv-danger);
-}
-
-.dictionary-stats button.import-accounts-button.import-accounts-button {
-  width: 100%;
-  min-height: 3.05rem;
-  justify-content: flex-start;
-  gap: 0.45rem;
-  border: 1px solid rgba(27, 156, 133, 0.58);
-  border-radius: 0.35rem;
-  padding: 0 0.85rem;
-  color: var(--otziv-success);
-  background: rgba(27, 156, 133, 0.05);
-  box-shadow: none;
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.dictionary-stats .import-accounts-button .material-icons-sharp {
-  color: currentColor;
-  font-size: 1.35rem;
-}
-
-.dictionary-stats button.import-accounts-button.city-import {
-  border-color: var(--otziv-action-border);
-  color: var(--otziv-action);
-  background: var(--otziv-action-soft);
 }
 
 .dictionary-ai-provider-page {
@@ -2239,14 +1911,9 @@ tr.selected td:first-child {
     grid-template-columns: 1fr;
   }
 
-  .dictionary-toolbar {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  
 
-  .dictionary-actions {
-    width: 100%;
-    flex: 1 1 100%;
-  }
+  
 }
 
 @media (max-width: 760px) {
@@ -2275,43 +1942,19 @@ tr.selected td:first-child {
     grid-template-columns: 1fr;
   }
 
-  .dictionary-tabs {
-    overflow-x: auto;
-  }
+  
 
-  .dictionary-tabs button {
-    flex: 0 0 auto;
-  }
+  
 
-  .dictionary-actions {
-    flex-wrap: wrap;
-  }
+  
 
-  .dictionary-search {
-    flex-basis: 100%;
-    min-height: 2.8rem;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.45rem;
-    border-radius: 1rem;
-    padding: 0 0.75rem;
-  }
+  
 
-  .dictionary-search > .material-icons-sharp {
-    display: inline-block;
-    color: var(--otziv-info);
-    font-size: 1.15rem;
-  }
+  
 
-  .dictionary-search input {
-    min-height: 2.65rem;
-    height: 100%;
-    font-size: 0.82rem;
-    font-weight: 400;
-    line-height: 2.65rem;
-  }
+  
 
-  .panel-heading,
-  .panel-actions {
+  .panel-heading {
     align-items: stretch;
     flex-direction: column;
   }
@@ -2320,9 +1963,7 @@ tr.selected td:first-child {
     gap: 0.75rem;
   }
 
-  .dictionary-workspace button.compact-action.compact-action {
-    width: 100%;
-  }
+  
 
   .subcategory-form {
     grid-template-columns: 1fr;

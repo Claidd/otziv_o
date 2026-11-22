@@ -8,6 +8,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.mockito.Mockito.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
@@ -23,6 +25,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -47,6 +50,83 @@ class TelegramServiceSendRetryTest {
         assertTrue(service.sendMessageOnceWithInlineKeyboardMessageId(
                 123L, "Delivery", "HTML", List.of()).isEmpty());
         assertEquals(1, service.attempts);
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "403|Forbidden: bot was kicked from the supergroup chat|bot_removed",
+            "403|Forbidden: bot is not a member of the supergroup chat|bot_removed",
+            "403|Forbidden: bot was blocked by the user|bot_blocked",
+            "400|Bad Request: chat not found|chat_not_found",
+            "400|Bad Request: not enough rights to send text messages to the chat|chat_permission_denied"
+    })
+    void durableDeliveryReportsAnExplicitChatRefusalAsNotSent(int code, String description, String reason) {
+        AnsweringTelegramService service = new AnsweringTelegramService(true, TOKEN, code, description);
+
+        TelegramService.SendOnceResult result = service.sendMessageOnceWithInlineKeyboard(123L, "Delivery", null, List.of());
+
+        assertEquals(reason, result.refusal());
+        assertFalse(result.confirmed());
+        assertEquals(1, service.attempts);
+        // The receipt-only entry keeps its contract: anything but a confirmed id is empty.
+        assertTrue(service.sendMessageOnceWithInlineKeyboardMessageId(123L, "Delivery", null, List.of()).isEmpty());
+        assertEquals(2, service.attempts);
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "429|Too Many Requests: retry after 5",
+            "500|Internal Server Error",
+            "502|Bad Gateway",
+            "400|Bad Request: message is too long",
+            "403|Forbidden: unexpected answer"
+    })
+    void durableDeliveryKeepsAmbiguousAndOtherRejectionsUnknown(int code, String description) {
+        AnsweringTelegramService service = new AnsweringTelegramService(true, TOKEN, code, description);
+
+        TelegramService.SendOnceResult result = service.sendMessageOnceWithInlineKeyboard(123L, "Delivery", null, List.of());
+
+        assertNull(result.refusal());
+        assertFalse(result.confirmed());
+        assertEquals(1, service.attempts);
+    }
+
+    @Test
+    void durableDeliveryTimeoutStaysUnknownAfterOneAttempt() {
+        RetryableTelegramService service = new RetryableTelegramService(1);
+
+        TelegramService.SendOnceResult result = service.sendMessageOnceWithInlineKeyboard(123L, "Delivery", "HTML", List.of());
+
+        assertNull(result.refusal());
+        assertFalse(result.confirmed());
+        assertEquals(1, service.attempts);
+        assertEquals(0, service.sleeps);
+    }
+
+    @Test
+    void durableDeliveryWithoutTransportIsKnownUnsentAndSendsNothing() {
+        AnsweringTelegramService disabled = new AnsweringTelegramService(false, TOKEN, 200, null);
+        AnsweringTelegramService unconfigured = new AnsweringTelegramService(true, "not-a-token", 200, null);
+        AnsweringTelegramService configured = new AnsweringTelegramService(true, TOKEN, 200, null);
+
+        assertEquals(TelegramService.SEND_ONCE_SENDING_DISABLED,
+                disabled.sendMessageOnceWithInlineKeyboard(123L, "Delivery", null, List.of()).refusal());
+        assertEquals(TelegramService.SEND_ONCE_NOT_CONFIGURED,
+                unconfigured.sendMessageOnceWithInlineKeyboard(123L, "Delivery", null, List.of()).refusal());
+        assertEquals(TelegramService.SEND_ONCE_MESSAGE_EMPTY,
+                configured.sendMessageOnceWithInlineKeyboard(123L, " ", null, List.of()).refusal());
+        assertEquals(0, disabled.attempts + unconfigured.attempts + configured.attempts);
+    }
+
+    @Test
+    void durableDeliveryReturnsTheConfirmedMessageId() {
+        AnsweringTelegramService service = new AnsweringTelegramService(true, TOKEN, 200, null);
+
+        TelegramService.SendOnceResult result = service.sendMessageOnceWithInlineKeyboard(123L, "Delivery", null, List.of());
+
+        assertTrue(result.confirmed());
+        assertEquals(Integer.valueOf(93), result.messageId());
+        assertNull(result.refusal());
     }
 
     @Test
@@ -317,6 +397,31 @@ class TelegramServiceSendRetryTest {
         @Override
         void sleepBeforeRetry(long delayMillis) {
             sleeps++;
+        }
+    }
+
+    private static final String TOKEN = "123456:abcdefghijklmnopqrstuvwxyz";
+
+    /** Answers every send with a fixed Bot API response, parsed by the real request type. */
+    private static final class AnsweringTelegramService extends TelegramService {
+        private final int code;
+        private final String description;
+        private int attempts;
+
+        private AnsweringTelegramService(boolean sendingEnabled, String token, int code, String description) {
+            super(new DefaultBotOptions(), token, "test_bot", sendingEnabled, "",
+                    null, null, null, null, null, null, null, null, null, null);
+            this.code = code;
+            this.description = description;
+        }
+
+        @Override
+        Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
+            attempts++;
+            String response = code == 200
+                    ? "{\"ok\":true,\"result\":{\"message_id\":93}}"
+                    : "{\"ok\":false,\"error_code\":" + code + ",\"description\":\"" + description + "\"}";
+            return message.deserializeResponse(response);
         }
     }
 

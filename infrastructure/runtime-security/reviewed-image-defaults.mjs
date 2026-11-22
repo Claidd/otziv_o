@@ -23,7 +23,7 @@ import {validateC59ActivationScan} from './c59-refresh.mjs';
 import {validateC55ActivationScan} from './c55-refresh.mjs';
 import {validateC50ActivationScan} from './c50-refresh.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
-import { validateDatabaseTransitionReadiness } from './mysql-c62-readiness.mjs';
+import { validateDatabaseTransitionReadiness } from './mysql-c63-readiness.mjs';
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
 import { validatePublishedKeycloakMigrationAcceptance,
   assertPostgresKeycloakCoupling } from './postgres-transition-readiness.mjs';

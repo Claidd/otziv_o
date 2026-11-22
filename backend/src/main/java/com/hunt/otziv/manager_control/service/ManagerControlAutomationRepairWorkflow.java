@@ -11,6 +11,7 @@ import static com.hunt.otziv.manager_control.service.ManagerControlDailySnapshot
 import static com.hunt.otziv.manager_control.service.ManagerControlDayLifecycle.*;
 import static com.hunt.otziv.manager_control.service.ManagerControlConcreteSnapshotWorkflow.*;
 import static com.hunt.otziv.manager_control.service.ManagerControlProblemExamples.*;
+import com.hunt.otziv.client_messages.api.ClientMessageStateDecisions;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageReconciliationService;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
@@ -73,39 +74,49 @@ public class ManagerControlAutomationRepairWorkflow {
             return resolveRepairedConcreteItem(concreteItem, control, "Ошибка автоматизации уже устранена, карточка перепроверена", principal, "Перепроверена устраненная ошибка автоматизации");
         }
         ManagerAutomationFailureService.AutomationFailureIssue issue = currentIssue.get();
-        var restarted = reminderRestart.repair(concreteItem.getId(), issue.stateId(), control.managerId(), principal);
+        ScheduledClientMessageState uncertainState = scheduledClientMessageStateRepository.findById(issue.stateId()).orElse(null);
+        if (ClientMessageStateDecisions.isQueuedAfterWhatsAppRefusal(uncertainState)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, REFUSAL_QUEUED);
+        }
+        if (uncertainState != null
+                && com.hunt.otziv.client_messages.service.ClientMessageStateSafety.ARCHIVE_CHECK_UNDECIDED.equals(uncertainState.getLastErrorCode())) {
+            // Nothing to restart: the check cannot read the chat. The manager archives the order or keeps working.
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "«Починить» здесь не поможет: автоархив не может прочитать переписку клиента. "
+                            + "Откройте чат: если клиент молчит — переведите заказ в архив вручную, если общается — продолжайте работу.");
+        }
+        ClientMessageScenario failedScenario = uncertainState == null ? null : uncertainState.getScenario();
+        boolean failedScenarioOff = failedScenario != null && scheduledClientMessageService.scenarioStoppedBySettings(failedScenario);
+        // A reminder of a scenario switched off is not restarted: the autoresponder would postpone it again at once.
+        var restarted = failedScenarioOff ? Optional.<ManagerControlConcreteItemResponse>empty()
+                : reminderRestart.repair(concreteItem.getId(), issue.stateId(), control.managerId(), principal);
         if (restarted.isPresent()) return restarted.get();
         Optional<ScheduledClientMessageService.RecoveredBadReviewDeliveryResult> recovered = recoverUncertainBadReviewDelivery(issue, manager);
         if (recovered.isPresent()) {
             ScheduledClientMessageService.RecoveredBadReviewDeliveryResult result = recovered.get();
             return resolveRepairedConcreteItem(concreteItem, control, result.message(), principal, result.retryScheduled() ? "Подтверждена старая отправка счета и запланирована безопасная новая" : "Подтверждена и закрыта зависшая отправка счета");
         }
-        ScheduledClientMessageState uncertainState = scheduledClientMessageStateRepository
-                .findById(issue.stateId()).orElse(null);
         if (uncertainState != null && uncertainState.getScenario() != ClientMessageScenario.BAD_REVIEW_INVOICE
                 && (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(uncertainState.getLastErrorCode())
                     || ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(uncertainState.getLastErrorCode()))) {
             var receipt = scheduledClientMessageService.recoverUncertainOrdinaryDelivery(issue.stateId());
+            if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNSENT_CONFIRMED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, REFUSAL_QUEUED);
+            }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE) {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                         "Сверка временно недоступна. Система продолжит проверять сохранённую отправку после восстановления WhatsApp. Повторное сообщение заблокировано.");
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Проверка завершена: подтвердить доставку по доступной истории не удалось. Новое сообщение не отправлялось. "
-                        + "Повторное нажатие не разрешит отправку. Передайте администратору название компании и результат проверки: "
-                        + "нужно сверить чат, а для счёта ещё и поступления, затем выбрать дальнейшее действие. "
-                        + "Система продолжит сверку автоматически, но отсутствие записи само по себе не доказывает недоставку.");
+                        UNCONFIRMED_DECIDE);
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.PROVIDER_REJECTED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, PROVIDER_REJECTED_MESSAGE);
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNRESOLVED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "В журнале исходной отправки нет подтверждения от мессенджера. Новое сообщение не отправлялось. "
-                        + "Повторное нажатие не разрешит отправку. Передайте администратору название компании: "
-                        + "нужна сверка исходного чата и выбор дальнейшего действия. "
-                        + "Система продолжит сверку существующей операции; без подтверждения замечание остаётся открытым.");
+                        UNCONFIRMED_DECIDE);
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED) {
                 if (managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId()).isPresent()) {
@@ -116,6 +127,12 @@ public class ManagerControlAutomationRepairWorkflow {
                         "Предыдущая отправка подтверждена по WhatsApp; повторного сообщения клиенту не было",
                         principal, "Подтверждена зависшая отправка по квитанции WhatsApp");
             }
+        }
+        if (failedScenarioOff) {
+            // Reconciling an earlier send above still ran; a new attempt would only be postponed as «automation_paused»
+            // and the card would close with a false «перезапущена».
+            throw new ResponseStatusException(HttpStatus.CONFLICT, switchedOff(
+                    scheduledClientMessageService.scenarioStopReason(failedScenario), failedScenario.name()));
         }
         ensureAutomationChatReady(issue);
         ScheduledClientMessageService.ManualRetryResult retry = scheduledClientMessageService.retryNow(issue.stateId());
@@ -129,6 +146,20 @@ public class ManagerControlAutomationRepairWorkflow {
         }
         return resolveRepairedConcreteItem(concreteItem, control, "Задача автоматизации перезапущена и прошла повторную проверку", principal, "Повторно запущена и восстановлена клиентская автоматизация");
     }
+
+    /** «Починить» does not switch the autoresponder on: it names the switch and the step to do by hand. */
+    static String switchedOff(String reason, String scenario) {
+        String what = reason == null ? "выключен этот сценарий" : reason;
+        return "«Починить» не включает автоответчик: в настройках автоответчика (" + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.SETTINGS_PAGE + ") "
+                + what + ". " + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.manualAction(scenario) + " " + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.whoTurnsItOn(what);
+    }
+
+    /** No receipt and no text in the chat history: the manager looks at the chat and decides in the card. */
+    static final String UNCONFIRMED_DECIDE = "WhatsApp не подтвердил доставку, а в доступной истории чата сообщение не найдено. "
+            + "Новое сообщение не отправлялось. Откройте чат клиента и нажмите «Сверка отправки»: "
+            + "«Сообщение есть в чате», «Сообщения нет — отправить снова» или «Не отправлять».";
+
+    private static final String REFUSAL_QUEUED = "Не отправлено. Шлюз отказал до передачи сообщения. Автоответчик проверит заказ в рабочее время. Ручная отправка не нужна.";
 
     Optional<ScheduledClientMessageService.RecoveredBadReviewDeliveryResult> recoverUncertainBadReviewDelivery(ManagerAutomationFailureService.AutomationFailureIssue issue, Manager manager) {
         if (issue == null || issue.stateId() == null) {
@@ -172,7 +203,8 @@ public class ManagerControlAutomationRepairWorkflow {
 
     ManagerControlConcreteItemResponse repairOrderAutomationConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, Order order, Principal principal) {
         var restartScenario = scheduledClientMessageService.orderAutomationScenario(order);
-        if (restartScenario.isPresent()) {
+        // A scenario switched off in the settings is not restarted: the check below answers why.
+        if (restartScenario.isPresent() && !scheduledClientMessageService.scenarioStoppedBySettings(restartScenario.get())) {
             var candidate = currentOrderAutomationState(order, restartScenario.get(), scheduledStatesByOrderId(List.of(order)));
             if (candidate != null) {
                 var restarted = reminderRestart.repair(concreteItem.getId(), candidate.getId(), control.managerId(), principal);
@@ -201,6 +233,17 @@ public class ManagerControlAutomationRepairWorkflow {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Исходная отправка пока не подтверждена. Система продолжит сверку автоматически; повторное сообщение заблокировано. Замечание останется открытым до проверяемого результата.");
             }
+        }
+        if (currentScenario.isPresent() && scheduledClientMessageService.scenarioStoppedBySettings(currentScenario.get())) {
+            // Restarting it would report «восстановлена» while the autoresponder postpones it again a minute later.
+            throw new ResponseStatusException(HttpStatus.CONFLICT, switchedOff(
+                    scheduledClientMessageService.scenarioStopReason(currentScenario.get()), currentScenario.get().name()));
+        }
+        if (scheduledClientMessageService.orderAutomationClosedByAdministrator(order)) {
+            // The administrator's decision stands: the card closes without reopening the task.
+            return resolveRepairedConcreteItem(concreteItem, control,
+                    "Задача автоответчика по заказу закрыта или отключена администратором в мониторинге; повторно не включается",
+                    principal, "Карточка закрыта: задача закрыта администратором");
         }
         Optional<ClientMessageScenario> scenario = scheduledClientMessageService.ensureOrderAutomationForOrder(order);
         if (scenario.isEmpty()) {

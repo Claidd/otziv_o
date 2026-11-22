@@ -26,6 +26,9 @@ public class ClientChatResolutionPolicy {
             "понял", "поняла", "поняли", "принято", "договорились", "отлично",
             "супер", "ясно", "ладно", "хорошо спасибо", "не надо", "пока не нужно"
     );
+    private static final Set<String> FILE_EXTENSIONS = Set.of(
+            "pdf", "doc", "docx", "xls", "xlsx", "csv", "jpg", "jpeg", "png", "heic", "webp", "zip", "rar"
+    );
     private static final Set<String> SAFE_ACKNOWLEDGEMENT_WORDS = Set.of(
             "ок", "окей", "хорошо", "спасибо", "большое", "вам", "и",
             "взаимно", "благодарю", "понял", "поняла", "поняли", "принято",
@@ -37,7 +40,11 @@ public class ClientChatResolutionPolicy {
         if (normalized.isBlank()) {
             return new Assessment(false, false, true, "EMPTY");
         }
-        if (normalized.startsWith("вложение ") || normalized.endsWith(" pdf")) {
+        // Checked before questions and courtesy words: a receipt photo captioned «Спасибо 🙏» is a file
+        // to check, whatever its caption says.
+        if (ClientChatContentClassifier.hasAttachmentMarker(messageText)
+                || ClientChatContentClassifier.attachmentOnly(messageText) || normalized.startsWith("вложение ")
+                || endsWithFileExtension(normalized)) {
             return new Assessment(true, true, false, "ATTACHMENT_REQUIRES_REVIEW");
         }
         if (normalized.contains("?") || containsWord(normalized, QUESTION_WORDS)) {
@@ -75,6 +82,12 @@ public class ClientChatResolutionPolicy {
         String[] words = normalized.split(" ");
         return words.length <= 5
                 && java.util.Arrays.stream(words).allMatch(SAFE_ACKNOWLEDGEMENT_WORDS::contains);
+    }
+
+    /** A file name such as «Счёт.xlsx» loses its dot in normalization and ends with « xlsx». */
+    private static boolean endsWithFileExtension(String normalized) {
+        int lastSpace = normalized.lastIndexOf(' ');
+        return lastSpace > 0 && FILE_EXTENSIONS.contains(normalized.substring(lastSpace + 1));
     }
 
     private boolean containsWord(String normalized, Set<String> words) {

@@ -1,7 +1,8 @@
 import { Component, Input } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import type {
   ArchiveOrderDetailsPayload,
   ArchiveOrderListItem,
@@ -358,6 +359,107 @@ describe('ManagerArchiveComponent', () => {
     expect(component.restoreResult()?.batchId).toBe(4);
     expect(toastService.success).toHaveBeenCalledWith('Заказ восстановлен', '#3 вернулся в live со статусом Новый');
     expect(managerApi.getArchiveOrders).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks for an active specialist in the restore window and repeats the restore with the choice', () => {
+    const workOrder = archiveOrder({ id: 5, status: 'Архив', workerName: 'Уволенный специалист' });
+    managerApi.getArchiveOrder.mockReturnValue(of(details(workOrder)));
+    managerApi.restoreArchiveOrder.mockReturnValueOnce(throwError(() => new HttpErrorResponse({
+      status: 409,
+      error: {
+        message: 'Специалист заказа деактивирован — выберите действующего специалиста',
+        code: 'SPECIALIST_REQUIRED',
+        workers: [
+          { id: 72, label: 'Новый специалист', companyWorker: true },
+          { id: 73, label: 'Другой специалист', companyWorker: false }
+        ]
+      }
+    })));
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.openRestore(workOrder);
+    component.restoreTargetStatus.set('Новый');
+    component.confirmRestore();
+    fixture.detectChanges();
+
+    expect(managerApi.restoreArchiveOrder).toHaveBeenNthCalledWith(1, 5, 'Новый');
+    expect(component.restoreResult()).toBeNull();
+    expect(component.restoreError()).toBeNull();
+    expect(component.restoring()).toBe(false);
+    expect(toastService.error).not.toHaveBeenCalled();
+    expect(component.restoreWorkerId()).toBe(72);
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.restore-specialist-note')?.textContent)
+      .toContain('Специалист заказа деактивирован — выберите действующего специалиста');
+    const options = Array.from(element.querySelectorAll('#archive-restore-worker option')).map((option) => option.textContent?.trim());
+    expect(options).toEqual(['Выберите специалиста', 'Новый специалист — специалист компании', 'Другой специалист']);
+
+    component.restoreWorkerId.set(73);
+    component.confirmRestore();
+    fixture.detectChanges();
+
+    expect(managerApi.restoreArchiveOrder).toHaveBeenNthCalledWith(2, 5, 'Новый', 73);
+    expect(component.restoreResult()?.batchId).toBe(4);
+    expect(component.restoreWorkerOptions()).toBeNull();
+    expect(toastService.success).toHaveBeenCalledWith('Заказ восстановлен', '#5 вернулся в live со статусом Новый');
+    expect(element.querySelector('#archive-restore-worker')).toBeNull();
+  });
+
+  it('keeps restore disabled until a specialist is chosen when the choice is ambiguous', () => {
+    const workOrder = archiveOrder({ id: 6, status: 'Архив' });
+    managerApi.getArchiveOrder.mockReturnValue(of(details(workOrder)));
+    managerApi.restoreArchiveOrder.mockReturnValueOnce(throwError(() => new HttpErrorResponse({
+      status: 409,
+      error: {
+        message: 'Специалист заказа деактивирован — выберите действующего специалиста',
+        code: 'SPECIALIST_REQUIRED',
+        workers: [
+          { id: 72, label: 'Первый', companyWorker: true },
+          { id: 73, label: 'Второй', companyWorker: true }
+        ]
+      }
+    })));
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.openRestore(workOrder);
+    component.restoreTargetStatus.set('Коррекция');
+    component.confirmRestore();
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(component.restoreWorkerId()).toBeNull();
+    expect(component.restoreWorkerMissing()).toBe(true);
+    expect(element.querySelector<HTMLButtonElement>('.restore-confirm-inline')?.disabled).toBe(true);
+
+    component.confirmRestore();
+    expect(managerApi.restoreArchiveOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows other restore conflicts as errors without asking for a specialist', () => {
+    const workOrder = archiveOrder({ id: 7, status: 'Архив' });
+    managerApi.getArchiveOrder.mockReturnValue(of(details(workOrder)));
+    managerApi.restoreArchiveOrder.mockReturnValueOnce(throwError(() => new HttpErrorResponse({
+      status: 409,
+      error: { message: 'Специалиста нельзя изменить: для заказа уже зафиксирован получатель платежа' }
+    })));
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.openRestore(workOrder);
+    component.restoreTargetStatus.set('Новый');
+    component.confirmRestore();
+
+    expect(component.restoreWorkerOptions()).toBeNull();
+    expect(component.restoreError()).toBe('Специалиста нельзя изменить: для заказа уже зафиксирован получатель платежа');
+    expect(toastService.error).toHaveBeenCalledWith(
+      'Восстановление не выполнено',
+      'Специалиста нельзя изменить: для заказа уже зафиксирован получатель платежа'
+    );
   });
 
   it('hides archive finance blocks from managers', () => {

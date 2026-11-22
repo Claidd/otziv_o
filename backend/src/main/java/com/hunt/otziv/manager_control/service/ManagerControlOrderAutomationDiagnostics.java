@@ -1,5 +1,6 @@
 package com.hunt.otziv.manager_control.service;
 
+import com.hunt.otziv.client_messages.api.ClientMessageStateDecisions;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.service.CompanyChatBindingPolicy;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
@@ -30,6 +31,8 @@ public class ManagerControlOrderAutomationDiagnostics {
     static final int WORKER_ORDER_UNCHANGED_DAYS = 2;
     private final OrderRepository orderRepository;
     private final ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
+    /** Why client-text reminders do not run now (switch off, pause): then a missing task is not a fault. */
+    private final com.hunt.otziv.client_messages.api.ClientMessageScenarioStops scenarioStops;
 
     boolean isWhatsAppChat(String chat) {
         return chat.startsWith("chat.whatsapp.com/")
@@ -77,10 +80,12 @@ public class ManagerControlOrderAutomationDiagnostics {
                 ? orderRepository.findManagerControlWorkerNewOrdersForControl(workerIds, cutoff)
                 : orderRepository.findManagerControlWorkerStaleOrders(workerIds, status, cutoff);
         Map<Long, List<ScheduledClientMessageState>> statesByOrderId = scheduledStatesByOrderId(orders);
+        // One fresh settings read for the whole list, and only when an order needs it.
+        java.util.function.Supplier<String> stop = clientTextStopReason();
         return orders.stream()
                 .map(order -> new WorkerOrderControlEntry(
                         order,
-                        workerOrderClientTextDecision(order, status, today, statesByOrderId)
+                        workerOrderClientTextDecision(order, status, today, statesByOrderId, stop)
                 ))
                 .filter(entry -> entry.clientTextDecision().include())
                 .toList();
@@ -91,6 +96,37 @@ public class ManagerControlOrderAutomationDiagnostics {
             String status,
             LocalDate today,
             Map<Long, List<ScheduledClientMessageState>> statesByOrderId
+    ) {
+        return workerOrderClientTextDecision(order, status, today, statesByOrderId, clientTextStopReason());
+    }
+
+    private java.util.function.Supplier<String> clientTextStopReason() {
+        String[] reason = new String[1];
+        boolean[] read = new boolean[1];
+        return () -> {
+            if (!read[0]) {
+                read[0] = true;
+                reason[0] = scenarioStops == null ? null : scenarioStops.stopReason("CLIENT_TEXT_REMINDER");
+            }
+            return reason[0];
+        };
+    }
+
+    private WorkerClientTextDecision clientTextSwitchedOff(String what) {
+        return new WorkerClientTextDecision(
+                true,
+                "Заказ ждет текст клиента, а автоответчик ему не пишет — " + what + " "
+                        + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.manualAction("CLIENT_TEXT_REMINDER")
+                        + " «Починить» здесь не поможет. " + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.whoTurnsItOn(what)
+        );
+    }
+
+    WorkerClientTextDecision workerOrderClientTextDecision(
+            Order order,
+            String status,
+            LocalDate today,
+            Map<Long, List<ScheduledClientMessageState>> statesByOrderId,
+            java.util.function.Supplier<String> clientTextStop
     ) {
         if (order == null
                 || !"Новый".equals(status)
@@ -110,10 +146,20 @@ public class ManagerControlOrderAutomationDiagnostics {
 
         ScheduledClientMessageState state = currentClientTextReminderState(order, statesByOrderId);
         if (state == null) {
+            // Switched off: no reminder task is created at all, which is a setting, not a lost task.
+            String stop = clientTextStop.get();
+            if (stop != null) {
+                return clientTextSwitchedOff(ManagerControlProblemExamples.switchedOffWhat(
+                        "в настройках автоответчика (" + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.SETTINGS_PAGE + ") " + stop));
+            }
             return new WorkerClientTextDecision(
                     true,
                     "Заказ ждет текст клиента, но автоответчик не отправляет напоминания: нет записи в очереди CLIENT_TEXT_REMINDER."
             );
+        }
+        if (ClientMessageStateDecisions.isSwitchedOffCode(state.getLastErrorCode())) {
+            // A setting, not a fault: the manager asks for the text; «Починить» would not switch reminders on.
+            return clientTextSwitchedOff(ManagerControlProblemExamples.switchedOffWhat(state.getLastErrorMessage()));
         }
         if (!clientTextReminderIsHealthy(state)) {
             return new WorkerClientTextDecision(
@@ -227,6 +273,15 @@ public class ManagerControlOrderAutomationDiagnostics {
     boolean clientTextReminderIsHealthy(ScheduledClientMessageState state) {
         if (state == null) {
             return false;
+        }
+        // Closed or disabled by an administrator in the monitor: a decision, not a fault to «repair».
+        if (ClientMessageStateDecisions.isManualDecision(state)) {
+            return true;
+        }
+        // Waits on purpose (the manager's message covers the cycle, a limit, the sending window): the reminder comes
+        // back by itself, so the card must not call it broken or offer «Починить».
+        if (ClientMessageStateDecisions.isIntentionalWait(state, LocalDateTime.now())) {
+            return true;
         }
         if (state.getStatus() == ScheduledMessageStateStatus.DISABLED || state.getStatus() == ScheduledMessageStateStatus.PAUSED) {
             return false;

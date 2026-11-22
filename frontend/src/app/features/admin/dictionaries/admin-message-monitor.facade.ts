@@ -1,15 +1,33 @@
 import { computed, signal } from '@angular/core';
 import { Observable, Subscription } from 'rxjs';
-import type { AdminClientMessageMonitor, AdminClientMessageMaintenancePreview, AdminClientMessageMonitorQueueItem, AdminClientMessageMonitorAttempt, AdminClientMessageMonitorScenario } from '../../../core/admin-dictionaries.api';
+import type { AdminClientMessageMonitor, AdminClientMessageMaintenancePreview, AdminClientMessageMonitorQueueItem, AdminClientMessageMonitorAttempt, AdminClientMessageMonitorScenario, AdminMaintenanceApplyResponse } from '../../../core/admin-dictionaries.api';
 import type { AdminMessageMonitorApi } from '../../../core/admin-message-monitor.api';
 import type { ToastService } from '../../../shared/toast.service';
 import { apiErrorMessage } from '../../../shared/api-error-message';
 
 type DictionaryMetric = { label: string; value: number; icon: string; tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink'; tooltip?: string };
-type MonitorDeps = { api: Pick<AdminMessageMonitorApi, keyof AdminMessageMonitorApi>; toast: Pick<ToastService, 'success' | 'error'>; isActive: () => boolean; isVisible: () => boolean; enabled: () => boolean; setEnabled: (enabled: boolean) => void };
+type MaintenanceAction = 'company-statuses' | 'payment-overdue' | 'missing-bad-tasks' | 'archive-offers' | 'publication-dates' | 'publication-completed';
+/** The outcome of the last database update started on this screen. It stays until the next one, also after leaving the tab. */
+export type MaintenanceResult = { tone: 'success' | 'warning' | 'error'; title: string; message: string; at: string };
+type MonitorDeps = {
+  api: Pick<AdminMessageMonitorApi, keyof AdminMessageMonitorApi>;
+  toast: Pick<ToastService, 'success' | 'error'> & Partial<Pick<ToastService, 'warning'>>;
+  isActive: () => boolean;
+  isVisible: () => boolean;
+  enabled: () => boolean;
+  setEnabled: (enabled: boolean) => void;
+};
 const CLIENT_MESSAGE_MONITOR_POLLING_MS = 60000;
+/** Tasks of these scenarios change the order status instead of writing to the client. */
+const STATUS_SCENARIOS: ReadonlySet<string> = new Set(['BAD_REVIEW_AUTO_BAN', 'PAYMENT_OVERDUE_ESCALATION']);
+/** Scenarios whose message carries payment details (a manager text or a bank link). */
+const PAYMENT_SCENARIOS: ReadonlySet<string> = new Set(['PAYMENT_REMINDER', 'PAYMENT_INVOICE_RETRY', 'BAD_REVIEW_INVOICE']);
 
 /** One instance per dictionary screen; owns only the monitor tab's state and work. */
+/** Waits the queue plans on purpose: a limit, a working window, a recovery in progress, a dry run. */
+const PLANNED_WAIT_CODES = new Set(['archive_waiting', 'daily_limit', 'rate_limited', 'outside_messaging_window',
+  'review_recovery_active', 'review_recovery_still_open', 'payment_overdue_dry_run']);
+
 export class AdminMessageMonitorFacade {
   private monitorTimerId: ReturnType<typeof setInterval> | null = null;
   private readonly reads = new Map<string, Subscription>();
@@ -63,6 +81,7 @@ export class AdminMessageMonitorFacade {
 
   readonly clientMessageMonitorSaving = signal(false);
 
+  /** Only a failed read of the monitor: the errors of the switch and of row actions are reported by their own toasts. */
   readonly clientMessageMonitorError = signal<string | null>(null);
 
   readonly clientMessageMaintenancePreviewError = signal<string | null>(null);
@@ -75,11 +94,46 @@ export class AdminMessageMonitorFacade {
 
   readonly monitorSearch = signal('');
 
+  /** The open preview row as the old template compares it (by targetKey); isMonitorQueueExpanded() is exact. */
   readonly expandedMonitorQueueKey = signal<string | null>(null);
+
+  /** The open preview row by task: two tasks of one order (payment and overdue payment) share their targetKey. */
+  private readonly expandedMonitorQueueId = signal<number | null>(null);
 
   readonly clientMessageManualAction = signal<string | null>(null);
 
   readonly maintenanceAction = signal<string | null>(null);
+
+  /** The last database update of this screen with its outcome, shown in the «Проверка базы» card. */
+  readonly maintenanceResult = signal<MaintenanceResult | null>(null);
+
+  /** The monitoring flag from the server's last answer on this visit of the tab: the monitor read, the switch or a row action. */
+  private readonly answeredEnabled = signal<boolean | null>(null);
+
+  /** Where the switch was moved while its request runs. */
+  private readonly switchTarget = signal<boolean | null>(null);
+
+  /**
+   * The one source of the monitoring state for the switch, its caption, «Обновить», «Проверить базу» and the empty state:
+   * the server's last answer on this visit, otherwise «on» when the loaded settings or snapshot say so. Null while it is
+   * unknown — shown as loading, never as «выключено»: the message settings are loaded only by the autoresponder tabs.
+   */
+  readonly monitorEnabled = computed<boolean | null>(() => this.answeredEnabled() ?? (this.deps.enabled() ? true : null));
+
+  /** The switch follows a click while its request runs, then shows the answer — or the old state after an error. */
+  readonly monitorSwitchChecked = computed(() => this.switchTarget() ?? this.monitorEnabled() === true);
+
+  readonly monitorSwitchLabel = computed(() => {
+    if (this.clientMessageMonitorSaving()) {
+      return 'Переключаю';
+    }
+    const enabled = this.monitorEnabled();
+    if (enabled === null) {
+      // Before the first answer the read is on its way; after a failed read the state is simply not known.
+      return this.clientMessageMonitorError() && !this.clientMessageMonitorLoading() ? 'Состояние неизвестно' : 'Загружаю';
+    }
+    return enabled ? 'Наблюдение включено' : 'Наблюдение выключено';
+  });
 
   readonly monitorMetrics = computed<DictionaryMetric[]>(() => {
     const monitor = this.clientMessageMonitor();
@@ -130,7 +184,7 @@ export class AdminMessageMonitorFacade {
       if (statusFilter === 'DUE' && !this.isMonitorQueueDue(item, nowMs)) {
         return false;
       }
-      if (statusFilter === 'ERROR' && !item.lastErrorMessage) {
+      if (statusFilter === 'ERROR' && !this.monitorQueueHasError(item)) {
         return false;
       }
       return this.matchesMonitorQueueSearch(item, search);
@@ -161,15 +215,17 @@ export class AdminMessageMonitorFacade {
       return;
     }
 
-    const previous = this.deps.enabled() ?? false;
     const generation = this.generation;
     this.cancelReads();
     this.clientMessageMonitorSaving.set(true);
+    this.switchTarget.set(enabled);
     this.clientMessageMonitorError.set(null);
     this.deps.api.updateClientMessageMonitorSettings(enabled).subscribe({
       next: (settings) => {
         this.clientMessageMonitorSaving.set(false);
+        this.switchTarget.set(null);
         if (!this.current(generation)) return;
+        this.answeredEnabled.set(settings.enabled);
         this.deps.setEnabled(settings.enabled);
         if (settings.enabled) {
           this.loadClientMessageMonitor(false, true);
@@ -179,17 +235,19 @@ export class AdminMessageMonitorFacade {
           this.clientMessageMonitor.set(null);
         }
         this.deps.toast.success(
-          settings.enabled ? 'Мониторинг включен' : 'Мониторинг выключен',
-          settings.enabled ? 'Данные будут обновляться раз в минуту, пока вкладка открыта.' : 'Автоответчик продолжит работать без UI-опроса.'
+          settings.enabled ? 'Наблюдение включено' : 'Наблюдение выключено',
+          settings.enabled
+            ? 'Для всех администраторов. Пока вкладка открыта, данные обновляются раз в минуту.'
+            : 'Для всех администраторов. Отправка сообщений клиентам работает как прежде.'
         );
       },
       error: (err: unknown) => {
         this.clientMessageMonitorSaving.set(false);
+        // The switch returns to the state the server still has; the monitor itself did not fail to load.
+        this.switchTarget.set(null);
         if (!this.current(generation)) return;
-        const message = apiErrorMessage(err, 'Не удалось переключить мониторинг автоответчика');
-        this.deps.setEnabled(previous);
-        this.clientMessageMonitorError.set(message);
-        this.deps.toast.error('Мониторинг не переключен', message);
+        const message = apiErrorMessage(err, 'Не удалось переключить наблюдение');
+        this.deps.toast.error('Наблюдение не переключено', message);
       }
     });
   }
@@ -198,7 +256,8 @@ export class AdminMessageMonitorFacade {
     if (!this.current(this.generation)) return;
     if (this.clientMessageMonitorSaving() || this.clientMessageManualAction() || this.maintenanceAction()) return;
     if (silent && this.reads.get('monitor') && !this.reads.get('monitor')!.closed) return;
-    if (!discoverSettings && !this.deps.enabled()) {
+    // Skipped only when monitoring is known to be off; an unknown state is read to learn it.
+    if (!discoverSettings && this.monitorEnabled() === false) {
       this.clientMessageMonitor.set(null);
       this.stopClientMessageMonitorPolling();
       return;
@@ -210,9 +269,14 @@ export class AdminMessageMonitorFacade {
     this.read('monitor', this.deps.api.getClientMessageMonitor(), {
       next: (monitor) => {
         this.clientMessageMonitor.set(monitor);
+        this.answeredEnabled.set(monitor.enabled);
         this.deps.setEnabled(monitor.enabled);
         this.clientMessageMonitorLoading.set(false);
-        this.loadClientMessageMaintenancePreview(true);
+        // The check of the base runs about a dozen heavy queries: once per entry or «Обновить» while monitoring is on,
+        // never from the minute poll, never while it is off.
+        if (!silent && monitor.enabled) {
+          this.loadClientMessageMaintenancePreview(true);
+        }
         if (monitor.enabled && this.deps.isActive()) {
           this.startClientMessageMonitorPolling();
         }
@@ -230,6 +294,13 @@ export class AdminMessageMonitorFacade {
 
   loadClientMessageMaintenancePreview(silent = false): void {
     if (!this.current(this.generation)) return;
+    if (!silent && (this.monitorEnabled() !== true || !this.clientMessageMonitor())) {
+      // The result card lives inside the monitor: a check that cannot be shown is not started.
+      this.notify('warning', 'Проверка базы не запущена', this.monitorEnabled() === false
+        ? 'Включите наблюдение: результат проверки показывается в кабинете мониторинга.'
+        : 'Дождитесь загрузки кабинета мониторинга: результат проверки показывается в нём.');
+      return;
+    }
     if (silent && this.reads.get('preview') && !this.reads.get('preview')!.closed) return;
     if (!silent) {
       this.clientMessageMaintenancePreviewLoading.set(true);
@@ -241,58 +312,143 @@ export class AdminMessageMonitorFacade {
         this.clientMessageMaintenancePreviewLoading.set(false);
       },
       error: (err: unknown) => {
-        const message = apiErrorMessage(err, 'Не удалось загрузить dry-run актуализации');
+        const message = apiErrorMessage(err, 'Не удалось проверить базу');
         this.clientMessageMaintenancePreviewError.set(message);
         this.clientMessageMaintenancePreviewLoading.set(false);
         if (!silent) {
-          this.deps.toast.error('Dry-run не загрузился', message);
+          this.deps.toast.error('Проверка базы не выполнена', message);
         }
       }
     });
   }
 
-  applyClientMessageMaintenance(
-    action: 'company-statuses' | 'payment-overdue' | 'missing-bad-tasks' | 'archive-offers' | 'publication-dates' | 'publication-completed',
-    label: string
-  ): void {
+  applyClientMessageMaintenance(action: MaintenanceAction, label: string): void {
     if (this.maintenanceAction() || !this.current(this.generation)) {
       return;
     }
-    const confirmed = window.confirm(`Применить: ${label}? Перед применением лучше проверить текущий dry-run.`);
-    if (!confirmed) {
+    const generation = this.generation;
+    // Reserved before the question: a second click while it is open cannot send a second update.
+    this.maintenanceAction.set(action);
+    if (!window.confirm(this.maintenanceQuestion(action, label)) || !this.current(generation)) {
+      this.maintenanceAction.set(null);
       return;
     }
 
-    this.maintenanceAction.set(action);
-    const generation = this.generation;
     this.cancelReads();
     this.clientMessageMaintenancePreviewError.set(null);
     this.deps.api.applyClientMessageMaintenance(action).subscribe({
       next: (response) => {
         this.maintenanceAction.set(null);
-        if (!this.current(generation)) return;
+        if (this.destroyed) return;
+        // The update is done on the server: its outcome and fresh check are kept even if the tab was left meanwhile.
+        const result = this.maintenanceOutcome(response);
+        this.maintenanceResult.set(result);
         this.clientMessageMaintenancePreview.set(response.preview);
-        this.deps.toast.success('Актуализация выполнена', response.message);
+        if (!this.current(this.generation)) return;
+        this.notify(result.tone, result.title, result.message);
         this.loadClientMessageMonitor(true);
       },
       error: (err: unknown) => {
         this.maintenanceAction.set(null);
-        if (!this.current(generation)) return;
+        if (this.destroyed) return;
         const message = apiErrorMessage(err, 'Не удалось выполнить актуализацию');
-        this.clientMessageMaintenancePreviewError.set(message);
+        this.maintenanceResult.set({ tone: 'error', title: 'Актуализация не выполнена', message, at: new Date().toISOString() });
+        if (!this.current(this.generation)) return;
         this.deps.toast.error('Актуализация не выполнена', message);
       }
     });
   }
 
+  /** The confirmation of one database update: what changes, how many records by the last check, limits and consequences. */
+  private maintenanceQuestion(action: MaintenanceAction, label: string): string {
+    const preview = this.clientMessageMaintenancePreview();
+    if (!preview) {
+      return `Применить: ${label}? Изменение сразу записывается в базу и само не отменяется.`;
+    }
+    const byCheck = 'по последней проверке базы';
+    const perRun = (limit: number) => `За один раз обрабатывается не больше ${limit} заказов.`;
+    const closing = 'Изменение сразу записывается в базу и само не отменяется. Применить?';
+    let lines: string[];
+    switch (action) {
+      case 'company-statuses':
+        lines = [
+          'Статусы компаний',
+          `Вернуть в «В работе»: ${preview.companyStatuses.shouldMoveToWork}. Поставить «На стопе»: ${preview.companyStatuses.workWithoutActiveOrders} (${byCheck}).`,
+          'Меняются сразу все подходящие компании. Компании на стопе со временем получат предложения нового заказа.'
+        ];
+        break;
+      case 'payment-overdue':
+        lines = [
+          'Старые счета',
+          `Перевести в «Не оплачено» заказы, которые ждут оплату ${preview.paymentOverdueDays} дн. и дольше: ${preview.paymentStatuses.invoiceOrReminderOlderThanThreshold} (${byCheck}).`,
+          `${perRun(200)} Статус меняется обычным путём: по заказам появятся плохие задачи.`
+        ];
+        break;
+      case 'missing-bad-tasks':
+        lines = [
+          'Плохие задачи',
+          `Создать недостающие плохие задачи для старых заказов «Не оплачено» с опубликованными отзывами: ${preview.unpaidRecovery.canCreateBadTasks} (${byCheck}).`,
+          perRun(300)
+        ];
+        break;
+      case 'archive-offers':
+        lines = [
+          'Архивные офферы',
+          `Закрыть предложения нового заказа компаниям, у которых уже есть активный заказ или открытая заявка: ${preview.archiveOffers.blockedByActiveOrders + preview.archiveOffers.blockedByOpenNextRequest} (${byCheck}).`,
+          'Закрываются сразу все подходящие предложения.'
+        ];
+        break;
+      case 'publication-dates':
+        lines = [
+          'Даты публикаций',
+          `Исправить пустые, слишком дальние и растянутые даты у неопубликованных отзывов. Заказов с такими датами: до ${preview.publication.farFuturePublishDate + preview.publication.longPublishSpan + preview.publication.undatedUnpublished} (${byCheck}).`,
+          perRun(100)
+        ];
+        break;
+      case 'publication-completed':
+        lines = [
+          'Завершить публикации',
+          `Перевести в «Опубликовано» заказы в «Публикации», где все отзывы уже опубликованы: ${preview.publication.oldAllReviewsPublished} (${byCheck}).`,
+          `${perRun(200)} Статус меняется обычным путём: клиентам уйдут финальные счета по обычным правилам.`
+        ];
+        break;
+      default:
+        lines = [`Применить: ${label}?`];
+    }
+    return [...lines, closing].join('\n\n');
+  }
+
+  /** Nothing changed or a part failed («не удалось: N» of the server message) is a warning, not a success. */
+  private maintenanceOutcome(response: AdminMaintenanceApplyResponse): MaintenanceResult {
+    const message = response.message || '';
+    const at = new Date().toISOString();
+    if (/не удалось:\s*[1-9]/i.test(message)) {
+      return { tone: 'warning', title: 'Выполнено не полностью', message, at };
+    }
+    if (!response.changed) {
+      return { tone: 'warning', title: 'Ничего не изменено', message, at };
+    }
+    return { tone: 'success', title: 'Актуализация выполнена', message, at };
+  }
+
+  private notify(tone: MaintenanceResult['tone'], title: string, message: string): void {
+    if (tone === 'success') {
+      this.deps.toast.success(title, message);
+    } else if (tone === 'warning' && this.deps.toast.warning) {
+      this.deps.toast.warning(title, message);
+    } else {
+      this.deps.toast.error(title, message);
+    }
+  }
+
   setMonitorScenarioFilter(value: string): void {
     this.monitorScenarioFilter.set(value);
-    this.expandedMonitorQueueKey.set(null);
+    this.collapseMonitorQueueDetails();
   }
 
   setMonitorQueueStatusFilter(value: string): void {
     this.monitorQueueStatusFilter.set(value);
-    this.expandedMonitorQueueKey.set(null);
+    this.collapseMonitorQueueDetails();
   }
 
   setMonitorAttemptStatusFilter(value: string): void {
@@ -301,11 +457,22 @@ export class AdminMessageMonitorFacade {
 
   setMonitorSearch(value: string): void {
     this.monitorSearch.set(value);
-    this.expandedMonitorQueueKey.set(null);
+    this.collapseMonitorQueueDetails();
   }
 
   toggleMonitorQueueDetails(item: AdminClientMessageMonitorQueueItem): void {
-    this.expandedMonitorQueueKey.set(this.expandedMonitorQueueKey() === item.targetKey ? null : item.targetKey);
+    const open = this.expandedMonitorQueueId() === item.id;
+    this.expandedMonitorQueueId.set(open ? null : item.id);
+    this.expandedMonitorQueueKey.set(open ? null : item.targetKey);
+  }
+
+  isMonitorQueueExpanded(item: AdminClientMessageMonitorQueueItem): boolean {
+    return this.expandedMonitorQueueId() === item.id;
+  }
+
+  private collapseMonitorQueueDetails(): void {
+    this.expandedMonitorQueueId.set(null);
+    this.expandedMonitorQueueKey.set(null);
   }
 
   retryClientMessageCandidate(item: AdminClientMessageMonitorQueueItem): void {
@@ -313,31 +480,30 @@ export class AdminMessageMonitorFacade {
       item,
       'retry',
       () => this.deps.api.retryClientMessageNow(item.id),
-      'Кандидат поставлен на ближайшую попытку'
+      'Задача поставлена на ближайшую попытку',
+      this.monitorActionQuestion(item, 'Повторить сейчас?', this.retryConsequence(item))
     );
   }
 
   disableClientMessageCandidate(item: AdminClientMessageMonitorQueueItem): void {
-    if (!window.confirm(`Отключить кандидата "${item.orderTitle || item.companyTitle}"?`)) {
-      return;
-    }
     this.runClientMessageManualAction(
       item,
       'disable',
       () => this.deps.api.disableClientMessageCandidate(item.id),
-      'Кандидат отключен'
+      'Задача отключена',
+      this.monitorActionQuestion(item, 'Отключить задачу?',
+        'Задача отключится без отправки и без смены статуса и больше не вернётся в очередь сама.')
     );
   }
 
   markClientMessageCandidateDone(item: AdminClientMessageMonitorQueueItem): void {
-    if (!window.confirm(`Пометить кандидата "${item.orderTitle || item.companyTitle}" выполненным?`)) {
-      return;
-    }
     this.runClientMessageManualAction(
       item,
       'done',
       () => this.deps.api.markClientMessageCandidateDone(item.id),
-      'Кандидат помечен выполненным'
+      'Задача помечена выполненной',
+      this.monitorActionQuestion(item, 'Пометить задачу выполненной?',
+        'Задача закроется без отправки и без смены статуса и больше не будет обрабатываться автоматически.')
     );
   }
 
@@ -345,18 +511,61 @@ export class AdminMessageMonitorFacade {
     return `${item.id}:${action}`;
   }
 
+  /** A row action question: the scenario, the target (one order can have two tasks) and what happens. */
+  private monitorActionQuestion(item: AdminClientMessageMonitorQueueItem, question: string, consequence: string): string {
+    return [question, `Сценарий: «${item.scenarioLabel}»`, `Цель: ${this.monitorTargetName(item)}`, '', consequence].join('\n');
+  }
+
+  private monitorTargetName(item: AdminClientMessageMonitorQueueItem): string {
+    if (item.orderId) {
+      return `заказ №${item.orderId}${item.orderTitle ? ` («${item.orderTitle}»)` : ''}`;
+    }
+    return `компания «${item.companyTitle}»`;
+  }
+
+  /** What «Повторить сейчас» really does: the task runs on the next step of the queue, without waiting for its date. */
+  private retryConsequence(item: AdminClientMessageMonitorQueueItem): string {
+    switch (item.scenario) {
+      case 'BAD_REVIEW_AUTO_BAN':
+        return 'Заказ сразу уйдёт в «Бан», не дожидаясь срока оплаты.';
+      case 'PAYMENT_OVERDUE_ESCALATION':
+        return 'Если автоперевод включён, заказ сразу уйдёт в статус просрочки из настроек автоответчика, не дожидаясь срока. Если выключен — будет только запись в журнале.';
+      case 'REVIEW_CHECK_AUTO_ARCHIVE':
+        return 'Задача закроется без действий: автоархив теперь проверяется после семи напоминаний.';
+      case 'REVIEW_CHECK_REMINDER':
+      case 'CLIENT_TEXT_REMINDER':
+        return 'Клиенту уйдёт внеочередное напоминание в ближайшее рабочее окно. Оно засчитается в семь напоминаний перед автоархивом.';
+      case 'PAYMENT_REMINDER':
+        return 'Клиенту уйдёт внеочередное напоминание об оплате в ближайшее рабочее окно.';
+      case 'PAYMENT_INVOICE_RETRY':
+        return 'Клиенту повторно уйдёт счёт в ближайшее рабочее окно.';
+      case 'REVIEW_CHECK_DELIVERY_RETRY':
+        return 'Клиенту повторно уйдёт ссылка на проверку отзывов в ближайшее рабочее окно.';
+      case 'ARCHIVE_REORDER_OFFER':
+        return 'Компании уйдёт предложение нового заказа в ближайшее рабочее окно.';
+      default:
+        return 'Задача выполнится на ближайшем шаге очереди, не дожидаясь срока: клиенту уйдёт сообщение в ближайшее рабочее окно.';
+    }
+  }
+
   private runClientMessageManualAction(
     item: AdminClientMessageMonitorQueueItem,
     action: string,
     requestFactory: () => Observable<AdminClientMessageMonitor>,
-    successTitle: string
+    successTitle: string,
+    question: string
   ): void {
     const key = this.monitorManualActionKey(item, action);
     if (this.clientMessageManualAction() || !this.current(this.generation)) {
       return;
     }
-    this.clientMessageManualAction.set(key);
     const generation = this.generation;
+    // Reserved before the question: a second click while it is open cannot start another action.
+    this.clientMessageManualAction.set(key);
+    if (!window.confirm(question) || !this.current(generation)) {
+      this.clientMessageManualAction.set(null);
+      return;
+    }
     this.cancelReads();
     this.clientMessageMonitorError.set(null);
     requestFactory().subscribe({
@@ -364,15 +573,16 @@ export class AdminMessageMonitorFacade {
         this.clientMessageManualAction.set(null);
         if (!this.current(generation)) return;
         this.clientMessageMonitor.set(monitor);
+        this.answeredEnabled.set(monitor.enabled);
         this.deps.setEnabled(monitor.enabled);
-        this.expandedMonitorQueueKey.set(null);
-        this.deps.toast.success(successTitle, item.scenarioLabel);
+        this.collapseMonitorQueueDetails();
+        this.deps.toast.success(successTitle, `${item.scenarioLabel} · ${this.monitorTargetName(item)}`);
       },
       error: (err: unknown) => {
         this.clientMessageManualAction.set(null);
         if (!this.current(generation)) return;
-        const message = apiErrorMessage(err, 'Не удалось выполнить действие с кандидатом');
-        this.clientMessageMonitorError.set(message);
+        // A refused action (for example 409 «Задача уже обрабатывается») is not a failed load of the monitor.
+        const message = apiErrorMessage(err, 'Не удалось выполнить действие с задачей');
         this.deps.toast.error('Действие не выполнено', message);
       }
     });
@@ -384,6 +594,16 @@ export class AdminMessageMonitorFacade {
     }
     const nextMs = Date.parse(item.nextAttemptAt);
     return !Number.isNaN(nextMs) && nextMs <= nowMs;
+  }
+
+  /**
+   * A real failure of the last attempts. Planned waits — the daily limit, an interval, a review recovery, the autoarchive
+   * check, a switched-off auto transfer — also fill the reason, but they are not errors.
+   */
+  monitorQueueHasError(item: AdminClientMessageMonitorQueueItem): boolean {
+    // A postponement keeps the failure counter of an earlier attempt: a planned wait is still not an error.
+    return (item.consecutiveFailures ?? 0) > 0 && !!item.lastErrorMessage
+      && !PLANNED_WAIT_CODES.has(item.lastErrorCode ?? '');
   }
 
   monitorQueueTimingLabel(item: AdminClientMessageMonitorQueueItem): string | null {
@@ -412,9 +632,9 @@ export class AdminMessageMonitorFacade {
       case 'PAUSED':
         return 'просрочено, пауза';
       case 'WORKER_DISABLED':
-        return 'просрочено, worker выключен';
+        return 'просрочено, фоновая очередь выключена';
       case 'DRY_RUN':
-        return 'просрочено, dry-run';
+        return 'просрочено, пробный режим';
       case 'LOCKED':
         return 'в обработке';
       default:
@@ -435,6 +655,35 @@ export class AdminMessageMonitorFacade {
       return 'status-pill';
     }
     return 'status-pill warning';
+  }
+
+  /** The target type of a task in words instead of the server code. */
+  monitorTargetTypeLabel(targetType: string | null | undefined): string {
+    switch (targetType) {
+      case 'ORDER':
+        return 'заказ';
+      case 'ARCHIVE_COMPANY':
+        return 'компания из архива';
+      default:
+        return targetType || 'цель не указана';
+    }
+  }
+
+  /** The channel of an attempt in words: status changes are written with the channel «system». */
+  monitorChannelLabel(channel: string | null | undefined): string {
+    const value = (channel ?? '').trim();
+    if (!value) {
+      return 'канал не выбран';
+    }
+    if (value.toLowerCase() === 'system') {
+      return 'система: смена статуса';
+    }
+    return value.toUpperCase() === 'ANY' ? 'любой канал' : value;
+  }
+
+  /** The «Оплата» line of the preview is shown only for scenarios that send payment details. */
+  monitorScenarioHasPayment(item: AdminClientMessageMonitorQueueItem): boolean {
+    return PAYMENT_SCENARIOS.has(item.scenario);
   }
 
   private matchesMonitorQueueSearch(item: AdminClientMessageMonitorQueueItem, search: string): boolean {
@@ -489,6 +738,9 @@ export class AdminMessageMonitorFacade {
     return {
       CLIENT_TEXT_REMINDER: 'edit_note',
       REVIEW_CHECK_REMINDER: 'playlist_add_check',
+      REVIEW_CHECK_DELIVERY_RETRY: 'forward_to_inbox',
+      REVIEW_CHECK_AUTO_ARCHIVE: 'inventory_2',
+      PAYMENT_INVOICE_RETRY: 'receipt',
       PAYMENT_REMINDER: 'receipt_long',
       PAYMENT_OVERDUE_ESCALATION: 'priority_high',
       ARCHIVE_REORDER_OFFER: 'archive',
@@ -499,7 +751,7 @@ export class AdminMessageMonitorFacade {
   }
 
   monitorScenarioTone(scenario: AdminClientMessageMonitorScenario): DictionaryMetric['tone'] {
-    if (scenario.failedToday > 0 || scenario.lastError) {
+    if (scenario.failedToday > 0 || this.monitorScenarioErrorIsRecent(scenario)) {
       return 'pink';
     }
     if ((scenario.missingChannelBindings ?? 0) > 0) {
@@ -515,6 +767,21 @@ export class AdminMessageMonitorFacade {
       return 'green';
     }
     return 'teal';
+  }
+
+  /** The server keeps the last error of a scenario without a date limit: an error of an earlier day is not a current problem. */
+  private monitorScenarioErrorIsRecent(scenario: AdminClientMessageMonitorScenario): boolean {
+    if (!scenario.lastError) {
+      return false;
+    }
+    const today = (this.clientMessageMonitor()?.nowIrkutsk ?? '').slice(0, 10);
+    const errorDay = (scenario.lastErrorAt ?? '').slice(0, 10);
+    return !today || !errorDay || errorDay >= today;
+  }
+
+  /** Scenarios that change an order status «выполняют» their task; the others «отправляют» a message. */
+  monitorScenarioSentWord(scenario: AdminClientMessageMonitorScenario): string {
+    return STATUS_SCENARIOS.has(scenario.scenario) ? 'выполнено' : 'отправлено';
   }
 
   monitorScenarioDueValue(scenario: AdminClientMessageMonitorScenario): number {
@@ -555,6 +822,9 @@ export class AdminMessageMonitorFacade {
     return {
       CLIENT_TEXT_REMINDER: 'Напоминает клиенту прислать текст или пожелания, когда заказ в режиме "ждем текст от клиента".',
       REVIEW_CHECK_REMINDER: 'Напоминает клиенту проверить шаблоны отзывов и перейти по ссылке проверки.',
+      REVIEW_CHECK_DELIVERY_RETRY: 'Если заказ остался в «В проверку», повторно отправляет клиенту ссылку на проверку отзывов и переводит заказ в «На проверке».',
+      REVIEW_CHECK_AUTO_ARCHIVE: 'Старый сценарий: его задачи закрываются без действий. Автоархив теперь проверяется после семи напоминаний — см. «Проверка автоархива».',
+      PAYMENT_INVOICE_RETRY: 'Если заказ остался в «Опубликовано», повторно отправляет клиенту счёт и переводит заказ в «Выставлен счет».',
       PAYMENT_REMINDER: 'Напоминает клиенту об оплате заказа в статусах счета и напоминания.',
       PAYMENT_OVERDUE_ESCALATION: 'Следит за долгой просрочкой оплаты и готовит перевод в целевой статус по настройкам.',
       ARCHIVE_REORDER_OFFER: 'Предлагает новый заказ компаниям из архивного цикла, если нет активных заказов и открытой заявки.',
@@ -586,6 +856,10 @@ export class AdminMessageMonitorFacade {
       this.startClientMessageMonitorPolling();
       return;
     }
+    if (!this.deps.isActive()) {
+      // The answer belongs to one visit of the tab: the next visit starts from the settings and snapshot loaded by then.
+      this.answeredEnabled.set(null);
+    }
     this.deactivate();
   }
 
@@ -612,12 +886,12 @@ export class AdminMessageMonitorFacade {
 
   private canPollClientMessageMonitor(): boolean {
     return !this.destroyed && this.deps.isActive()
-      && !!this.deps.enabled()
+      && this.monitorEnabled() === true
       && this.deps.isVisible();
   }
 
   monitorTotal(): number {
-    if (!this.deps.enabled()) {
+    if (this.monitorEnabled() !== true) {
       return 0;
     }
     return this.clientMessageMonitor()?.activeCandidates ?? 0;

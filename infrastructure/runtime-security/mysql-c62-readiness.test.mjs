@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {validateDatabaseTransitionReadiness,MYSQL_C62_REFERENCE,MYSQL_C62_REHEARSAL_SHA256} from './mysql-c62-readiness.mjs';
 
 const root=new URL('../../',import.meta.url),read=path=>readFile(new URL(path,root));
-const entry=JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json')).images.find(item=>item.component==='mysql');
+const entry=JSON.parse(await read('infrastructure/runtime-security/proofs/c63-mysql/parent-activation.json'));
 const image=JSON.parse(await read('infrastructure/runtime-security/reviewed-images.json')).images.find(item=>item.component==='mysql');
 const proofRoot='infrastructure/runtime-security/proofs/c62-mysql/';
 

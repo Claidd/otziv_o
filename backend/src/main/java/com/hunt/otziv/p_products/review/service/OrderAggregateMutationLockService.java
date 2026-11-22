@@ -79,6 +79,40 @@ public class OrderAggregateMutationLockService {
         return lockedOrder;
     }
 
+    /**
+     * Same lock order and binding re-check as {@link #lockForReview(Long)}, but a review,
+     * order link or order row that is already gone is reported as {@link Optional#empty()}.
+     *
+     * <p>This method participates in the caller's transaction, so any exception thrown
+     * through its proxy marks that whole transaction rollback-only. A caller that catches
+     * the 404 of {@link #lockForReview(Long)} and answers "not found" normally would then
+     * fail at commit with {@code UnexpectedRollbackException} (HTTP 500). Callers that
+     * treat a vanished review as an ordinary result must use this variant instead. A moved
+     * review is still a real conflict, so the 409 keeps propagating.</p>
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Order> lockIfLiveForReview(Long reviewId) {
+        if (reviewId == null) {
+            return Optional.empty();
+        }
+        Optional<Long> candidateOrderId = reviewRepository.findOrderIdByReviewId(reviewId);
+        if (candidateOrderId.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<Order> lockedOrder = lockIfLive(candidateOrderId.get());
+        if (lockedOrder.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<Long> currentOrderId = reviewRepository.findOrderIdByReviewId(reviewId);
+        if (currentOrderId.isEmpty()) {
+            return Optional.empty();
+        }
+        if (!Objects.equals(candidateOrderId.get(), currentOrderId.get())) {
+            throw bindingChanged();
+        }
+        return lockedOrder;
+    }
+
     private static ResponseStatusException notFound() {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
     }

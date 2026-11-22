@@ -104,6 +104,12 @@ public class ManagerControlWorkerTaskWorkflow {
             concreteItem.setWorkerNotificationFailureReason("Специалист карточки не найден");
             return null;
         }
+        if (!workerUser.isActive()) {
+            // A deactivated specialist must not get order details in Telegram (an ex-employee's chat).
+            concreteItem.setWorkerNotificationFailureReason(
+                    "Специалист деактивирован: переназначьте заказ действующему специалисту");
+            return null;
+        }
         // DATETIME(6): the attempt is compared again after the send, so keep exactly what is stored.
         LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
         concreteItem.setWorkerNotificationAttemptedAt(now);

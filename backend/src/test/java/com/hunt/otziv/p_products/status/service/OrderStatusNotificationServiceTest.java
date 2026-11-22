@@ -94,7 +94,7 @@ class OrderStatusNotificationServiceTest {
         order.getCompany().setTelegramGroupChatId(-100L);
         OrderStatus success = status("На проверке");
 
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
+        when(telegramService.sendMessageOnceWithInlineKeyboard(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(com.hunt.otziv.t_telegrambot.service.TelegramService.SendOnceResult.sent(71));
         when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
@@ -108,7 +108,7 @@ class OrderStatusNotificationServiceTest {
 
         assertTrue(result);
         assertSame(success, order.getStatus());
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
+        verify(telegramService).sendMessageOnceWithInlineKeyboard(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
         verify(orderRepository).save(order);
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(maxBotClient);
@@ -122,7 +122,7 @@ class OrderStatusNotificationServiceTest {
         order.getCompany().setTelegramGroupChatId(-100L);
         OrderStatus success = status("Выставлен счет");
 
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Оплата по карте 2202208238396676"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
+        when(telegramService.sendMessageOnceWithInlineKeyboard(eq(-100L),eq("Оплата по карте 2202208238396676"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(com.hunt.otziv.t_telegrambot.service.TelegramService.SendOnceResult.sent(71));
         when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
@@ -131,7 +131,7 @@ class OrderStatusNotificationServiceTest {
         );
 
         assertTrue(result);
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Оплата по карте 2202208238396676"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.argThat(keyboard -> !keyboard.isEmpty()));
+        verify(telegramService).sendMessageOnceWithInlineKeyboard(eq(-100L),eq("Оплата по карте 2202208238396676"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.argThat(keyboard -> !keyboard.isEmpty()));
         verify(telegramService, never()).sendMessage(-100L, "Оплата по карте 2202208238396676");
         verify(telegramService, never()).sendMessage(-100L, "2202208238396676");
     }
@@ -385,7 +385,7 @@ class OrderStatusNotificationServiceTest {
 
         assertFalse(result);
         assertSame(fallback, order.getStatus());
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
+        verify(telegramService).sendMessageOnceWithInlineKeyboard(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
         verify(telegramService).sendMessage(
                 123L,
                 "Компания готов - На проверку\nhttps://o-ogo.ru/orders/all_orders?status=В%20проверку"

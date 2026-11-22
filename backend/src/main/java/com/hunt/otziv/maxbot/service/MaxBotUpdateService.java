@@ -85,7 +85,7 @@ public class MaxBotUpdateService {
             if (publicationProgressPreferenceService.isPreferenceCommand(messageText)) {
                 return;
             }
-            trackMessageCreated(update, chatId, userId, messageText);
+            trackMessageCreated(update, chatId, userId, trackedMessageText(update));
             return;
         }
 
@@ -205,6 +205,39 @@ public class MaxBotUpdateService {
         return "";
     }
 
+    // Attachments a client sends as a file. A link preview ("share") or a keyboard comes with plain text
+    // and is not a file to check.
+    private static final java.util.Set<String> FILE_ATTACHMENT_TYPES = java.util.Set.of("image", "video", "audio", "file", "sticker");
+
+    /**
+     * Client-chat tracking text. Text sent together with a file keeps the attachment marker in front of it
+     * («[Вложение: image] Спасибо 🙏»): a captioned payment receipt is a file to check, not a courtesy reply.
+     * Commands keep using {@link #messageText}, which returns the plain text.
+     */
+    static String trackedMessageText(JsonNode update) {
+        String text = firstText(update.path("message").path("body"), update.path("body"), update);
+        String type = hasText(text) ? fileAttachmentType(update) : null;
+        // Without text messageText already returns the attachment-only marker, which stays unchanged.
+        return type == null ? messageText(update) : "[Вложение: " + type + "] " + text.trim();
+    }
+
+    private static String fileAttachmentType(JsonNode update) {
+        JsonNode attachments = update.path("message").path("body").path("attachments");
+        if (!attachments.isArray() || attachments.isEmpty()) {
+            attachments = update.path("message").path("attachments");
+        }
+        if (!attachments.isArray()) {
+            return null;
+        }
+        for (JsonNode attachment : attachments) {
+            String type = text(attachment, "type").trim().toLowerCase(Locale.ROOT);
+            if (FILE_ATTACHMENT_TYPES.contains(type)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
     private static String firstText(JsonNode... nodes) {
         for (JsonNode node : nodes) {
             String value = text(node, "text");
@@ -251,7 +284,7 @@ public class MaxBotUpdateService {
                     ClientChatPlatform.MAX,
                     String.valueOf(chatId),
                     messageId,
-                    messageText(update),
+                    trackedMessageText(update),
                     editTime(update)
             ));
         } catch (Exception e) {

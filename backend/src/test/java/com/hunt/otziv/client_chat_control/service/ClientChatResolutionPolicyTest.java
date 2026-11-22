@@ -1,5 +1,6 @@
 package com.hunt.otziv.client_chat_control.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,5 +63,38 @@ class ClientChatResolutionPolicyTest {
 
         assertTrue(assessment.responseRequired());
         assertTrue(assessment.actionRequired());
+    }
+
+    @Test
+    void captionedAttachmentIsNeverACourtesyMessage() {
+        for (String message : new String[]{
+                "[Вложение: image] Спасибо 🙏",
+                "[Вложение: photo] Спасибо большое",
+                "[Вложение: document] Ок",
+                "[Вложение]",
+                "[Вложение] Хорошо",
+                "[image]"
+        }) {
+            var assessment = policy.assess(message);
+
+            assertEquals("ATTACHMENT_REQUIRES_REVIEW", assessment.reasonCode(), message);
+            assertTrue(assessment.responseRequired(), message);
+            assertFalse(assessment.safeNoResponse(), message);
+            assertTrue(policy.rejectsNoResponse(assessment), message);
+        }
+    }
+
+    @Test
+    void fileNamesOfCommonFormatsRequireReviewLikePdf() {
+        for (String message : new String[]{
+                "Документ-2026-07-26 180739.pdf",
+                "Счёт на оплату.xlsx",
+                "Договор.docx",
+                "чек.jpg",
+                "Скрин оплаты.png",
+                "Документы.zip"
+        }) {
+            assertEquals("ATTACHMENT_REQUIRES_REVIEW", policy.assess(message).reasonCode(), message);
+        }
     }
 }

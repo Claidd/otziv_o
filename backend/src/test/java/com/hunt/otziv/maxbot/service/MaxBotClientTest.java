@@ -94,6 +94,24 @@ class MaxBotClientTest {
         assertThat(client.sendMessageToChatOnce(91L, "fixture").errorCode()).isEqualTo("operation_unknown");
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {403, 404})
+    void chatRefusalIsKnownUnsentAfterExactlyOneRequest(int status) {
+        server.expect(requestTo(ENDPOINT)).andRespond(withStatus(HttpStatus.valueOf(status))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{\"code\":\"chat.denied\",\"message\":\"fixture\"}"));
+        var result = client.sendMessageToChatOnce(91L, "fixture");
+        assertThat(result.confirmed()).isFalse();
+        assertThat(result.messageId()).isNull();
+        assertThat(result.errorCode()).isEqualTo(MaxBotClient.CHAT_UNAVAILABLE);
+    }
+
+    @Test
+    void otherClientErrorStaysUnknown() {
+        server.expect(requestTo(ENDPOINT)).andRespond(withStatus(HttpStatus.BAD_REQUEST));
+        assertThat(client.sendMessageToChatOnce(91L, "fixture").errorCode()).isEqualTo("operation_unknown");
+    }
+
     @Test
     void oversizeIsRejectedBeforeAnyChunkOrHttpAttempt() {
         assertThat(client.sendMessageToChatOnce(91L, "x".repeat(3901)).errorCode()).isEqualTo("payload_too_large");

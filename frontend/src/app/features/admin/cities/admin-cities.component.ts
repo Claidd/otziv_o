@@ -23,6 +23,8 @@ type StatCard = {
   label: string;
   value: number;
   tone: 'default' | 'archive' | 'bots' | 'balance';
+  /** Material icon of the card's round icon chip. */
+  icon: string;
   detail?: string;
 };
 
@@ -69,19 +71,21 @@ export class AdminCitiesComponent implements OnDestroy {
   readonly cards = computed<StatCard[]>(() => {
     const stats = this.stats();
     return [
-      { label: 'Всего городов', value: stats?.totalCities ?? 0, tone: 'default' },
-      { label: 'Среднее без архивных', value: stats?.averageNotArchivePerCity ?? 0, tone: 'archive' },
+      { label: 'Всего городов', value: stats?.totalCities ?? 0, tone: 'default', icon: 'location_city' },
+      { label: 'Среднее без архивных', value: stats?.averageNotArchivePerCity ?? 0, tone: 'archive', icon: 'calculate' },
       {
         label: 'Неопубликованных (без архивных)',
         value: stats?.totalUnpublishedNotArchive ?? 0,
         tone: 'archive',
+        icon: 'rate_review',
         detail: stats && stats.archivedCount > 0 ? `-${stats.archivedCount} архивных` : undefined
       },
-      { label: 'Доступных аккаунтов', value: stats?.totalActiveBots ?? 0, tone: 'bots' },
+      { label: 'Доступных аккаунтов', value: stats?.totalActiveBots ?? 0, tone: 'bots', icon: 'smart_toy' },
       {
         label: 'Общий баланс (+/-)',
         value: stats?.totalBotBalance ?? 0,
         tone: 'balance',
+        icon: 'balance',
         detail: stats && stats.totalBotBalance !== 0
           ? (stats.totalBotBalance > 0 ? 'Профицит' : 'Дефицит')
           : undefined

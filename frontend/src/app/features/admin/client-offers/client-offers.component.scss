@@ -1,43 +1,1391 @@
-:host { display: block; }
-.offers-page { max-width: 1440px; margin: auto; padding: 24px; color: var(--text-primary, #18252c); }
-.panel { background: var(--surface, #fff); border: 1px solid var(--border-color, #e1e8e8); border-radius: 20px; padding: 24px; }
-.hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 20px; background: linear-gradient(120deg, #edf8f4, #f8fbfa); }
-.hero p { margin-bottom: 0; }
-.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .09em; color: #317160; font-weight: 700; }
-h1 { margin: 10px 0; font-size: clamp(24px, 3vw, 34px); } h2 { font-size: 20px; margin: 0; } h3 { margin: 24px 0 12px; font-size: 16px; }
-p, small, .hint { line-height: 1.6; } small, .hint, .campaign > span { color: #637679; font-size: 13px; }
-a { color: #256b59; white-space: nowrap; }
-.workspace { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 20px; align-items: start; }
-.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; }
-button { padding: 10px 16px; border: 1px solid #cbdcda; border-radius: 10px; color: #23453f; background: #f4faf7; font: inherit; font-weight: 600; cursor: pointer; }
-button:disabled { opacity: .5; cursor: default; } button:hover:enabled { border-color: #317d68; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid #69ad98; outline-offset: 2px; }
-.primary { background: #206c55; color: #fff; border-color: #206c55; } .danger { color: #9f3442; background: #fff4f4; border-color: #e9c9ce; }
-.campaign { display: grid; width: 100%; text-align: left; gap: 10px; padding: 16px; margin-top: 12px; background: transparent; }
-.campaign.selected { border-color: #357e68; background: #eff8f4; } .campaign strong { overflow-wrap: anywhere; }
-.pill { display: inline-flex; width: fit-content; background: #eef2f3; border-radius: 20px; padding: 4px 10px; font-size: 12px; color: #48625d; }
-.pill.running { background: #d9f1e4; color: #1d694d; }
-progress { width: 100%; height: 5px; accent-color: #2b8065; }
-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
-label { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; font-size: 14px; font-weight: 600; }
-input, textarea, select { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #cbd8d7; border-radius: 10px; background: #fff; color: #183e35; font: inherit; }
-textarea { resize: vertical; min-height: 160px; line-height: 1.6; } small { display: block; font-weight: 400; }
-.file-panel { border: 1px dashed #adc9bf; border-radius: 14px; background: #f7faf9; padding: 16px; } .file-panel label:last-child { margin: 16px 0 0; }
-.file-name { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 10px; overflow-wrap: anywhere; }
-.audiences { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.check { flex-direction: row; align-items: center; padding: 14px; border: 1px solid #d5e3de; border-radius: 12px; margin: 0; }
-.check input { width: 18px; height: 18px; accent-color: #267258; flex-shrink: 0; }
-.schedule { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 16px; }
-.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
-.banner { border-radius: 12px; padding: 14px 18px; margin-bottom: 18px; line-height: 1.6; }
-.error { background: #fff0f0; color: #8f2637; } .warning { background: #fff7df; color: #755b1b; } .success { background: #e7f5eb; color: #246342; }
-.preview-counts { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 18px; } .preview-counts b { display: block; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .stats article { padding: 16px; border-radius: 12px; background: #f1f7f5; }
-.stats b { display: block; font-size: 24px; } .stats span { font-size: 12px; color: #526c62; }
-.message-preview { white-space: pre-wrap; overflow-wrap: anywhere; background: #f7faf9; padding: 20px; border-radius: 14px; margin: 20px 0; line-height: 1.7; }
-.table-scroll { overflow-x: auto; } table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
-th, td { padding: 12px; border-bottom: 1px solid #e4ece8; vertical-align: top; } td small { max-width: 420px; overflow-wrap: anywhere; }
-.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; gap: 12px; }
-@media (max-width: 1050px) { .workspace { grid-template-columns: 250px minmax(0, 1fr); } .audiences { grid-template-columns: 1fr; } .stats { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 760px) { .offers-page { padding: 12px; } .workspace { grid-template-columns: 1fr; } .hero { align-items: start; flex-direction: column; } .panel { padding: 18px; } .campaign-list { max-height: 340px; overflow-y: auto; } .schedule { grid-template-columns: 1fr 1fr; } }
-@media (prefers-color-scheme: dark) { :host-context(.dark) { .panel { background: #172824; color: #e7eeeb; } .hero, .message-preview, .file-panel, .stats article { background: #223a32; } input, textarea, select { background: #12261f; color: #e7eeeb; } .hint, small { color: #b1c8c0; } } }
+// «Рассылки предложений» on the site tokens of styles.scss: both themes follow the body class.
+// Every selector starts with .offers-page and buttons repeat their class (.btn.btn, .campaign.campaign):
+// this outweighs the global .admin-layout rules for buttons, inputs, labels and .error of styles.scss.
+// The page is a size container, so the columns follow the room the layout leaves, not the window.
+
+:host {
+  display: block;
+}
+
+// On dark surfaces the mixed warning colour came out almost white: the plain warning token keeps the yellow.
+:host-context(body.otziv-dark-theme) .offers-page {
+  --offers-warning-text: var(--otziv-warning);
+  --offers-warning-icon: var(--otziv-warning);
+}
+
+.offers-page {
+  // Colours derived from the site tokens: lines and readable state text for both themes.
+  --offers-line: color-mix(in srgb, var(--otziv-info) 30%, transparent);
+  --offers-line-strong: color-mix(in srgb, var(--otziv-info) 55%, transparent);
+  --offers-track: color-mix(in srgb, var(--otziv-info) 22%, transparent);
+  --offers-success-text: color-mix(in srgb, var(--otziv-success) 70%, var(--otziv-dark));
+  --offers-danger-text: color-mix(in srgb, var(--otziv-danger) 80%, var(--otziv-dark));
+  --offers-warning-text: color-mix(in srgb, var(--otziv-warning) 35%, var(--otziv-dark));
+  --offers-warning-icon: color-mix(in srgb, var(--otziv-warning) 60%, var(--otziv-dark));
+
+  container: offers / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  max-width: 1440px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 0 0 8px;
+  color: var(--otziv-dark);
+  font-family: var(--otziv-font-family);
+  font-size: 0.9rem;
+  line-height: 1.45;
+
+  h1,
+  h2,
+  h3,
+  h4,
+  p {
+    margin: 0;
+  }
+
+  // ---- Headings ----
+  .kicker {
+    display: block;
+    color: var(--otziv-action);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    line-height: 1.3;
+    text-transform: uppercase;
+  }
+
+  .section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    margin-bottom: 16px;
+  }
+
+  .heading-text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .section-heading h2 {
+    color: var(--otziv-dark);
+    font-size: 1.12rem;
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .section-heading > .pill,
+  .section-heading > .btn {
+    flex: none;
+  }
+
+  // ---- Page blocks ----
+  .panel {
+    min-width: 0;
+    padding: 20px;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 20px;
+    color: var(--otziv-dark);
+    background: var(--otziv-white);
+  }
+
+  .hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+    padding: 22px 24px 20px;
+    border-color: var(--otziv-surface-border-blue);
+    background: var(--otziv-action-fill) top / 100% 3px no-repeat, var(--otziv-surface-gradient-blue);
+  }
+
+  .hero-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .hero-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.9rem;
+    height: 2.9rem;
+    border-radius: 14px;
+    color: #fff;
+    background: var(--otziv-action-fill);
+    box-shadow: 0 6px 14px var(--otziv-action-soft);
+    font-size: 1.5rem;
+  }
+
+  .hero-text {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .hero h1 {
+    color: var(--otziv-dark);
+    font-size: 1.45rem;
+    font-size: clamp(1.2rem, 0.9rem + 1.2cqi, 1.65rem);
+    font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .hero p {
+    color: var(--otziv-info);
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+
+  .settings-link {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 2.5rem;
+    padding: 0 1rem;
+    border: 1px solid var(--offers-line);
+    border-radius: 12px;
+    color: var(--otziv-dark);
+    background: var(--otziv-field-background);
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+
+    .material-icons-sharp {
+      color: var(--otziv-action);
+      font-size: 1.15rem;
+    }
+
+    &:hover {
+      border-color: var(--otziv-action-border);
+      color: var(--otziv-action);
+      box-shadow: 0 4px 12px var(--otziv-action-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--otziv-action);
+      outline-offset: 2px;
+    }
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  .editor {
+    container: editor / inline-size;
+  }
+
+  form {
+    min-width: 0;
+    margin: 0;
+  }
+
+  fieldset {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .editor-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .form-block {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    min-width: 0;
+    padding: 16px 18px;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 16px;
+    color: var(--otziv-dark);
+    background: var(--otziv-surface-gradient-neutral);
+  }
+
+  .block-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: var(--otziv-dark);
+    font-size: 0.96rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .step {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 1.65rem;
+    height: 1.65rem;
+    border-radius: 999px;
+    color: #fff;
+    background: var(--otziv-action-fill);
+    box-shadow: 0 3px 8px var(--otziv-action-soft);
+    font-size: 0.78rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .block-icon {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 999px;
+    color: var(--otziv-action);
+    background: var(--otziv-action-soft);
+    font-size: 1.1rem;
+  }
+
+  .block-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+  }
+
+  .block-meta {
+    color: var(--otziv-info);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .group-title {
+    margin-top: 2px;
+    color: var(--otziv-dark);
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .hint {
+    color: var(--otziv-info);
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+
+  .empty {
+    padding: 16px 14px;
+    border: 1px dashed var(--offers-line);
+    border-radius: 14px;
+    color: var(--otziv-info);
+    font-size: 0.84rem;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  // ---- Notices ----
+  .banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 14px;
+    color: var(--otziv-dark);
+    background: var(--otziv-surface-gradient-neutral);
+    font-size: 0.86rem;
+    font-weight: 500;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+
+    &::before {
+      flex: none;
+      font-family: 'Material Icons Sharp';
+      font-size: 1.2rem;
+      font-style: normal;
+      font-weight: normal;
+      letter-spacing: normal;
+      line-height: 1.29rem;
+      text-transform: none;
+      white-space: nowrap;
+      font-feature-settings: 'liga';
+      -webkit-font-smoothing: antialiased;
+    }
+  }
+
+  // The icon names go with an empty alternative text, so screen readers do not read them out.
+  .banner.error {
+    border-color: var(--otziv-surface-border-red);
+    background: var(--otziv-surface-gradient-red);
+
+    &::before {
+      content: 'error';
+      content: 'error' / '';
+      color: var(--offers-danger-text);
+    }
+  }
+
+  .banner.success {
+    border-color: var(--otziv-surface-border-green);
+    background: var(--otziv-surface-gradient-green);
+
+    &::before {
+      content: 'check_circle';
+      content: 'check_circle' / '';
+      color: var(--offers-success-text);
+    }
+  }
+
+  .banner.warning {
+    border-color: var(--otziv-surface-border-yellow);
+    background: var(--otziv-surface-gradient-yellow);
+
+    &::before {
+      content: 'warning';
+      content: 'warning' / '';
+      color: var(--offers-warning-icon);
+    }
+  }
+
+  // ---- Buttons: neutral with a brand icon; the gradient only for the main action ----
+  .btn.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    max-width: 100%;
+    min-height: 2.5rem;
+    margin: 0;
+    padding: 0 1.05rem;
+    border: 1px solid var(--offers-line);
+    border-radius: 12px;
+    color: var(--otziv-dark);
+    background: var(--otziv-field-background);
+    box-shadow: none;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    opacity: 1;
+    cursor: pointer;
+    transition: border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+
+    .material-icons-sharp {
+      flex: none;
+      color: var(--otziv-action);
+      font-size: 1.1rem;
+    }
+  }
+
+  .btn.btn:not(:disabled):hover {
+    border-color: var(--otziv-action-border);
+    color: var(--otziv-action);
+    background: var(--otziv-field-background);
+    box-shadow: 0 4px 12px var(--otziv-action-soft);
+  }
+
+  .btn.btn:focus-visible {
+    outline: 2px solid var(--otziv-action);
+    outline-offset: 2px;
+  }
+
+  .btn.btn:disabled {
+    border-style: dashed;
+    color: var(--otziv-info);
+    background: var(--otziv-muted-surface);
+    box-shadow: none;
+    filter: none;
+    opacity: 1;
+    cursor: not-allowed;
+
+    .material-icons-sharp {
+      color: inherit;
+    }
+  }
+
+  .btn.btn.primary {
+    border-color: transparent;
+    color: #fff;
+    background: var(--otziv-action-fill);
+    box-shadow: 0 6px 16px var(--otziv-action-soft);
+
+    .material-icons-sharp {
+      color: inherit;
+    }
+  }
+
+  .btn.btn.primary:not(:disabled):hover {
+    border-color: transparent;
+    color: #fff;
+    background: var(--otziv-action-fill);
+    box-shadow: 0 8px 20px var(--otziv-action-soft);
+    filter: brightness(1.06);
+  }
+
+  .btn.btn.primary:disabled {
+    border-color: var(--offers-line);
+    color: var(--otziv-info);
+    background: var(--otziv-muted-surface);
+    box-shadow: none;
+  }
+
+  .btn.btn.danger {
+    border-color: var(--otziv-surface-border-red);
+    color: var(--offers-danger-text);
+    background: var(--otziv-surface-gradient-red);
+
+    .material-icons-sharp {
+      color: inherit;
+    }
+  }
+
+  .btn.btn.danger:not(:disabled):hover {
+    border-color: var(--otziv-danger);
+    color: var(--offers-danger-text);
+    background: var(--otziv-surface-gradient-red);
+    box-shadow: none;
+  }
+
+  .btn.btn.danger:disabled {
+    border-color: var(--offers-line);
+    color: var(--otziv-info);
+    background: var(--otziv-muted-surface);
+  }
+
+  .action-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .action-row:empty {
+    display: none;
+  }
+
+  // ---- Campaign list ----
+  .campaigns {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .campaign.campaign {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    align-items: start;
+    justify-content: stretch;
+    justify-items: start;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 14px;
+    color: var(--otziv-dark);
+    background: var(--otziv-surface-gradient-neutral);
+    box-shadow: none;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 400;
+    line-height: 1.4;
+    text-align: left;
+    opacity: 1;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease;
+
+    strong {
+      justify-self: stretch;
+      font-size: 0.92rem;
+      font-weight: 800;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    progress {
+      justify-self: stretch;
+    }
+  }
+
+  .campaign.campaign:not(:disabled):hover {
+    border-color: var(--offers-line-strong);
+    color: var(--otziv-dark);
+    background: var(--otziv-surface-gradient-neutral);
+    box-shadow: none;
+  }
+
+  .campaign.campaign:focus-visible {
+    outline: 2px solid var(--otziv-action);
+    outline-offset: -2px;
+  }
+
+  .campaign.campaign:disabled {
+    opacity: 0.7;
+    cursor: default;
+  }
+
+  // The one chosen campaign: the brand stripe on a soft brand surface, like the active item of the menu.
+  .campaign.campaign.selected,
+  .campaign.campaign.selected:not(:disabled):hover {
+    padding-left: 18px;
+    border-color: var(--otziv-action-border);
+    background:
+      var(--otziv-action-fill) left / 4px 100% no-repeat,
+      linear-gradient(var(--otziv-action-soft), var(--otziv-action-soft)),
+      var(--otziv-surface-gradient-neutral);
+  }
+
+  .campaign-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .campaign-count {
+    color: var(--otziv-info);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    max-width: 100%;
+    min-height: 1.45rem;
+    padding: 0 0.6rem;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 999px;
+    color: var(--otziv-info);
+    background: var(--otziv-muted-surface);
+    font-size: 0.7rem;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .pill.running {
+    border-color: var(--otziv-tone-success-border);
+    color: var(--offers-success-text);
+    background: var(--otziv-tone-success-surface);
+  }
+
+  .pill.test {
+    border-color: var(--otziv-tone-wait-border);
+    color: var(--offers-warning-text);
+    background: var(--otziv-tone-wait-surface);
+  }
+
+  progress {
+    display: block;
+    width: 100%;
+    height: 6px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 999px;
+    color: var(--otziv-success);
+    background: var(--offers-track);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  progress::-webkit-progress-bar {
+    border-radius: 999px;
+    background: var(--offers-track);
+  }
+
+  progress::-webkit-progress-value {
+    border-radius: 999px;
+    background: var(--otziv-success);
+  }
+
+  progress::-moz-progress-bar {
+    border-radius: 999px;
+    background: var(--otziv-success);
+  }
+
+  // ---- Form fields ----
+  .field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+    margin: 0;
+    color: var(--otziv-dark);
+    font-size: 0.9rem;
+    font-weight: 400;
+  }
+
+  .field-label {
+    display: block;
+    margin: 0;
+    color: var(--otziv-info);
+    font-size: 0.76rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .field-note {
+    display: block;
+    color: var(--otziv-info);
+    font-size: 0.74rem;
+    font-weight: 400;
+    line-height: 1.45;
+  }
+
+  .counter {
+    justify-self: end;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .control {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.6rem;
+    margin: 0;
+    padding: 0 0.8rem;
+    border: 1px solid var(--offers-line);
+    border-radius: 10px;
+    color: var(--otziv-dark);
+    background: var(--otziv-field-background);
+    box-shadow: none;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.4;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+
+    &::placeholder {
+      color: var(--otziv-info);
+      font-weight: 400;
+      opacity: 0.85;
+    }
+
+    &:hover:not(:disabled) {
+      border-color: var(--offers-line-strong);
+    }
+
+    &:focus,
+    &:focus-visible {
+      border-color: var(--otziv-action-border);
+      outline: none;
+      box-shadow: 0 0 0 3px var(--otziv-action-soft);
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+  }
+
+  textarea.control {
+    min-height: 9.5rem;
+    padding: 0.7rem 0.8rem;
+    line-height: 1.55;
+    resize: vertical;
+  }
+
+  select.control {
+    padding-right: 0.5rem;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  // ---- File picker: a bordered drop zone; the real input covers it, so a click or a dropped file reaches it ----
+  .file-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .file-drop {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    min-height: 4.6rem;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1.5px dashed var(--offers-line-strong);
+    border-radius: 14px;
+    color: var(--otziv-dark);
+    background: var(--otziv-field-background);
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  }
+
+  .file-row:has(> .btn) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  // Hover only strengthens the border: a brand tint would look like a chosen tile of this screen.
+  .file-drop:hover {
+    border-color: var(--offers-line-strong);
+  }
+
+  .file-drop.has-file {
+    border-style: solid;
+    border-color: var(--otziv-tone-success-border);
+  }
+
+  .file-drop.has-file:hover {
+    border-color: var(--otziv-action-border);
+  }
+
+  .file-drop:has(.file-input:focus-visible) {
+    border-color: var(--otziv-action-border);
+    box-shadow: 0 0 0 3px var(--otziv-action-soft);
+  }
+
+  .file-drop:has(.file-input:disabled) {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .file-input {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    cursor: pointer;
+
+    &::file-selector-button {
+      cursor: pointer;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+
+  .file-icon {
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    margin: 0;
+    border-radius: 12px;
+    color: var(--otziv-action);
+    background: var(--otziv-action-soft);
+    font-size: 1.4rem;
+    font-weight: normal;
+  }
+
+  .file-drop.has-file .file-icon {
+    color: var(--offers-success-text);
+    background: var(--otziv-tone-success-surface);
+  }
+
+  .file-copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+    min-width: 0;
+    margin: 0;
+    color: var(--otziv-dark);
+    font-weight: 400;
+  }
+
+  .file-title {
+    font-size: 0.88rem;
+    font-weight: 800;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .file-hint {
+    color: var(--otziv-info);
+    font-size: 0.74rem;
+    line-height: 1.4;
+  }
+
+  .file-pick {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.2rem;
+    margin: 0;
+    padding: 0 0.9rem;
+    border: 1px solid var(--offers-line);
+    border-radius: 10px;
+    color: var(--otziv-dark);
+    background: var(--otziv-muted-surface);
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  // ---- Audience lists ----
+  .audiences {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .check {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 3.6rem;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--offers-line);
+    border-radius: 12px;
+    color: var(--otziv-dark);
+    background: var(--otziv-field-background);
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+
+    input {
+      width: 1.1rem;
+      height: 1.1rem;
+      margin: 0;
+      accent-color: var(--otziv-action);
+      cursor: pointer;
+    }
+
+    input:focus {
+      outline: none;
+    }
+
+    input:focus-visible {
+      outline: 2px solid var(--otziv-action);
+      outline-offset: 2px;
+    }
+
+    > span {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      margin: 0;
+      color: var(--otziv-dark);
+      font-weight: 400;
+    }
+
+    b {
+      font-size: 0.86rem;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    small {
+      color: var(--otziv-info);
+      font-size: 0.74rem;
+      line-height: 1.35;
+    }
+  }
+
+  .check:hover {
+    border-color: var(--offers-line-strong);
+  }
+
+  .check:has(input:checked) {
+    border-color: var(--otziv-action-border);
+    background: linear-gradient(var(--otziv-action-soft), var(--otziv-action-soft)), var(--otziv-field-background);
+  }
+
+  .check:has(input:focus-visible) {
+    box-shadow: 0 0 0 3px var(--otziv-action-soft);
+  }
+
+  .schedule {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    min-width: 0;
+  }
+
+  // ---- Form footer: count, save, start ----
+  .form-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    min-width: 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--otziv-surface-border-neutral);
+  }
+
+  .footer-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .preview-counts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .count-card {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--otziv-tone-success-border);
+    border-radius: 12px;
+    color: var(--otziv-dark);
+    background: var(--otziv-tone-success-surface);
+    font-size: 0.82rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+
+    b {
+      color: var(--offers-success-text);
+      font-size: 0.74rem;
+      font-weight: 800;
+    }
+  }
+
+  // ---- A started campaign ----
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .stat {
+    display: grid;
+    align-content: start;
+    gap: 2px;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 12px;
+    background: var(--otziv-field-background);
+
+    b {
+      color: var(--otziv-dark);
+      font-size: 1.35rem;
+      font-weight: 800;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    span {
+      color: var(--otziv-info);
+      font-size: 0.74rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+  }
+
+  .stat--sent {
+    border-color: var(--otziv-surface-border-green);
+    background: var(--otziv-surface-gradient-green);
+
+    b {
+      color: var(--offers-success-text);
+    }
+  }
+
+  .stat--alert {
+    border-color: var(--otziv-surface-border-red);
+    background: var(--otziv-surface-gradient-red);
+
+    b {
+      color: var(--offers-danger-text);
+    }
+  }
+
+  .meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+
+    p {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--otziv-dark);
+      font-size: 0.84rem;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .material-icons-sharp {
+      flex: none;
+      color: var(--otziv-action);
+      font-size: 1.1rem;
+      line-height: 1.22rem;
+    }
+  }
+
+  .message-preview {
+    padding: 14px 16px;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 12px;
+    color: var(--otziv-dark);
+    background: var(--otziv-field-background);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .file-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    min-width: 0;
+
+    .btn.btn {
+      justify-content: flex-start;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    small {
+      color: var(--otziv-info);
+      font-size: 0.76rem;
+    }
+  }
+
+  // ---- Recipients: a table in its own scroll box; cards in a narrow editor ----
+  .table-scroll {
+    min-width: 0;
+    overflow-x: auto;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 12px;
+    background: var(--otziv-field-background);
+  }
+
+  .recipients {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--otziv-dark);
+    font-size: 0.84rem;
+    text-align: left;
+
+    th {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--otziv-surface-border-neutral);
+      color: var(--otziv-info);
+      background: var(--otziv-muted-surface);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--otziv-surface-border-neutral);
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+  }
+
+  .result {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    min-width: 0;
+
+    small {
+      max-width: 26rem;
+      color: var(--otziv-info);
+      font-size: 0.74rem;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .state {
+    font-weight: 800;
+  }
+
+  .state[data-state='SENT'] {
+    color: var(--offers-success-text);
+  }
+
+  .state[data-state='FAILED'] {
+    color: var(--offers-danger-text);
+  }
+
+  .state[data-state='UNKNOWN'] {
+    color: var(--offers-warning-text);
+  }
+
+  .state[data-state='SKIPPED'],
+  .state[data-state='CANCELLED'] {
+    color: var(--otziv-info);
+  }
+
+  .empty-cell {
+    color: var(--otziv-info);
+    text-align: center;
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+
+    > span {
+      color: var(--otziv-info);
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+  }
+}
+
+// Native parts of the fields (time picker, spin buttons, checkbox) drawn for the dark surface.
+:host-context(body.otziv-dark-theme) .offers-page {
+  .control,
+  .check input,
+  .file-input {
+    color-scheme: dark;
+  }
+}
+
+// ---- Width of the page area ----
+@container offers (min-width: 720px) {
+  .offers-page .workspace {
+    grid-template-columns: 16.5rem minmax(0, 1fr);
+  }
+}
+
+@container offers (min-width: 1000px) {
+  .offers-page .workspace {
+    grid-template-columns: 19rem minmax(0, 1fr);
+  }
+}
+
+// One column: the campaigns become a row of cards that scrolls inside its own box.
+@container offers (max-width: 719.98px) {
+  .offers-page .campaigns:has(> .campaign) {
+    grid-auto-columns: minmax(13.5rem, 78%);
+    grid-auto-flow: column;
+    padding-bottom: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+  }
+
+  .offers-page .campaigns > .campaign {
+    scroll-snap-align: start;
+  }
+}
+
+// A phone: lighter frames, and the editor's own frame gives its width to the blocks inside it.
+@container offers (max-width: 560px) {
+  .offers-page .panel {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .offers-page .hero {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 14px 14px;
+  }
+
+  .offers-page .hero-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 12px;
+    font-size: 1.3rem;
+  }
+
+  .offers-page .settings-link {
+    white-space: normal;
+  }
+
+  .offers-page .section-heading {
+    margin-bottom: 12px;
+  }
+
+  .offers-page .editor.panel {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .offers-page .editor > .section-heading {
+    padding: 0 2px;
+  }
+
+  .offers-page .form-block {
+    padding: 14px 12px;
+    border-radius: 14px;
+  }
+}
+
+// ---- Width of the editor ----
+@container editor (min-width: 640px) {
+  .offers-page .schedule {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container editor (max-width: 639.98px) {
+  .offers-page .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container editor (max-width: 520px) {
+  .offers-page .file-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .offers-page .file-row > .btn {
+    justify-self: start;
+  }
+
+  .offers-page .file-drop {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .offers-page .file-pick {
+    display: none;
+  }
+
+  // The longest choice («Клиентам и лидам — по выбранным спискам») stays whole on a 390px phone.
+  .offers-page select.control {
+    padding-left: 0.65rem;
+    font-size: 0.86rem;
+  }
+
+  .offers-page .footer-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .offers-page .action-row > .btn {
+    flex: 1 1 auto;
+  }
+
+  .offers-page .table-scroll {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+
+  .offers-page .recipients,
+  .offers-page .recipients tbody,
+  .offers-page .recipients tr {
+    display: block;
+  }
+
+  .offers-page .recipients thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .offers-page .recipients tr {
+    margin-bottom: 8px;
+    padding: 4px 12px;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 12px;
+    background: var(--otziv-field-background);
+  }
+
+  .offers-page .recipients tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .offers-page .recipients td {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 34%) minmax(0, 1fr);
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--otziv-surface-border-neutral);
+  }
+
+  // Lines between the cells of a card (the table rule removes them in the last row), none under the last cell.
+  .offers-page .recipients tbody tr:last-child td {
+    border-bottom: 1px solid var(--otziv-surface-border-neutral);
+  }
+
+  .offers-page .recipients tbody tr td:last-child {
+    border-bottom: 0;
+  }
+
+  .offers-page .recipients td::before {
+    content: attr(data-label);
+    color: var(--otziv-info);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+
+  .offers-page .recipients td.empty-cell {
+    display: block;
+  }
+
+  .offers-page .recipients td.empty-cell::before {
+    content: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .offers-page {
+    gap: 12px;
+  }
+}

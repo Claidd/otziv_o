@@ -369,15 +369,34 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
             }
             String envelope = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(new String[]{
                     message, copyButton == null ? null : copyButton.text(), copyButton == null ? null : copyButton.copyText()});
-            return operationFence.execute(operationId, platform.name(), destination == null ? null : destination.toString(), envelope, () -> {
+            ClientMessageSendResult[] attempted = new ClientMessageSendResult[1];
+            ClientMessageSendResult recorded = operationFence.execute(operationId, platform.name(),
+                    destination == null ? null : destination.toString(), envelope, () -> {
                 ClientMessageSendResult result = platform == ChatPlatform.TELEGRAM
                         ? sendToTelegramOnce(destination, message, copyButton) : sendToMaxOnce(destination, message);
                 if (result.sent()) sendPlainChannelCopyMessageBestEffort(platform, company, clientId, groupId, copyButton, operationId);
+                attempted[0] = result;
                 return result;
             });
+            return withAttemptExplanation(recorded, attempted[0]);
         } catch (Exception unavailable) {
             return ClientMessageSendResult.failed("operation_unknown", "Не удалось подтвердить операцию; требуется сверка");
         }
+    }
+
+    /**
+     * The ledger keeps only the code of a known-unsent attempt and answers with a generic text. The attempt
+     * that has just run still knows why the provider refused (for example, the bot was removed from the
+     * group), and the operator needs that reason to fix the chat.
+     */
+    private ClientMessageSendResult withAttemptExplanation(ClientMessageSendResult recorded,
+            ClientMessageSendResult attempted) {
+        if (recorded == null || attempted == null || recorded.sent() || attempted.sent()
+                || !isKnownUnsent(recorded) || !hasText(attempted.errorMessage())
+                || !recorded.errorCode().trim().equalsIgnoreCase(String.valueOf(attempted.errorCode()).trim())) {
+            return recorded;
+        }
+        return ClientMessageSendResult.failed(recorded.errorCode(), attempted.errorMessage());
     }
 
     public ClientMessageSendResult sendPublicationProgressWithOperationId(Company company,String clientId,String groupId,
@@ -524,12 +543,41 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
         List<List<InlineKeyboardButton>> keyboard = copyButton == null ? List.of()
                 : List.of(List.of(new CopyTextOperationButton(copyButton.text(), copyButton.copyText())));
         try {
-            Optional<Integer> messageId = telegramService.sendMessageOnceWithInlineKeyboardMessageId(chatId, message, null, keyboard);
-            if (messageId.filter(id -> id > 0).isPresent()) return ClientMessageSendResult.sent("Telegram", messageId.get().toString());
+            TelegramService.SendOnceResult outcome = telegramService.sendMessageOnceWithInlineKeyboard(chatId, message, null, keyboard);
+            if (outcome != null && outcome.confirmed()) return ClientMessageSendResult.sent("Telegram", outcome.messageId().toString());
+            ClientMessageSendResult refused = outcome == null ? null : telegramRefusal(outcome.refusal());
+            if (refused != null) return refused;
         } catch (RuntimeException unconfirmed) {
             log.warn("Telegram operation has no confirmed result ({})", unconfirmed.getClass().getSimpleName());
         }
         return ClientMessageSendResult.failed("operation_unknown", "Результат отправки Telegram неизвестен; проверьте сообщение перед повтором");
+    }
+
+    /** Telegram answered that the bot cannot write to the chat; nothing was sent, so the same occurrence may retry. */
+    public static final String TELEGRAM_CHAT_UNAVAILABLE = "telegram_chat_unavailable";
+    /** Telegram sending is switched off or the bot token is missing; no request left the service. */
+    public static final String TELEGRAM_NOT_CONFIGURED = "telegram_not_configured";
+    /** MAX answered 403/404 for the chat; nothing was sent, so the same occurrence may retry. */
+    public static final String MAX_CHAT_UNAVAILABLE = MaxBotClient.CHAT_UNAVAILABLE;
+
+    /** Known-unsent result for a definitive refusal; {@code null} keeps every other outcome unknown. */
+    private static ClientMessageSendResult telegramRefusal(String refusal) {
+        if (refusal == null) return null;
+        return switch (refusal) {
+            case "chat_not_found" -> ClientMessageSendResult.failed(TELEGRAM_CHAT_UNAVAILABLE,
+                    "Telegram не нашёл группу клиента. Сообщение не отправлено: проверьте привязку группы к боту");
+            case "bot_removed" -> ClientMessageSendResult.failed(TELEGRAM_CHAT_UNAVAILABLE,
+                    "Бот удалён из Telegram-группы клиента. Сообщение не отправлено: верните бота в группу");
+            case "bot_blocked" -> ClientMessageSendResult.failed(TELEGRAM_CHAT_UNAVAILABLE,
+                    "Клиент заблокировал Telegram-бота. Сообщение не отправлено");
+            case "chat_permission_denied" -> ClientMessageSendResult.failed(TELEGRAM_CHAT_UNAVAILABLE,
+                    "У Telegram-бота нет права писать в группу клиента. Сообщение не отправлено");
+            case TelegramService.SEND_ONCE_SENDING_DISABLED, TelegramService.SEND_ONCE_NOT_CONFIGURED ->
+                    ClientMessageSendResult.failed(TELEGRAM_NOT_CONFIGURED,
+                            "Отправка в Telegram выключена или бот не настроен. Сообщение не отправлено");
+            case TelegramService.SEND_ONCE_MESSAGE_EMPTY -> ClientMessageSendResult.failed("message_empty", "Текст сообщения пустой");
+            default -> null;
+        };
     }
 
     /** Bot API copy_text shape for the bundled Telegram library which predates this button. */
@@ -583,6 +631,10 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
         try {
             MaxBotClient.SendOnceResult result = maxBotClient.sendMessageToChatOnce(maxChatId, message);
             if (result != null && result.confirmed()) return ClientMessageSendResult.sent("MAX", result.messageId());
+            if (result != null && MAX_CHAT_UNAVAILABLE.equals(result.errorCode())) {
+                return ClientMessageSendResult.failed(MAX_CHAT_UNAVAILABLE,
+                        "MAX отказал: у бота нет доступа к группе клиента или группа не найдена. Сообщение не отправлено");
+            }
             if (result != null && result.errorCode() != null
                     && Set.of("payload_too_large", "invalid_request", "max_not_configured").contains(result.errorCode())) {
                 return ClientMessageSendResult.failed(result.errorCode(), "MAX не начал отправку: проверьте текст и настройки канала");

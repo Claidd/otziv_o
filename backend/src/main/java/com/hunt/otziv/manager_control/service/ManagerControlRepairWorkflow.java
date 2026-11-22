@@ -127,6 +127,17 @@ public class ManagerControlRepairWorkflow {
             return repairOrderAutomationConcreteItem(concreteItem, control, order, principal);
         }
         LocalDate today = LocalDate.now();
+        String remindersStopped = scheduledClientMessageService.clientTextRemindersStopReason();
+        if (remindersStopped != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    ManagerControlAutomationRepairWorkflow.switchedOff(remindersStopped, "CLIENT_TEXT_REMINDER"));
+        }
+        if (scheduledClientMessageService.clientTextReminderClosedByAdministrator(order)) {
+            // The administrator's decision stands: the card closes without turning the reminders back on.
+            return resolveRepairedConcreteItem(concreteItem, control,
+                    "Напоминания о текстах по заказу отключены администратором в мониторинге автоответчика; повторно не включаются",
+                    principal, "Карточка закрыта: напоминания отключены администратором");
+        }
         scheduledClientMessageService.ensureClientTextReminderForOrder(order);
         WorkerClientTextDecision decision = workerOrderClientTextDecision(order, "Новый", today, scheduledStatesByOrderId(List.of(order)));
         if (decision.include()) {

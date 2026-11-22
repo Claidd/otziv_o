@@ -1,269 +1,729 @@
-.transfer-workspace {
-  display: grid;
-  gap: 16px;
-  max-width: 1180px;
+@use '../../../shared/plain-modal' as plain;
+
+// «Передача работы» in the look of the site: the page font, bordered blocks on the soft surface
+// gradient, a small accent kicker above a bold title, the brand gradient only for the main action
+// of a block («Проверить», «Перенести») and calm neutral buttons with a brand icon. Every colour
+// comes from the site tokens of styles.scss, so the dark theme follows without copies.
+//
+// The buttons reuse the shared mixins of shared/plain-modal.scss. They read --plain-* names, which
+// are filled here from the site tokens instead of the fixed window palette. The button selectors
+// repeat their class (.swap-button.swap-button) to outweigh the .admin-layout button rules.
+
+:host {
+  --plain-surface: var(--otziv-field-background);
+  --plain-soft: var(--otziv-muted-surface);
+  --plain-text: var(--otziv-dark);
+  --plain-control-border: color-mix(in srgb, var(--otziv-info) 36%, transparent);
+  --plain-disabled-text: color-mix(in srgb, var(--otziv-info) 72%, transparent);
+  --plain-brand-shadow: color-mix(in srgb, var(--otziv-action) 24%, transparent);
+  --transfer-block-shadow: color-mix(in srgb, var(--otziv-info) 12%, transparent);
+  display: block;
+  min-width: 0;
+  color: var(--otziv-dark);
+  font-family: var(--otziv-font-family);
 }
 
+// A light or warm shade turns into a halo on a dark page: the shadows take the page colour there.
+:host-context(body.otziv-dark-theme) {
+  --plain-brand-shadow: color-mix(in srgb, var(--otziv-background) 72%, transparent);
+  --transfer-block-shadow: color-mix(in srgb, var(--otziv-background) 55%, transparent);
+}
+
+.transfer-workspace {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+/* ---- Blocks ---- */
+
 .transfer-panel {
-  background: var(--surface, #fff);
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  border-radius: 8px;
-  padding: 18px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 1rem;
+  padding: 1rem 1.1rem 1.1rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-surface-gradient-neutral);
+  box-shadow: 0 0.7rem 1.6rem var(--transfer-block-shadow);
+}
+
+.result-panel {
+  border-color: var(--otziv-surface-border-green);
+  background: var(--otziv-surface-gradient-green);
 }
 
 .panel-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.panel-head h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: #172033;
-}
-
-.panel-head p {
-  margin: 4px 0 0;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.panel-head > span {
-  color: #2563eb;
-  font-size: 28px;
-}
-
-.transfer-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
-  gap: 12px;
-  align-items: end;
-}
-
-label {
-  display: grid;
-  gap: 6px;
-  color: #334155;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-select,
-textarea,
-input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #fff;
-  color: #172033;
-  font: inherit;
-  padding: 9px 11px;
-}
-
-textarea {
-  resize: vertical;
-}
-
-select:focus,
-textarea:focus,
-input:focus {
-  outline: 2px solid rgba(37, 99, 235, 0.22);
-  border-color: #2563eb;
-}
-
-.swap-button,
-.actions button,
-.confirm-row button {
-  min-height: 42px;
-  border: 0;
-  border-radius: 6px;
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-weight: 700;
-  cursor: pointer;
+  gap: 0.75rem;
+  min-width: 0;
 }
 
-.swap-button {
-  color: #334155;
-  background: #e2e8f0;
+.panel-icon {
+  @include plain.icon-chip;
+  width: 2.3rem;
+  height: 2.3rem;
+  font-size: 1.2rem;
 }
 
-.comment-field {
-  margin-top: 14px;
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
-.primary {
-  color: #fff;
-  background: #2563eb;
-  padding: 0 18px;
-}
-
-.danger {
-  color: #fff;
-  background: #dc2626;
-  padding: 0 18px;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.metric-grid {
+.panel-title {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
+  flex: 1 1 auto;
+  gap: 0.12rem;
+  min-width: 0;
+
+  h3 {
+    margin: 0;
+    color: var(--otziv-dark);
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
 }
 
-.metric-grid article {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
-  background: #f8fafc;
+.panel-kicker {
+  margin: 0;
+  color: var(--otziv-action);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  line-height: 1.3;
+  text-transform: uppercase;
 }
 
-.metric-grid span {
-  display: block;
-  color: #64748b;
-  font-size: 12px;
+.route-arrow {
+  color: var(--otziv-action);
 }
 
-.metric-grid strong {
-  display: block;
-  margin-top: 6px;
-  color: #172033;
-  font-size: 24px;
+.panel-chip {
+  flex: none;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  color: var(--otziv-info);
+  background: var(--otziv-white);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.result-panel .panel-icon {
+  color: var(--otziv-success);
+  background: color-mix(in srgb, var(--otziv-success) 14%, transparent);
+}
+
+.result-panel .panel-kicker {
+  color: var(--otziv-success);
+}
+
+.result-panel .panel-chip {
+  border-color: var(--otziv-surface-border-green);
+}
+
+/* ---- Messages ---- */
+
+.transfer-error,
+.transfer-note,
+.warning-list p {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 12px;
+  padding: 0.6rem 0.75rem;
+  color: var(--otziv-dark);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+
+  .material-icons-sharp {
+    flex: none;
+    font-size: 1.15rem;
+  }
+
+  span:last-child {
+    min-width: 0;
+  }
+}
+
+.transfer-error {
+  border-color: var(--otziv-surface-border-red);
+  background: var(--otziv-surface-gradient-red);
+
+  .material-icons-sharp {
+    color: var(--otziv-danger);
+  }
 }
 
 .warning-list {
   display: grid;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.warning-list p,
-.error {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0;
-  border-radius: 6px;
-  padding: 10px 12px;
+  gap: 0.5rem;
 }
 
 .warning-list p {
-  color: #854d0e;
-  background: #fef3c7;
+  border-color: var(--otziv-surface-border-yellow);
+  background: var(--otziv-surface-gradient-yellow);
+
+  .material-icons-sharp {
+    color: color-mix(in srgb, var(--otziv-warning) 55%, var(--otziv-dark));
+  }
 }
 
-.error {
-  margin-bottom: 14px;
-  color: #991b1b;
-  background: #fee2e2;
+// What a transfer does and does not do: calm blue, not a warning.
+.transfer-note {
+  border-color: var(--otziv-surface-border-blue);
+  background: var(--otziv-surface-gradient-blue);
+
+  .material-icons-sharp {
+    color: var(--otziv-action);
+  }
+}
+
+// A failed transfer stands under «Перенести», across the whole confirmation zone.
+.confirm-error {
+  grid-column: 1 / -1;
+}
+
+// The journal error keeps its «Повторить» on the right while it fits and moves it under the text when not.
+.recent-error {
+  flex-wrap: wrap;
+  align-items: center;
+
+  .recent-error-text {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+}
+
+.result-note {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* ---- Fields ---- */
+
+.transfer-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.transfer-field {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.transfer-field .field-caption {
+  display: block;
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+
+  small {
+    color: var(--otziv-info);
+    font-size: inherit;
+    font-weight: 500;
+  }
+}
+
+.field-hint {
+  color: var(--otziv-dark);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+
+  b {
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+}
+
+// Under the lists: who is in them. Pulled up to the fields it explains.
+.list-hint {
+  margin: -0.45rem 0 0;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.transfer-field select,
+.transfer-field textarea,
+.transfer-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.65rem;
+  margin: 0;
+  border: 1px solid var(--plain-control-border);
+  border-radius: 10px;
+  padding: 0 0.75rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  box-shadow: none;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.transfer-field select {
+  cursor: pointer;
+}
+
+.transfer-field textarea {
+  min-height: 5.4rem;
+  padding: 0.6rem 0.75rem;
+  resize: vertical;
+}
+
+.transfer-field select:not(:disabled):hover,
+.transfer-field textarea:not(:disabled):hover,
+.transfer-field input:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+}
+
+.transfer-field select:focus,
+.transfer-field textarea:focus,
+.transfer-field input:focus {
+  border-color: var(--otziv-action-border);
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--otziv-action-soft);
+}
+
+.transfer-field select:disabled,
+.transfer-field textarea:disabled,
+.transfer-field input:disabled {
+  border-style: dashed;
+  color: var(--otziv-info);
+  background: var(--otziv-muted-surface);
+  cursor: not-allowed;
+}
+
+// The lists and the comment are locked only while something loads or runs.
+.transfer-field select:disabled,
+.transfer-field textarea:disabled {
+  cursor: progress;
+}
+
+.transfer-field textarea::placeholder,
+.transfer-field input::placeholder {
+  color: var(--plain-disabled-text);
+  font-weight: 500;
+}
+
+/* ---- Buttons ---- */
+
+// «Поменять местами»: a neutral round button with the brand icon.
+.transfer-workspace button.swap-button.swap-button {
+  @include plain.button;
+
+  & {
+    width: 2.65rem;
+    min-width: 2.65rem;
+    height: 2.65rem;
+    min-height: 2.65rem;
+    border-radius: 999px;
+    padding: 0;
+  }
+
+  .material-icons-sharp {
+    font-size: 1.25rem;
+  }
+}
+
+// The main action of a block: «Проверить» and «Перенести» in the brand gradient.
+.transfer-workspace button.transfer-primary.transfer-primary {
+  @include plain.button;
+
+  & {
+    @include plain.button-save;
+  }
+
+  & {
+    min-height: 2.65rem;
+    padding: 0 1.35rem;
+    font-size: 0.9rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .material-icons-sharp {
+    color: inherit;
+    font-size: 1.15rem;
+  }
+}
+
+// «Проверить» while the preview is open: a calm button, so only «Перенести» carries the gradient.
+.transfer-workspace button.transfer-primary.transfer-primary.transfer-primary--quiet {
+  @include plain.button;
+
+  & {
+    min-height: 2.65rem;
+    padding: 0 1.35rem;
+    font-size: 0.9rem;
+    font-weight: 800;
+  }
+}
+
+// «Повторить» of the journal error: the same neutral button with a brand icon, a size smaller.
+.transfer-workspace button.transfer-secondary.transfer-secondary {
+  @include plain.button;
+
+  & {
+    flex: none;
+    min-height: 2.2rem;
+    padding: 0 0.9rem;
+    font-size: 0.8rem;
+  }
+}
+
+// The reason a disabled «Проверить» waits for stands to the left of it.
+.transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 1rem;
+}
+
+.action-hint {
+  flex: 1 1 14rem;
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: right;
+}
+
+/* ---- Preview and result ---- */
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  gap: 0.6rem;
+
+  article {
+    display: grid;
+    align-content: space-between;
+    gap: 0.35rem;
+    min-width: 0;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 12px;
+    padding: 0.7rem 0.8rem;
+    background: var(--otziv-white);
+  }
+
+  span {
+    color: var(--otziv-info);
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  strong {
+    color: var(--otziv-dark);
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.result-panel .metric-grid article {
+  border-color: var(--otziv-surface-border-green);
 }
 
 .company-samples {
-  margin-top: 16px;
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+
+  h4 {
+    margin: 0;
+    color: var(--otziv-dark);
+    font-size: 0.85rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  h4 small {
+    color: var(--otziv-info);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
 }
 
-.company-samples h3 {
-  margin: 0 0 8px;
-  color: #172033;
-  font-size: 16px;
+.company-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 0.45rem;
 }
 
-.company-row,
-.recent-list article {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  border-top: 1px solid #e2e8f0;
-  padding: 10px 0;
+.company-row {
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
+  min-width: 0;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  background: var(--otziv-white);
+
+  strong {
+    color: var(--otziv-dark);
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  span {
+    color: var(--otziv-info);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
 }
 
-.company-row strong,
-.recent-list strong {
-  color: #172033;
-}
-
-.company-row span,
-.recent-list span,
-.recent-list p {
-  color: #64748b;
-  font-size: 13px;
-}
-
+// The transfer is confirmed by a typed word. This zone is the only action area in soft red: the
+// button itself stays the brand gradient, as the main action of the block.
 .confirm-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto;
-  gap: 12px;
-  align-items: end;
-  margin-top: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  border: 1px solid var(--otziv-surface-border-red);
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
+  background: var(--otziv-surface-gradient-red);
+
+  .transfer-field {
+    grid-template-columns: minmax(0, 1fr) minmax(11rem, 16rem);
+    align-items: center;
+    gap: 0.2rem 1rem;
+  }
+
+  .field-caption {
+    grid-column: 1;
+    grid-row: 1;
+    color: var(--otziv-danger);
+    font-size: 0.66rem;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .field-hint {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  input {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
 }
 
+/* ---- History ---- */
+
+// A record keeps its numbers on the right while they fit and moves them under the names when not.
 .recent-list {
   display: grid;
+  gap: 0.5rem;
+
+  article {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem 1rem;
+    min-width: 0;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 12px;
+    padding: 0.65rem 0.8rem;
+    background: var(--otziv-white);
+  }
 }
 
-.recent-list article p {
+.recent-main {
+  display: grid;
+  flex: 1 1 15rem;
+  gap: 0.15rem;
+  min-width: 0;
+
+  strong {
+    color: var(--otziv-dark);
+    font-size: 0.9rem;
+    font-weight: 800;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  span {
+    color: var(--otziv-info);
+    font-size: 0.76rem;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+}
+
+.recent-stats {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-width: 0;
   margin: 0;
-  align-self: center;
+
+  span {
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    color: var(--otziv-info);
+    background: var(--otziv-muted-surface);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  b {
+    color: var(--otziv-dark);
+    font-weight: 800;
+  }
+}
+
+// The comment of a record takes its own line under the names and the numbers.
+.recent-comment {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin: 0;
+  border-left: 3px solid var(--otziv-action-border);
+  padding: 0.1rem 0 0.1rem 0.6rem;
+  color: var(--otziv-dark);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .empty {
   margin: 0;
-  color: #64748b;
+  border: 1px dashed var(--plain-control-border);
+  border-radius: 12px;
+  padding: 0.9rem;
+  color: var(--otziv-info);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
 }
 
-:host-context(.otziv-dark-theme) .transfer-panel {
-  background: #111827;
-  border-color: rgba(148, 163, 184, 0.18);
+/* ---- Phone and narrow screens ---- */
+
+@media (max-width: 860px) {
+  .transfer-workspace {
+    gap: 0.75rem;
+  }
+
+  // 641-860px: the confirm field stacks its caption and input, so the step caption keeps room beside the button.
+  .confirm-row .transfer-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .confirm-row .field-caption,
+  .confirm-row .field-hint,
+  .confirm-row input {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .transfer-panel {
+    gap: 0.85rem;
+    border-radius: 14px;
+    padding: 0.9rem;
+  }
+
+  // 16px keeps iOS from zooming into a field on focus.
+  .transfer-field select,
+  .transfer-field textarea,
+  .transfer-field input {
+    min-height: 2.9rem;
+    font-size: 1rem;
+  }
+
+  .transfer-field textarea {
+    min-height: 5.8rem;
+  }
+
+  .transfer-workspace button.transfer-primary.transfer-primary {
+    min-height: 2.9rem;
+  }
+
+  .transfer-workspace button.swap-button.swap-button {
+    width: 2.9rem;
+    min-width: 2.9rem;
+    height: 2.9rem;
+    min-height: 2.9rem;
+  }
 }
 
-:host-context(.otziv-dark-theme) .panel-head h2,
-:host-context(.otziv-dark-theme) .metric-grid strong,
-:host-context(.otziv-dark-theme) .company-samples h3,
-:host-context(.otziv-dark-theme) .company-row strong,
-:host-context(.otziv-dark-theme) .recent-list strong {
-  color: #f8fafc;
-}
+@media (max-width: 640px) {
+  .transfer-form {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
 
-:host-context(.otziv-dark-theme) select,
-:host-context(.otziv-dark-theme) textarea,
-:host-context(.otziv-dark-theme) input,
-:host-context(.otziv-dark-theme) .metric-grid article {
-  background: #0f172a;
-  border-color: #334155;
-  color: #f8fafc;
-}
+  // The fields stand one under the other: the swap button sits between them and turns upright.
+  .transfer-workspace button.swap-button.swap-button {
+    justify-self: center;
 
-@media (max-width: 820px) {
-  .transfer-form,
+    .material-icons-sharp {
+      transform: rotate(90deg);
+    }
+  }
+
+  .transfer-workspace button.transfer-primary.transfer-primary {
+    width: 100%;
+  }
+
+  .action-hint {
+    text-align: left;
+  }
+
   .confirm-row,
-  .metric-grid {
-    grid-template-columns: 1fr;
+  .confirm-row .transfer-field {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .swap-button {
-    width: 44px;
+  .confirm-row .field-caption,
+  .confirm-row .field-hint,
+  .confirm-row input {
+    grid-column: auto;
+    grid-row: auto;
   }
 
-  .company-row,
-  .recent-list article {
-    display: grid;
+  .confirm-row input {
+    margin-top: 0.3rem;
   }
 }

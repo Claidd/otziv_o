@@ -171,6 +171,77 @@ class MaxBotUpdateServiceTest {
     }
 
     @Test
+    void captionedFileIsTrackedWithTheAttachmentMarkerWhileCommandsSeeThePlainText() throws Exception {
+        MaxBotUpdateService service = service();
+        JsonNode update = MAPPER.readTree("""
+                {
+                  "update_type": "message_created",
+                  "message": {
+                    "mid": "max-media-2",
+                    "recipient": { "chat_id": -200 },
+                    "sender": { "user_id": 303, "name": "Клиент" },
+                    "body": { "text": " Спасибо 🙏 ", "attachments": [{ "type": "image" }] }
+                  }
+                }
+                """);
+
+        service.handleUpdate(update);
+
+        ArgumentCaptor<ClientChatMessageCommand> captor = ArgumentCaptor.forClass(ClientChatMessageCommand.class);
+        verify(clientChatMessageTrackerService).track(captor.capture());
+        assertEquals("max-media-2", captor.getValue().externalMessageId());
+        assertEquals("[Вложение: image] Спасибо 🙏", captor.getValue().messageText());
+        verify(publicationProgressPreferenceService).handleMaxCommand(-200L, " Спасибо 🙏 ");
+    }
+
+    @Test
+    void textWithALinkPreviewIsNotTrackedAsAFile() throws Exception {
+        MaxBotUpdateService service = service();
+        JsonNode update = MAPPER.readTree("""
+                {
+                  "update_type": "message_created",
+                  "message": {
+                    "mid": "max-link-1",
+                    "recipient": { "chat_id": -200 },
+                    "sender": { "user_id": 303, "name": "Клиент" },
+                    "body": { "text": "Вот ссылка https://example.test", "attachments": [{ "type": "share" }] }
+                  }
+                }
+                """);
+
+        service.handleUpdate(update);
+
+        ArgumentCaptor<ClientChatMessageCommand> captor = ArgumentCaptor.forClass(ClientChatMessageCommand.class);
+        verify(clientChatMessageTrackerService).track(captor.capture());
+        assertEquals("Вот ссылка https://example.test", captor.getValue().messageText());
+    }
+
+    @Test
+    void editedCaptionKeepsTheAttachmentMarkerOfTheOriginalMessage() throws Exception {
+        MaxBotUpdateService service = service();
+        JsonNode update = MAPPER.readTree("""
+                {
+                  "update_type": "message_edited",
+                  "timestamp": 1793900060000,
+                  "message": {
+                    "recipient": { "chat_id": -74761808437879, "chat_type": "chat" },
+                    "sender": { "user_id": 182858506, "name": "Татьяна" },
+                    "body": { "mid": "mid.edit-2", "text": "Оплатила, чек во вложении",
+                              "attachments": [{ "type": "share" }, { "type": "file" }] }
+                  }
+                }
+                """);
+
+        service.handleUpdate(update);
+
+        ArgumentCaptor<com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand> captor =
+                ArgumentCaptor.forClass(com.hunt.otziv.client_chat_control.dto.ClientChatMessageEditCommand.class);
+        verify(clientChatMessageTrackerService).trackEdit(captor.capture());
+        assertEquals("[Вложение: file] Оплатила, чек во вложении", captor.getValue().editedText());
+        verifyNoMoreInteractions(maxGroupLinkService, maxBotClient, publicationProgressPreferenceService);
+    }
+
+    @Test
     void messageEditIsTrackedAsAnEditWithTheEditTimeAndNeverAsACommand() throws Exception {
         MaxBotUpdateService service = service();
         JsonNode update = MAPPER.readTree("""

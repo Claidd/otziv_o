@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { FormBuilder, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ValidatorFn, Validators } from '@angular/forms';
 import type { AdminClientMessageSettingsApi } from '../../../core/admin-client-message-settings.api';
 import type {
   AdminClientMessageSettings,
@@ -10,8 +10,128 @@ import { apiErrorMessage } from '../../../shared/api-error-message';
 import { DictionaryViewScope } from './dictionary-view-scope';
 import { DictionaryEditorSession } from './dictionary-editor-session';
 
+/** The server's own default list (ClientChatAutoIgnoreService.DEFAULT_PHRASES). */
 const DEFAULT_AUTO_IGNORE_PHRASES =
-  'ок,окей,хорошо,спасибо,спасибо большое,благодарю,да,нет,понял,поняла,поняли,принято,договорились,отлично,супер,ясно,ладно,хорошо спасибо,спс';
+  'ок,окей,хорошо,спасибо,спасибо большое,вам спасибо,и вам спасибо,взаимно,благодарю,да,нет,понял,поняла,поняли,принято,договорились,отлично,супер,ясно,ладно,хорошо спасибо,спс';
+
+/** The server refuses the whole settings request when one phrase is longer (normalizedSettingList). */
+export const AUTO_IGNORE_PHRASE_MAX_LENGTH = 80;
+
+type SettingsKey = keyof AdminClientMessageSettings;
+type FormValues = Record<string, unknown>;
+
+/** How the page names a field, for a field that is not on the open tab. */
+const FIELD_LABELS: Partial<Record<SettingsKey, string>> = {
+  unansweredFastClickWarningCount: 'Первый порог: закрытий',
+  unansweredFastClickWarningSeconds: 'Первый порог: период, секунд',
+  unansweredFastClickCriticalCount: 'Второй порог: закрытий',
+  unansweredFastClickCriticalSeconds: 'Второй порог: период, секунд',
+  unansweredAutoIgnoreMaxLength: 'Сообщение клиента не длиннее, символов',
+  unansweredAutoIgnorePhrases: 'Фразы без ответа',
+  reviewCheckIntervalDays: 'Интервал проверки отзывов, дней',
+  reviewCheckAutoArchiveDays: 'Автоархив проверки, дней',
+  clientTextReminderIntervalDays: 'Интервал ожидания текста, дней',
+  paymentReminderIntervalDays: 'Интервал оплаты, дней',
+  reviewCheckRetryDelayHours: 'Повтор проверки после сбоя, часов',
+  paymentInvoiceRetryDelayHours: 'Повтор счета после сбоя, часов',
+  transientRetryMinutes: 'Повтор временной ошибки, минут',
+  manualControlFailureThreshold: 'В контроль после ошибок',
+  manualControlAfterMinutes: 'В контроль после, минут',
+  badReviewInvoiceRetryDelayHours: 'Повтор доплаты после сбоя, часов',
+  badReviewAutoBanDelayDays: 'Автобан после плохих, дней',
+  reviewRecoveryNoticeRetryDelayHours: 'Повтор уведомления, часов',
+  paymentOverdueDays: 'Просрочка оплаты, дней',
+  archiveReorderMonths: 'Архивное предложение, месяцев',
+  archiveReorderJitterDays: 'Разброс отправки, дней',
+  archiveOrderRetentionDays: 'Архив закрытых заказов, дней',
+  errorProtectionThreshold: 'Порог ошибок',
+  errorProtectionWindowMinutes: 'Окно ошибок, минут',
+  errorProtectionCooldownMinutes: 'Пауза после срабатывания, минут',
+  whatsAppAuthRetryHours: 'Повтор WhatsApp QR, часов',
+  whatsAppAuthAlertCooldownHours: 'Алерт менеджеру, часов',
+  retentionDays: 'Хранить журнал, дней',
+  tickBatchSize: 'Задач за один проход',
+  candidateLimit: 'Заказов на проверку за проход',
+  dailyLimit: 'Дневной лимит сообщений',
+  defaultGapSeconds: 'Общая пауза, секунд',
+  whatsAppGapSeconds: 'Пауза WhatsApp, секунд',
+  telegramGapSeconds: 'Пауза Telegram, секунд',
+  maxGapSeconds: 'Пауза MAX, секунд',
+  businessWindows: 'Рабочие окна по Иркутску',
+  reviewCheckStatuses: 'Статусы проверки отзывов',
+  clientTextReminderStatuses: 'Статусы ожидания текста',
+  paymentReminderStatuses: 'Статусы ожидания оплаты',
+  paymentOverdueStatuses: 'Статусы просрочки оплаты',
+  closedOrderStatuses: 'Закрытые статусы заказов',
+  paymentOverdueTargetStatus: 'Целевой статус просрочки',
+  archiveCompanyStatus: 'Статус архивной компании',
+  archiveInactiveOrderStatuses: 'Неактивные статусы заказов',
+  openNextOrderRequestStatuses: 'Открытые статусы заявок',
+  reviewLinkBaseUrl: 'Ссылка проверки отзывов',
+  reviewReminderText: 'Проверка отзывов',
+  clientTextReminderText: 'Ожидание текста клиента',
+  publicationStartedText: 'Передача в публикацию',
+  publicationProgressReportText: 'Отчет о публикации',
+  paymentInstructionSource: 'Источник оплаты',
+  paymentReminderText: 'Напоминание об оплате',
+  paymentLinkCopyText: 'Текст счёта клиенту',
+  paymentSuccessText: 'Успешная оплата',
+  reviewRecoveryNoticeText: 'Все отзывы восстановлены',
+  archiveOfferText: 'Архивное предложение',
+};
+
+function normalizePhrase(value: string | null | undefined): string {
+  return (value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function samePhrase(left: string, right: string): boolean {
+  return left.toLocaleLowerCase() === right.toLocaleLowerCase();
+}
+
+function splitPhrases(value: string | null | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((item) => normalizePhrase(item))
+    .filter(Boolean)
+    .filter((item, index, list) => list.findIndex((candidate) => samePhrase(candidate, item)) === index);
+}
+
+function plural(count: number, one: string, few: string, many: string): string {
+  const tens = Math.abs(count) % 100;
+  const units = tens % 10;
+  if (tens > 10 && tens < 20) return many;
+  if (units === 1) return one;
+  if (units >= 2 && units <= 4) return few;
+  return many;
+}
+
+/** «1 фраза», «3 фразы», «11 фраз». */
+export function phraseCountLabel(count: number): string {
+  return `${count} ${plural(count, 'фраза', 'фразы', 'фраз')}`;
+}
+
+function shortened(text: string, length = 40): string {
+  return text.length > length ? `${text.slice(0, length)}…` : text;
+}
+
+function sentence(text: string): string {
+  return /[.!?…]$/.test(text) ? text : `${text}.`;
+}
+
+/**
+ * The request sends trimmed texts, and the server refuses an empty one only after it has already written the
+ * switches and numbers: text of spaces alone counts as empty here.
+ */
+const requiredText: ValidatorFn = (control) =>
+  typeof control.value !== 'string' || control.value.trim() === '' ? { required: true } : null;
+
+/** Each phrase is checked as the server checks it: before the request, not after a partial save. */
+const phraseLengths: ValidatorFn = (control) => {
+  const tooLong = splitPhrases(typeof control.value === 'string' ? control.value : '').find(
+    (phrase) => phrase.length > AUTO_IGNORE_PHRASE_MAX_LENGTH,
+  );
+  return tooLong ? { phraseTooLong: { phrase: tooLong, max: AUTO_IGNORE_PHRASE_MAX_LENGTH } } : null;
+};
 
 type Deps = {
   api: AdminClientMessageSettingsApi;
@@ -36,6 +156,9 @@ export class AdminClientMessageSettingsFacade {
   readonly editingAutoIgnorePhraseIndex = signal<number | null>(null);
 
   readonly editingAutoIgnorePhraseValue = signal('');
+
+  /** The phrase as it was when its edit opened: the edit follows it when the list changes around it. */
+  private editingAutoIgnorePhraseOriginal: string | null = null;
 
   readonly autoresponderForm = this.fb.nonNullable.group({
     workerEnabled: [true],
@@ -79,7 +202,7 @@ export class AdminClientMessageSettingsFacade {
       [Validators.required, Validators.min(1), Validators.max(3650)],
     ],
     clientTextReminderIntervalDays: [
-      3,
+      2,
       [Validators.required, Validators.min(1), Validators.max(365)],
     ],
     paymentReminderIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
@@ -135,52 +258,69 @@ export class AdminClientMessageSettingsFacade {
     ],
     businessWindows: [
       '10:00-12:00,14:00-17:00,19:00-21:00',
-      [Validators.required, Validators.maxLength(500)],
+      [requiredText, Validators.maxLength(500)],
     ],
-    reviewCheckStatuses: ['На проверке', [Validators.required, Validators.maxLength(500)]],
-    clientTextReminderStatuses: ['Новый', [Validators.required, Validators.maxLength(500)]],
+    reviewCheckStatuses: ['На проверке', [requiredText, Validators.maxLength(500)]],
+    clientTextReminderStatuses: ['Новый', [requiredText, Validators.maxLength(500)]],
     paymentReminderStatuses: [
       'Выставлен счет,Напоминание',
-      [Validators.required, Validators.maxLength(500)],
+      [requiredText, Validators.maxLength(500)],
     ],
     paymentOverdueStatuses: [
       'Выставлен счет,Напоминание',
-      [Validators.required, Validators.maxLength(500)],
+      [requiredText, Validators.maxLength(500)],
     ],
     closedOrderStatuses: [
       'Оплачено,Архив,Бан,Не оплачено',
-      [Validators.required, Validators.maxLength(500)],
+      [requiredText, Validators.maxLength(500)],
     ],
-    paymentOverdueTargetStatus: ['Не оплачено', [Validators.required, Validators.maxLength(500)]],
-    archiveCompanyStatus: ['На стопе', [Validators.required, Validators.maxLength(500)]],
+    paymentOverdueTargetStatus: ['Не оплачено', [requiredText, Validators.maxLength(500)]],
+    archiveCompanyStatus: ['На стопе', [requiredText, Validators.maxLength(500)]],
     archiveInactiveOrderStatuses: [
       'Оплачено,Архив,Бан',
-      [Validators.required, Validators.maxLength(500)],
+      [requiredText, Validators.maxLength(500)],
     ],
     openNextOrderRequestStatuses: [
       'PENDING,FAILED',
-      [Validators.required, Validators.maxLength(500)],
+      [requiredText, Validators.maxLength(500)],
     ],
-    reviewLinkBaseUrl: ['https://o-ogo.ru', [Validators.required, Validators.maxLength(500)]],
-    reviewReminderText: ['', [Validators.required, Validators.maxLength(500)]],
-    clientTextReminderText: ['', [Validators.required, Validators.maxLength(500)]],
-    publicationStartedText: ['', [Validators.required, Validators.maxLength(500)]],
-    publicationProgressReportText: ['', [Validators.required, Validators.maxLength(500)]],
+    reviewLinkBaseUrl: ['https://o-ogo.ru', [requiredText, Validators.maxLength(500)]],
+    reviewReminderText: ['', [requiredText, Validators.maxLength(500)]],
+    clientTextReminderText: ['', [requiredText, Validators.maxLength(500)]],
+    publicationStartedText: ['', [requiredText, Validators.maxLength(500)]],
+    publicationProgressReportText: ['', [requiredText, Validators.maxLength(500)]],
     paymentInstructionSource: [
       'MANAGER_TEXT' as 'MANAGER_TEXT' | 'TBANK_LINK' | 'BANK_LINK' | 'TOCHKA_LINK',
       [Validators.required],
     ],
-    paymentReminderText: ['', [Validators.required, Validators.maxLength(500)]],
-    paymentLinkCopyText: ['', [Validators.required, Validators.maxLength(500)]],
-    paymentSuccessText: ['', [Validators.required, Validators.maxLength(500)]],
-    reviewRecoveryNoticeText: ['', [Validators.required, Validators.maxLength(500)]],
-    archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]],
-    unansweredAutoIgnorePhrases: [DEFAULT_AUTO_IGNORE_PHRASES, [Validators.maxLength(2000)]],
+    paymentReminderText: ['', [requiredText, Validators.maxLength(500)]],
+    paymentLinkCopyText: ['', [requiredText, Validators.maxLength(500)]],
+    paymentSuccessText: ['', [requiredText, Validators.maxLength(500)]],
+    reviewRecoveryNoticeText: ['', [requiredText, Validators.maxLength(500)]],
+    archiveOfferText: ['', [requiredText, Validators.maxLength(500)]],
+    unansweredAutoIgnorePhrases: [
+      DEFAULT_AUTO_IGNORE_PHRASES,
+      [Validators.maxLength(2000), phraseLengths],
+    ],
   });
+
+  /**
+   * What each field showed before the user could type: the last server values, or what a reset put there. A field
+   * that still holds it is untouched and takes fresher server values; any other value is the user's edit.
+   */
+  private baseValues: FormValues = this.autoresponderForm.getRawValue();
+
+  private readonly numberFields = new Set(
+    Object.keys(this.baseValues).filter((key) => typeof this.baseValues[key] === 'number'),
+  );
 
   private readonly editor = new DictionaryEditorSession(this.autoresponderForm);
   constructor(private readonly deps: Deps) {
-    this.scope = new DictionaryViewScope(deps.isActive);
+    // A save that ends after the tab was left and opened again reads the list again (see DictionaryViewScope).
+    this.scope = new DictionaryViewScope(deps.isActive, () => this.load());
+    // Until the first read the fields hold interface defaults, not the saved settings: nothing may be typed over them.
+    // No events: an event would count as an edit and keep the read from filling the form.
+    this.autoresponderForm.disable({ emitEvent: false });
   }
   deactivate(): void {
     this.editor.change();
@@ -193,16 +333,40 @@ export class AdminClientMessageSettingsFacade {
   load(): void {
     if (!this.scope.active()) return;
     this.error.set(null);
-    const editor = this.editor.capture();
+    this.readSettings(false);
+  }
+
+  private readSettings(afterFailedSave: boolean): void {
     this.scope.read('settings', this.deps.api.getClientMessageSettings(), this.loading).subscribe({
-      next: (response) =>
-        this.applyClientMessageSettings(
-          response,
-          this.editor.sameDraft(editor) && !this.autoresponderForm.dirty,
-        ),
-      error: (err) =>
-        this.fail(err, 'Справочник не загрузился', 'Не удалось загрузить настройки сообщений'),
+      next: (response) => this.applyLoadedSettings(response),
+      error: (err) => {
+        // After a failed save its message stays on screen: this read only refreshes the overview.
+        if (afterFailedSave) return;
+        this.fail(err, 'Справочник не загрузился', 'Не удалось загрузить настройки сообщений');
+      },
     });
+  }
+
+  /**
+   * A read never replaces what the user typed: an edited field keeps its value, every other field takes the server
+   * value. Before the first read this replaces the interface defaults; later it refreshes untouched fields.
+   */
+  private applyLoadedSettings(response: AdminClientMessageSettings): void {
+    const current: FormValues = this.autoresponderForm.getRawValue();
+    const edited = new Set(
+      Object.keys(current).filter((key) => !Object.is(current[key], this.baseValues[key])),
+    );
+    if (edited.size === 0) {
+      this.applyClientMessageSettings(response);
+      return;
+    }
+    const server: FormValues = { ...response };
+    const fresh: FormValues = {};
+    for (const key of Object.keys(current)) {
+      if (!edited.has(key) && server[key] !== undefined) fresh[key] = server[key];
+    }
+    this.autoresponderForm.patchValue(fresh as Partial<AdminClientMessageSettings>);
+    this.applyClientMessageSettings(response, false);
   }
 
   autoIgnorePhrases(): string[] {
@@ -221,11 +385,11 @@ export class AdminClientMessageSettingsFacade {
 
   addAutoIgnorePhrase(): void {
     const phrase = this.normalizeAutoIgnorePhrase(this.autoIgnorePhraseDraft());
-    if (!phrase) {
+    if (!phrase || !this.phraseListReady() || this.phraseTooLong(phrase)) {
       return;
     }
     const phrases = this.autoIgnorePhrases();
-    if (phrases.some((item) => item.toLocaleLowerCase() === phrase.toLocaleLowerCase())) {
+    if (phrases.some((item) => samePhrase(item, phrase))) {
       this.deps.toast.info('Фраза уже есть', phrase);
 
       return;
@@ -237,26 +401,34 @@ export class AdminClientMessageSettingsFacade {
   startEditAutoIgnorePhrase(index: number, phrase: string): void {
     this.editingAutoIgnorePhraseIndex.set(index);
     this.editingAutoIgnorePhraseValue.set(phrase);
+    this.editingAutoIgnorePhraseOriginal = phrase;
   }
 
   saveAutoIgnorePhraseEdit(index: number): void {
-    const phrase = this.normalizeAutoIgnorePhrase(this.editingAutoIgnorePhraseValue());
-    if (!phrase) {
-      this.removeAutoIgnorePhrase(index);
+    if (!this.phraseListReady()) return;
+    const phrases = this.autoIgnorePhrases();
+    const target = this.editedPhraseIndex(index, phrases);
+    if (target < 0) {
+      this.cancelAutoIgnorePhraseEdit();
 
       return;
     }
-    const phrases = this.autoIgnorePhrases();
-    const duplicateIndex = phrases.findIndex(
-      (item, itemIndex) =>
-        itemIndex !== index && item.toLocaleLowerCase() === phrase.toLocaleLowerCase(),
+    const phrase = this.normalizeAutoIgnorePhrase(this.editingAutoIgnorePhraseValue());
+    if (!phrase) {
+      this.removeAutoIgnorePhrase(target);
+
+      return;
+    }
+    if (this.phraseTooLong(phrase)) return;
+    const duplicate = phrases.some(
+      (item, itemIndex) => itemIndex !== target && samePhrase(item, phrase),
     );
-    if (duplicateIndex >= 0) {
+    if (duplicate) {
       this.deps.toast.info('Фраза уже есть', phrase);
 
       return;
     }
-    phrases[index] = phrase;
+    phrases[target] = phrase;
     this.setAutoIgnorePhrases(phrases);
     this.cancelAutoIgnorePhraseEdit();
   }
@@ -264,13 +436,54 @@ export class AdminClientMessageSettingsFacade {
   cancelAutoIgnorePhraseEdit(): void {
     this.editingAutoIgnorePhraseIndex.set(null);
     this.editingAutoIgnorePhraseValue.set('');
+    this.editingAutoIgnorePhraseOriginal = null;
   }
 
   removeAutoIgnorePhrase(index: number): void {
+    if (!this.phraseListReady()) return;
     const phrases = this.autoIgnorePhrases().filter((_phrase, itemIndex) => itemIndex !== index);
     this.setAutoIgnorePhrases(phrases);
-    if (this.editingAutoIgnorePhraseIndex() === index) {
+    this.syncEditingPhrase();
+  }
+
+  /** Before the first read the list holds interface defaults: a change to it would replace the saved list. */
+  private phraseListReady(): boolean {
+    if (this.clientMessageSettings() != null) return true;
+    this.deps.toast.info('Список ещё загружается', 'Дождитесь загрузки и повторите.');
+
+    return false;
+  }
+
+  private phraseTooLong(phrase: string): boolean {
+    if (!splitPhrases(phrase).some((item) => item.length > AUTO_IGNORE_PHRASE_MAX_LENGTH)) {
+      return false;
+    }
+    this.deps.toast.info(
+      'Фраза слишком длинная',
+      `Фраза может быть не длиннее ${AUTO_IGNORE_PHRASE_MAX_LENGTH} символов: сократите её.`,
+    );
+
+    return true;
+  }
+
+  /** The row of the phrase being edited: its own index, unless the list has changed under it since. */
+  private editedPhraseIndex(index: number, phrases: string[]): number {
+    const original = this.editingAutoIgnorePhraseOriginal;
+    if (original == null) return index >= 0 && index < phrases.length ? index : -1;
+    if (index >= 0 && index < phrases.length && samePhrase(phrases[index], original)) return index;
+
+    return phrases.findIndex((item) => samePhrase(item, original));
+  }
+
+  /** An open edit follows its phrase when rows above it change, and closes when the phrase is gone. */
+  private syncEditingPhrase(): void {
+    const original = this.editingAutoIgnorePhraseOriginal;
+    if (original == null || this.editingAutoIgnorePhraseIndex() == null) return;
+    const index = this.autoIgnorePhrases().findIndex((item) => samePhrase(item, original));
+    if (index < 0) {
       this.cancelAutoIgnorePhraseEdit();
+    } else {
+      this.editingAutoIgnorePhraseIndex.set(index);
     }
   }
 
@@ -282,20 +495,7 @@ export class AdminClientMessageSettingsFacade {
   }
 
   splitAutoIgnorePhrases(value: string | null | undefined): string[] {
-    return (value ?? '')
-
-      .split(',')
-
-      .map((item) => this.normalizeAutoIgnorePhrase(item))
-
-      .filter(Boolean)
-
-      .filter(
-        (item, index, list) =>
-          list.findIndex(
-            (candidate) => candidate.toLocaleLowerCase() === item.toLocaleLowerCase(),
-          ) === index,
-      );
+    return splitPhrases(value);
   }
 
   private joinAutoIgnorePhrases(phrases: string[]): string {
@@ -309,7 +509,7 @@ export class AdminClientMessageSettingsFacade {
   }
 
   private normalizeAutoIgnorePhrase(value: string | null | undefined): string {
-    return (value ?? '').trim().replace(/\s+/g, ' ');
+    return normalizePhrase(value);
   }
 
   resetAutoresponderForm(): void {
@@ -367,7 +567,7 @@ export class AdminClientMessageSettingsFacade {
 
       reviewCheckAutoArchiveDays: settings?.reviewCheckAutoArchiveDays ?? 30,
 
-      clientTextReminderIntervalDays: settings?.clientTextReminderIntervalDays ?? 3,
+      clientTextReminderIntervalDays: settings?.clientTextReminderIntervalDays ?? 2,
 
       paymentReminderIntervalDays: settings?.paymentReminderIntervalDays ?? 2,
 
@@ -486,9 +686,9 @@ export class AdminClientMessageSettingsFacade {
       unansweredAutoIgnorePhrases:
         settings?.unansweredAutoIgnorePhrases ?? DEFAULT_AUTO_IGNORE_PHRASES,
     });
+    this.baseValues = this.autoresponderForm.getRawValue();
     this.autoIgnorePhraseDraft.set('');
-    this.editingAutoIgnorePhraseIndex.set(null);
-    this.editingAutoIgnorePhraseValue.set('');
+    this.cancelAutoIgnorePhraseEdit();
   }
 
   patchClientMessageMonitorEnabled(enabled: boolean): void {
@@ -497,16 +697,37 @@ export class AdminClientMessageSettingsFacade {
       this.clientMessageSettings.set({ ...current, monitorEnabled: enabled });
     }
     this.autoresponderForm.patchValue({ monitorEnabled: enabled });
+    // The monitor switch is already saved on the server: it is not the user's unsaved edit.
+    this.baseValues = { ...this.baseValues, monitorEnabled: enabled };
+  }
+
+  /** «Фразы без ответа» sends the same full request as the autoresponder, under its own titles. */
+  savePhraseDictionary(): void {
+    this.saveAutoresponderSettings(
+      'Фразы сохранены',
+      (settings) => phraseCountLabel(splitPhrases(settings.unansweredAutoIgnorePhrases).length),
+      'Фразы не сохранены',
+      'Не удалось сохранить фразы',
+    );
   }
 
   saveAutoresponderSettings(
     successTitle = 'Автоответчик сохранен',
     successMessage: (settings: AdminClientMessageSettings) => string = (settings) =>
       settings.workerEnabled ? `лимит ${settings.dailyLimit} в день` : 'сервис выключен',
+    failureTitle = 'Автоответчик не сохранен',
+    failureFallback = 'Не удалось сохранить автоответчик',
   ): void {
     if (!this.scope.active() || this.saving()) return;
+    if (this.clientMessageSettings() == null) {
+      // Until the first load the form holds interface defaults: saving them would overwrite every autoresponder setting.
+      this.error.set('Настройки ещё не загрузились. Дождитесь загрузки и сохраните снова.');
+      return;
+    }
+    if (this.unappliedPhraseBlocksSave()) return;
     if (this.autoresponderForm.invalid) {
       this.autoresponderForm.markAllAsTouched();
+      this.reportInvalidFields(failureTitle);
 
       return;
     }
@@ -562,7 +783,7 @@ export class AdminClientMessageSettingsFacade {
 
       reviewCheckAutoArchiveDays: Number(raw.reviewCheckAutoArchiveDays ?? 30),
 
-      clientTextReminderIntervalDays: Number(raw.clientTextReminderIntervalDays ?? 3),
+      clientTextReminderIntervalDays: Number(raw.clientTextReminderIntervalDays ?? 2),
 
       paymentReminderIntervalDays: Number(raw.paymentReminderIntervalDays ?? 2),
 
@@ -663,11 +884,29 @@ export class AdminClientMessageSettingsFacade {
       unansweredAutoIgnorePhrases: this.joinAutoIgnorePhrases(
         this.splitAutoIgnorePhrases(raw.unansweredAutoIgnorePhrases),
       ),
+      // The values the form was loaded with: if another administrator or tab changed the settings since, the server
+      // refuses instead of silently writing this form's switches back (an emergency stop must not be undone).
+      ...(this.clientMessageSettings()?.settingsVersion
+        ? {
+            expectedSettingsVersion: this.clientMessageSettings()!.settingsVersion,
+            // The monitor switch is outside the version (it has its own toggle): sent as loaded, so an untouched
+            // switch in a stale form does not turn the monitor back on or off.
+            expectedMonitorEnabled: this.baseValues['monitorEnabled'] === true,
+          }
+        : {}),
     };
+    if (!this.confirmStoppingSends(request) || !this.confirmStartingSends(request)) return;
     const editor = this.editor.capture();
     this.saving.set(true);
     this.error.set(null);
-    this.scope.write(this.deps.api.updateClientMessageSettings(request), this.saving).subscribe({
+    // Leaving the tab (or the page) during the request still reports how it ended: an emergency stop that failed
+    // must not look done. The form is read again on return to the tab.
+    this.scope.write(this.deps.api.updateClientMessageSettings(request), this.saving, (outcome) => outcome.failed
+      ? this.deps.toast.error(failureTitle, (outcome.error as { status?: number } | null)?.status === 409
+        ? sentence(apiErrorMessage(outcome.error, 'Настройки изменились после открытия страницы. Проверьте значения и сохраните снова.'))
+        : `${sentence(apiErrorMessage(outcome.error, failureFallback))} Часть изменений могла сохраниться: сверьте значения.`)
+      : outcome.value && this.deps.toast.success(successTitle, successMessage(outcome.value))
+    ).subscribe({
       next: (settings) => {
         this.saving.set(false);
 
@@ -684,24 +923,188 @@ export class AdminClientMessageSettingsFacade {
       error: (err) => {
         if (!this.editor.sameSelection(editor)) return;
 
-        const message = apiErrorMessage(err, 'Не удалось сохранить автоответчик');
+        // A stale form is refused before anything is written (409): the fresh values are read in, typed ones stay.
+        // Otherwise the server writes the values one by one and checks some of them last: a refused request may
+        // already have changed switches and numbers. Either way the overview is read again.
+        const staleForm = (err as { status?: number } | null)?.status === 409;
+        const message = staleForm
+          ? sentence(apiErrorMessage(err, 'Настройки изменились после открытия страницы. Проверьте значения и сохраните снова.'))
+          : `${sentence(apiErrorMessage(err, failureFallback))} Часть изменений могла сохраниться: сверьте значения.`;
 
         this.error.set(message);
 
         this.saving.set(false);
 
-        this.deps.toast.error('Автоответчик не сохранен', message);
+        this.deps.toast.error(failureTitle, message);
+
+        this.readSettings(true);
       },
     });
   }
+
+  /** A phrase typed but not added, or an edit not applied, is not part of the request: saving would hide that. */
+  private unappliedPhraseBlocksSave(): boolean {
+    if (this.editingAutoIgnorePhraseIndex() !== null) {
+      this.deps.toast.error(
+        'Правка фразы не применена',
+        'Нажмите галочку у фразы, чтобы применить правку, или крестик, чтобы отменить. Затем сохраните.',
+      );
+
+      return true;
+    }
+    const draft = this.normalizeAutoIgnorePhrase(this.autoIgnorePhraseDraft());
+    if (draft) {
+      this.deps.toast.error(
+        'Фраза не добавлена',
+        `«${shortened(draft)}»: нажмите «+», чтобы добавить её, или очистите поле. Затем сохраните.`,
+      );
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Turning off the background queue or sending to clients stops far more than reminders: the owner confirms the
+   * list. Only a change from the saved «on» asks, so a later phrase save with sending already off does not.
+   */
+  /**
+   * Turning the background queue or sending to clients back on releases what waited while they were off: the owner
+   * confirms it. Only a change from the saved «off» asks.
+   */
+  private confirmStartingSends(request: ClientMessageSettingsRequest): boolean {
+    const saved = this.clientMessageSettings();
+    const startsQueue = !!saved && !saved.workerEnabled && request.workerEnabled;
+    const startsSending = !!saved && !saved.liveEnabled && request.liveEnabled;
+    if ((!startsQueue && !startsSending) || typeof window === 'undefined') return true;
+    const lines = [
+      startsQueue && startsSending
+        ? 'Включить фоновую очередь и отправку клиентам?'
+        : startsQueue
+          ? 'Включить фоновую очередь?'
+          : 'Включить отправку клиентам?',
+      'Сообщения, накопленные в очереди за время выключения, начнут уходить клиентам в ближайшие рабочие окна с учётом лимитов.',
+    ];
+    return window.confirm(lines.join('\n\n'));
+  }
+
+  private confirmStoppingSends(request: ClientMessageSettingsRequest): boolean {
+    const saved = this.clientMessageSettings();
+    const stopsQueue = !!saved?.workerEnabled && !request.workerEnabled;
+    const stopsSending = !!saved?.liveEnabled && !request.liveEnabled;
+    if ((!stopsQueue && !stopsSending) || typeof window === 'undefined') return true;
+    const lines = [
+      stopsQueue && stopsSending
+        ? 'Выключить фоновую очередь и отправку клиентам?'
+        : stopsQueue
+          ? 'Выключить фоновую очередь?'
+          : 'Выключить отправку клиентам?',
+    ];
+    if (stopsQueue) {
+      lines.push(
+        'Остановятся напоминания, повторы после сбоев, автоархив, архивные предложения, контроль просрочки и рассылки предложений.',
+      );
+    }
+    if (stopsSending) {
+      lines.push(
+        'Клиентам перестанут уходить сообщения автоответчика, счёт после плохого отзыва, общие счета (и ручные отправки тоже), рассылки предложений, сообщения менеджеров из «Контроля» и ответы в WhatsApp.',
+      );
+    }
+    lines.push(
+      'Новые маршруты оплаты на специалистов выдаваться не будут. Сообщения из очереди уйдут после включения.',
+    );
+
+    return window.confirm(lines.join('\n\n'));
+  }
+
+  /** A refused save names the wrong fields with their limits and brings the first one into view. */
+  private reportInvalidFields(title: string): void {
+    const controls: Record<string, AbstractControl> = this.autoresponderForm.controls;
+    const keys = this.inPageOrder(Object.keys(controls).filter((key) => controls[key].invalid));
+    if (keys.length === 0) return;
+    const problems = keys
+      .slice(0, 3)
+      .map((key) => `«${this.fieldLabel(key)}»: ${this.fieldProblem(key, controls[key])}.`);
+    const rest = keys.length - 3;
+    if (rest > 0) problems.push(`Ещё ${rest} ${plural(rest, 'поле', 'поля', 'полей')} с ошибкой.`);
+    this.deps.toast.error(title, problems.join(' '));
+    this.revealField(keys[0]);
+  }
+
+  private fieldProblem(key: string, control: AbstractControl): string {
+    const errors = control.errors ?? {};
+    const tooLong = errors['phraseTooLong'] as { phrase: string; max: number } | undefined;
+    if (tooLong) return `фраза «${shortened(tooLong.phrase)}» длиннее ${tooLong.max} символов`;
+    if (errors['required']) return this.numberFields.has(key) ? 'укажите число' : 'заполните поле';
+    if (errors['min']) return `не меньше ${errors['min'].min}`;
+    if (errors['max']) return `не больше ${errors['max'].max}`;
+    if (errors['maxlength']) {
+      return `не длиннее ${errors['maxlength'].requiredLength} символов, сейчас ${errors['maxlength'].actualLength}`;
+    }
+
+    return 'проверьте значение';
+  }
+
+  /** The name next to the field on the page; the fixed name when the field is on the other tab. */
+  private fieldLabel(key: string): string {
+    const shown = this.fieldElement(key)?.closest('label')?.querySelector('span')?.textContent?.trim();
+
+    return shown || FIELD_LABELS[key as SettingsKey] || 'Поле настроек';
+  }
+
+  /** Fields in the order the page shows them; fields of the other tab go last. */
+  private inPageOrder(keys: string[]): string[] {
+    if (typeof document === 'undefined') return keys;
+    const shown = Array.from(document.querySelectorAll('[formcontrolname]'), (element) =>
+      element.getAttribute('formcontrolname'),
+    );
+    const rank = (key: string) => {
+      const position = shown.indexOf(key);
+
+      return position < 0 ? shown.length : position;
+    };
+
+    return [...keys].sort((left, right) => rank(left) - rank(right));
+  }
+
+  /** The first wrong field may sit in a folded block: the block opens and the cursor goes to the field. */
+  private revealField(key: string): void {
+    const field = this.fieldElement(key);
+    if (!field) return;
+    const block = field.closest('details');
+    if (block) block.open = true;
+    field.focus();
+  }
+
+  private fieldElement(key: string): HTMLElement | null {
+    if (typeof document === 'undefined') return null;
+
+    return document.querySelector<HTMLElement>(`[formcontrolname="${key}"]`);
+  }
+
   applyClientMessageSettings(response: AdminClientMessageSettings, patchDraft = true): void {
     this.clientMessageSettings.set(response);
     if (patchDraft) {
       this.autoresponderForm.patchValue(response);
       this.autoresponderForm.markAsPristine();
     }
+    this.rememberServerValues(response);
+    if (this.autoresponderForm.disabled) this.autoresponderForm.enable({ emitEvent: false });
+    this.syncEditingPhrase();
     this.deps.onSettingsChanged();
   }
+
+  /** Server values become what fields are compared with: a field that differs from them is an unsaved edit. */
+  private rememberServerValues(response: AdminClientMessageSettings): void {
+    const server: FormValues = { ...response };
+    const next: FormValues = { ...this.baseValues };
+    for (const key of Object.keys(next)) {
+      if (server[key] !== undefined) next[key] = server[key];
+    }
+    this.baseValues = next;
+  }
+
   private fail(error: unknown, title: string, fallback: string): void {
     const message = apiErrorMessage(error, fallback);
     this.error.set(message);

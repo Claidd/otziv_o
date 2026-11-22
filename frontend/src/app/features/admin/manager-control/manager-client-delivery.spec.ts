@@ -135,6 +135,32 @@ describe('queued manager messages in the web card', () => {
     fixture.destroy();
   });
 
+  it('offers «Сверка отправки» on open automation, common invoice and order cards about an unconfirmed send', () => {
+    const fresh = { ...card, type: 'AUTOMATION_FAILURE', reason: 'state_transaction_outcome_uncertain' };
+    const { fixture, page } = pageWithFreshCard(fresh, true);
+    expect(page.isUncertainDeliveryForHandoff(fresh)).toBe(true);
+    // A decision closes the card on the server: the closed card has nothing left to check.
+    expect(page.isUncertainDeliveryForHandoff({ ...fresh, itemStatus: 'RESOLVED' })).toBe(false);
+    expect(page.isUncertainDeliveryForHandoff({ ...fresh, type: 'COMMON_INVOICE_AUTOMATION',
+      reason: 'Результат предыдущей отправки клиенту не подтверждён: WhatsApp не прислал квитанцию' })).toBe(true);
+    // Order cards repeat the task's own error text.
+    const orderCard = { ...card, type: 'ORDER', delivery: null,
+      reason: 'Почему в контроле: автоответчик не обработал заказ — Исход внешней отправки не определен; повтор заблокирован.' };
+    expect(page.isUncertainDeliveryForHandoff(orderCard)).toBe(true);
+    expect(page.isUncertainDeliveryForHandoff({ ...orderCard,
+      reason: 'Почему в контроле: автоответчик не обработал заказ — Подготовленная отправка прервалась.' })).toBe(true);
+    expect(page.isUncertainDeliveryForHandoff({ ...orderCard, reason: 'Почему в контроле: заказ просрочен.' })).toBe(false);
+    // The manager's own send from the card is checked by «Проверить отправку», not by this decision.
+    expect(page.isUncertainDeliveryForHandoff({ ...orderCard, delivery })).toBe(false);
+
+    const reload = vi.spyOn(page, 'load').mockImplementation(() => undefined);
+    page.handoffUncertainDelivery(fresh);
+    page.completeDeliveryHandoff({ ...fresh, itemStatus: 'RESOLVED', comment: 'Задача закрыта' });
+    expect(reload).toHaveBeenCalledWith({ silent: true });
+    expect(page.deliveryHandoffItem()).toBeNull();
+    fixture.destroy();
+  });
+
   it.each(['QUEUED', 'UNKNOWN'])('keeps the authoritative %s operation blocked after refreshing details', status => {
     const current = { ...delivery, operationId: '00000000-0000-0000-0000-000000000042', status };
     const fresh = { ...card, delivery: current };

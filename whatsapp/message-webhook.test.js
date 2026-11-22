@@ -487,3 +487,115 @@ test("reconciliation resolves participant LID before redelivering an existing me
 
   assert.equal(payloads[0].from, "79991112233@c.us");
 });
+
+test("tracks a captioned attachment with the marker in front of the caption", async () => {
+  assert.equal(trackedBody({ type: "image", hasMedia: true, body: " Спасибо 🙏 " }), "[Вложение: image] Спасибо 🙏");
+  assert.equal(trackedBody({ type: "document", hasMedia: true, body: "Счёт.pdf" }), "[Вложение: document] Счёт.pdf");
+  assert.equal(trackedBody({ type: "video", hasMedia: false, body: "Отзыв" }), "[Вложение: video] Отзыв");
+  // Attachment-only messages, plain text and non-media types keep their exact previous form.
+  assert.equal(trackedBody({ type: "image", hasMedia: true, body: "" }), "[Вложение: image]");
+  assert.equal(trackedBody({ type: "chat", body: "Спасибо" }), "Спасибо");
+  assert.equal(trackedBody({ type: "chat", hasMedia: true, body: "Спасибо" }), "Спасибо");
+  assert.equal(trackedBody({ body: "Спасибо" }), "Спасибо");
+  assert.equal(trackedBody({ type: "location", body: "Офис на Ленина" }), "Офис на Ленина");
+
+  const calls = [];
+  const handler = createMessageHandler({
+    clientId: "whatsapp_vika",
+    postWebhook: async (route, payload) => calls.push({ route, payload }),
+  });
+  await handler({
+    from: "12001@g.us",
+    id: { _serialized: "media-2" },
+    type: "image",
+    hasMedia: true,
+    body: "Спасибо 🙏",
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].payload.message, "[Вложение: image] Спасибо 🙏");
+});
+
+test("recognises the gateway's own captioned document by the caption it registered", async () => {
+  const calls = [];
+  const registry = new RecentOutboundRegistry();
+  registry.begin("12001@g.us", "Счёт на оплату");
+  const handler = createMessageHandler({
+    clientId: "whatsapp_vika",
+    outboundRegistry: registry,
+    postWebhook: async (path, payload) => calls.push(payload),
+  });
+
+  await handler({ from: "12001@g.us", type: "document", hasMedia: true, body: "Счёт на оплату", fromMe: true });
+  await handler({ from: "12001@g.us", type: "document", hasMedia: true, body: "Другой файл", fromMe: true });
+
+  assert.equal(calls[0].message, "[Вложение: document] Счёт на оплату");
+  assert.equal(calls[0].systemGenerated, true);
+  assert.equal(calls[1].message, "[Вложение: document] Другой файл");
+  assert.equal(calls[1].systemGenerated, false);
+});
+
+test("reconciliation tracks captioned attachments with the marker and keeps generated-message evidence", async () => {
+  const outboundRegistry = new RecentOutboundRegistry();
+  outboundRegistry.begin("120363000000000000@g.us", "Счёт на оплату");
+  const payloads = await reconciliationPayloads({
+    clientId: "whatsapp_vika",
+    groupId: "120363000000000000@g.us",
+    groupName: "Клиент",
+    afterTimestamp: 100,
+    outboundRegistry,
+    messages: [
+      {
+        id: { _serialized: "invoice" },
+        timestamp: 110,
+        type: "document",
+        hasMedia: true,
+        body: "Счёт на оплату",
+        fromMe: true,
+      },
+      {
+        id: { _serialized: "receipt" },
+        timestamp: 120,
+        author: "70000000001@c.us",
+        type: "image",
+        hasMedia: true,
+        body: "Спасибо 🙏",
+      },
+    ],
+  });
+
+  assert.equal(payloads.length, 2);
+  assert.equal(payloads[0].message, "[Вложение: document] Счёт на оплату");
+  assert.equal(payloads[0].systemGenerated, true);
+  assert.equal(payloads[1].message, "[Вложение: image] Спасибо 🙏");
+  assert.equal(payloads[1].systemGenerated, false);
+});
+
+test("an edited caption keeps the attachment marker of the original message", async () => {
+  const calls = [];
+  const handler = createEditHandler({
+    clientId: "whatsapp_lika",
+    postWebhook: async (route, payload) => { calls.push({ route, payload }); return { queued: true }; },
+    now: () => 1_700_000_999_000,
+  });
+
+  await handler({
+    from: "12001@g.us",
+    author: "79834636568@c.us",
+    type: "image",
+    hasMedia: true,
+    body: "Спасибо",
+    id: { _serialized: "false_12001@g.us_3EB0RECEIPT" },
+  }, "Спасибо, оплатила");
+  await handler({
+    from: "12001@g.us",
+    author: "79834636568@c.us",
+    type: "chat",
+    body: "Текст",
+    id: { _serialized: "false_12001@g.us_3EB0TEXT" },
+  }, "Исправленный текст");
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].payload.message, "[Вложение: image] Спасибо, оплатила");
+  assert.equal(calls[1].payload.message, "Исправленный текст");
+});

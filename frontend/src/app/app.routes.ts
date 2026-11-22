@@ -2,6 +2,10 @@ import { Routes } from '@angular/router';
 import type { UrlMatchResult, UrlSegment } from '@angular/router';
 import { roleGuard } from './core/role.guard';
 
+/** «Справочники» ask before leaving with unsaved edits: the page itself knows what is unsaved. */
+export const confirmLeaveDictionaries = (component: { confirmLeavePage?: () => boolean } | null): boolean =>
+  component?.confirmLeavePage?.() ?? true;
+
 const REVIEW_SHORT_LINK_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function reviewShortLinkMatcher(segments: UrlSegment[]): UrlMatchResult | null {
@@ -446,6 +450,7 @@ export const routes: Routes = [
     loadComponent: () => import('./features/admin/dictionaries/admin-dictionaries.component')
       .then((m) => m.AdminDictionariesComponent),
     canActivate: [roleGuard],
+    canDeactivate: [confirmLeaveDictionaries],
     data: {
       roles: ['ADMIN', 'OWNER'],
       initialTab: 'phones'
@@ -462,6 +467,7 @@ export const routes: Routes = [
     loadComponent: () => import('./features/admin/dictionaries/admin-dictionaries.component')
       .then((m) => m.AdminDictionariesComponent),
     canActivate: [roleGuard],
+    canDeactivate: [confirmLeaveDictionaries],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER']
     }

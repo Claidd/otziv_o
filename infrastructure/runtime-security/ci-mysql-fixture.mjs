@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { repositoryInventory, composeFiles } from './upstream-images.mjs';
 import { createEvidenceReader, validateActivation } from './reviewed-image-defaults.mjs';
 import { reviewedImageSetForComponent } from './reviewed-image-sets.mjs';
-import { validateDatabaseTransitionReadiness } from './mysql-c62-readiness.mjs';
+import { validateDatabaseTransitionReadiness } from './mysql-c63-readiness.mjs';
 
 export function selectMysqlFixture(activations, inventory) {
   assert.equal(activations?.schema, 'otziv-reviewed-image-activations-v1', 'ci_mysql_activation_schema');

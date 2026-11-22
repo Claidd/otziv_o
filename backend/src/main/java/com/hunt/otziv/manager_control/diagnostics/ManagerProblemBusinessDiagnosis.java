@@ -260,29 +260,16 @@ final class ManagerProblemBusinessDiagnosis {
                                     "Система", "В журнале существующей отправки сохранён проверяемый результат сверки. Отсутствие сообщения в доступной истории не доказывает, что отправки не было.", List.of(fact.reference()))),
                     List.of("Результат существующей отправки подтверждён проверяемой записью, а причина замечания по счёту устранена. Запуск проверки сам по себе замечание не закрывает."));
         }
-        boolean periodicReminder = isCurrentPeriodicReminder(facts, fact);
-        String action = periodicReminder
-                ? "Система проверяет подтверждение в исходном канале и автоматически восстанавливает очередь плановых напоминаний на будущий срок с полным интервалом ожидания. Старая неподтверждённая отправка не повторяется. Если восстановлению мешает другая незавершённая отправка, нужна сверка администратором."
-                : "Система сверяет существующую отправку с квитанцией исходного канала. Если подтверждения нет, нужна сверка администратором. От менеджера не требуется подтверждать доставку или повторять отправку. Новое сообщение не создаётся.";
-        String verification = periodicReminder
-                ? "Подтверждена отправка либо восстановлена очередь плановых напоминаний с указанным сроком. Оплату и проверку отзывов система закрывает только по их фактическому результату."
-                : "Результат существующей отправки подтверждён проверяемой записью, а причина замечания устранена. Запуск проверки сам по себе замечание не закрывает.";
-        return new Diagnosis("Результат предыдущей отправки клиенту не подтверждён. Повторное сообщение может оказаться дубликатом.",
-                List.of(), List.of(), List.of("Нужно подтверждение результата существующей отправки."),
-                List.of(new Action("CHECK_DELIVERY", action,
-                                "Система", periodicReminder
-                                    ? "Сохранена квитанция исходной отправки либо проверяемый срок следующего планового напоминания. Прежний неопределённый результат остаётся в истории без повтора."
-                                    : "Сохранено подтверждение результата именно существующей отправки. Отсутствие сообщения в доступной истории не доказывает, что отправки не было.", List.of(fact.reference()))),
-                List.of(verification));
-    }
-
-    private static boolean isCurrentPeriodicReminder(List<Fact> facts, Fact uncertain) {
-        if (!"automation".equals(uncertain.subject())) return false;
-        String prefix = uncertain.reference().substring(0, uncertain.reference().lastIndexOf(':') + 1);
-        return facts.stream().anyMatch(f -> f.reference().equals(prefix + "scenario")
-                    && Set.of("REVIEW_CHECK_REMINDER", "PAYMENT_REMINDER").contains(f.value()))
-                && facts.stream().anyMatch(f -> f.reference().equals(prefix + "state_status") && "ACTIVE".equals(f.value()))
-                && facts.stream().anyMatch(f -> f.reference().equals(prefix + "current_cycle") && "true".equals(f.value()));
+        // The system checks receipts and re-sends once by itself after 24 h; then the manager decides in the card.
+        String action = "Откройте чат клиента и нажмите «Сверка отправки»: «Сообщение есть в чате» засчитает отправку, "
+                + "«Сообщения нет — отправить снова» отправит его заново, «Не отправлять» закроет задачу на этом этапе заказа.";
+        return new Diagnosis("Результат предыдущей отправки клиенту не подтверждён: WhatsApp не прислал квитанцию, "
+                + "а повторная проверка системы не помогла.",
+                List.of(), List.of(), List.of("Нужна проверка чата клиента менеджером."),
+                List.of(new Action("CHECK_DELIVERY", action, "Менеджер",
+                        "Решение сохранено в карточке; при «отправить снова» новое сообщение ушло в разрешённое время.",
+                        List.of(fact.reference()))),
+                List.of("Отправка засчитана, отправлена заново или задача закрыта решением менеджера."));
     }
 
     private static Diagnosis invoice(List<Fact> facts) {

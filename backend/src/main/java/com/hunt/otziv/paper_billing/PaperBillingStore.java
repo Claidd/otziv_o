@@ -165,7 +165,8 @@ public class PaperBillingStore implements com.hunt.otziv.client_messages.api.Del
         jdbc.update("UPDATE paper_invoice_document SET error_text=?,updated_at=NOW(6) WHERE id=? AND cancelled_at IS NULL AND NOT(error_text <=> ?)",
                 text.substring(0,Math.min(700,text.length())),id,text.substring(0,Math.min(700,text.length())));
         if(Set.of("not_ready","whatsapp_client_missing","whatsapp_group_missing","telegram_group_missing","max_group_missing",
-                "max_not_configured","chat_platform_missing","chat_platform_unknown","unauthorized","invalid_request","payload_too_large").contains(Objects.toString(code,"")))
+                "max_not_configured","chat_platform_missing","chat_platform_unknown","unauthorized","invalid_request","payload_too_large",
+                "telegram_chat_unavailable","telegram_not_configured","max_chat_unavailable").contains(Objects.toString(code,"")))
             jdbc.update("UPDATE paper_invoice_document SET work_next_attempt_at=DATE_ADD(NOW(6),INTERVAL 30 MINUTE) WHERE id=? AND (message_delivery='PENDING' OR invoice_delivery='PENDING' OR act_delivery='PENDING')",id);
         jdbc.update("""
             INSERT IGNORE INTO paper_invoice_event(document_id,event_key,body)

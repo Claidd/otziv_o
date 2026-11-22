@@ -493,6 +493,9 @@ export interface ManagerReportDisputeResolutionPayload {
   comment?: string | null;
 }
 
+/** What the manager saw in the client's chat for an unconfirmed send. */
+export type UncertainDeliveryDecision = 'SEEN_IN_CHAT' | 'NOT_IN_CHAT' | 'CLOSE';
+
 @Injectable({ providedIn: 'root' })
 export class ManagerControlApi {
   constructor(private readonly http: HttpClient) {}
@@ -636,6 +639,14 @@ export class ManagerControlApi {
   uncertainDelivery(concreteItemId: number): Observable<{ stateId: number; operationId: string; message: string; preparedAt: string; chatUrl: string | null }> {
     return this.http.get<{ stateId: number; operationId: string; message: string; preparedAt: string; chatUrl: string | null }>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/uncertain-delivery`);
+  }
+
+  /** The manager's decision on an unconfirmed autoresponder send («Сверка отправки»). */
+  decideUncertainDelivery(concreteItemId: number, operationId: string, decision: UncertainDeliveryDecision,
+                          note: string): Observable<ManagerControlConcreteItem> {
+    return this.http.post<ManagerControlConcreteItem>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/handoff-uncertain-delivery`,
+      { operationId, note, checkedChat: true, decision });
   }
 
   handoffUncertainDelivery(concreteItemId: number, operationId: string, note: string): Observable<ManagerControlConcreteItem> {

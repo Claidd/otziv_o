@@ -92,7 +92,11 @@ public class ApiAdminPhoneController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Оператор не найден");
         }
         TelephoneDTO dto = toDto(request, telephoneService.createEmptyDTO());
-        return toResponse(telephoneService.createTelephone(dto));
+        TelephoneDTO created = telephoneService.createTelephone(dto);
+        // The created DTO holds the operator of an already closed transaction: its user is a lazy proxy, and naming the
+        // operator in the response failed with 500 after the phone was stored (a retry then hit the unique number). The
+        // response reads the phone again with its operator, as an update does.
+        return toResponse(telephoneService.getTelephoneDTOById(created.getId()));
     }
 
     @PutMapping("/{id}")

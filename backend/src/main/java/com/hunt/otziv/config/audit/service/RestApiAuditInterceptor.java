@@ -44,7 +44,8 @@ public class RestApiAuditInterceptor implements HandlerInterceptor {
         String login = currentLogin(request);
         String method = request.getMethod();
         String path = actionResolver.bestPattern(request);
-        int status = response.getStatus();
+        // A response already committed (e.g. the client went away after the body) really carried its status.
+        int status = response.isCommitted() ? response.getStatus() : loggedStatus(response.getStatus(), exception);
 
         if (exception == null) {
             auditLog.info("{} {} | httpStatus={} | {} - {}", method, path, status, action, login);
@@ -60,6 +61,18 @@ public class RestApiAuditInterceptor implements HandlerInterceptor {
                 login,
                 exception.getClass().getSimpleName()
         );
+    }
+
+    /**
+     * DispatcherServlet passes the exception here only when no resolver handled it. The
+     * response still holds its default 200 at that point; the container answers 500 only
+     * afterwards, so logging the raw status would record a failed request as a success.
+     */
+    static int loggedStatus(int responseStatus, Exception exception) {
+        if (exception != null && responseStatus < 400) {
+            return 500;
+        }
+        return responseStatus;
     }
 
     private boolean isRestEndpoint(HandlerMethod handlerMethod) {

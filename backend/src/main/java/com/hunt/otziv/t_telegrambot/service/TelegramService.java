@@ -700,6 +700,37 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         return message.getCaption() == null ? "" : message.getCaption();
     }
 
+    /**
+     * Client-chat tracking text. A caption keeps the attachment marker the gateways use
+     * («[Вложение: <type>] <caption>»): a receipt photo captioned «Спасибо 🙏» is a file to check,
+     * not a courtesy reply. Command and reply matching keep using {@link #telegramMessageText},
+     * because bot prompts sent as captioned pictures are matched by their plain caption.
+     */
+    static String telegramTrackedText(Message message) {
+        if (message == null) {
+            return "";
+        }
+        if (message.hasText()) {
+            return message.getText();
+        }
+        String caption = message.getCaption() == null ? "" : message.getCaption();
+        String type = telegramAttachmentType(message);
+        if (type == null) return caption;
+        // The same marker as WhatsApp and MAX: a receipt photo is recognised as a file to look at, with or without caption.
+        return caption.isBlank() ? "[Вложение: " + type + "]" : "[Вложение: " + type + "] " + caption.trim();
+    }
+
+    /** Bot API names of the media that can carry a caption; a GIF also carries a document, so it goes first. */
+    private static String telegramAttachmentType(Message message) {
+        if (message.hasPhoto()) return "photo";
+        if (message.hasAnimation()) return "animation";
+        if (message.hasDocument()) return "document";
+        if (message.hasVideo()) return "video";
+        if (message.hasAudio()) return "audio";
+        if (message.hasVoice()) return "voice";
+        return null;
+    }
+
     private void trackTelegramGroupMessage(Update update) {
         if (clientChatMessageTrackerService == null || update == null || !update.hasMessage()) {
             return;
@@ -716,7 +747,7 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
                     message.getMessageId() == null ? null : String.valueOf(message.getMessageId()),
                     from == null || from.getId() == null ? null : String.valueOf(from.getId()),
                     telegramSenderName(from),
-                    telegramMessageText(message),
+                    telegramTrackedText(message),
                     telegramMessageTime(message.getDate())
             ));
         } catch (Exception e) {
@@ -735,7 +766,7 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
                     ClientChatPlatform.TELEGRAM,
                     String.valueOf(message.getChatId()),
                     String.valueOf(message.getMessageId()),
-                    telegramMessageText(message),
+                    telegramTrackedText(message),
                     message.getEditDate() == null ? LocalDateTime.now() : telegramMessageTime(message.getEditDate())
             ));
         } catch (Exception e) {
@@ -1281,8 +1312,62 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             String parseMode,
             List<List<InlineKeyboardButton>> keyboard
     ) {
-        if (!sendingEnabled || !looksLikeTelegramBotToken(getBotToken()) || !hasText(text)) {
-            return Optional.empty();
+        return sendMessageOnceWithInlineKeyboard(chatId, text, parseMode, keyboard).confirmedMessageId();
+    }
+
+    /**
+     * Refusal labels of {@link SendOnceResult} for an attempt that never left the service. A chat access
+     * refusal carries the TelegramDeliveryFailure label instead: chat_not_found, bot_removed, bot_blocked
+     * or chat_permission_denied.
+     */
+    public static final String SEND_ONCE_SENDING_DISABLED = "sending_disabled";
+    public static final String SEND_ONCE_NOT_CONFIGURED = "not_configured";
+    public static final String SEND_ONCE_MESSAGE_EMPTY = "message_empty";
+
+    /**
+     * Outcome of one durable attempt. {@code refusal} is set only when the message certainly did not
+     * reach the chat: sending is switched off, the bot is not configured, or Telegram answered 400/403
+     * about chat access. Then the same operation may be tried again. Neither id nor refusal means the
+     * outcome is unknown and must be reconciled.
+     */
+    public record SendOnceResult(Integer messageId, String refusal) {
+        public static SendOnceResult sent(int messageId) {
+            return new SendOnceResult(messageId, null);
+        }
+
+        public static SendOnceResult refused(String refusal) {
+            return new SendOnceResult(null, refusal);
+        }
+
+        public static SendOnceResult unknown() {
+            return new SendOnceResult(null, null);
+        }
+
+        public boolean confirmed() {
+            return messageId != null && messageId > 0;
+        }
+
+        public Optional<Integer> confirmedMessageId() {
+            return confirmed() ? Optional.of(messageId) : Optional.empty();
+        }
+    }
+
+    /** Same single attempt as {@link #sendMessageOnceWithInlineKeyboardMessageId}, but tells a refusal from an unknown. */
+    public SendOnceResult sendMessageOnceWithInlineKeyboard(
+            long chatId,
+            String text,
+            String parseMode,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        // No request leaves the service in these cases, so the operation is known to be unsent.
+        if (!sendingEnabled) {
+            return SendOnceResult.refused(SEND_ONCE_SENDING_DISABLED);
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            return SendOnceResult.refused(SEND_ONCE_NOT_CONFIGURED);
+        }
+        if (!hasText(text)) {
+            return SendOnceResult.refused(SEND_ONCE_MESSAGE_EMPTY);
         }
         SendMessage request = new SendMessage();
         request.setChatId(String.valueOf(chatId));
@@ -1297,14 +1382,19 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             request.setReplyMarkup(markup);
         }
         try {
-            return Optional.ofNullable(executeTelegramMessage(request))
-                    .map(Message::getMessageId)
-                    .filter(id -> id > 0);
+            Message accepted = executeTelegramMessage(request);
+            Integer messageId = accepted == null ? null : accepted.getMessageId();
+            return messageId != null && messageId > 0 ? SendOnceResult.sent(messageId) : SendOnceResult.unknown();
         } catch (TelegramApiException e) {
             var diagnostic = TelegramDeliveryFailure.describe(e);
+            if (diagnostic.definitiveRefusal()) {
+                log.warn("Telegram refused the delivery attempt; the message was not sent: chatId={}, apiCode={}, reason={}",
+                        chatId, diagnostic.apiCode(), diagnostic.reason());
+                return SendOnceResult.refused(diagnostic.reason());
+            }
             log.warn("Telegram delivery attempt has no confirmed result; automatic resend suppressed: chatId={}, apiCode={}, reason={}, errorType={}",
                     chatId, diagnostic.apiCode(), diagnostic.reason(), e.getClass().getSimpleName());
-            return Optional.empty();
+            return SendOnceResult.unknown();
         }
     }
 

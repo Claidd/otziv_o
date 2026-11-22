@@ -45,10 +45,17 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
     @Override public String queueName() { return "common_invoice"; }
     @Override @Transactional(readOnly = true, timeout = 3)
     public List<Row> deliveryQueueHealth() {
-        return jdbc.query("SELECT state,COUNT(*),GREATEST(0,TIMESTAMPDIFF(SECOND,MIN(created_at),CURRENT_TIMESTAMP(6))),"
+        // A message held by the schedule is on time until its re-check falls due, so its age runs from
+        // next_attempt_at. A dead worker stops re-arming that time, so the age still grows and alerts.
+        // A NULL error_code (never tried) falls to created_at like every other row.
+        Object[] scheduleHolds = SCHEDULE_HOLD_CODES.toArray();
+        // Only "?" placeholders are joined in; the values are bound from the constant SCHEDULE_HOLD_CODES.
+        return jdbc.query("SELECT state,COUNT(*),GREATEST(0,MAX(TIMESTAMPDIFF(SECOND,CASE WHEN state IN ('QUEUED','RETRYABLE') AND error_code IN (" // sql-guard: allow -- bound placeholders only
+                + String.join(",", java.util.Collections.nCopies(scheduleHolds.length, "?"))
+                + ") THEN next_attempt_at ELSE created_at END,CURRENT_TIMESTAMP(6)))),"
                 + "SUM(CASE WHEN lease_until<CURRENT_TIMESTAMP(6) THEN 1 ELSE 0 END) FROM common_invoice_message_queue "
                 + "WHERE replacement_operation_id IS NULL AND state IN ('QUEUED','SENDING','RETRYABLE','UNKNOWN','FAILED') GROUP BY state",
-                (rs, n) -> new Row(State.valueOf(rs.getString(1)), rs.getLong(2), rs.getDouble(3), rs.getLong(4)));
+                (rs, n) -> new Row(State.valueOf(rs.getString(1)), rs.getLong(2), rs.getDouble(3), rs.getLong(4)), scheduleHolds);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

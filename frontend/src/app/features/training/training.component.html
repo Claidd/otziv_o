@@ -37,7 +37,7 @@
 
       <section class="training-shortcuts" aria-label="Быстрые переходы">
         @for (shortcut of tab.shortcuts; track trackShortcut($index, shortcut)) {
-          <a [routerLink]="shortcut.routerLink">
+          <a [routerLink]="shortcut.routerLink" [queryParams]="shortcut.queryParams ?? null">
             <span class="material-icons-sharp">{{ shortcut.icon }}</span>
             {{ shortcut.label }}
           </a>

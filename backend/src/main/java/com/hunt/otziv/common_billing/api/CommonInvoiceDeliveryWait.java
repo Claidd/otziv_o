@@ -17,6 +17,14 @@ public interface CommonInvoiceDeliveryWait {
             "outside_business_window", "daily_limit", "rate_limited", "automation_paused", "live_disabled");
 
     /**
+     * Holds set by the autoresponder's schedule (business window, shared daily limit, sending
+     * interval). They lift on their own, so queue health counts such a message as late only once
+     * its re-check is overdue. Pause and the live switch are left out: nothing lifts them without
+     * a person, so a message waiting behind them is still reported as delayed.
+     */
+    Set<String> SCHEDULE_HOLD_CODES = Set.of("outside_business_window", "daily_limit", "rate_limited");
+
+    /**
      * @param reasonCode the hold code, or empty while the message is queued and not yet tried
      * @param queuedAt   when the message entered the queue
      */

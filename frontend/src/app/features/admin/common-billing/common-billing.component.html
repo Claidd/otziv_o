@@ -504,6 +504,27 @@
           </section>
         }
 
+        @if (canCancelPaperPayment()) {
+          <section class="side-group" aria-labelledby="invoice-side-paper-cancel">
+            <header class="side-group-head">
+              <span class="material-icons-sharp" aria-hidden="true">undo</span>
+              <div>
+                <h4 id="invoice-side-paper-cancel">Ошибочная отметка оплаты</h4>
+                <p>Только если деньги по бумажному счёту на самом деле не приходили.</p>
+              </div>
+            </header>
+            <div class="side-actions">
+              <button type="button" class="side-action danger" (click)="cancelPaperInvoicePayment()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">undo</span>
+                <span class="side-action-text">
+                  <strong>Отменить ошибочную оплату</strong>
+                  <small>Заказы вернутся в «Напоминание», чеки и начисления откатятся, нетронутые следующие заказы удалятся. Бумажный счёт останется выставленным на ту же сумму.</small>
+                </span>
+              </button>
+            </div>
+          </section>
+        }
+
         @if (invoice
           && !invoiceNeedsAttention()
           && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'

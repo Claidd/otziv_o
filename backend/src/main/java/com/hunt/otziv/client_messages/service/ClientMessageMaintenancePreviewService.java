@@ -3,10 +3,13 @@ package com.hunt.otziv.client_messages.service;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.client_messages.dto.ClientMessageMaintenanceApplyResponse;
 import com.hunt.otziv.client_messages.dto.ClientMessageMaintenancePreviewResponse;
+import com.hunt.otziv.common_billing.api.CommonInvoicePaymentOperations;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
+import com.hunt.otziv.payments.api.SpecialistPaymentReviewGate;
+import com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.ResultSet;
@@ -15,9 +18,11 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -28,7 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class ClientMessageMaintenancePreviewService {
 
     private static final List<String> CLOSED_ORDER_STATUSES = List.of("Оплачено", "Архив", "Бан");
-    private static final List<String> OPEN_NEXT_ORDER_REQUEST_STATUSES = List.of("CREATED", "PENDING", "OPEN");
+    // Open requests of the next-order domain (NextOrderRequestService): CREATED is a fulfilled request and stays in the
+    // table, FAILED still waits for a retry. Counting CREATED as open closed legitimate archive offers for good.
+    private static final List<String> OPEN_NEXT_ORDER_REQUEST_STATUSES = List.of("PENDING", "FAILED");
     private static final List<String> PAYMENT_WAITING_STATUSES = List.of("Выставлен счет", "Напоминание");
     private static final int PUBLICATION_STALE_DAYS = 60;
     private static final int PUBLICATION_SPAN_LIMIT_DAYS = 75;
@@ -40,6 +47,9 @@ public class ClientMessageMaintenancePreviewService {
     private final OrderRepository orderRepository;
     private final BadReviewTaskService badReviewTaskService;
     private final OrderStatusTransitionService orderStatusTransitionService;
+    private final SpecialistPaymentReviewGate paymentReviewGate;
+    private final ReviewRecoveryMessageHold reviewRecoveryMessageHold;
+    private final ObjectProvider<CommonInvoicePaymentOperations> commonInvoicePaymentsProvider;
 
     @Transactional(readOnly = true)
     public ClientMessageMaintenancePreviewResponse preview() {
@@ -123,12 +133,16 @@ public class ClientMessageMaintenancePreviewService {
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS,
                 60
         );
+        // A bank paper invoice on hold and an already settled payment are never «overdue» (the background escalation
+        // skips them too).
         List<Long> orderIds = jdbc.queryForList("""
                 SELECT o.order_id
                 FROM orders o
                 JOIN order_statuses os ON os.order_status_id = o.order_status
                 WHERE os.order_status_title IN (:paymentStatuses)
                   AND TIMESTAMPDIFF(DAY, COALESCE(o.order_status_changed_at, o.order_changed, o.order_created), NOW()) >= :paymentOverdueDays
+                  AND o.paper_invoice_automation_hold = 0
+                  AND NOT (o.order_complete = 1 AND o.order_pay_day IS NOT NULL)
                 ORDER BY o.order_status_changed_at ASC, o.order_id ASC
                 LIMIT 200
                 """, new MapSqlParameterSource()
@@ -137,8 +151,15 @@ public class ClientMessageMaintenancePreviewService {
 
         long changed = 0;
         long failed = 0;
+        long skipped = 0;
         for (Long orderId : orderIds) {
             try {
+                // A payment the manager reported and that is still being checked, an active review recovery and an
+                // order of an active common invoice keep their status: the background escalation leaves them alone.
+                if (overdueTransferBlocked(orderId)) {
+                    skipped++;
+                    continue;
+                }
                 if (Boolean.TRUE.equals(orderStatusTransitionService.changeStatusForOrder(orderId, "Не оплачено"))) {
                     changed++;
                 }
@@ -151,8 +172,18 @@ public class ClientMessageMaintenancePreviewService {
                 "payment-overdue",
                 changed,
                 "Просроченные счета переведены в Не оплачено через бизнес-логику: " + changed
+                        + (skipped > 0 ? ", пропущено (идёт сверка оплаты, восстановление отзывов или общий счёт): " + skipped : "")
                         + (failed > 0 ? ", не удалось: " + failed : "")
         );
+    }
+
+    private boolean overdueTransferBlocked(Long orderId) {
+        if (paymentReviewGate.hasPendingReview(orderId) || reviewRecoveryMessageHold.shouldPauseActiveOrder(orderId)) {
+            return true;
+        }
+        CommonInvoicePaymentOperations commonInvoices = commonInvoicePaymentsProvider.getIfAvailable();
+        return commonInvoices != null && commonInvoices.isOrderInActiveCommonInvoice(orderId)
+                && !commonInvoices.allowsStandalonePaymentAfterPaperCancellation(orderId);
     }
 
     @Transactional
@@ -198,14 +229,22 @@ public class ClientMessageMaintenancePreviewService {
 
     @Transactional
     public ClientMessageMaintenanceApplyResponse blockInvalidArchiveOffers() {
+        // A state being delivered (claimed, with a prepared envelope or an open transaction) is left to the worker:
+        // closing it here would hide an uncertain delivery from the manual handover, as the monitor actions refuse to.
         long changed = jdbc.update("""
                 UPDATE scheduled_client_message_state s
                 SET s.state_status = 'DONE',
                     s.last_error_code = 'archive_reorder_blocked',
                     s.last_error_message = 'У компании уже есть активный заказ или открытая заявка на следующий заказ',
+                    s.next_attempt_at = NULL,
                     s.updated_at = NOW(6)
                 WHERE s.scenario = 'ARCHIVE_REORDER_OFFER'
                   AND s.state_status = 'ACTIVE'
+                  AND s.delivery_status IS NULL
+                  AND COALESCE(s.delivery_envelope, '') = ''
+                  AND (s.locked_until IS NULL OR s.locked_until < NOW(6))
+                  AND LOWER(COALESCE(s.last_error_code, '')) NOT IN
+                      ('state_transaction_in_progress', 'state_transaction_outcome_uncertain', 'legacy_operation_unverified')
                   AND (
                     EXISTS (
                       SELECT 1
@@ -221,7 +260,7 @@ public class ClientMessageMaintenancePreviewService {
                         AND norq.request_status IN (:openRequestStatuses)
                     )
                   )
-                """, baseParams());
+                """, archiveOfferParams());
 
         return applyResponse(
                 "archive-offers",
@@ -832,7 +871,7 @@ public class ClientMessageMaintenancePreviewService {
     }
 
     private ClientMessageMaintenancePreviewResponse.ArchiveOfferPreview archiveOffers() {
-        MapSqlParameterSource params = baseParams();
+        MapSqlParameterSource params = archiveOfferParams();
         Map<String, Object> row = jdbc.queryForMap("""
                 SELECT COUNT(*) AS active_states,
                        SUM(s.next_attempt_at <= NOW()) AS due_now,
@@ -924,6 +963,33 @@ public class ClientMessageMaintenancePreviewService {
         return new MapSqlParameterSource()
                 .addValue("closedStatuses", CLOSED_ORDER_STATUSES)
                 .addValue("openRequestStatuses", OPEN_NEXT_ORDER_REQUEST_STATUSES);
+    }
+
+    /**
+     * Archive offers are judged by the autoresponder's own settings (inactive order statuses and open next-order request
+     * statuses), so the preview counts and the bulk block match what the background sending itself would skip.
+     */
+    private MapSqlParameterSource archiveOfferParams() {
+        return new MapSqlParameterSource()
+                .addValue("closedStatuses", listSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES))
+                .addValue("openRequestStatuses", listSetting(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES));
+    }
+
+    private List<String> listSetting(String key, String fallbackCsv) {
+        List<String> values = splitCsv(appSettingService.getString(key, fallbackCsv));
+        return values.isEmpty() ? splitCsv(fallbackCsv) : values;
+    }
+
+    private static List<String> splitCsv(String value) {
+        if (value == null) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .toList();
     }
 
     private long number(Map<String, Object> row, String key) {

@@ -215,16 +215,17 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
                 .contains("<b>Группа:</b> Company").contains("Похожих компаний</b> по названию группы нет"));
     }
 
-    private WhatsAppGroupReplyDTO sticker(String client, int group, String messageId) {
+    // A photo, not a sticker: bare stickers from groups without a company are no longer kept.
+    private WhatsAppGroupReplyDTO attachment(String client, int group, String messageId) {
         return new WhatsAppGroupReplyDTO(client, group+"@g.us", "", "sender@c.us", "Мария",
-                messageId, 1794142749L, false, false, "[Вложение: sticker]");
+                messageId, 1794142749L, false, false, "[Вложение: image]");
     }
 
     @Test void aBurstAcrossTicksProducesOneBoundedDigestForEachAccountAndOnlyAcknowledgesItsSnapshot() {
         when(telegram.canSendAdminAlerts()).thenReturn(true);
-        for (int i=0;i<56;i++) accept(sticker("whatsapp_vika", i, "m"+i));
-        accept(sticker("whatsapp_vika", 0, "second"));
-        accept(sticker("whatsapp_lika", 0, "other"));
+        for (int i=0;i<56;i++) accept(attachment("whatsapp_vika", i, "m"+i));
+        accept(attachment("whatsapp_vika", 0, "second"));
+        accept(attachment("whatsapp_lika", 0, "other"));
         when(whatsApp.groupsSnapshot("whatsapp_vika")).thenReturn(new WhatsAppService.GroupsSnapshot(
                 List.of(new WhatsAppGroupInfo("0@g.us","Вика <Отзывы>",null)),true,false,null));
         when(whatsApp.groupsSnapshot("whatsapp_lika")).thenReturn(new WhatsAppService.GroupsSnapshot(
@@ -237,14 +238,14 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
         jdbc.update("UPDATE whatsapp_unlinked_events SET created_at=created_at-INTERVAL 1 MINUTE WHERE group_id='0@g.us'");
         when(telegram.sendHtmlAlertToAdmins(anyString())).thenAnswer(call -> {
             if (call.getArgument(0,String.class).contains("whatsapp_vika")) {
-                accept(sticker("whatsapp_vika", 0, "arrived_during_send"));
+                accept(attachment("whatsapp_vika", 0, "arrived_during_send"));
                 assertThat(notifier.notifyDue()).isZero();
             }
             return true;
         });
         assertThat(notifier.notifyDue()).isEqualTo(57);
         verify(telegram).sendHtmlAlertToAdmins(argThat(s -> s.contains("Групп:</b> 56") && s.contains("Сообщений:</b> 57")
-                && s.contains("стикеров:</b> 57") && s.contains("Вика &lt;Отзывы&gt;") && s.contains("Ещё групп: 46")
+                && !s.contains("стикеров") && s.contains("Вика &lt;Отзывы&gt;") && s.contains("Ещё групп: 46")
                 && !s.contains("Лика") && s.length()<4096));
         verify(telegram).sendHtmlAlertToAdmins(argThat(s -> s.contains("Группа:</b> Лика &amp; Ко") && !s.contains("Вика")));
         verify(whatsApp,times(1)).groupsSnapshot("whatsapp_vika");
@@ -258,9 +259,9 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
 
     @Test void continuousActivityFlushesAfterTenMinutesAndUnavailableDirectoryDoesNotBlockTheNotice() {
         when(telegram.canSendAdminAlerts()).thenReturn(true);
-        accept(sticker("whatsapp_vika", 1, "first"));
+        accept(attachment("whatsapp_vika", 1, "first"));
         jdbc.update("UPDATE whatsapp_unlinked_events SET created_at=NOW(6)-INTERVAL 11 MINUTE");
-        accept(sticker("whatsapp_vika", 2, "fresh"));
+        accept(attachment("whatsapp_vika", 2, "fresh"));
         when(whatsApp.groupsSnapshot("whatsapp_vika")).thenReturn(WhatsAppService.GroupsSnapshot.unavailable());
         assertThat(noticeQueue()).isEqualTo(2);
         when(telegram.sendHtmlAlertToAdmins(anyString())).thenReturn(false,true);
@@ -269,5 +270,59 @@ class WhatsAppUnlinkedEventMySqlIntegrationTest {
         assertThat(notifier.notifyDue()).isEqualTo(2);
         assertThat(sentNotice()).contains("1@g.us","2@g.us");
         assertThat(noticeQueue()).isZero();
+    }
+
+    WhatsAppGroupReplyDTO message(String messageId,boolean fromMe,String text) {
+        return new WhatsAppGroupReplyDTO("client","group@g.us","Company","sender@c.us","Client",messageId,1793635200L,fromMe,false,text);
+    }
+    long open() {return jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_unlinked_events WHERE completed_at IS NULL",Long.class);}
+
+    @Test void stickersAndOwnMessagesAreAcknowledgedWithoutBeingKeptUnlessTheyAnswerAWaitingClient() {
+        accept(message("sticker",false,"[Вложение: sticker]"));
+        accept(message("own-first",true,"Добрый день"));
+        assertThat(open()).isZero();
+        assertThat(store.hasWaitingClientMessage("client","group@g.us")).isFalse();
+
+        accept(message("question",false,"Когда будет публикация?"));
+        assertThat(store.hasWaitingClientMessage("client","group@g.us")).isTrue();
+        accept(message("own-answer",true,"Завтра"));
+        assertThat(open()).isEqualTo(2);
+        // Skipped messages are acknowledged too, so the gateway does not deliver them again.
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_inbound_receipts WHERE completed_at IS NOT NULL",Long.class)).isEqualTo(4);
+        verifyNoInteractions(tracker);
+
+        // Linking replays the question and then the answer, so the question is not left unanswered.
+        jdbc.update("UPDATE whatsapp_unlinked_events SET created_at=created_at-INTERVAL 1 SECOND WHERE payload_json->>'$.messageId'='question'");
+        bind();recovery.recover();
+        var tracked=ArgumentCaptor.forClass(com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand.class);
+        verify(tracker,times(2)).track(tracked.capture(),any());
+        assertThat(tracked.getAllValues().stream().map(command->command.externalMessageId()).toList())
+                .containsExactly("question","own-answer");
+        assertThat(open()).isZero();
+    }
+
+    @Test void theOldStickerBacklogIsNotCountedAsQueueAndIsClosedAfterADay() {
+        // Saved before stickers from groups without a company stopped being kept.
+        store.defer(message("old-sticker",false,"[Вложение: sticker]"),"company_missing");
+        store.defer(message("new-sticker",false,"[Вложение: sticker]"),"company_missing");
+        store.defer(message("photo",false,"[Вложение: image]"),"company_missing");
+        jdbc.update("UPDATE whatsapp_unlinked_events SET created_at=NOW(6)-INTERVAL 25 HOUR WHERE payload_json->>'$.messageId' IN ('old-sticker','photo')");
+        var health=store.deliveryQueueHealth().getFirst();
+        assertThat(health.jobs()).isEqualTo(1);
+        assertThat(health.oldestSeconds()).isBetween(89_000d,91_000d);
+
+        assertThat(store.expireStale()).isEqualTo(1);
+        assertThat(jdbc.queryForList("SELECT reason FROM whatsapp_unlinked_events WHERE completed_at IS NOT NULL AND JSON_LENGTH(payload_json)=0",String.class))
+                .containsExactly("sticker_expired");
+        assertThat(jdbc.queryForList("SELECT payload_json->>'$.messageId' FROM whatsapp_unlinked_events WHERE completed_at IS NULL ORDER BY 1",String.class))
+                .containsExactly("new-sticker","photo");
+        assertThat(store.deliveryQueueHealth().getFirst().jobs()).isEqualTo(1);
+
+        // A sticker that is still open is still summed up in the admin notice.
+        quietPeriodElapsed();
+        assertThat(store.dueNotices()).singleElement().satisfies(notice->{
+            assertThat(notice.receipts()).hasSize(2);
+            assertThat(notice.stickers()).isEqualTo(1);
+        });
     }
 }

@@ -1,8 +1,8 @@
 <section class="bot-browser-page">
   <header class="browser-topbar">
     <div class="browser-title">
-      <a href="/admin/dictionaries" title="Вернуться к справочникам">
-        <span class="material-icons-sharp">arrow_back</span>
+      <a [href]="backLink()" title="Вернуться к аккаунту в справочниках" aria-label="Вернуться к аккаунту в справочниках">
+        <span class="material-icons-sharp" aria-hidden="true">arrow_back</span>
       </a>
       <div>
         <small>Аккаунт #{{ bot()?.botId || '' }}</small>

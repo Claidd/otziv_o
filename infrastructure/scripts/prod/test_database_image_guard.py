@@ -337,6 +337,7 @@ class ContinuityTests(unittest.TestCase):
             ("c57-mysql", guard.REVIEWED_MYSQL_C57_INDEX, guard.REVIEWED_MYSQL_C57_CONFIG, guard.REVIEWED_MYSQL_C57_REFERENCE),
             ("c60-mysql", guard.REVIEWED_MYSQL_C60_INDEX, guard.REVIEWED_MYSQL_C60_CONFIG, guard.REVIEWED_MYSQL_C60_REFERENCE),
             ("c62-mysql", guard.REVIEWED_MYSQL_C62_INDEX, guard.REVIEWED_MYSQL_C62_CONFIG, guard.REVIEWED_MYSQL_C62_REFERENCE),
+            ("c63-mysql", guard.REVIEWED_MYSQL_C63_INDEX, guard.REVIEWED_MYSQL_C63_CONFIG, guard.REVIEWED_MYSQL_C63_REFERENCE),
         ]:
             with self.subTest(proof=proof):
                 publication = HERE.parents[1] / "runtime-security/proofs" / proof / "publication"
@@ -389,6 +390,14 @@ class ContinuityTests(unittest.TestCase):
                 self.state = native_mysql_fixture(image_id, guard.REVIEWED_MYSQL_C60_REFERENCE)
                 self.assertEqual(self.evaluate()["services"]["mysql"], {"pull_policy": "never"})
                 self.state["containers"]["1" * 64]["Image"] = guard.REVIEWED_MYSQL_C57_CONFIG
+                self.reject("Database image change refused")
+
+    def test_c63_restarts_after_activation_but_never_replaces_a_c62_database(self):
+        for image_id in (guard.REVIEWED_MYSQL_C63_CONFIG, guard.REVIEWED_MYSQL_C63_INDEX):
+            with self.subTest(image_id=image_id):
+                self.state = native_mysql_fixture(image_id, guard.REVIEWED_MYSQL_C63_REFERENCE)
+                self.assertEqual(self.evaluate()["services"]["mysql"], {"pull_policy": "never"})
+                self.state["containers"]["1" * 64]["Image"] = guard.REVIEWED_MYSQL_C62_CONFIG
                 self.reject("Database image change refused")
 
     def test_c62_restarts_after_activation_but_never_replaces_a_c60_database(self):

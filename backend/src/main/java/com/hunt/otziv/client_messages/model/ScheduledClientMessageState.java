@@ -101,6 +101,10 @@ public class ScheduledClientMessageState {
     @Column(name = "dispatch_generation", nullable = false)
     private long dispatchGeneration;
 
+    /** When the autoresponder re-sent this occurrence after its outcome stayed unconfirmed for 24 hours; null until then. */
+    @Column(name = "uncertain_auto_resend_at")
+    private LocalDateTime uncertainAutoResendAt;
+
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 

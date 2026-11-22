@@ -278,6 +278,10 @@ public class ApiAdminDictionaryController {
         int skipped = 0;
         List<String> errors = new ArrayList<>();
         String content = readTextFile(file);
+        // Excel saves CSV with a byte order mark: without stripping it the first ID is not a number and the row is lost.
+        if (content.startsWith("﻿")) {
+            content = content.substring(1);
+        }
         String[] lines = content.split("\\R");
         for (int index = 0; index < lines.length; index++) {
             String line = lines[index].trim();
@@ -291,7 +295,7 @@ public class ApiAdminDictionaryController {
             }
             if (columns.length < 3) {
                 skipped++;
-                errors.add("Строка " + (index + 1) + ": нужно city_id, latitude, longitude");
+                errors.add("Строка " + (index + 1) + ": нужны ID города, широта и долгота");
                 continue;
             }
             try {
@@ -309,6 +313,13 @@ public class ApiAdminDictionaryController {
                 city.setDistanceMatrixReady(false);
                 cityRepository.save(city);
                 updated++;
+            } catch (NumberFormatException exception) {
+                // The Java text («For input string: …») means nothing to the owner who reads these rows.
+                skipped++;
+                errors.add("Строка " + (index + 1) + ": ID города, широта и долгота должны быть числами");
+            } catch (ResponseStatusException exception) {
+                skipped++;
+                errors.add("Строка " + (index + 1) + ": " + exception.getReason());
             } catch (Exception exception) {
                 skipped++;
                 errors.add("Строка " + (index + 1) + ": " + exception.getMessage());
@@ -408,9 +419,15 @@ public class ApiAdminDictionaryController {
     @DeleteMapping("/products/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public void deleteProduct(@PathVariable Long id) {
         if (!productRepository.existsById(id)) {
             throw notFound("Продукт не найден");
+        }
+        // The database cascades a product delete into order lines and unlinks reviews,
+        // so a product that orders still use must stay.
+        if (productRepository.countOrderUsagesByProductId(id) > 0) {
+            throw conflict("Продукт уже есть в заказах, поэтому удалить его нельзя.");
         }
         productRepository.deleteById(id);
     }
@@ -551,9 +568,22 @@ public class ApiAdminDictionaryController {
         bot.setFio(requiredText(request.fio(), "ФИО обязательно"));
         bot.setWorker(requiredWorker(request.workerId()));
         bot.setBotCity(optionalCity(request.cityId()));
-        bot.setStatus(requiredBotStatus(request.statusId()));
-        bot.setCounter(requiredCounter(request.counter()));
-        bot.setActive(request.active());
+        // Publications, «Блок» and the 10/20 thresholds change the counter, the status and the activity in the
+        // background while a card is open. A card sends the values it was opened with: a field the user left as it
+        // was keeps the current value of the locked row instead of writing back the one of the moment of opening.
+        boolean keepStatus = request.expectedStatusId() != null && bot.getStatus() != null
+                && java.util.Objects.equals(request.expectedStatusId(), request.statusId());
+        boolean keepCounter = request.expectedCounter() != null && request.expectedCounter() == request.counter();
+        boolean keepActive = request.expectedActive() != null && request.expectedActive() == request.active();
+        if (!keepStatus) {
+            bot.setStatus(requiredBotStatus(request.statusId()));
+        }
+        if (!keepCounter) {
+            bot.setCounter(requiredCounter(request.counter()));
+        }
+        if (!keepActive) {
+            bot.setActive(request.active());
+        }
 
         Bot saved = botsRepository.save(bot);
         botAssignmentService.promoteUnpublishedReviewsForBot(saved);
@@ -832,6 +862,14 @@ public class ApiAdminDictionaryController {
         if (request == null) {
             throw badRequest("Настройки автоответчика не переданы");
         }
+        // A form opened before another administrator (or another tab) changed the settings must not write them back:
+        // otherwise a phrase save could turn sending to clients on again after an emergency stop.
+        String expectedVersion = request.expectedSettingsVersion();
+        if (expectedVersion != null && !expectedVersion.isBlank()
+                && !expectedVersion.equals(clientMessageSettings().settingsVersion())) {
+            throw conflict("Настройки автоответчика изменились после открытия страницы (другой пользователь или вкладка). "
+                    + "Значения обновлены: проверьте их и сохраните снова.");
+        }
 
         String businessWindows = requiredSettingText(request.businessWindows(), "Укажите рабочие окна автоответчика");
         if (!ClientMessageSlotPlanner.isValidWindowsSpec(businessWindows)) {
@@ -847,7 +885,9 @@ public class ApiAdminDictionaryController {
                 AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,
                 request.immediateEnabled() == null || request.immediateEnabled()
         );
-        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_MONITOR_ENABLED, request.monitorEnabled());
+        if (request.expectedMonitorEnabled() == null || request.expectedMonitorEnabled() != request.monitorEnabled()) {
+            appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_MONITOR_ENABLED, request.monitorEnabled());
+        }
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED, request.reviewCheckEnabled());
         appSettingService.setBoolean(
                 AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED,
@@ -871,6 +911,14 @@ public class ApiAdminDictionaryController {
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, request.paymentOverdueLiveEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, request.archiveReorderEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED, request.errorProtectionEnabled());
+        if (!request.errorProtectionEnabled()) {
+            // Switching the protection off also lifts the pause it set; other pauses (their reasons differ) stay.
+            String pauseReason = appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAUSE_REASON, "");
+            if (pauseReason != null && pauseReason.startsWith("За ") && pauseReason.contains(" ошибок.")) {
+                appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL, "");
+                appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAUSE_REASON, "");
+            }
+        }
         appSettingService.setBoolean(
                 AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED,
                 request.unansweredAutoIgnoreEnabled() == null || request.unansweredAutoIgnoreEnabled()
@@ -1631,8 +1679,9 @@ public class ApiAdminDictionaryController {
                 appSettingService.getStringAllowEmpty(
                         AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES,
                         ClientChatAutoIgnoreService.DEFAULT_PHRASES
-                )
-        );
+                ),
+                null
+        ).withSettingsVersion();
     }
 
     private int saveIntSetting(String key, Integer value, int min, int max, String title) {
@@ -1863,6 +1912,11 @@ public class ApiAdminDictionaryController {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, message);
     }
 
+    private ResponseStatusException conflict(String message) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, message);
+    }
+
+
     public record OptionResponse(Long id, String title) {
     }
 
@@ -1958,7 +2012,11 @@ public class ApiAdminDictionaryController {
             Long cityId,
             Long statusId,
             boolean active,
-            int counter
+            int counter,
+            /* Values the card was opened with (null for older clients and new accounts): unchanged fields keep the row. */
+            Integer expectedCounter,
+            Long expectedStatusId,
+            Boolean expectedActive
     ) {
     }
 
@@ -2182,7 +2240,12 @@ public class ApiAdminDictionaryController {
             String paymentSuccessText,
             String reviewRecoveryNoticeText,
             String archiveOfferText,
-            String unansweredAutoIgnorePhrases
+            String unansweredAutoIgnorePhrases,
+            /* settingsVersion the form was loaded with; null (older clients) skips the stale-form check. */
+            String expectedSettingsVersion,
+            /* The monitor switch as the form showed it (the version leaves the switch out: it has its own toggle).
+               Equal to monitorEnabled means «not touched here», so the stored value stays; null always writes. */
+            Boolean expectedMonitorEnabled
     ) {
     }
 
@@ -2261,7 +2324,34 @@ public class ApiAdminDictionaryController {
             String paymentSuccessText,
             String reviewRecoveryNoticeText,
             String archiveOfferText,
-            String unansweredAutoIgnorePhrases
+            String unansweredAutoIgnorePhrases,
+            /*
+             * Fingerprint of every value above except the monitor switch (it has its own endpoint). A client sends it
+             * back as expectedSettingsVersion, so a form opened before another change cannot silently overwrite it.
+             */
+            String settingsVersion
     ) {
+        ClientMessageSettingsResponse withSettingsVersion() {
+            try {
+                java.lang.reflect.RecordComponent[] components = ClientMessageSettingsResponse.class.getRecordComponents();
+                StringBuilder canonical = new StringBuilder();
+                Object[] values = new Object[components.length];
+                Class<?>[] types = new Class<?>[components.length];
+                for (int index = 0; index < components.length; index++) {
+                    java.lang.reflect.RecordComponent component = components[index];
+                    types[index] = component.getType();
+                    values[index] = component.getAccessor().invoke(this);
+                    if (!"settingsVersion".equals(component.getName()) && !"monitorEnabled".equals(component.getName())) {
+                        canonical.append(component.getName()).append('=').append(values[index]).append('\n');
+                    }
+                }
+                byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(canonical.toString().getBytes(StandardCharsets.UTF_8));
+                values[components.length - 1] = java.util.HexFormat.of().formatHex(digest, 0, 16);
+                return ClientMessageSettingsResponse.class.getDeclaredConstructor(types).newInstance(values);
+            } catch (ReflectiveOperationException | java.security.NoSuchAlgorithmException exception) {
+                throw new IllegalStateException("Cannot fingerprint the client message settings", exception);
+            }
+        }
     }
 }

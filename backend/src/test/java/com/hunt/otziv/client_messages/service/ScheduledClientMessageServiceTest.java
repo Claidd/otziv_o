@@ -68,6 +68,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1604,7 +1605,7 @@ class ScheduledClientMessageServiceTest {
 
     @ParameterizedTest
     @EnumSource(value = ClientMessageScenario.class, names = {"PAYMENT_REMINDER", "ARCHIVE_REORDER_OFFER"})
-    void rolledBackStateIsQuarantinedUntilManualReview(ClientMessageScenario scenario) {
+    void aRolledBackClaimIsProvablyUnsentAndReturnsToTheQueueInsteadOfFreezingAsUnknown(ClientMessageScenario scenario) {
         LocalDateTime now = LocalDateTime.of(2026, 8, 1, 16, 30);
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
                 .id(5819L)
@@ -1635,21 +1636,63 @@ class ScheduledClientMessageServiceTest {
                 new RuntimeException("transaction marked rollback-only")
         );
 
+        // The transport is only called after a committed PREPARED: a rollback while CLAIMED happened before any send.
         assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
-        boolean archiveOffer = scenario == ClientMessageScenario.ARCHIVE_REORDER_OFFER;
-        String expectedError = archiveOffer ? "rollback_receipt_only" : "state_transaction_outcome_uncertain";
+        String expectedError = ClientMessageStateSafety.ROLLED_BACK_BEFORE_SEND;
         assertEquals(expectedError, state.getLastErrorCode());
-        assertEquals(archiveOffer, ClientMessageStateSafety.onlyReconcileReceipt(state));
-        assertTrue(state.getLastErrorMessage().contains("автоматический повтор остановлен"));
+        assertFalse(ClientMessageStateSafety.onlyReconcileReceipt(state));
+        assertTrue(state.getLastErrorMessage().contains("сообщение клиенту не отправлялось"));
         assertEquals(1, state.getConsecutiveFailures());
-        assertEquals("UNKNOWN", state.getDeliveryStatus());
-        assertNull(state.getNextAttemptAt());
+        assertNull(state.getDeliveryStatus());
+        assertNotNull(state.getNextAttemptAt());
         assertNull(state.getLockedUntil());
         ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
                 ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
         verify(attemptRepository).save(attemptCaptor.capture());
         assertEquals(ScheduledMessageAttemptStatus.FAILED, attemptCaptor.getValue().getStatus());
         assertEquals(expectedError, attemptCaptor.getValue().getErrorCode());
+        verify(stateRepository).save(state);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ClientMessageScenario.class, names = {"PAYMENT_OVERDUE_ESCALATION", "BAD_REVIEW_AUTO_BAN"})
+    void aRefusedStatusChangeOfAStatusOnlyScenarioIsRetriedLaterNotFrozenAsUnknownDelivery(ClientMessageScenario scenario) {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 1, 16, 30);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5830L)
+                .scenario(scenario)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24760:2026-08-01T14:00")
+                .companyId(100L)
+                .orderId(24760L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .deliveryStatus("CLAIMED")
+                .lastErrorCode("state_transaction_in_progress")
+                .nextAttemptAt(now.minusMinutes(1))
+                .lockedUntil(now.plusMinutes(5))
+                .build();
+        when(stateRepository.findByIdForUpdate(5830L)).thenReturn(Optional.of(state));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(0).run();
+            return null;
+        }).when(transactionRunner).runInNewTransaction(any(Runnable.class));
+
+        ReflectionTestUtils.invokeMethod(service, "quarantineRolledBackState", 5830L, state.getLockedUntil(), now,
+                new RuntimeException("По заказу выпущены банковские документы"));
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertNull(state.getDeliveryStatus());
+        assertEquals("status_change_rolled_back", state.getLastErrorCode());
+        assertTrue(state.getLastErrorMessage().startsWith("Смена статуса заказа не выполнена"));
+        assertFalse(ClientMessageStateSafety.blocksAutomaticRearm(state));
+        assertEquals(now.plusHours(6), state.getNextAttemptAt());
+        assertNull(state.getLockedUntil());
+        assertEquals(1, state.getConsecutiveFailures());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        // Not a sending failure: the mass-error protection counts FAILED attempts only.
+        assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
         verify(stateRepository).save(state);
     }
 
@@ -1700,10 +1743,19 @@ class ScheduledClientMessageServiceTest {
         when(stateRepository.findByIdForUpdate(5819L)).thenReturn(Optional.of(state));
         ReflectionTestUtils.invokeMethod(service,"quarantineRolledBackState",5819L,state.getLockedUntil(),now,
                 new com.hunt.otziv.p_products.api.LegacyOrderNotificationException());
-        assertEquals(prepared ? ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN
-                : ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED,state.getLastErrorCode());
-        assertTrue(ClientMessageStateSafety.blocksAutomaticRearm(state));
-        assertNull(state.getNextAttemptAt());
+        if (prepared) {
+            // A claim re-takes only a known-unsent envelope, and the transport runs only after a committed PREPARED:
+            // a rollback while CLAIMED is a proven non-send, so the same envelope goes back to the queue.
+            assertEquals(ClientMessageStateSafety.ROLLED_BACK_BEFORE_SEND, state.getLastErrorCode());
+            assertEquals("RETRYABLE", state.getDeliveryStatus());
+            assertEquals("existing-operation-envelope", state.getDeliveryEnvelope());
+            assertNotNull(state.getNextAttemptAt());
+            assertFalse(ClientMessageStateSafety.blocksAutomaticRearm(state));
+        } else {
+            assertEquals(ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED, state.getLastErrorCode());
+            assertTrue(ClientMessageStateSafety.blocksAutomaticRearm(state));
+            assertNull(state.getNextAttemptAt());
+        }
         verifyNoInteractions(messageSender);
     }
 
@@ -1822,6 +1874,44 @@ class ScheduledClientMessageServiceTest {
         assertEquals(nextAttempt, state.getNextAttemptAt());
         assertNull(state.getLockedUntil());
         verify(stateRepository).save(state);
+    }
+
+    @Test
+    void reconciliationKeepsATaskAnAdministratorMarkedDoneClosed() {
+        LocalDateTime nextAttempt = LocalDateTime.of(2026, 8, 20, 14, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5826L)
+                .scenario(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24889:2026-07-23T11:23:13")
+                .companyId(100L)
+                .orderId(24_889L)
+                .status(ScheduledMessageStateStatus.DONE)
+                .sentCount(0)
+                .lastSuccessAt(null)
+                .lastErrorCode(ClientMessageStateSafety.MANUAL_DONE)
+                .build();
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION,
+                state.getTargetKey()
+        )).thenReturn(Optional.of(state));
+
+        Boolean created = ReflectionTestUtils.invokeMethod(
+                service,
+                "ensureState",
+                ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION,
+                ClientMessageTargetType.ORDER,
+                state.getTargetKey(),
+                state.getCompanyId(),
+                state.getOrderId(),
+                null,
+                nextAttempt
+        );
+
+        assertEquals(Boolean.FALSE, created);
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertEquals(ClientMessageStateSafety.MANUAL_DONE, state.getLastErrorCode());
+        verify(stateRepository, never()).save(state);
     }
 
     @Test

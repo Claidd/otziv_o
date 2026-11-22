@@ -133,8 +133,10 @@ class ManagerAutomationFailureServiceTest {
         assertEquals("Доставка не подтверждена", issue.status());
         assertEquals(state.getDeliveryPreparedAt(), issue.firstObservedAt());
         assertFalse(issue.reason().contains("попыток подряд: 0"));
-        assertTrue(issue.reason().contains("Рабочая текущая ссылка"));
-        assertTrue(issue.reason().contains("Повторная отправка заблокирована"));
+        assertTrue(issue.reason().contains("Результат предыдущей отправки клиенту не подтверждён"));
+        // The chat check says the group is unreachable: the card names that cause and the next step.
+        assertTrue(issue.reason().contains("Причина: WhatsApp не доставляет сообщения в группу клиента"));
+        assertTrue(issue.reason().contains("Что сделать: "));
         assertEquals("UNKNOWN", state.getDeliveryStatus());
         assertEquals("state_transaction_outcome_uncertain", state.getLastErrorCode());
 
@@ -233,8 +235,8 @@ class ManagerAutomationFailureServiceTest {
         assertFalse(reason.contains("chatId"));
         assertTrue(reason.contains("Привязать Telegram"));
         if (errorCode.equals("manual_delivery_handoff_pending")) {
-            assertTrue(reason.contains("Кнопка «Проверить отправку»"));
-            assertTrue(reason.contains("автоматический повтор запрещён"));
+            assertTrue(reason.contains("передана на ручную проверку"));
+            assertTrue(reason.contains("«Сверка отправки»"));
             assertFalse(reason.contains("завершите заказ вручную"));
             assertFalse(reason.contains("подтвердите результат в чате"));
         }

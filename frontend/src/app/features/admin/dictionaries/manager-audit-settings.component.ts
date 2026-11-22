@@ -1,4 +1,4 @@
-import { Component, computed, inject, output, signal } from '@angular/core';
+import { Component, ElementRef, computed, inject, output, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   ManagerReportReviewManagerSetting,
@@ -18,6 +18,29 @@ export const DEFAULT_MANAGER_EVIDENCE_SETTINGS: ManagerReportReviewEvidenceSetti
   evidenceMaxAgeMinutes: 15
 };
 
+type PilotField = 'diagnosisPilotManagerIds' | 'answerPilotManagerIds';
+
+/**
+ * Number fields in the order they stand on the page. `folded` fields live in «Генерация вопросов», which is closed
+ * until opened; a wrong value there is shown by opening it.
+ */
+const NUMBER_FIELDS: { path: string; label: string; folded?: boolean }[] = [
+  { path: 'minimumReadSeconds', label: 'Минимальное чтение' },
+  { path: 'testMinimumReadSeconds', label: 'Чтение в тестовом режиме' },
+  { path: 'reminderOneMinutes', label: 'Первое напоминание' },
+  { path: 'reminderThreeMinutes', label: 'Срок прохождения' },
+  { path: 'evidence.diagnosisMaxRequestsPerHour', label: 'Максимум запросов в час' },
+  { path: 'evidence.diagnosisMaxOutputTokens', label: 'Лимит ответа' },
+  { path: 'evidence.diagnosisTimeoutSeconds', label: 'Таймаут диагностики' },
+  { path: 'evidence.answerMaxTokens', label: 'Лимит проверки ответа' },
+  { path: 'evidence.answerTimeoutSeconds', label: 'Таймаут проверки ответа' },
+  { path: 'evidence.evidenceMaxAgeMinutes', label: 'Допустимый возраст текущих фактов' },
+  { path: 'maxQuestionCount', label: 'Максимум вопросов', folded: true },
+  { path: 'questionGenerationMaxTokens', label: 'Лимит генерации', folded: true },
+  { path: 'questionGenerationRetryMaxTokens', label: 'Лимит повторной генерации', folded: true },
+  { path: 'evidence.questionTimeoutSeconds', label: 'Таймаут генерации', folded: true }
+];
+
 @Component({
   selector: 'app-manager-audit-settings',
   imports: [ReactiveFormsModule],
@@ -28,6 +51,7 @@ export class ManagerAuditSettingsComponent {
   private readonly fb = inject(FormBuilder);
   private readonly api = inject(ManagerReportReviewSettingsApi);
   private readonly toast = inject(ToastService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly managerCount = output<number>();
   readonly settings = signal<ManagerReportReviewSettings | null>(null);
@@ -35,6 +59,11 @@ export class ManagerAuditSettingsComponent {
   readonly saving = signal(false);
   readonly managerSavingId = signal<number | null>(null);
   readonly error = signal<string | null>(null);
+  /**
+   * The error belongs to «Сохранить настройки» (a wrong field, a refused save): it is shown next to that button, at
+   * the bottom of the form, instead of the banner at the top.
+   */
+  readonly errorAtSave = signal(false);
   readonly managerSearch = signal('');
 
   readonly enabledManagers = computed(
@@ -87,6 +116,7 @@ export class ManagerAuditSettingsComponent {
   load(): void {
     this.loading.set(true);
     this.error.set(null);
+    this.errorAtSave.set(false);
     this.api.settings().subscribe({
       next: (settings) => {
         this.apply(settings);
@@ -99,9 +129,19 @@ export class ManagerAuditSettingsComponent {
     });
   }
 
+  /** «Обновить»: reading the settings again drops typed edits, so it asks first. */
+  refresh(): void {
+    if (this.form.dirty && !window.confirm('Несохранённые изменения пропадут. Обновить настройки?')) {
+      return;
+    }
+    this.load();
+  }
+
   save(): void {
+    if (this.saving()) return;
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.reportInvalidFields();
       return;
     }
     const current = this.settings();
@@ -109,26 +149,28 @@ export class ManagerAuditSettingsComponent {
     const { managers: _managers, ...previous } = current;
     const request: ManagerReportReviewSettingsRequest = { ...previous, ...this.form.getRawValue() };
     const evidence = request.evidence!;
-    if ((evidence.diagnosisMode === 'PILOT' && !evidence.diagnosisPilotManagerIds.length)
-      || (evidence.answerMode === 'PILOT' && !evidence.answerPilotManagerIds.length)) {
-      this.error.set('Выберите хотя бы одного менеджера для каждого включённого пилота.');
+    if ((evidence.diagnosisMode === 'PILOT' && !this.visiblePilotIds(evidence.diagnosisPilotManagerIds).length)
+      || (evidence.answerMode === 'PILOT' && !this.visiblePilotIds(evidence.answerPilotManagerIds).length)) {
+      this.refuseSave('Выберите хотя бы одного менеджера для каждого включённого пилота.');
       return;
     }
     if (request.reminderThreeMinutes <= request.reminderOneMinutes) {
-      this.error.set('Срок прохождения должен быть больше времени первого напоминания.');
+      this.refuseSave('Срок прохождения должен быть больше времени первого напоминания.');
       return;
     }
     if (request.questionGenerationRetryMaxTokens < request.questionGenerationMaxTokens) {
-      this.error.set('Лимит повторной генерации не может быть меньше основного лимита.');
+      this.refuseSave('Лимит повторной генерации не может быть меньше основного лимита.');
       return;
     }
-    if (!request.enabled && !window.confirm(
+    // Asked only when the saved audit is switched off now, not on every save while it stays off.
+    if (current.enabled && !request.enabled && !window.confirm(
       'Выключить аудит полностью? Новые аудиты не будут формироваться, а текущие незавершённые аудиты закроются.'
     )) {
       return;
     }
     this.saving.set(true);
     this.error.set(null);
+    this.errorAtSave.set(false);
     this.api.update(request).subscribe({
       next: (settings) => {
         this.apply(settings);
@@ -141,6 +183,7 @@ export class ManagerAuditSettingsComponent {
       error: (err: unknown) => {
         const message = apiErrorMessage(err, 'Не удалось сохранить настройки аудита');
         this.error.set(message);
+        this.errorAtSave.set(true);
         this.saving.set(false);
         this.toast.error('Настройки не сохранены', message);
       }
@@ -159,6 +202,7 @@ export class ManagerAuditSettingsComponent {
     }
     this.managerSavingId.set(manager.managerId);
     this.error.set(null);
+    this.errorAtSave.set(false);
     this.api.updateManager(manager.managerId, enabled).subscribe({
       next: (updated) => {
         const current = this.settings();
@@ -188,9 +232,95 @@ export class ManagerAuditSettingsComponent {
     return manager.managerId;
   }
 
+  /** A wrong number after a save attempt: its hint turns red and names the allowed range. */
+  invalid(path: string): boolean {
+    const control = this.form.get(path);
+    return !!control && control.invalid && control.touched;
+  }
+
+  /** «Аудит работает» is what the server has; a switch moved but not saved yet is marked so. */
+  summaryUnsaved(): boolean {
+    const saved = this.settings();
+    return !!saved && saved.enabled !== this.form.controls.enabled.value;
+  }
+
+  /**
+   * What the selected answer check does to the access restriction or to reminders: in «Сверка качества» neither works,
+   * in a pilot only for its managers, and nothing works while the AI is unavailable.
+   */
+  rolloutNote(kind: 'restriction' | 'reminders'): string {
+    const mode = this.form.controls.evidence.controls.answerMode.value;
+    if (kind === 'restriction') {
+      // A switched-off restriction is said to be off: a sentence about its scope would read as if it worked.
+      if (!this.form.controls.restrictionEnabled.value) return 'Ограничение доступа выключено.';
+      const scope = mode === 'SHADOW'
+        ? 'В режиме «Сверка качества» ограничение доступа не действует.'
+        : mode === 'PILOT'
+          ? 'Ограничение действует только для менеджеров пилота проверки ответов.'
+          : 'Ограничение действует для всех менеджеров.';
+      return `${scope} Пока ИИ недоступен, доступ не ограничивается.`;
+    }
+    const scope = mode === 'SHADOW'
+      ? 'В режиме «Сверка качества» напоминания не отправляются и срок не отслеживается.'
+      : mode === 'PILOT'
+        ? 'Напоминания и срок действуют только для менеджеров пилота проверки ответов.'
+        : 'Напоминания и срок действуют для всех менеджеров.';
+    return `${scope} Пока ИИ недоступен, напоминания не отправляются.`;
+  }
+
+  /**
+   * Pilot managers stored on the server but missing from the list (deactivated or without the manager role): the
+   * list cannot show them, so they are named separately and can be removed.
+   */
+  hiddenPilotIds(field: PilotField): number[] {
+    const visible = new Set((this.settings()?.managers ?? []).map((manager) => manager.managerId));
+    return this.form.controls.evidence.controls[field].value.filter((id) => !visible.has(id));
+  }
+
+  removePilotId(field: PilotField, id: number): void {
+    const control = this.form.controls.evidence.controls[field];
+    control.setValue(control.value.filter((item) => item !== id));
+    control.markAsDirty();
+  }
+
+  private visiblePilotIds(ids: number[]): number[] {
+    const visible = new Set((this.settings()?.managers ?? []).map((manager) => manager.managerId));
+    return ids.filter((id) => visible.has(id));
+  }
+
+  private refuseSave(message: string): void {
+    this.error.set(message);
+    this.errorAtSave.set(true);
+    this.toast.error('Настройки не сохранены', message);
+  }
+
+  /** Names the wrong fields, opens «Генерация вопросов» when one is inside and brings the first one into view. */
+  private reportInvalidFields(): void {
+    const wrong = NUMBER_FIELDS.filter((field) => this.form.get(field.path)?.invalid);
+    const message = wrong.length
+      ? `Проверьте ${wrong.length === 1 ? 'поле' : 'поля'}: ${wrong.map((field) => `«${field.label}»`).join(', ')}. Допустимые значения написаны под полями.`
+      : 'Проверьте выделенные поля.';
+    this.refuseSave(message);
+    if (wrong.some((field) => field.folded)) {
+      const advanced = this.host.nativeElement.querySelector<HTMLDetailsElement>('details.advanced-card');
+      if (advanced) advanced.open = true;
+    }
+    const first = wrong[0];
+    if (!first) return;
+    const name = first.path.split('.').pop()!;
+    const element = this.host.nativeElement.querySelector<HTMLElement>(`[formcontrolname="${name}"]`);
+    if (!element) return;
+    element.focus({ preventScroll: true });
+    if (typeof element.scrollIntoView === 'function') {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
   private apply(settings: ManagerReportReviewSettings): void {
     this.settings.set(settings);
     this.managerCount.emit(settings.managers.length);
     this.form.patchValue({ ...settings, evidence: settings.evidence ?? DEFAULT_MANAGER_EVIDENCE_SETTINGS });
+    // The form now holds what the server has: only later edits count as unsaved.
+    this.form.markAsPristine();
   }
 }

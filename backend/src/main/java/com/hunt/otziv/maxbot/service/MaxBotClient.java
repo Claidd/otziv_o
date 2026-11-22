@@ -83,10 +83,36 @@ public class MaxBotClient {
                     return new SendOnceResult(receipt.textValue(), null);
                 }
             }
+        } catch (RestClientResponseException refused) {
+            if (chatAccessRefusal(refused.getStatusCode().value())) {
+                log.warn("MAX refused the message for the chat; it was not sent: HTTP {} (code={})",
+                        refused.getStatusCode().value(), safeCode(errorCodeOf(refused)));
+                return new SendOnceResult(null, CHAT_UNAVAILABLE);
+            }
+            log.warn("MAX operation has no confirmed result: HTTP {}", refused.getStatusCode().value());
         } catch (Exception unconfirmed) {
             log.warn("MAX operation has no confirmed result ({})", unconfirmed.getClass().getSimpleName());
         }
         return new SendOnceResult(null, "operation_unknown");
+    }
+
+    /** MAX refused the chat itself (no access, bot removed, chat not found); the message was not sent. */
+    public static final String CHAT_UNAVAILABLE = "max_chat_unavailable";
+
+    /**
+     * 403 (no access to the chat) and 404 (chat not found) reject the request before a message exists.
+     * Every other failure keeps the unknown outcome: after a timeout, 429 or 5xx the message may exist.
+     */
+    private static boolean chatAccessRefusal(int status) {
+        return status == 403 || status == 404;
+    }
+
+    private String errorCodeOf(RestClientResponseException error) {
+        try {
+            return objectMapper.readTree(error.getResponseBodyAsString()).path("code").asText();
+        } catch (Exception unreadable) {
+            return null;
+        }
     }
 
     public record SendOnceResult(String messageId, String errorCode) {

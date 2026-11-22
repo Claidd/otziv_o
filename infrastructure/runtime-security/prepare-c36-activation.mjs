@@ -27,7 +27,7 @@ const PREFIX = 'infrastructure/runtime-security/';
 const COMPONENTS = new Set(['dozzle', 'prometheus', 'loki', 'alloy', 'tempo', 'grafana', 'mc', 'minio', 'postgres']);
 const LIBRARY_PATCH_SETS = new Set(['c43-tempo', 'c43-loki', 'c43-alloy', 'c43-grafana', 'c43-keycloak', 'c44-grafana', 'c45-keycloak',
   'c48-keycloak', 'c48-alloy', 'c59-nginx', 'c61-nginx', 'c61-phpmyadmin', ...C50_COMPONENTS.map(component => 'c50-' + component), ...C55_COMPONENTS.map(component => 'c55-' + component)]);
-const MYSQL_REFRESH_SETS = new Set(['c37-mysql', 'c46-mysql', 'c56-mysql', 'c57-mysql', 'c60-mysql', 'c62-mysql']);
+const MYSQL_REFRESH_SETS = new Set(['c37-mysql', 'c46-mysql', 'c56-mysql', 'c57-mysql', 'c60-mysql', 'c62-mysql', 'c63-mysql']);
 // Official OS package refreshes of the accepted C36 PostgreSQL; the database cutover stays separate.
 const POSTGRES_REFRESH_SETS = new Set(['c51-postgres','c54-postgres','c58-postgres']);
 const REGISTRY_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;

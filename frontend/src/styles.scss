@@ -1084,6 +1084,13 @@ app-review-check .approve-publication-hint .material-icons-sharp {
   line-height: 1.35;
 }
 
+// The same error plate on dark surfaces: a light pink plate inside a dark page read as a broken theme.
+body.otziv-dark-theme .admin-layout .error {
+  border-color: var(--otziv-tone-bad-border);
+  color: #ffb3c7;
+  background: var(--otziv-tone-bad-surface);
+}
+
 .admin-layout :where(.load-error, .error.compact, .notice, .dashboard-warning p, .dashboard-warning small) {
   overflow-wrap: anywhere;
 }
