@@ -106,6 +106,7 @@ public class ReviewCheckArchiveService {
             );
         }
 
+        // Nobody to ask here: a deactivated specialist is replaced by the automatic rule (OrderArchiveRestoreService.suggest).
         return restoreService.restoreIndividualOrder(candidate.orderId(), targetStatus, restoredBy, true);
     }
 

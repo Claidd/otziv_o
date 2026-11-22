@@ -45,4 +45,11 @@ public class SpecialistTransferController {
     public List<SpecialistTransferAuditResponse> recent(Authentication authentication) {
         return specialistTransferService.recent(authentication);
     }
+
+    /** Who work can be moved from, deactivated specialists included (marked). */
+    @GetMapping("/sources")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public List<com.hunt.otziv.specialist_transfer.dto.SpecialistTransferSourceResponse> sources(Authentication authentication) {
+        return specialistTransferService.sources(authentication);
+    }
 }

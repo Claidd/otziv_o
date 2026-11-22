@@ -7,6 +7,7 @@ import {
   SpecialistTransferPreview,
   SpecialistTransferRequest,
   SpecialistTransferResult,
+  SpecialistTransferSource,
   SpecialistTransferWorker
 } from '../../../core/admin-specialist-transfers.api';
 import { AdminUsersApi, AssignmentOption, AssignmentOptions } from '../../../core/admin-users.api';
@@ -93,11 +94,13 @@ function text(node: Element | null | undefined): string {
 function setup(options: {
   recent?: () => Observable<SpecialistTransferAudit[]>;
   workers?: Observable<AssignmentOptions>;
+  sources?: () => Observable<SpecialistTransferSource[]>;
 } = {}) {
   const transfersApi = {
     preview: vi.fn<(request: SpecialistTransferRequest) => Observable<SpecialistTransferPreview>>(),
     apply: vi.fn<(request: SpecialistTransferRequest) => Observable<SpecialistTransferResult>>(),
-    recent: vi.fn(options.recent ?? (() => of<SpecialistTransferAudit[]>([])))
+    recent: vi.fn(options.recent ?? (() => of<SpecialistTransferAudit[]>([]))),
+    sources: vi.fn(options.sources ?? (() => of<SpecialistTransferSource[]>([])))
   };
   const usersApi = {
     getAssignmentOptions: vi.fn(() => options.workers ?? of<AssignmentOptions>({ managers: [], workers: WORKERS, operators: [], marketologs: [] }))
@@ -118,6 +121,29 @@ function setup(options: {
 
 describe('specialist transfer fixes', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  it('offers a deactivated specialist with work left as the source, never as the receiver', () => {
+    const { element } = setup({
+      sources: () => of<SpecialistTransferSource[]>([
+        { workerId: 15, label: 'Уволенный Ушёл', active: false, companyCount: 4, openOrderCount: 2 },
+        { workerId: 12, label: 'Петров Пётр', active: true, companyCount: 1, openOrderCount: 0 }
+      ])
+    });
+    const [from, to] = Array.from(element.querySelectorAll('select'));
+    const fromOptions = Array.from(from.querySelectorAll('option')).map((option) => text(option));
+    expect(fromOptions).toEqual([
+      'Выберите специалиста',
+      'Уволенный Ушёл — отключён · компаний 4, открытых заказов 2',
+      'Петров Пётр · компаний 1, открытых заказов 0'
+    ]);
+    expect(Array.from(to.querySelectorAll('option')).map((option) => text(option)).join('|')).not.toContain('Уволенный');
+  });
+
+  it('falls back to the specialist list when the sources did not load', () => {
+    const { element } = setup({ sources: () => throwError(() => ({ status: 500 })) });
+    const fromOptions = Array.from(element.querySelectorAll('select')[0].querySelectorAll('option')).map((option) => text(option));
+    expect(fromOptions.length).toBe(WORKERS.length + 1);
+  });
 
   it('declines the numbers: 1 запись, 2 записи, 5 записей, 11 записей, 21 запись', () => {
     const forms = ['запись', 'записи', 'записей'] as const;
@@ -374,7 +400,7 @@ describe('specialist transfer fixes', () => {
 
     const options = Array.from(element.querySelectorAll('select')[0].querySelectorAll('option')).map((option) => text(option));
     expect(options).toEqual(['Выберите специалиста', 'Иванов Иван (ivanov.a)', 'Иванов Иван (ivanov.b)', 'Петров Пётр (petrov)', 'Сидоров Сидор (sidorov)']);
-    expect(text(element.querySelector('.list-hint'))).toBe('В списках только активные специалисты: работу уходящего сотрудника передайте до его отключения.');
+    expect(text(element.querySelector('.list-hint'))).toBe('«От специалиста» показывает и отключённых специалистов, у которых осталась работа; «К специалисту» — только активных.');
     expect(element.querySelector('textarea')?.getAttribute('maxlength')).toBe('1000');
   });
 });

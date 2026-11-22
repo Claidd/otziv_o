@@ -230,6 +230,8 @@ export interface ReputationAiStatus {
   openAiResearchReportProfiles: ReputationAiModelProfile[];
   openAiContentPackProfiles: ReputationAiModelProfile[];
   warnings: string[];
+  /** Settings to change; the server fills them for administrators only. */
+  technicalWarnings?: string[];
 }
 
 export interface OpenAiProviderDiagnostics {

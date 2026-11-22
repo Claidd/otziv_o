@@ -218,6 +218,8 @@ public class SecurityConfig {
         auth.requestMatchers(HttpMethod.PUT, "/api/ai/reputation/prompts/*").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers(HttpMethod.DELETE, "/api/ai/reputation/prompts/*").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/ai/reputation/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG");
+        // Managers read, add and rename categories; only the owner and administrators delete them.
+        auth.requestMatchers(HttpMethod.DELETE, "/api/admin/categories/**", "/api/admin/subcategories/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/admin/categories", "/api/admin/categories/**", "/api/admin/subcategories", "/api/admin/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.GET, "/api/admin/bots/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/admin/manager-control/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
@@ -321,6 +323,8 @@ public class SecurityConfig {
         auth.requestMatchers(HttpMethod.POST, "/bots/bot_add", "/bots/edit/*", "/bots/delete/*")
                 .hasAnyRole("ADMIN", "OWNER", "WORKER");
         auth.requestMatchers("/bots", "/bots/**").hasAnyRole("ADMIN", "OWNER");
+        // Deleting from the old pages stays with the owner and administrators, as on the dictionary page.
+        auth.requestMatchers("/categories/delete/**", "/subcategories/delete/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/categories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR");
         auth.requestMatchers("/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR");
         auth.requestMatchers("/operator/**", "/operators", "/operators/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR", "MARKETOLOG");

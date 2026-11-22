@@ -191,11 +191,16 @@ export interface ArchiveRestoreWorkerOption {
   companyWorker: boolean;
 }
 
-/** 409 body of an archive restore whose specialist no longer works; workers are the accepted choices. */
+/**
+ * 409 body of an archive restore whose specialist no longer works; workers are the accepted choices and
+ * suggestedWorkerId the one the automatic restore rule would pick (transfer successor, the only company or team
+ * specialist), null when the choice is not unambiguous.
+ */
 export interface ArchiveRestoreSpecialistRequiredError {
   message: string;
   code: 'SPECIALIST_REQUIRED';
   workers: ArchiveRestoreWorkerOption[];
+  suggestedWorkerId?: number | null;
 }
 
 export interface CompanyCardItem {

@@ -53,10 +53,10 @@
         <p class="dictionary-kicker">{{ activeGroup().label }}</p>
         <h2 tabindex="-1">{{ activeHelp().title }}</h2>
         <p>{{ activeHelp().summary }}</p>
-        @if (canManageAllDictionaries()) {
+        @if (canEditCategories()) {
           <p class="dictionary-howto"><strong>Как править:</strong> {{ activeHelp().howTo }}</p>
         } @else {
-          <p class="dictionary-howto"><strong>Только просмотр:</strong> категории и подкатегории меняют администратор и владелец.</p>
+          <p class="dictionary-howto"><strong>Только просмотр:</strong> категории и подкатегории меняют администратор, владелец и менеджеры.</p>
         }
         @if (activeHelp().caution) {
           <p class="dictionary-caution-inline">
@@ -181,7 +181,7 @@
             }
             <button type="submit" class="list-search-go" [disabled]="activeLoading()">Найти</button>
           </form>
-          @if (canManageAllDictionaries()) {
+          @if (canEditCategories()) {
             <button type="button" class="list-create" (click)="openNewCategory()">
               <span class="material-icons-sharp" aria-hidden="true">add</span>
               Новая категория
@@ -209,8 +209,8 @@
                     <span class="count-pill">{{ category.subCategoryCount }}</span>
                   </td>
                   <td class="row-tools">
-                    @if (canManageAllDictionaries()) {
-                      <button type="button" class="row-icon-button edit-button" (click)="editCategory($event, category)" title="Переименовать или удалить категорию" aria-label="Переименовать или удалить категорию">
+                    @if (canEditCategories()) {
+                      <button type="button" class="row-icon-button edit-button" (click)="editCategory($event, category)" [title]="canManageAllDictionaries() ? 'Переименовать или удалить категорию' : 'Переименовать категорию'" [attr.aria-label]="canManageAllDictionaries() ? 'Переименовать или удалить категорию' : 'Переименовать категорию'">
                         <span class="material-icons-sharp" aria-hidden="true">edit</span>
                       </button>
                     }
@@ -232,7 +232,7 @@
               <h3>{{ category.title }}</h3>
               <span class="total-badge">{{ selectedCategorySubCategories().length }}</span>
             </div>
-            @if (canManageAllDictionaries()) {
+            @if (canEditCategories()) {
               <button type="button" class="list-create list-create--soft" (click)="openNewSubCategory()">
                 <span class="material-icons-sharp" aria-hidden="true">add</span>
                 Новая подкатегория
@@ -251,12 +251,12 @@
               </thead>
               <tbody>
                 @for (subCategory of selectedCategorySubCategories(); track trackSubCategory($index, subCategory)) {
-                  <tr [class.selected]="editingSubCategoryId() === subCategory.id" (click)="canManageAllDictionaries() && editSubCategory($event, subCategory)">
+                  <tr [class.selected]="editingSubCategoryId() === subCategory.id" (click)="canEditCategories() && editSubCategory($event, subCategory)">
                     <td><strong>{{ subCategory.title }}</strong></td>
                     <td>{{ subCategory.id }}</td>
                     <td class="row-tools">
-                      @if (canManageAllDictionaries()) {
-                        <button type="button" class="row-icon-button edit-button" (click)="editSubCategory($event, subCategory)" title="Переименовать или удалить подкатегорию" aria-label="Переименовать или удалить подкатегорию">
+                      @if (canEditCategories()) {
+                        <button type="button" class="row-icon-button edit-button" (click)="editSubCategory($event, subCategory)" [title]="canManageAllDictionaries() ? 'Переименовать или удалить подкатегорию' : 'Переименовать подкатегорию'" [attr.aria-label]="canManageAllDictionaries() ? 'Переименовать или удалить подкатегорию' : 'Переименовать подкатегорию'">
                           <span class="material-icons-sharp" aria-hidden="true">edit</span>
                         </button>
                       }
@@ -1024,6 +1024,9 @@
             <div class="ai-provider-warnings">
               @for (warning of status.warnings; track warning) {
                 <p><span class="material-icons-sharp">warning</span>{{ warning }}</p>
+              }
+              @for (hint of status.technicalWarnings ?? []; track hint) {
+                <p><small>{{ hint }}</small></p>
               }
             </div>
           }
@@ -2068,7 +2071,7 @@
                         <strong>Привязано {{ deviceToken.createdAt | date:'dd.MM.yyyy HH:mm' }}</strong>
                         <span [title]="deviceToken.token">Отпечаток {{ tokenPreview(deviceToken.token) }}</span>
                       </div>
-                      <span class="status-pill" [class.off]="!deviceToken.active">{{ deviceToken.active ? 'Активен' : 'Выключен' }}</span>
+                      <span class="status-pill" [class.off]="!deviceToken.active">{{ deviceToken.status === 'EXPIRED' ? 'Истёк ' + (deviceToken.expiresAt | date:'dd.MM') : deviceToken.active ? 'Активен' : 'Выключен' }}</span>
                       <button
                         type="button"
                         class="row-icon-button danger-icon"
@@ -2223,7 +2226,7 @@
                   }
                 </select>
               </label>
-              <p class="settings-hint">Выбор в списке кнопки сохраняется сразу. Личный текст видит только сам менеджер на своих досках «Лиды» и «Менеджер»; владелец, администратор и специалисты видят текст по умолчанию.</p>
+              <p class="settings-hint">Выбор в списке кнопки сохраняется сразу. Личный текст видит только сам менеджер на своих досках «Лиды» и «Менеджер»; владелец, администратор и специалисты видят текст по умолчанию. Специалист, отправляя тексты клиенту на проверку, берёт общие тексты №5 и №12, а не личные тексты менеджера: он работает с заказами разных менеджеров.</p>
 
               <div class="promo-assignment-list">
                 @for (button of promoButtons(); track trackPromoButton($index, button)) {
@@ -2258,25 +2261,8 @@
                   <textarea rows="5" formControlName="payText"></textarea>
                 </label>
 
-                <label appTooltip="Сейчас нигде не используется: текст сохраняется, но клиентам не уходит.">
-                  <span>Начальный текст</span>
-                  <textarea rows="5" formControlName="beginText"></textarea>
-                </label>
-
-                <label appTooltip="Сейчас нигде не используется: текст сохраняется, но клиентам не уходит.">
-                  <span>Текст предложения</span>
-                  <textarea rows="8" formControlName="offerText"></textarea>
-                </label>
-
-                <label appTooltip="Сейчас нигде не используется: текст сохраняется, но клиентам не уходит.">
-                  <span>Напоминание</span>
-                  <textarea rows="5" formControlName="reminderText"></textarea>
-                </label>
-
-                <label appTooltip="Сейчас нигде не используется: текст сохраняется, но клиентам не уходит.">
-                  <span>Старт группы</span>
-                  <textarea rows="5" formControlName="startText"></textarea>
-                </label>
+                <!-- Начальный текст, предложение, напоминание и старт группы нигде не используются (решение 22.11.2026):
+                     поля скрыты, значения в базе остаются и сохраняются как были. -->
 
                 <div class="actions">
                   <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
@@ -4434,7 +4420,7 @@
             <p class="error compact">Название обязательно.</p>
           }
           <div class="actions">
-            @if (editingCategoryId() !== null) {
+            @if (editingCategoryId() !== null && canManageAllDictionaries()) {
               <button type="button" class="danger" (click)="deleteEditingCategory()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
             }
             <button type="button" class="secondary" (click)="closeCategoryEditor()" [disabled]="activeSaving() || activeDeleting()">Закрыть</button>
@@ -4477,7 +4463,7 @@
             <p class="error compact">Название и категория обязательны.</p>
           }
           <div class="actions">
-            @if (editingSubCategoryId() !== null) {
+            @if (editingSubCategoryId() !== null && canManageAllDictionaries()) {
               <button type="button" class="danger" (click)="deleteEditingSubCategory()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
             }
             <button type="button" class="secondary" (click)="closeSubCategoryEditor()" [disabled]="activeSaving() || activeDeleting()">Закрыть</button>

@@ -96,4 +96,17 @@ export class AdminSpecialistTransfersApi {
   recent(): Observable<SpecialistTransferAudit[]> {
     return this.http.get<SpecialistTransferAudit[]>(`${this.baseUrl}/recent`);
   }
+
+  /** Who work can be moved from, deactivated specialists included. */
+  sources(): Observable<SpecialistTransferSource[]> {
+    return this.http.get<SpecialistTransferSource[]>(`${this.baseUrl}/sources`);
+  }
+}
+
+export interface SpecialistTransferSource {
+  workerId: number;
+  label: string;
+  active: boolean;
+  companyCount: number;
+  openOrderCount: number;
 }

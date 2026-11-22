@@ -130,8 +130,8 @@ public class ManagerArchiveService {
     }
 
     /**
-     * @param specialistChoice the client can show the specialist list; without it an order whose archived specialist
-     *                         was deactivated is restored as before (an older mobile app cannot choose yet)
+     * @param specialistChoice the client can show the specialist list; without it (an older mobile app) an order whose
+     *                         archived specialist was deactivated goes to the specialist the automatic rule picks
      */
     @Transactional
     public ArchiveRestoreResult restoreOrder(

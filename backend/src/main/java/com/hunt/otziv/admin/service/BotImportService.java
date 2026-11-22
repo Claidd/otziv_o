@@ -347,11 +347,12 @@ public class BotImportService {
             Long cityOverrideId
     ) {
         String login = requiredValue(cell(row, hasHeader, headers, "bot_login", 0), "bot_login", rowNumber);
-        if (login.length() > 45) throw rowError(rowNumber, "bot_login не должен превышать 45 символов");
+        if (login.length() > 45) throw rowError(rowNumber, "логин длиннее 45 символов (столбец bot_login)");
         String password = requiredValue(cell(row, hasHeader, headers, "bot_password", 1), "bot_password", rowNumber);
         String fio = cityOverrideId != null
                 ? DEFAULT_FIO
                 : valueOrDefault(cell(row, hasHeader, headers, "bot_fio", 2), DEFAULT_FIO);
+        if (fio.length() > 50) throw rowError(rowNumber, "ФИО длиннее 50 символов (столбец bot_fio)");
         int counter = parseIntOrDefault(cell(row, hasHeader, headers, "bot_counter", 3), DEFAULT_COUNTER, "bot_counter", rowNumber);
         boolean active = parseBooleanOrDefault(cell(row, hasHeader, headers, "bot_active", 4), DEFAULT_ACTIVE, "bot_active", rowNumber);
         long statusId = parseLongOrDefault(cell(row, hasHeader, headers, "bot_status", 5), DEFAULT_STATUS_ID, "bot_status", rowNumber);
@@ -361,7 +362,7 @@ public class BotImportService {
                 : parseLongOrDefault(cell(row, hasHeader, headers, "bot_city_id", 7), DEFAULT_CITY_ID, "bot_city_id", rowNumber);
 
         if (counter < 0) {
-            throw rowError(rowNumber, "bot_counter не может быть меньше нуля");
+            throw rowError(rowNumber, "счётчик публикаций не может быть меньше нуля (столбец bot_counter)");
         }
 
         return new ImportedBotRow(rowNumber, login, password, fio, counter, active, statusId, workerId, cityId);
@@ -474,9 +475,24 @@ public class BotImportService {
         return row.get(index);
     }
 
+    /** The owner's word for an import column; messages name both, so the file can be fixed without guessing. */
+    private static String columnLabel(String field) {
+        return switch (field) {
+            case "bot_login" -> "логин";
+            case "bot_password" -> "пароль";
+            case "bot_fio" -> "ФИО";
+            case "bot_counter" -> "счётчик публикаций";
+            case "bot_active" -> "признак активности";
+            case "bot_status" -> "статус";
+            case "bot_worker" -> "владелец";
+            case "bot_city_id" -> "город";
+            default -> field;
+        };
+    }
+
     private String requiredValue(String value, String field, int rowNumber) {
         if (value.isBlank()) {
-            throw rowError(rowNumber, field + " обязателен");
+            throw rowError(rowNumber, "не заполнен " + columnLabel(field) + " (столбец " + field + ")");
         }
         return value;
     }
@@ -494,7 +510,7 @@ public class BotImportService {
 
         Long longValue = parseWholeNumber(result);
         if (longValue == null || longValue < Integer.MIN_VALUE || longValue > Integer.MAX_VALUE) {
-            throw rowError(rowNumber, field + " должен быть целым числом");
+            throw rowError(rowNumber, columnLabel(field) + " должен быть целым числом (столбец " + field + ")");
         }
         return longValue.intValue();
     }
@@ -507,7 +523,7 @@ public class BotImportService {
 
         Long longValue = parseWholeNumber(result);
         if (longValue == null) {
-            throw rowError(rowNumber, field + " должен быть целым числом");
+            throw rowError(rowNumber, columnLabel(field) + " должен быть целым числом (столбец " + field + ")");
         }
         return longValue;
     }
@@ -531,7 +547,7 @@ public class BotImportService {
             return numeric != 0;
         }
 
-        throw rowError(rowNumber, field + " должен быть 1/0 или true/false");
+        throw rowError(rowNumber, columnLabel(field) + ": укажите 1/0 или true/false (столбец " + field + ")");
     }
 
     private Long parseWholeNumber(String value) {

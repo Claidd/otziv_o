@@ -107,6 +107,46 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("paymentCycleStatuses") Collection<String> paymentCycleStatuses
     );
 
+    /**
+     * Work orders of the manager waiting for a specialist who no longer works: none, a deactivated user, or a user
+     * without the specialist role. Nobody would do or publish them; the manager changes the specialist in the card.
+     */
+    @Query("""
+        SELECT COUNT(o.id)
+        FROM Order o
+        JOIN o.status s
+        LEFT JOIN o.worker w
+        LEFT JOIN w.user u
+        WHERE o.manager = :manager
+          AND s.title IN :workStatuses
+          AND (w IS NULL OR u IS NULL OR u.active = false
+               OR NOT EXISTS (SELECT r.id FROM User ru JOIN ru.roles r WHERE ru = u AND r.name = 'ROLE_WORKER'))
+    """)
+    long countWorkOrdersOnInactiveWorkerByManager(
+            @Param("manager") Manager manager,
+            @Param("workStatuses") Collection<String> workStatuses
+    );
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        JOIN FETCH o.status s
+        LEFT JOIN FETCH o.company c
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user u
+        WHERE o.manager = :manager
+          AND s.title IN :workStatuses
+          AND (w IS NULL OR u IS NULL OR u.active = false
+               OR NOT EXISTS (SELECT r.id FROM User ru JOIN ru.roles r WHERE ru = u AND r.name = 'ROLE_WORKER'))
+        ORDER BY o.statusChangedAt ASC, o.id ASC
+    """)
+    List<Order> findWorkOrdersOnInactiveWorkerByManager(
+            @Param("manager") Manager manager,
+            @Param("workStatuses") Collection<String> workStatuses,
+            Pageable pageable
+    );
+
     @Query("""
         SELECT DISTINCT o
         FROM Order o

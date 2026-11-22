@@ -21,8 +21,14 @@
           <span class="field-caption">От специалиста</span>
           <select [ngModel]="fromWorkerId()" (ngModelChange)="setFromWorkerId($event)" [disabled]="optionsLoading() || busy()">
             <option [ngValue]="null">Выберите специалиста</option>
-            @for (worker of sortedWorkers(); track trackWorker($index, worker)) {
-              <option [ngValue]="worker.id">{{ workerLabel(worker) }}</option>
+            @if (sourceWorkers().length) {
+              @for (source of sourceWorkers(); track trackSource($index, source)) {
+                <option [ngValue]="source.workerId">{{ sourceLabel(source) }}</option>
+              }
+            } @else {
+              @for (worker of sortedWorkers(); track trackWorker($index, worker)) {
+                <option [ngValue]="worker.id">{{ workerLabel(worker) }}</option>
+              }
             }
           </select>
         </label>
@@ -42,7 +48,7 @@
         </label>
       </div>
 
-      <p class="list-hint">В списках только активные специалисты: работу уходящего сотрудника передайте до его отключения.</p>
+      <p class="list-hint">«От специалиста» показывает и отключённых специалистов, у которых осталась работа; «К специалисту» — только активных.</p>
 
       <label class="transfer-field">
         <span class="field-caption">Комментарий <small>(необязательно, до {{ commentMaxLength }} символов)</small></span>

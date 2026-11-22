@@ -196,9 +196,11 @@ public class OrderStatusNotificationService {
 
     public boolean hasWorkerWithTelegram(Order order) {
         try {
+            // A deactivated specialist's work group no longer receives company names and order links.
             return order != null
                     && order.getWorker() != null
                     && order.getWorker().getUser() != null
+                    && order.getWorker().getUser().isActive()
                     && order.getWorker().getUser().getWorkerTelegramGroupChatId() != null
                     && hasDetails(order)
                     && order.getCompany() != null;

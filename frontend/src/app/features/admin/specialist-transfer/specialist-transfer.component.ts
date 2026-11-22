@@ -3,6 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   AdminSpecialistTransfersApi,
+  SpecialistTransferSource,
   SpecialistTransferAudit,
   SpecialistTransferPreview,
   SpecialistTransferRequest,
@@ -71,6 +72,8 @@ export class SpecialistTransferComponent {
   readonly commentMaxLength = TRANSFER_COMMENT_MAX_LENGTH;
 
   readonly workers = signal<AssignmentOption[]>([]);
+  /** «От специалиста»: everyone with companies to move, deactivated specialists included and marked. */
+  readonly sourceWorkers = signal<SpecialistTransferSource[]>([]);
   readonly fromWorkerId = signal<number | null>(null);
   readonly toWorkerId = signal<number | null>(null);
   readonly comment = signal('');
@@ -396,7 +399,21 @@ export class SpecialistTransferComponent {
     return warning.code;
   }
 
+  sourceLabel(source: SpecialistTransferSource): string {
+    const label = source.active ? source.label : `${source.label} — отключён`;
+    return `${label} · компаний ${source.companyCount}, открытых заказов ${source.openOrderCount}`;
+  }
+
+  trackSource(_index: number, source: SpecialistTransferSource): number {
+    return source.workerId;
+  }
+
   private loadWorkers(): void {
+    this.transfersApi.sources().subscribe({
+      next: (sources) => this.sourceWorkers.set(sources ?? []),
+      // The full specialist list below still works as the source list.
+      error: () => this.sourceWorkers.set([])
+    });
     this.optionsLoading.set(true);
     this.adminUsersApi.getAssignmentOptions().subscribe({
       next: (options) => {

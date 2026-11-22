@@ -17,7 +17,10 @@ type Deps = {
   api: AdminTaxonomyApi;
   toast: Pick<ToastService, 'success' | 'error'>;
   isActive: () => boolean;
+  /** Add and rename: administrators, the owner and managers. */
   canWrite: () => boolean;
+  /** Delete: administrators and the owner only. */
+  canDelete: () => boolean;
   tab: () => string;
   search: () => string;
 };
@@ -117,14 +120,23 @@ export class AdminTaxonomyFacade {
   }
 
   /**
-   * A manager only reads categories: the page hides the edit controls for that role. A change that still reaches
-   * the facade is refused with a message instead of silently doing nothing.
+   * Managers add and rename categories but do not delete them; other roles only read. The page hides the controls a
+   * role lacks; a change that still reaches the facade is refused with a message instead of silently doing nothing.
    */
   private writeAllowed(): boolean {
     if (this.deps.canWrite()) return true;
     this.deps.toast.error(
       'Только просмотр',
-      'Категории и подкатегории меняют администратор и владелец.',
+      'Категории и подкатегории меняют администратор, владелец и менеджеры.',
+    );
+    return false;
+  }
+
+  private deleteAllowed(): boolean {
+    if (this.deps.canDelete()) return true;
+    this.deps.toast.error(
+      'Удаление недоступно',
+      'Удаляют категории и подкатегории администратор и владелец.',
     );
     return false;
   }
@@ -381,7 +393,7 @@ export class AdminTaxonomyFacade {
   }
   deleteEditingCategory(): void {
     const id = this.editingCategoryId();
-    if (id == null || !this.writeAllowed() || !this.canMutate()) return;
+    if (id == null || !this.deleteAllowed() || !this.canMutate()) return;
     const editor = this.categoryEditor.capture(id);
     if (!window.confirm(this.categoryDeleteQuestion(id))) return;
     if (!this.canMutate() || !this.categoryEditor.sameSelection(editor, this.editingCategoryId()))
@@ -412,7 +424,7 @@ export class AdminTaxonomyFacade {
 
   deleteEditingSubCategory(): void {
     const id = this.editingSubCategoryId();
-    if (id == null || !this.writeAllowed() || !this.canMutate()) return;
+    if (id == null || !this.deleteAllowed() || !this.canMutate()) return;
     const editor = this.subCategoryEditor.capture(id);
     if (!window.confirm(this.subCategoryDeleteQuestion(id))) return;
     if (
@@ -459,14 +471,12 @@ export class AdminTaxonomyFacade {
       const verb = plural(count, 'удалится', 'удалятся', 'удалятся');
       const noun = plural(count, 'подкатегория', 'подкатегории', 'подкатегорий');
       lines.push(`Вместе с ней ${verb} ${count} ${noun}.`);
-      lines.push(
-        'У компаний и отзывов с этой категорией поля «Категория» и «Подкатегория» станут пустыми.',
-      );
     } else {
       lines.push('Подкатегорий у неё нет.');
-      lines.push('У компаний и отзывов с этой категорией поле «Категория» станет пустым.');
     }
-    lines.push('Если по категории уже есть опубликованные отзывы, удалить её не получится.');
+    lines.push(
+      'Если категорию или её подкатегории используют компании или отзывы, удалить её не получится — сначала переведите их в другую категорию.',
+    );
     lines.push('Отменить нельзя.');
     return lines.join('\n');
   }
@@ -477,8 +487,7 @@ export class AdminTaxonomyFacade {
     const parent = subCategory?.category?.title || this.activeCategory()?.title;
     return [
       `Удалить ${named('подкатегорию', title)}${parent ? ` из категории «${parent}»` : ''}?`,
-      'У компаний и отзывов с этой подкатегорией поле «Подкатегория» станет пустым.',
-      'Если по подкатегории уже есть опубликованные отзывы, удалить её не получится.',
+      'Если подкатегорию используют компании или отзывы, удалить её не получится — сначала переведите их в другую подкатегорию.',
       'Отменить нельзя.',
     ].join('\n');
   }

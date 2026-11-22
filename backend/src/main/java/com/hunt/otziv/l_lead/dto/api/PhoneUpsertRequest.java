@@ -21,6 +21,8 @@ public record PhoneUpsertRequest(
         String fotoInstagram,
         Boolean active,
         LocalDate createDate,
-        Long operatorId
+        Long operatorId,
+        /** True erases the birthday; an absent birthday alone keeps the stored one (older clients send none). */
+        Boolean clearBirthday
 ) {
 }

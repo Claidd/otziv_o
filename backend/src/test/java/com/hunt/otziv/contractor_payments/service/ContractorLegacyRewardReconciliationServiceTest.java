@@ -249,7 +249,7 @@ class ContractorLegacyRewardReconciliationServiceTest {
                 )
         )).isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
             assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(exception.getReason()).contains("Получатель не выводится");
+            assertThat(exception.getReason()).contains("Получателя выплаты не удалось определить");
         });
 
         verify(repository, never()).casApply(any(ItemRow.class));

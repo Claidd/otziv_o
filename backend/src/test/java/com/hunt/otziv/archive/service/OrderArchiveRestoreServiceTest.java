@@ -288,23 +288,131 @@ class OrderArchiveRestoreServiceTest {
     }
 
     @Test
-    void automaticRestoresKeepTheirBehaviourWithoutAPersonToAsk() {
+    void anAutomaticRestoreMovesTheOrderToTheOnlyCompanySpecialistAndAuditsIt() {
         OrderArchiveRestoreRepository repository = mock(OrderArchiveRestoreRepository.class);
-        ArchiveCandidateCounts reviewCheckRows = stubUnpaid(repository, 513L, "На проверке", 4L);
-        when(repository.restoreOrder(513L, 4L)).thenReturn(reviewCheckRows);
-        ArchiveCandidateCounts invoiceRows = stubUnpaid(repository, 514L, "Коррекция", 3L);
-        when(repository.restoreOrder(514L, 3L)).thenReturn(invoiceRows);
-        when(repository.findArchiveOrderWorker(any()))
-                .thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        ArchiveCandidateCounts rows = stubUnpaid(repository, 513L, "На проверке", 4L);
+        when(repository.restoreOrder(513L, 4L)).thenReturn(rows);
+        when(repository.findArchiveOrderWorker(513L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        when(repository.findRestoreWorkerOptions(513L)).thenReturn(List.of(
+                new ArchiveRecoveryWorkerOption(72L, "Специалист компании", true),
+                new ArchiveRecoveryWorkerOption(73L, "Другой", false)));
+        when(repository.findArchiveOrderCompany(513L)).thenReturn(900L);
 
-        // Old review-check link and archived common invoice: nobody is there to pick a specialist.
+        // Old review-check link: nobody is there to pick a specialist.
         service(repository).restoreIndividualOrder(513L, "На проверке", "client", true);
+
+        InOrder order = inOrder(repository, membership);
+        order.verify(repository).restoreOrder(513L, 4L);
+        order.verify(repository).clearCompletionMarkers(513L);
+        order.verify(repository).reassignRestoredOrderWorker(513L, 72L);
+        order.verify(repository).insertRestoreBatch(eq(513L), any(), eq("client"), eq("На проверке"), eq(rows),
+                contains("workerRule=COMPANY_SPECIALIST; previousWorkerId=2"));
+        order.verify(repository).auditRestoreWorkerDecision(513L, 2L, 72L, "COMPANY_SPECIALIST", "client");
+        order.verify(membership).attachOrderByIdIfNeeded(513L);
+    }
+
+    @Test
+    void anAutomaticRestoreFollowsTheCompanyTransferHistoryThroughAnInactiveIntermediate() {
+        OrderArchiveRestoreRepository repository = mock(OrderArchiveRestoreRepository.class);
+        ArchiveCandidateCounts rows = stubUnpaid(repository, 514L, "Коррекция", 3L);
+        when(repository.restoreOrder(514L, 3L)).thenReturn(rows);
+        when(repository.findArchiveOrderWorker(514L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        when(repository.findRestoreWorkerOptions(514L)).thenReturn(List.of(
+                new ArchiveRecoveryWorkerOption(72L, "Первый", true),
+                new ArchiveRecoveryWorkerOption(74L, "Второй", true),
+                new ArchiveRecoveryWorkerOption(73L, "Преемник", false)));
+        when(repository.findArchiveOrderCompany(514L)).thenReturn(900L);
+        when(repository.findTransferTarget(900L, 2L)).thenReturn(9L);
+        when(repository.findTransferTarget(900L, 9L)).thenReturn(73L);
+
+        // An archived common invoice chain restores its orders automatically as well.
         service(repository).restoreOrder(514L, "Коррекция", "alex", true);
 
-        verify(repository).restoreOrder(513L, 4L);
-        verify(repository).restoreOrder(514L, 3L);
-        verify(repository, never()).findArchiveOrderWorker(any());
+        verify(repository).reassignRestoredOrderWorker(514L, 73L);
+        verify(repository).auditRestoreWorkerDecision(514L, 2L, 73L, "TRANSFER_SUCCESSOR", "alex");
+    }
+
+    @Test
+    void anAutomaticRestoreKeepsTheArchivedSpecialistWhenThePaymentRecipientIsFixed() {
+        OrderArchiveRestoreRepository repository = mock(OrderArchiveRestoreRepository.class);
+        ArchiveCandidateCounts rows = stubUnpaid(repository, 515L, "Новый", 1L);
+        when(repository.restoreOrder(515L, 1L)).thenReturn(rows);
+        when(repository.findArchiveOrderWorker(515L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        when(repository.hasFrozenLivePaymentRoute(515L)).thenReturn(true);
+
+        service(repository).restoreIndividualOrder(515L, "Новый", "client", true);
+
+        verify(repository, never()).findRestoreWorkerOptions(any());
         verify(repository, never()).reassignRestoredOrderWorker(any(), any());
+        verify(repository).insertRestoreBatch(eq(515L), any(), any(), any(), any(), contains("workerRule=FIXED_RECIPIENT"));
+        verify(repository).auditRestoreWorkerDecision(515L, 2L, null, "FIXED_RECIPIENT", "client");
+    }
+
+    @Test
+    void anAutomaticRestoreWithoutAnUnambiguousPickStillRestoresAndLeavesATrace() {
+        OrderArchiveRestoreRepository repository = mock(OrderArchiveRestoreRepository.class);
+        ArchiveCandidateCounts rows = stubUnpaid(repository, 516L, "На проверке", 4L);
+        when(repository.restoreOrder(516L, 4L)).thenReturn(rows);
+        when(repository.findArchiveOrderWorker(516L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        when(repository.findRestoreWorkerOptions(516L)).thenReturn(List.of(
+                new ArchiveRecoveryWorkerOption(72L, "Первый", true),
+                new ArchiveRecoveryWorkerOption(74L, "Второй", true)));
+        when(repository.findArchiveOrderCompany(516L)).thenReturn(900L);
+
+        var result = service(repository).restoreIndividualOrder(516L, "На проверке", "client", true);
+
+        assertThat(result.message()).contains("workerRule=NO_UNAMBIGUOUS_CANDIDATE");
+        verify(repository, never()).reassignRestoredOrderWorker(any(), any());
+        verify(repository).auditRestoreWorkerDecision(516L, 2L, null, "NO_UNAMBIGUOUS_CANDIDATE", "client");
+    }
+
+    @Test
+    void anAutomaticRestoreKeepsAWorkingSpecialistWithoutLookingForAnother() {
+        OrderArchiveRestoreRepository repository = mock(OrderArchiveRestoreRepository.class);
+        ArchiveCandidateCounts rows = stubUnpaid(repository, 517L, "На проверке", 4L);
+        when(repository.restoreOrder(517L, 4L)).thenReturn(rows);
+        when(repository.findArchiveOrderWorker(517L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, true));
+
+        var result = service(repository).restoreIndividualOrder(517L, "На проверке", "client", true);
+
+        assertThat(result.message()).doesNotContain("workerRule");
+        verify(repository, never()).findRestoreWorkerOptions(any());
+        verify(repository, never()).auditRestoreWorkerDecision(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void theRestoreWindowGetsTheSuggestionOfTheAutomaticRule() {
+        OrderArchiveRestoreRepository repository = mock(OrderArchiveRestoreRepository.class);
+        stubUnpaid(repository, 518L, "Новый", 1L);
+        when(repository.findArchiveOrderWorker(518L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        when(repository.findRestoreWorkerOptions(518L)).thenReturn(List.of(
+                new ArchiveRecoveryWorkerOption(72L, "Первый", true),
+                new ArchiveRecoveryWorkerOption(74L, "Второй", true),
+                new ArchiveRecoveryWorkerOption(73L, "Преемник", false)));
+        when(repository.findArchiveOrderCompany(518L)).thenReturn(900L);
+        when(repository.findTransferTarget(900L, 2L)).thenReturn(73L);
+
+        assertThatThrownBy(() -> service(repository).restoreIndividualOrderWithActiveSpecialist(518L, "Новый", "manager", true, null))
+                .isInstanceOfSatisfying(ArchiveRestoreSpecialistRequiredException.class,
+                        refused -> assertThat(refused.suggestedWorkerId()).isEqualTo(73L));
+        verify(repository, never()).restoreOrder(any(), any());
+    }
+
+    @Test
+    void theSuggestionRulePrefersTheSuccessorThenTheOnlyCompanyThenTheOnlyTeamSpecialist() {
+        var company72 = new ArchiveRecoveryWorkerOption(72L, "A", true);
+        var company74 = new ArchiveRecoveryWorkerOption(74L, "B", true);
+        var team73 = new ArchiveRecoveryWorkerOption(73L, "C", false);
+
+        assertThat(OrderArchiveRestoreService.suggest(List.of(company72, team73), 73L))
+                .isEqualTo(new OrderArchiveRestoreService.Suggestion(73L, "TRANSFER_SUCCESSOR"));
+        // A successor outside the eligible team is ignored.
+        assertThat(OrderArchiveRestoreService.suggest(List.of(company72, team73), 99L))
+                .isEqualTo(new OrderArchiveRestoreService.Suggestion(72L, "COMPANY_SPECIALIST"));
+        assertThat(OrderArchiveRestoreService.suggest(List.of(team73), null))
+                .isEqualTo(new OrderArchiveRestoreService.Suggestion(73L, "ONLY_MANAGER_SPECIALIST"));
+        assertThat(OrderArchiveRestoreService.suggest(List.of(company72, company74, team73), null)).isNull();
+        assertThat(OrderArchiveRestoreService.suggest(List.of(), 73L)).isNull();
     }
 
     private OrderArchiveRestoreService service(OrderArchiveRestoreRepository repository) {

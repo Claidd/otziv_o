@@ -77,7 +77,8 @@ public interface DeviceTokenRepository extends CrudRepository<DeviceToken, Strin
                 d.telephone.id,
                 d.token,
                 d.createdAt,
-                d.active
+                d.active,
+                d.expiresAt
             )
             FROM DeviceToken d
             WHERE d.telephone.id IN :telephoneIds

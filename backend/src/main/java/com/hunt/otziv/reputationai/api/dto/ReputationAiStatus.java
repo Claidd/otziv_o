@@ -25,6 +25,8 @@ public record ReputationAiStatus(
         List<ReputationAiModelProfile> openAiResearchReportProfiles,
         List<ReputationAiModelProfile> openAiContentPackProfiles,
         List<String> warnings,
-        boolean enabled
+        boolean enabled,
+        /** Settings to change, for administrators only; empty for other roles. */
+        List<String> technicalWarnings
 ) {
 }

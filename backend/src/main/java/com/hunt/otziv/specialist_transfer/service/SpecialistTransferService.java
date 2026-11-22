@@ -41,6 +41,42 @@ public class SpecialistTransferService {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Specialists with companies the actor may transfer (all for an administrator, the owner's managers' companies for
+     * an owner), deactivated ones included, with how many companies and open orders would move.
+     */
+    @Transactional(readOnly = true)
+    public List<com.hunt.otziv.specialist_transfer.dto.SpecialistTransferSourceResponse> sources(Authentication authentication) {
+        Actor actor = resolveActor(authentication);
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("actorUserId", actor.userId())
+                .addValue("adminAccess", actor.admin());
+        return jdbc.query("""
+                SELECT w.worker_id,
+                       COALESCE(NULLIF(TRIM(u.fio), ''), u.username, CONCAT('Специалист #', w.worker_id)) AS label,
+                       COALESCE(u.active, 0) AS active,
+                       COUNT(DISTINCT c.company_id) AS company_count,
+                       COUNT(DISTINCT o.order_id) AS open_order_count
+                FROM workers w
+                LEFT JOIN users u ON u.id = w.user_id
+                JOIN workers_companies wc ON wc.worker_id = w.worker_id
+                JOIN companies c ON c.company_id = wc.company_id
+                LEFT JOIN orders o ON o.order_worker = w.worker_id
+                                  AND o.order_company = c.company_id
+                                  AND o.order_complete = 0
+                WHERE :adminAccess = TRUE
+                   OR c.company_manager IN (SELECT manager_id FROM managers_users WHERE user_id = :actorUserId)
+                GROUP BY w.worker_id, label, active
+                ORDER BY active DESC, label, w.worker_id
+                """, params, (rs, rowNum) -> new com.hunt.otziv.specialist_transfer.dto.SpecialistTransferSourceResponse(
+                rs.getLong("worker_id"),
+                rs.getString("label"),
+                rs.getBoolean("active"),
+                rs.getLong("company_count"),
+                rs.getLong("open_order_count")
+        ));
+    }
+
     @Transactional(readOnly = true)
     public SpecialistTransferPreview preview(SpecialistTransferRequest request, Authentication authentication) {
         TransferContext context = buildContext(request, authentication);
@@ -54,6 +90,10 @@ public class SpecialistTransferService {
         }
 
         TransferContext context = buildContext(request, authentication);
+        if (!context.toWorker().active()) {
+            // Moving work to someone who no longer works would leave it undone again.
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Новый специалист отключён — выберите активного");
+        }
         SpecialistTransferPreview preview = buildPreview(context);
         if (preview.companyCount() == 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У исходного специалиста нет компаний для переноса");

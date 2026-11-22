@@ -132,6 +132,91 @@ public class OrderArchiveRestoreRepository {
         ));
     }
 
+    /** The same eligible specialists as {@link #findRestoreWorkerOptions}, for an order still in the live tables. */
+    public List<ArchiveRecoveryWorkerOption> findLiveWorkerOptions(Long orderId) {
+        return jdbc.query("""
+                SELECT w.worker_id,
+                       COALESCE(NULLIF(TRIM(u.fio), ''), NULLIF(TRIM(u.username), ''),
+                                CONCAT('Специалист #', w.worker_id)) AS worker_label,
+                       EXISTS (SELECT 1 FROM workers_companies wc
+                               WHERE wc.worker_id = w.worker_id AND wc.company_id = c.company_id) AS company_worker
+                FROM orders o
+                JOIN companies c ON c.company_id = o.order_company
+                JOIN managers_users mu ON mu.manager_id = c.company_manager
+                JOIN users u ON u.id = mu.user_id
+                JOIN workers w ON w.user_id = u.id
+                WHERE o.order_id = :orderId
+                  AND u.active = true
+                  AND EXISTS (SELECT 1 FROM users_roles ur JOIN roles r ON r.id = ur.role_id
+                              WHERE ur.user_id = u.id AND r.name = 'ROLE_WORKER')
+                ORDER BY company_worker DESC, worker_label, w.worker_id
+                """, Map.of("orderId", orderId), (rs, rowNum) -> new ArchiveRecoveryWorkerOption(
+                rs.getLong("worker_id"),
+                rs.getString("worker_label"),
+                rs.getBoolean("company_worker")
+        ));
+    }
+
+    public Long findArchiveOrderCompany(Long orderId) {
+        List<Long> companies = jdbc.queryForList("""
+                SELECT order_company
+                FROM archive_orders
+                WHERE order_id = :orderId
+                  AND order_company IS NOT NULL
+                """, Map.of("orderId", orderId), Long.class);
+        return companies.stream().findFirst().orElse(null);
+    }
+
+    /**
+     * The specialist that received this company's work from {@code fromWorkerId} last: an owner's specialist transfer
+     * covering the company or an applied workload transfer of it, whichever is newer. Null without such a transfer.
+     */
+    public Long findTransferTarget(Long companyId, Long fromWorkerId) {
+        List<Long> targets = jdbc.queryForList("""
+                SELECT target_worker_id
+                FROM (
+                    SELECT audit.to_worker_id AS target_worker_id,
+                           audit.created_at AS transferred_at,
+                           audit.id AS transfer_id
+                    FROM specialist_transfer_audit audit
+                    WHERE audit.from_worker_id = :fromWorkerId
+                      AND audit.company_ids_json IS NOT NULL
+                      AND JSON_CONTAINS(audit.company_ids_json, CAST(:companyId AS CHAR))
+                    UNION ALL
+                    SELECT execution.target_worker_id,
+                           execution.applied_at,
+                           execution.workload_transfer_execution_id
+                    FROM workload_transfer_executions execution
+                    WHERE execution.company_id = :companyId
+                      AND execution.source_worker_id = :fromWorkerId
+                      AND execution.status = 'APPLIED'
+                ) transfers
+                ORDER BY transferred_at DESC, transfer_id DESC
+                LIMIT 1
+                """, new MapSqlParameterSource()
+                .addValue("companyId", companyId)
+                .addValue("fromWorkerId", fromWorkerId), Long.class);
+        return targets.stream().findFirst().orElse(null);
+    }
+
+    /** Business audit of an automatic specialist decision for a restored order (moved, or kept although inactive). */
+    public void auditRestoreWorkerDecision(Long orderId, Long previousWorkerId, Long newWorkerId, String rule, String actor) {
+        jdbc.update("""
+                INSERT INTO business_audit_events
+                    (created_at, actor, source, action, entity_type, entity_id,
+                     order_id, old_value, new_value, details)
+                VALUES (CURRENT_TIMESTAMP(6), :actor, 'archive_restore', :action, 'order', :entityId,
+                        :orderId, :oldValue, :newValue, :details)
+                """, new MapSqlParameterSource()
+                .addValue("actor", actor == null || actor.isBlank() ? "system" : actor.length() > 150 ? actor.substring(0, 150) : actor)
+                .addValue("action", newWorkerId == null ? "archive_restore_worker_kept_inactive" : "archive_restore_worker_rerouted")
+                .addValue("entityId", Long.toString(orderId))
+                .addValue("orderId", orderId)
+                .addValue("oldValue", previousWorkerId == null ? null : Long.toString(previousWorkerId))
+                .addValue("newValue", newWorkerId == null ? null : Long.toString(newWorkerId))
+                .addValue("details", "rule=" + rule));
+    }
+
     /**
      * Same evidence as ContractorPaymentShadowService.hasFrozenLiveRoute: once a client holds a
      * contractor's requisites, the payment recipient is fixed and the specialist may not change.
