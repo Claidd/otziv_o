@@ -80,14 +80,22 @@ public class OrderPaymentCancellationService implements com.hunt.otziv.p_product
         cancelPayment(orderId,principal,null);
     }
 
-    private record ManualReceipt(Long linkId, long amount, boolean common, String reason) {}
+    private record ManualReceipt(Long linkId, long amount, boolean common, String reason, boolean deleteCreatedNextOrder) {}
 
     @Override
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
     public void reopen(long orderId, Long evidenceLinkId, long amountKopecks, boolean commonInvoice, Principal actor, String reason) {
         if (amountKopecks <= 0 || commonInvoice != (evidenceLinkId == null))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Неверный источник ручной оплаты");
-        cancelPayment(orderId,actor,new ManualReceipt(evidenceLinkId,amountKopecks,commonInvoice,reason));
+        cancelPayment(orderId,actor,new ManualReceipt(evidenceLinkId,amountKopecks,commonInvoice,reason,false));
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void reopenPaperInvoiceOrder(long orderId, long amountKopecks, Principal actor, String reason) {
+        if (amountKopecks <= 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Неверная сумма отменяемой оплаты");
+        cancelPayment(orderId,actor,new ManualReceipt(null,amountKopecks,true,reason,true));
     }
 
     private void cancelPayment(Long orderId, Principal principal, ManualReceipt manual) {
@@ -153,7 +161,8 @@ public class OrderPaymentCancellationService implements com.hunt.otziv.p_product
         int canceledAmount = requirePaidAmountSnapshot(activeCheck);
         requireCompanyRollback(order, canceledSum, canceledAmount);
 
-        if (manual == null) cancelNextOrderRequest(order, principal);
+        // A single order's payment, and a paper invoice paid by mistake, take back the next order the payment created.
+        if (manual == null || manual.deleteCreatedNextOrder()) cancelNextOrderRequest(order, principal);
         else nextOrderRequestRepository.findBySourceOrderId(orderId).filter(request -> request.getCreatedOrder() == null).ifPresent(request -> {
             request.setStatus(NextOrderRequestStatus.CANCELED);
             request.setErrorMessage("Отменена ручная оплата исходного заказа");

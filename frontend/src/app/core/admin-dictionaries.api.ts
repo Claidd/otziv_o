@@ -360,6 +360,8 @@ export interface AdminClientMessageSettings {
   reviewRecoveryNoticeText: string;
   archiveOfferText: string;
   unansweredAutoIgnorePhrases: string;
+  /** Fingerprint of the stored values; sent back as expectedSettingsVersion so a stale form cannot overwrite them. */
+  settingsVersion?: string | null;
 }
 
 export interface AdminClientMessageMonitorScenario {
@@ -739,6 +741,10 @@ export interface BotRequest {
   statusId: number | null;
   active: boolean;
   counter: number;
+  /** Values the card was opened with: a field left unchanged keeps the server's current value. */
+  expectedCounter?: number;
+  expectedStatusId?: number | null;
+  expectedActive?: boolean;
 }
 
 export interface PromoTextRequest {
@@ -784,4 +790,8 @@ export interface ClientPublicationProgressReportSettingsRequest {
   enabled: boolean;
 }
 
-export type ClientMessageSettingsRequest = AdminClientMessageSettings;
+export type ClientMessageSettingsRequest = AdminClientMessageSettings & {
+  expectedSettingsVersion?: string | null;
+  /** The monitor switch as the form showed it: an untouched stale switch does not overwrite the stored one. */
+  expectedMonitorEnabled?: boolean | null;
+};

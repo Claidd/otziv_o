@@ -24,7 +24,7 @@ public class DeliveryQueueHealthMetrics implements MeterBinder {
                         .description("Durable messages by outcome; SENT history excluded")
                         .tag("queue", queue.queueName()).tag("state", state.name()).strongReference(true).register(registry);
                 Gauge.builder("otziv.delivery.queue.oldest.seconds", cache, c -> c.age(state))
-                        .description("Age of the oldest durable message in this state")
+                        .description("Overdue age of the oldest durable message in this state; a schedule hold counts from its due re-check")
                         .tag("queue", queue.queueName()).tag("state", state.name()).strongReference(true).register(registry);
             }
             Gauge.builder("otziv.delivery.queue.expired.leases", cache, SnapshotCache::expired)

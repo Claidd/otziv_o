@@ -110,6 +110,39 @@ public class ManagerArchiveService {
             Principal principal,
             Authentication authentication
     ) {
+        return restoreOrder(orderId, targetStatus, null, false, confirm, principal, authentication);
+    }
+
+    /**
+     * @param targetWorkerId specialist chosen in the restore window after the server reported that
+     *                       the archived one no longer works; null keeps the archived specialist
+     */
+    @Transactional
+    public ArchiveRestoreResult restoreOrder(
+            Long orderId,
+            String targetStatus,
+            Long targetWorkerId,
+            boolean confirm,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return restoreOrder(orderId, targetStatus, targetWorkerId, true, confirm, principal, authentication);
+    }
+
+    /**
+     * @param specialistChoice the client can show the specialist list; without it an order whose archived specialist
+     *                         was deactivated is restored as before (an older mobile app cannot choose yet)
+     */
+    @Transactional
+    public ArchiveRestoreResult restoreOrder(
+            Long orderId,
+            String targetStatus,
+            Long targetWorkerId,
+            boolean specialistChoice,
+            boolean confirm,
+            Principal principal,
+            Authentication authentication
+    ) {
         if (orderId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order id is required");
         }
@@ -132,7 +165,11 @@ public class ManagerArchiveService {
         }
 
         String restoredBy = principal == null ? null : principal.getName();
-        return restoreService.restoreIndividualOrder(orderId, targetStatus, restoredBy, confirm);
+        if (!specialistChoice) {
+            return restoreService.restoreIndividualOrder(orderId, targetStatus, restoredBy, confirm);
+        }
+        return restoreService.restoreIndividualOrderWithActiveSpecialist(
+                orderId, targetStatus, restoredBy, confirm, targetWorkerId);
     }
 
     @Transactional

@@ -115,7 +115,8 @@ class ManagerControlConcreteReasonProjectionTest {
         var response = workflow().readConcreteExamples(card.getParentItem(), List.of());
         assertThat(response).isEmpty();
         assertThat(card.getStatus()).isEqualTo(ManagerDailyControlItemStatus.RESOLVED);
-        assertThat(card.getComment()).contains("администратору", "состояние доставки не изменено").doesNotContain("устранена");
+        assertThat(card.getComment()).contains("больше не требует действия менеджера", "состояние доставки не изменено")
+                .doesNotContain("устранена", "подтверждена", "администратор");
         assertThat(card.isAutomaticResolution()).isTrue();
         verify(cards).save(card);
     }

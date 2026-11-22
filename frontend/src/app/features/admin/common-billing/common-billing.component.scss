@@ -1289,6 +1289,43 @@ button .material-icons-sharp {
   overflow-wrap: anywhere;
 }
 
+/* Dark theme: the problem block's steps, hint, quick actions and raw error used light-only colours. */
+:host-context(body.otziv-dark-theme) .invoice-problem > span {
+  background: rgba(255, 154, 182, 0.12);
+}
+
+:host-context(body.otziv-dark-theme) .invoice-problem-steps {
+  color: var(--billing-alert-text);
+}
+
+:host-context(body.otziv-dark-theme) .invoice-problem-steps li::marker {
+  color: var(--billing-alert-title);
+}
+
+:host-context(body.otziv-dark-theme) .invoice-problem-next {
+  border-color: var(--billing-alert-border);
+  color: var(--billing-action-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:host-context(body.otziv-dark-theme) .invoice-problem-tools button,
+:host-context(body.otziv-dark-theme) .invoice-problem-tools a {
+  border-color: var(--billing-action-border);
+  color: #9cc8ff;
+  background: var(--billing-action-surface);
+}
+
+:host-context(body.otziv-dark-theme) .invoice-problem-tools button:hover:not(:disabled),
+:host-context(body.otziv-dark-theme) .invoice-problem-tools a:hover {
+  background: var(--billing-action-surface-hover);
+}
+
+:host-context(body.otziv-dark-theme) .invoice-problem code {
+  border-color: var(--billing-alert-border);
+  color: var(--billing-action-muted);
+  background: rgba(0, 0, 0, 0.22);
+}
+
 .side-head {
   display: flex;
   align-items: flex-start;

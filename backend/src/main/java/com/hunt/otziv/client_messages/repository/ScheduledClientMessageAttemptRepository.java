@@ -16,6 +16,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ScheduledClientMessageAttemptRepository extends CrudRepository<ScheduledClientMessageAttempt, Long> {
 
+    List<ScheduledClientMessageAttempt> findTop3ByStateIdAndAttemptedAtGreaterThanEqualOrderByAttemptedAtDescIdDesc(
+            Long stateId, LocalDateTime preparedAt);
+
     @Modifying
     @Query("DELETE FROM ScheduledClientMessageAttempt a WHERE a.attemptedAt < :cutoff")
     int deleteOlderThan(@Param("cutoff") LocalDateTime cutoff);

@@ -3,6 +3,8 @@ package com.hunt.otziv.common_billing.service;
 import static org.assertj.core.api.Assertions.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
+import com.hunt.otziv.client_messages.api.DeliveryQueueHealth;
+import com.hunt.otziv.common_billing.api.CommonInvoiceDeliveryWait;
 import com.hunt.otziv.security.credentials.CredentialCipher;
 import com.hunt.otziv.security.credentials.CredentialEncryptionProperties;
 import java.nio.file.Files;
@@ -350,5 +352,68 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
         });
         tx.executeWithoutResult(status -> queue.finish(claim, "SENT", null, 0));
         assertThat(queue.deliveryQueueHealth()).isEmpty();
+    }
+
+    /** The worker's real path: claim, keep the message unsent, re-check in five minutes; queued ten hours ago. */
+    private void waitedTenHoursWith(String code, boolean held) {
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        var claim = queue.claim().orElseThrow();
+        tx.executeWithoutResult(status -> queue.finish(claim, "RETRYABLE", code, 300, held));
+        jdbc.update("UPDATE common_invoice_message_queue SET created_at=TIMESTAMPADD(HOUR,-10,CURRENT_TIMESTAMP(6))");
+    }
+
+    private DeliveryQueueHealth.Row healthOf(DeliveryQueueHealth.State state) {
+        var rows = queue.deliveryQueueHealth();
+        assertThat(rows).extracting(DeliveryQueueHealth.Row::state).containsExactly(state);
+        return rows.getFirst();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"outside_business_window", "daily_limit", "rate_limited"})
+    void scheduleHoldIsNotDelayedWhileItsReCheckIsAhead(String code) {
+        waitedTenHoursWith(code, true);
+        var row = healthOf(DeliveryQueueHealth.State.RETRYABLE);
+        assertThat(row.jobs()).isEqualTo(1);
+        assertThat(row.oldestSeconds()).isZero();
+        jdbc.update("UPDATE common_invoice_message_queue SET state='QUEUED'");
+        assertThat(healthOf(DeliveryQueueHealth.State.QUEUED).oldestSeconds()).isZero();
+    }
+
+    @Test void stalledScheduleReCheckStillCountsAsDelayed() {
+        waitedTenHoursWith("outside_business_window", true);
+        // A dead worker no longer moves the re-check forward, so the hold becomes overdue.
+        jdbc.update("UPDATE common_invoice_message_queue SET next_attempt_at=TIMESTAMPADD(SECOND,-400,CURRENT_TIMESTAMP(6))");
+        assertThat(healthOf(DeliveryQueueHealth.State.RETRYABLE).oldestSeconds())
+                .isGreaterThanOrEqualTo(400.0).isLessThan(3_600.0);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"gateway_not_ready,false", "automation_paused,true", "live_disabled,true"})
+    void pauseSwitchAndGatewayWaitsStillCountFromCreation(String code, boolean held) {
+        waitedTenHoursWith(code, held);
+        assertThat(healthOf(DeliveryQueueHealth.State.RETRYABLE).oldestSeconds()).isGreaterThanOrEqualTo(36_000.0);
+    }
+
+    @Test void freshQueuedMessageWithoutCodeStillCountsFromCreation() {
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        // A future re-check time must not hide an untried message: a NULL code falls back to created_at.
+        jdbc.update("UPDATE common_invoice_message_queue SET created_at=TIMESTAMPADD(HOUR,-10,CURRENT_TIMESTAMP(6)),"
+                + "next_attempt_at=TIMESTAMPADD(SECOND,300,CURRENT_TIMESTAMP(6))");
+        assertThat(queue.status("invoice-message:test").errorCode()).isNull();
+        assertThat(healthOf(DeliveryQueueHealth.State.QUEUED).oldestSeconds()).isGreaterThanOrEqualTo(36_000.0);
+    }
+
+    @Test void heldMessageDoesNotHideALateNeighbourInTheSameState() {
+        waitedTenHoursWith("outside_business_window", true);
+        jdbc.update("INSERT INTO common_invoice_message_queue(operation_id,invoice_id,envelope_ciphertext,state,error_code,created_at) "
+                + "VALUES('late-retry',11,'fixture','RETRYABLE','gateway_not_ready',TIMESTAMPADD(SECOND,-900,CURRENT_TIMESTAMP(6)))");
+        var row = healthOf(DeliveryQueueHealth.State.RETRYABLE);
+        assertThat(row.jobs()).isEqualTo(2);
+        assertThat(row.oldestSeconds()).isGreaterThanOrEqualTo(900.0).isLessThan(3_600.0);
+    }
+
+    @Test void scheduleHoldsAreTheSelfLiftingPartOfAutoresponderHolds() {
+        assertThat(CommonInvoiceDeliveryWait.AUTORESPONDER_HOLD_CODES).containsAll(CommonInvoiceDeliveryWait.SCHEDULE_HOLD_CODES);
+        assertThat(CommonInvoiceDeliveryWait.SCHEDULE_HOLD_CODES).doesNotContain("automation_paused", "live_disabled");
     }
 }

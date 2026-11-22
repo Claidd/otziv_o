@@ -570,6 +570,7 @@ VALUES
   ('client.messages.payment-overdue.live-enabled', 'false', NOW(6)),
   ('client.messages.immediate.enabled', 'false', NOW(6)),
   ('client.messages.monitor.enabled', 'false', NOW(6)),
+  ('manager-control.diagnostics.mode', 'OFF', NOW(6)),
   ('publication.health-monitor.enabled', 'false', NOW(6)),
   ('telegram.reports.morning.enabled', 'false', NOW(6)),
   ('telegram.reports.evening.enabled', 'false', NOW(6)),

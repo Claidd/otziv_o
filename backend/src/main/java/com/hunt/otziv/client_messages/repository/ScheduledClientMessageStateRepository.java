@@ -61,6 +61,22 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     @Query("SELECT s.id FROM ScheduledClientMessageState s WHERE s.scenario <> com.hunt.otziv.client_messages.model.ClientMessageScenario.BAD_REVIEW_INVOICE AND s.deliveryEnvelope IS NOT NULL AND s.deliveryStatus IN ('PREPARED','UNKNOWN') AND COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt) < :cutoff ORDER BY COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt), s.id")
     List<Long> findRecoverablePreparedIds(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
 
+    /**
+     * As above, but an old unconfirmed send is re-checked less often: every 5 minutes during its first day, hourly up
+     * to a week, then every 6 hours. Each check asks the messenger again (receipt, history, invite route), so checking
+     * week-old sends every few minutes only loaded the gateway without new evidence.
+     */
+    @Query("SELECT s.id FROM ScheduledClientMessageState s WHERE s.scenario <> com.hunt.otziv.client_messages.model.ClientMessageScenario.BAD_REVIEW_INVOICE AND s.deliveryEnvelope IS NOT NULL AND s.deliveryStatus IN ('PREPARED','UNKNOWN') AND COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt) < :cutoff"
+            + " AND (s.deliveryPreparedAt IS NULL OR s.deliveryPreparedAt >= :dayAgo OR COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt) < :hourlyCutoff)"
+            + " AND (s.deliveryPreparedAt IS NULL OR s.deliveryPreparedAt >= :weekAgo OR COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt) < :sixHourCutoff)"
+            + " ORDER BY COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt), s.id")
+    List<Long> findRecoverablePreparedIdsWithBackoff(@Param("cutoff") LocalDateTime cutoff,
+                                                     @Param("dayAgo") LocalDateTime dayAgo,
+                                                     @Param("hourlyCutoff") LocalDateTime hourlyCutoff,
+                                                     @Param("weekAgo") LocalDateTime weekAgo,
+                                                     @Param("sixHourCutoff") LocalDateTime sixHourCutoff,
+                                                     Pageable pageable);
+
     @Modifying
     @Query(value = """
         UPDATE scheduled_client_message_state SET delivery_status = IF(delivery_envelope IS NULL, NULL, 'RETRYABLE'),
@@ -701,8 +717,11 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
                         @Param("claimCode") String claimCode,
                         @Param("claimMessage") String claimMessage);
 
+    // A task an administrator disabled or closed by hand is kept: once deleted, the reconciliation would create it again with an
+    // overdue deadline and the client would receive the message that was stopped on purpose.
     @Modifying
-    @Query("DELETE FROM ScheduledClientMessageState s WHERE s.status IN :statuses AND s.updatedAt < :cutoff")
+    @Query("DELETE FROM ScheduledClientMessageState s WHERE s.status IN :statuses AND s.updatedAt < :cutoff"
+            + " AND (s.lastErrorCode IS NULL OR s.lastErrorCode NOT IN ('manual_disabled', 'manual_done'))")
     int deleteTerminalOlderThan(@Param("statuses") Collection<ScheduledMessageStateStatus> statuses,
                                 @Param("cutoff") LocalDateTime cutoff);
 

@@ -185,6 +185,19 @@ export interface ArchiveRestoreResult {
   message: string;
 }
 
+export interface ArchiveRestoreWorkerOption {
+  id: number;
+  label: string;
+  companyWorker: boolean;
+}
+
+/** 409 body of an archive restore whose specialist no longer works; workers are the accepted choices. */
+export interface ArchiveRestoreSpecialistRequiredError {
+  message: string;
+  code: 'SPECIALIST_REQUIRED';
+  workers: ArchiveRestoreWorkerOption[];
+}
+
 export interface CompanyCardItem {
   id: number;
   title: string;
@@ -1013,10 +1026,19 @@ export class ManagerApi {
     );
   }
 
-  restoreArchiveOrder(orderId: number, targetStatus = 'Архив'): Observable<ArchiveRestoreResult> {
-    const params = new HttpParams()
+  /**
+   * A 409 with code SPECIALIST_REQUIRED (see ArchiveRestoreSpecialistRequiredError) means the
+   * archived specialist no longer works: repeat with one of the returned workers as targetWorkerId.
+   */
+  restoreArchiveOrder(orderId: number, targetStatus = 'Архив', targetWorkerId?: number | null): Observable<ArchiveRestoreResult> {
+    let params = new HttpParams()
       .set('targetStatus', targetStatus)
-      .set('confirm', 'true');
+      .set('confirm', 'true')
+      // The site shows the specialist list when the archived specialist no longer works.
+      .set('specialistChoice', 'true');
+    if (targetWorkerId != null) {
+      params = params.set('targetWorkerId', targetWorkerId);
+    }
 
     return this.http.post<ArchiveRestoreResult>(
       `${appEnvironment.apiBaseUrl}/api/manager/archive/orders/${orderId}/restore`,

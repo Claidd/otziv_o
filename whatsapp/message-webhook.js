@@ -40,6 +40,26 @@ function generatedOutboundKey(externalMessageId) {
   return `generated-outbound:${String(externalMessageId || "").trim()}`;
 }
 
+function attachmentMarker(type) {
+  return `[Вложение${type ? `: ${type}` : ""}]`;
+}
+
+// Media that can carry a caption. Other non-chat types (location, vcard, polls) keep their text as is.
+const CAPTIONED_MEDIA_TYPES = new Set(["audio", "document", "image", "ptt", "sticker", "video"]);
+
+function isCaptionedMedia(message) {
+  const type = String(message && message.type || "").trim().toLowerCase();
+  return Boolean(message) && type !== "chat"
+    && (message.hasMedia === true || CAPTIONED_MEDIA_TYPES.has(type));
+}
+
+// whatsapp-web.js puts a media caption into body. The marker stays in front of it so a receipt photo
+// captioned «Спасибо» is tracked as a file to check, not as a courtesy reply.
+function withAttachmentMarker(message, text) {
+  const type = String(message && message.type || "").trim();
+  return isCaptionedMedia(message) ? `${attachmentMarker(type)} ${text}` : text;
+}
+
 function trackedBody(message) {
   // WhatsApp reactions are acknowledgements attached to another message, not replies.
   if (isSystemNotification(message)
@@ -48,13 +68,20 @@ function trackedBody(message) {
   }
   const body = String(message && message.body || "").trim();
   if (body) {
-    return body;
+    return withAttachmentMarker(message, body);
   }
   const type = String(message && message.type || "").trim();
   if (message && (message.hasMedia || (type && type !== "chat"))) {
-    return `[Вложение${type ? `: ${type}` : ""}]`;
+    return attachmentMarker(type);
   }
   return "";
+}
+
+// The gateway registers its own sends by the text it passed to WhatsApp: a document is registered by its
+// caption, so a captioned echo is matched by the caption, not by the tracked form with the marker.
+function outboundMatchBody(message) {
+  const body = String(message && message.body || "").trim();
+  return body && isCaptionedMedia(message) ? body : trackedBody(message);
 }
 
 function isSystemNotification(message) {
@@ -528,7 +555,7 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, partici
         resolvedParticipantId(participantResolver, rawParticipantId, log),
       ]);
       const systemGenerated = Boolean(message.fromMe)
-        && registry.matches(metadata.groupId, body, externalMessageId);
+        && registry.matches(metadata.groupId, outboundMatchBody(message), externalMessageId);
       const payload = {
         clientId,
         groupId: metadata.groupId,
@@ -574,10 +601,12 @@ function createEditHandler({ clientId, postWebhook, participantResolver, groupWe
     }
     const groupId = deriveGroupId(message);
     const originalId = messageId(message);
-    const body = String(newBody === undefined || newBody === null ? message.body || "" : newBody).trim();
-    if (!groupId || !originalId || !body) {
+    const text = String(newBody === undefined || newBody === null ? message.body || "" : newBody).trim();
+    if (!groupId || !originalId || !text) {
       return { ignored: true };
     }
+    // An edited caption replaces the tracked text of the original message, so it keeps the same marker.
+    const body = withAttachmentMarker(message, text);
     const editedAtMs = Number(message.latestEditSenderTimestampMs) > 0
       ? Math.floor(Number(message.latestEditSenderTimestampMs))
       : Math.floor(now());
@@ -634,7 +663,7 @@ async function reconciliationPayloads({
     const fromMe = Boolean(message.fromMe);
     const recentGenerated = fromMe
       && outboundRegistry instanceof RecentOutboundRegistry
-      && outboundRegistry.matches(groupId, body, externalMessageId);
+      && outboundRegistry.matches(groupId, outboundMatchBody(message), externalMessageId);
     const durableGenerated = fromMe
       && !recentGenerated
       && generatedMessageStore

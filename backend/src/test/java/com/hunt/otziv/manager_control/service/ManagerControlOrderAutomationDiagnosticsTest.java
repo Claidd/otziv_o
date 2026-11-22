@@ -20,7 +20,7 @@ class ManagerControlOrderAutomationDiagnosticsTest {
     private final OrderRepository orders = mock(OrderRepository.class);
     private final ScheduledClientMessageStateRepository states = mock(ScheduledClientMessageStateRepository.class);
     private final ManagerControlOrderAutomationDiagnostics diagnostics =
-            new ManagerControlOrderAutomationDiagnostics(orders, states);
+            new ManagerControlOrderAutomationDiagnostics(orders, states, scenario -> null);
     private final LocalDate today = LocalDate.of(2026, 9, 7);
 
     @Test
@@ -89,6 +89,41 @@ class ManagerControlOrderAutomationDiagnosticsTest {
         assertThat(order.getWaitingForClientChangedAt()).isEqualTo(today.minusDays(40).atTime(12, 0));
         assertThat(scheduled.getSentCount()).isEqualTo(6);
         assertThat(scheduled.getStatus()).isEqualTo(ScheduledMessageStateStatus.ACTIVE);
+    }
+
+    @Test
+    void reminderThatWaitsOnPurposeIsHealthyAndDoesNotReopenTheNewOrderCard() {
+        // After the manager's own message the reminder waits (manual_contact_reserved); a limit or the sending window
+        // postpone it the same way. None of them is «автоответчик не отправляет напоминания».
+        Order order = waitingOrder();
+        for (String code : new String[]{"manual_contact_reserved", "daily_limit", "rate_limited",
+                "outside_messaging_window", "review_recovery_active"}) {
+            var waiting = activeState(order);
+            waiting.setLastErrorCode(code);
+            waiting.setNextAttemptAt(java.time.LocalDateTime.now().plusHours(2));
+            var result = diagnostics.workerOrderClientTextDecision(order, "Новый", today, Map.of(11L, List.of(waiting)));
+            assertThat(result.include()).as(code).isFalse();
+        }
+        // The whole autoresponder stopped: nothing rewrites the task, so a long overdue wait is no longer «healthy».
+        var stale = activeState(order);
+        stale.setLastErrorCode("daily_limit");
+        stale.setNextAttemptAt(java.time.LocalDateTime.now().minusHours(3));
+        assertThat(diagnostics.clientTextReminderIsHealthy(stale)).isFalse();
+    }
+
+    @Test
+    void remindersSwitchedOffInTheSettingsAskForAManualRequestWithoutRepair() {
+        Order order = waitingOrder();
+        var paused = activeState(order);
+        paused.setLastErrorCode("automation_paused");
+        paused.setLastErrorMessage("Не отправлено: в настройках автоответчика (Справочники → Автоответчик) "
+                + "выключен переключатель «Напоминать, если ждем текст клиента».");
+        var result = diagnostics.workerOrderClientTextDecision(order, "Новый", today, Map.of(11L, List.of(paused)));
+        assertThat(result.include()).isTrue();
+        assertThat(result.reason()).contains("выключен переключатель «Напоминать, если ждем текст клиента»")
+                .contains("Попросите у клиента текст или пожелания сами.")
+                // The words the page uses to offer «Починить» must not appear.
+                .doesNotContain("автоответчик не отправляет").doesNotContain("CLIENT_TEXT_REMINDER");
     }
 
     @Test

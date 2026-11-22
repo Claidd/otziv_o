@@ -9,6 +9,8 @@ type TrainingShortcut = {
   label: string;
   icon: string;
   routerLink: string;
+  /** Opens a particular tab of a page, e.g. the accounts of «Справочники». */
+  queryParams?: Record<string, string>;
 };
 
 type TrainingBlock = {
@@ -598,7 +600,7 @@ export const TRAINING_TABS: Record<TrainingAudience, TrainingTab> = {
     shortcuts: [
       { label: 'Открыть специалиста', icon: 'engineering', routerLink: '/worker' },
       { label: 'Открыть заказы', icon: 'inventory_2', routerLink: '/orders' },
-      { label: 'Справочник аккаунтов', icon: 'manage_accounts', routerLink: '/admin/dictionaries' },
+      { label: 'Справочник аккаунтов', icon: 'manage_accounts', routerLink: '/admin/dictionaries', queryParams: { tab: 'accounts' } },
     ],
     flow: [
       {

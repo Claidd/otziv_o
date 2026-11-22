@@ -20,6 +20,39 @@ public class CommonInvoiceReceiptCorrection implements ManualReceiptInvoiceDebt 
     private final CommonInvoiceOrderRepository items;
     private final ManualReceiptOrderDebt orders;
 
+    /** The actor the Точка bank receipt confirms a paper invoice with: such a payment is real and never undone here. */
+    static final String PAPER_BANK_ACTOR = "tochka-bank";
+
+    /**
+     * Undoes a paper invoice payment confirmed by mistake: no bank receipt, no recorded recipient. Every order goes back
+     * to «Напоминание» through the regular payment reversal (payment check, rewards, company counters), the untouched
+     * next orders the payment created are deleted, and the invoice is payable again on the same issued paper invoice.
+     */
+    @Transactional
+    public void reopenOwnerPaperPayment(long id, Principal actor, String reason) {
+        String cleanReason = reason == null ? "" : reason.trim();
+        if (cleanReason.length() < 5 || cleanReason.length() > 500)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину отмены оплаты (5–500 символов)");
+        var invoice = delivery.lockedInvoiceAfterStandalonePaymentPrelude(id).invoice();
+        var positions = items.findByInvoiceIdWithOrders(id);
+        long amount = invoice.getPaidKopecks();
+        if (invoice.getStatus() != CommonInvoiceStatus.PAID || invoice.getManualConfirmedAt() == null
+                || invoice.getPaperBankDocumentId() != null
+                || !CommonInvoiceManualPaymentWorkflow.PAYMENT_METHOD_OWNER_PAPER_INVOICE.equals(invoice.getPaymentMethod())
+                || !CommonInvoiceRouteState.isOwnerPaperInvoice(invoice)
+                || PAPER_BANK_ACTOR.equals(invoice.getManualPaidBy())
+                || amount <= 0 || positions.isEmpty()
+                || positions.stream().anyMatch(item -> !item.isPaid()
+                        || !CommonInvoiceManualPaymentWorkflow.PAYMENT_METHOD_OWNER_PAPER_INVOICE.equals(item.getPaymentMethod()))
+                || positions.stream().mapToLong(item -> item.getAmountKopecks()).sum() != amount)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Отменить можно только ручную отметку оплаты бумажного счёта без поступления по банку");
+        for (var item : positions) {
+            orders.reopenPaperInvoiceOrder(item.orderId(), item.getAmountKopecks(), actor, cleanReason);
+        }
+        reopenInvoice(id, true);
+    }
+
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void reopen(long id, String evidence, long amount, Principal actor, String reason) {
@@ -33,12 +66,20 @@ public class CommonInvoiceReceiptCorrection implements ManualReceiptInvoiceDebt 
         for (var item : positions) {
             orders.reopen(item.orderId(),null,item.getAmountKopecks(),true,actor,reason);
         }
+        reopenInvoice(id, false);
+    }
+
+    /**
+     * @param reminder the orders went back to «Напоминание» (a paper invoice paid by mistake): the positions are not
+     *                 «Не оплачено» and the invoice keeps reminding when reminders were already sent
+     */
+    private void reopenInvoice(long id, boolean reminder) {
         // Reversing order rewards flushes and clears the persistence context.
-        invoice = delivery.lockedInvoice(id).orElseThrow();
+        var invoice = delivery.lockedInvoice(id).orElseThrow();
         for (var item : items.findByInvoiceIdWithOrders(id)) {
             item.setPaid(false);
             item.setPaidAt(null);
-            item.setUnpaid(true);
+            item.setUnpaid(!reminder);
             item.setPaymentMethod(null);
             item.setActualPaymentEvidenceReference(null);
             item.setManualPaidBy(null);
@@ -52,7 +93,8 @@ public class CommonInvoiceReceiptCorrection implements ManualReceiptInvoiceDebt 
         invoice.setClosedBy(null);
         invoice.setCloseReason(null);
         // Restore a payable state on the same public URL. An already delivered bill keeps its delivery history.
-        invoice.setStatus(invoice.getSentAt() == null ? CommonInvoiceStatus.READY : CommonInvoiceStatus.INVOICED);
+        invoice.setStatus(invoice.getSentAt() == null ? CommonInvoiceStatus.READY
+                : reminder && invoice.getLastReminderAt() != null ? CommonInvoiceStatus.REMINDER : CommonInvoiceStatus.INVOICED);
         invoice.setPaymentMethod(null);
         invoice.setManualConfirmedAt(null);
         invoice.setManualPaidBy(null);
@@ -60,5 +102,9 @@ public class CommonInvoiceReceiptCorrection implements ManualReceiptInvoiceDebt 
         invoice.setManualPaymentReceiptUrl(null);
         invoice.setClientReportedAt(null);
         invoice.setLastError(null);
+        if (reminder) {
+            // A failed «оплата прошла» notice belonged to the undone payment (it is skipped now: the invoice is unpaid).
+            invoice.setPaymentSuccessNotificationError(null);
+        }
     }
 }

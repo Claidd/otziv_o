@@ -98,6 +98,18 @@ export function isExplicitlyRepairableCommonInvoiceReason(reason: string | null 
     || normalized.includes('нажмите «проверить отправку»');
 }
 
+/**
+ * Server texts of an autoresponder send whose result is not confirmed. Order cards repeat the task's error message
+ * («Исход внешней отправки не определен…», «Подготовленная отправка прервалась…»), automation cards the newer texts.
+ */
+const UNCERTAIN_AUTORESPONDER_SEND = new RegExp([
+  'state_transaction_outcome_uncertain', 'manual_delivery_handoff_pending', '«сверка отправки»',
+  'результат предыдущей отправки клиенту не подтвержд', 'whatsapp не подтвердил доставку',
+  'исход (?:внешней |автоматической |предыдущей )?отправки (?:этого заказа )?(?:ещё )?(?:не подтвержд|не определ)',
+  'результат внешней отправки не определ', 'отправка не была финализирована', 'подготовленная отправка прервалась',
+  'отправка осталась без подтверждения'
+].join('|'), 'i');
+
 export function isDeliveryReconciliationCard(example: ManagerControlConcreteItem): boolean {
   if (!['ORDER', 'WORKER_ORDER_NEW', 'AUTOMATION_FAILURE', 'COMMON_INVOICE_AUTOMATION', 'COMMON_INVOICE'].includes(example.type)) return false;
   if (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required') return true;
@@ -1780,10 +1792,20 @@ export class ManagerControlComponent implements OnInit {
     return this.isDeliveryReconciliation(example) ? 'Проверить отправку' : 'Починить';
   }
 
+  /**
+   * «Сверка отправки»: an autoresponder send that stayed unconfirmed after the system's own checks and its automatic
+   * re-send. The manager of the card decides; the manager's own sends from the card («delivery») are not covered.
+   */
   isUncertainDeliveryForHandoff(example: ManagerControlConcreteItem): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
-      && (example.type === 'AUTOMATION_FAILURE' || example.type === 'COMMON_INVOICE_AUTOMATION')
-      && (example.reason ?? '').includes('state_transaction_outcome_uncertain');
+    if (!this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER'])) return false;
+    const automationCard = example.type === 'AUTOMATION_FAILURE' || example.type === 'COMMON_INVOICE_AUTOMATION';
+    if (!automationCard && example.type !== 'ORDER' && example.type !== 'WORKER_ORDER_NEW') return false;
+    // An order card about the manager's own send («delivery») is checked by «Проверить отправку», not here.
+    if (!automationCard && example.delivery) return false;
+    // A decision closes the card on the server: a closed card has nothing left to check.
+    if (example.itemStatus === 'RESOLVED') return false;
+    const reason = [example.reason, example.clientMessageSendBlockedReason].filter(Boolean).join(' ');
+    return UNCERTAIN_AUTORESPONDER_SEND.test(reason);
   }
 
   handoffUncertainDelivery(example: ManagerControlConcreteItem): void {
@@ -1805,7 +1827,7 @@ export class ManagerControlComponent implements OnInit {
     if (!example) return;
     this.patchDetailConcreteItem(example, updated);
     this.closeDeliveryHandoff();
-    this.toast.warning('Передано вручную', 'Исход отправки не подтверждён. Карточка остаётся открытой.');
+    this.toast.success('Решение сохранено', updated.comment || 'Карточка обновлена.');
     this.load({ silent: true });
   }
 
@@ -2467,6 +2489,8 @@ export class ManagerControlComponent implements OnInit {
 
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
+    if (example.status === 'Не отправлено'
+        && (example.type === 'AUTOMATION_FAILURE' || example.type === 'COMMON_INVOICE_AUTOMATION')) return false;
     if (isDeliveryReconciliationCard(example)) return true;
     if (this.isAutomationWaitingForSlot(example)) {
       return false;

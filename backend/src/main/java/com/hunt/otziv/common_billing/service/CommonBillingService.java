@@ -107,6 +107,7 @@ public class CommonBillingService {
     private final CommonInvoicePaymentRouteWorkflow invoiceRouteWorkflow;
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
+    private final org.springframework.beans.factory.ObjectProvider<CommonInvoiceReceiptCorrection> paperPaymentCorrection;
 
     private final CommonInvoiceTochkaReconciliationService invoiceReconciliation;
 
@@ -421,6 +422,15 @@ public class CommonBillingService {
 
     public CommonInvoiceDetailsResponse markPaperInvoicePaid(Long invoiceId, ManualPaymentConfirmationRequest request, Principal principal) {
         return manualPaymentWorkflow.markPaperInvoicePaid(invoiceId, request, principal);
+    }
+
+    /** Owner or administrator: undo a paper invoice payment confirmed by mistake (see the correction service). */
+    public CommonInvoiceDetailsResponse cancelPaperInvoicePayment(Long invoiceId, ManualPaymentConfirmationRequest request,
+                                                                   Principal principal) {
+        // Resolved at call time: the order payment reversal behind it depends on this service.
+        paperPaymentCorrection.getObject().reopenOwnerPaperPayment(invoiceId, principal,
+                request == null ? null : request.comment());
+        return invoice(invoiceId);
     }
 
     public CommonInvoiceDetailsResponse markPaid(Long invoiceId, ManualPaymentConfirmationRequest request, Principal principal) {

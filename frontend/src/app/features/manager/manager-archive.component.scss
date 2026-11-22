@@ -1339,3 +1339,42 @@ button.details-button:disabled {
     white-space: normal;
   }
 }
+
+.restore-specialist {
+  display: grid;
+  gap: 0.5rem;
+
+  .restore-specialist-note {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--otziv-tone-wait-border);
+    border-radius: var(--otziv-small-radius);
+    padding: 0.6rem 0.7rem;
+    color: var(--otziv-dark);
+    background: var(--otziv-tone-wait-surface);
+    font-size: 0.78rem;
+  }
+
+  .restore-specialist-note .material-icons-sharp {
+    flex: 0 0 auto;
+    font-size: 1.2rem;
+  }
+
+  label {
+    color: var(--otziv-info);
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  select {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid rgba(103, 116, 131, 0.24);
+    border-radius: 8px;
+    background: var(--otziv-field-background);
+    color: var(--otziv-dark);
+    font-family: inherit;
+  }
+}

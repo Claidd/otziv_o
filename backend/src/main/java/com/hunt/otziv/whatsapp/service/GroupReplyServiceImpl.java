@@ -101,6 +101,9 @@ public class GroupReplyServiceImpl implements GroupReplyService {
                     optCompany = companyService.findByGroupId(reply.getGroupId());
                 }
                 if (optCompany.isEmpty()) {
+                    if (notWorthKeepingForAnUnlinkedGroup(reply)) {
+                        return;
+                    }
                     unlinkedEvents.defer(reply,"company_missing");
                     return;
                 }
@@ -213,6 +216,29 @@ public class GroupReplyServiceImpl implements GroupReplyService {
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    /**
+     * A bare sticker carries no business content, and a message of the connected account is our own:
+     * keeping them only grew the queue of groups no company may ever claim. Our own message is still
+     * kept while a client message of the same group waits for the link, so the replay after linking
+     * finds the answer and does not leave an already answered question open.
+     */
+    private boolean notWorthKeepingForAnUnlinkedGroup(WhatsAppGroupReplyDTO reply) {
+        if (isBareSticker(reply)) {
+            log.debug("WhatsApp sticker from an unlinked group skipped: groupId={}", reply.getGroupId());
+            return true;
+        }
+        if (reply.isFromMe() && !unlinkedEvents.hasWaitingClientMessage(reply.getClientId(), reply.getGroupId())) {
+            log.debug("Own WhatsApp message in an unlinked group skipped: groupId={}", reply.getGroupId());
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isBareSticker(WhatsAppGroupReplyDTO reply) {
+        return reply.getMessage() != null
+                && WhatsAppUnlinkedEventStore.STICKER_PLACEHOLDER.equals(reply.getMessage().trim());
     }
 
     private static boolean isSystemNotificationPlaceholder(WhatsAppGroupReplyDTO reply) {

@@ -45,7 +45,9 @@ describe('dictionary editor identity and unsaved drafts', () => {
       expect(selectedId()).toBe(reopen ? 8 : 9);
       expect(facade.phoneForm.controls.fio.value).toBe('Новый черновик');
       expect(facade.saving()).toBe(false);
-      expect(toast.success).not.toHaveBeenCalled();
+      // The open draft is not touched, but the save of phone A is still reported once.
+      expect(toast.success).toHaveBeenCalledTimes(1);
+      expect(toast.success).toHaveBeenCalledWith('Телефон сохранен', 'ID 8');
       http.expectNone(() => true);
       facade.destroy();
     });
@@ -120,7 +122,8 @@ describe('dictionary editor identity and unsaved drafts', () => {
     expect(selectedId()).toBeNull();
     expect(facade.botForm.controls.login.value).toBe('new-draft');
     expect(facade.saving()).toBe(false);
-    expect(toast.success).not.toHaveBeenCalled();
+    // The new draft stays as typed; the save of the old account is still reported, naming it.
+    expect(toast.success).toHaveBeenCalledWith(expect.any(String), 'ID 8');
     http.expectNone(() => true);
     facade.destroy();
   });

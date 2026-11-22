@@ -11,7 +11,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class GroupReplyServiceImplTest {
@@ -38,6 +42,58 @@ class GroupReplyServiceImplTest {
         org.mockito.Mockito.verify(unlinkedEvents).defer(reply,"company_missing");
         verifyNoInteractions(clientChatMessageTrackerService,replyOutbox);
         org.mockito.Mockito.verify(unlinkedEvents,org.mockito.Mockito.never()).resolved(org.mockito.ArgumentMatchers.any());
+    }
+
+    private static WhatsAppGroupReplyDTO unlinked(String messageId, boolean fromMe, String text) {
+        var reply = new WhatsAppGroupReplyDTO(); reply.setClientId("client"); reply.setGroupId("unlinked@g.us");
+        reply.setMessageId(messageId); reply.setFromMe(fromMe); reply.setMessage(text);
+        return reply;
+    }
+
+    @org.junit.jupiter.api.Test void bareStickerFromAnUnlinkedGroupIsAcknowledgedWithoutBeingKept() {
+        var reply = unlinked("sticker", false, " [Вложение: sticker] ");
+        service.processGroupReply(reply);
+        verify(unlinkedEvents, never()).defer(any(), any());
+        verify(unlinkedEvents, never()).resolved(any());
+        verifyNoInteractions(clientChatMessageTrackerService, replyOutbox);
+    }
+
+    @org.junit.jupiter.api.Test void ownMessageInAnUnlinkedGroupIsNotKeptWhenNoClientMessageWaits() {
+        var reply = unlinked("own", true, "Добрый день, счёт во вложении");
+        service.processGroupReply(reply);
+        verify(unlinkedEvents).hasWaitingClientMessage("client", "unlinked@g.us");
+        verify(unlinkedEvents, never()).defer(any(), any());
+        verifyNoInteractions(clientChatMessageTrackerService, replyOutbox);
+    }
+
+    /** The replay after linking must find the answer, or it reopens a question that was already answered. */
+    @org.junit.jupiter.api.Test void ownReplyIsKeptWhileAClientMessageOfTheGroupWaitsForTheLink() {
+        var reply = unlinked("own-reply", true, "Ответили вам выше");
+        when(unlinkedEvents.hasWaitingClientMessage("client", "unlinked@g.us")).thenReturn(true);
+        service.processGroupReply(reply);
+        verify(unlinkedEvents).defer(reply, "company_missing");
+        verifyNoInteractions(clientChatMessageTrackerService, replyOutbox);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Нужен ответ", "[Вложение: image]", "[Вложение: ptt]", "[Вложение: document]",
+            "[Вложение: sticker] спасибо"})
+    void clientTextAndOtherAttachmentsFromAnUnlinkedGroupAreStillKept(String message) {
+        var reply = unlinked("client-message", false, message);
+        service.processGroupReply(reply);
+        verify(unlinkedEvents).defer(reply, "company_missing");
+        verify(unlinkedEvents, never()).hasWaitingClientMessage(any(), any());
+        verifyNoInteractions(clientChatMessageTrackerService, replyOutbox);
+    }
+
+    @org.junit.jupiter.api.Test void stickerInALinkedGroupIsStillTracked() {
+        var reply = new WhatsAppGroupReplyDTO(); reply.setClientId("client"); reply.setGroupId("1@g.us");
+        reply.setMessageId("sticker"); reply.setMessage("[Вложение: sticker]");
+        var company = new com.hunt.otziv.c_companies.model.Company(); company.setGroupId("1@g.us");
+        when(companyService.findByGroupId("1@g.us")).thenReturn(java.util.Optional.of(company));
+        service.processGroupReply(reply);
+        verify(clientChatMessageTrackerService).track(any(), any());
+        verify(unlinkedEvents, never()).defer(any(), any());
     }
 
     @org.junit.jupiter.api.Test void queueWriteFailurePreventsSuccessfulReceipt() {

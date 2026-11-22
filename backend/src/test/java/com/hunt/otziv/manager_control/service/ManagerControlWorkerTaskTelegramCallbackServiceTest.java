@@ -44,6 +44,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -383,6 +384,29 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, item.getStatus());
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void noRepeatReminderForADeactivatedOrAnotherSpecialist(boolean deactivated) {
+        User worker = worker();
+        ManagerDailyControlConcreteItem item = riskConcreteItem();
+        if (deactivated) {
+            worker.setActive(false);
+        } else {
+            // The request went to someone else: the specialist now on the task never got it.
+            item.setWorkerNotificationUserId(99L);
+        }
+        LocalDateTime sentAt = LocalDateTime.of(2026, 7, 15, 10, 0);
+        item.setWorkerExplanationRequestedAt(sentAt);
+        item.setWorkerNotificationSentAt(sentAt);
+        when(concreteItemRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(item));
+        when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(riskIncident()));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
+
+        assertFalse(service.remindPendingExplanation(30L, sentAt.plusHours(3)));
+
+        verifyNoInteractions(notificationMediaDeliveryService);
+    }
+
     @Test
     void failedReminderReleasesItsClaimSoTheNextPassRetries() {
         User worker = worker();
@@ -680,6 +704,8 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         item.setEntityId(77L);
         item.setTitle("Риск специалиста");
         item.setReason("Нужно пояснение");
+        // As the explanation request stores it (ApiWorkerRiskController).
+        item.setWorkerNotificationUserId(2L);
         return item;
     }
 

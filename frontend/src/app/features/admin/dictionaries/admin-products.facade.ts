@@ -19,6 +19,9 @@ type Deps = {
   search: () => string;
 };
 
+/** products.product_title is VARCHAR(45): the database refuses a longer name. */
+export const PRODUCT_TITLE_MAX_LENGTH = 45;
+
 export class AdminProductsFacade {
   private readonly fb = new FormBuilder();
   private readonly scope: DictionaryViewScope;
@@ -29,7 +32,10 @@ export class AdminProductsFacade {
   readonly products = signal<AdminProduct[]>([]);
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly productForm = this.fb.group({
-    title: this.fb.nonNullable.control('', Validators.required),
+    title: this.fb.nonNullable.control('', [
+      Validators.required,
+      Validators.maxLength(PRODUCT_TITLE_MAX_LENGTH),
+    ]),
     price: this.fb.nonNullable.control('0', Validators.required),
     categoryId: this.fb.control<number | null>(null, Validators.required),
     photo: this.fb.nonNullable.control(false),
@@ -41,7 +47,8 @@ export class AdminProductsFacade {
   });
   private readonly editor = new DictionaryEditorSession(this.productForm);
   constructor(private readonly deps: Deps) {
-    this.scope = new DictionaryViewScope(deps.isActive);
+    // A save that ends after the tab was left and opened again reads the list again (see DictionaryViewScope).
+    this.scope = new DictionaryViewScope(deps.isActive, () => this.load());
   }
   private get selectedId() {
     return this.deps.selectedId;
@@ -78,7 +85,9 @@ export class AdminProductsFacade {
     this.productForm.setValue({
       title: product.title,
       price: String(product.price ?? 0),
-      categoryId: product.category?.id ?? this.defaultProductCategoryId(),
+      // A product without a category keeps the field empty: saving asks to choose one instead of
+      // silently giving it the first category of the list.
+      categoryId: product.category?.id ?? null,
       photo: product.photo,
       requiresPerformer: product.requiresPerformer,
       targetPlatform: product.targetPlatform || 'OTHER',
@@ -132,7 +141,11 @@ export class AdminProductsFacade {
     const editor = this.editor.capture(selectedId);
     this.saving.set(true);
     this.error.set(null);
-    this.scope.write(call, this.saving).subscribe({
+    const named = `«${request.title}»`;
+    this.scope.write(call, this.saving, (outcome) => outcome.failed
+      ? this.deps.toast.error('Продукт не сохранен', `${named}: ${apiErrorMessage(outcome.error, 'Не удалось сохранить продукт')}`)
+      : this.deps.toast.success('Продукт сохранен', `${named}, ID ${outcome.value?.id ?? selectedId ?? '—'}`)
+    ).subscribe({
       next: (saved) => {
         this.saving.set(false);
         if (this.editor.sameSelection(editor, this.selectedId())) this.selectedId.set(saved.id);
@@ -140,8 +153,10 @@ export class AdminProductsFacade {
         this.load();
       },
       error: (err) => {
-        if (this.editor.sameSelection(editor, this.selectedId()))
-          this.fail(err, 'Запись не сохранена', 'Не удалось сохранить продукт');
+        // Another product opened meanwhile keeps a clean form; the failure is still reported in a toast.
+        const message = apiErrorMessage(err, 'Не удалось сохранить продукт');
+        if (this.editor.sameSelection(editor, this.selectedId())) this.error.set(message);
+        this.deps.toast.error('Продукт не сохранен', `${named}: ${message}`);
       },
     });
   }
@@ -150,25 +165,46 @@ export class AdminProductsFacade {
     const id = this.selectedId();
     if (id == null || !this.scope.active() || this.saving() || this.deleting()) return;
     const editor = this.editor.capture(id);
-    if (!window.confirm('Удалить запись из справочника "Продукты"?')) return;
+    // The saved name from the list, not a half-typed new one: the question must name what is deleted.
+    const title = (
+      this.products().find((product) => product.id === id)?.title ||
+      this.productForm.controls.title.value
+    ).trim();
+    if (!window.confirm(this.deleteQuestion(title))) return;
     if (!this.scope.active() || !this.editor.sameSelection(editor, this.selectedId())) return;
     this.deleting.set(true);
     this.error.set(null);
-    this.scope.write(this.deps.api.deleteProduct(id), this.deleting).subscribe({
+    this.scope.write(this.deps.api.deleteProduct(id), this.deleting, (outcome) => outcome.failed
+      ? this.deps.toast.error('Продукт не удалён', apiErrorMessage(outcome.error, 'Не удалось удалить продукт'))
+      : this.deps.toast.success('Продукт удалён', title ? `«${title}»` : undefined)
+    ).subscribe({
       next: () => {
         this.deleting.set(false);
         if (this.editor.sameDraft(editor, this.selectedId())) this.clearSelection();
         else if (this.editor.sameSelection(editor, this.selectedId())) this.selectedId.set(null);
-        this.deps.toast.success('Запись удалена', 'Продукты');
+        this.deps.toast.success('Продукт удалён', title ? `«${title}»` : undefined);
         this.load();
       },
       error: (err) => {
-        if (this.editor.sameSelection(editor, this.selectedId()))
-          this.fail(err, 'Запись не удалена', 'Не удалось удалить продукт');
+        const message = apiErrorMessage(err, 'Не удалось удалить продукт');
+        if (this.editor.sameSelection(editor, this.selectedId())) this.error.set(message);
+        this.deps.toast.error('Продукт не удалён', message);
       },
     });
   }
+
+  /** Names the product; the server refuses to delete a product that order lines use. */
+  private deleteQuestion(title: string): string {
+    return [
+      title ? `Удалить продукт «${title}»?` : 'Удалить продукт?',
+      'Продукт, который уже есть в заказах, удалить не получится.',
+      'Отменить удаление нельзя.',
+    ].join('\n');
+  }
+
   ensureDefaults(): void {
+    // Only a new product gets the first category preselected; an existing product without one stays empty.
+    if (this.selectedId() != null) return;
     if (this.productForm.controls.categoryId.value == null && !this.productForm.dirty)
       this.productForm.controls.categoryId.setValue(this.defaultProductCategoryId());
   }

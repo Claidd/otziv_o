@@ -65,13 +65,27 @@ describe('independent dictionary domain lifetimes', () => {
     write.flush(phone);
     expect(facade.saving()).toBe(false);
     expect(selectedId()).toBe(99);
-    expect(toast.success).not.toHaveBeenCalled();
+    // The hidden view is not touched, but the save is still reported once.
+    expect(toast.success).toHaveBeenCalledOnce();
+    expect(toast.success).toHaveBeenCalledWith('Телефон сохранен', 'ID 8');
     http.expectNone(request => request.method === 'GET');
   });
 
   it('settings preserve worker cooldown endpoint, sequence partial writes and re-read on failure', () => {
     const facade = new AdminWorkSettingsFacade({ api: TestBed.inject(AdminWorkSettingsApi), toast,
       isActive: () => true, selectedId: signal(null), search: () => '', canApplyMaintenance: () => false });
+    facade.load();
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/nagul'))
+      .flush({ cooldownMinutes: 60, lookaheadDays: 60, accountWalkedCounterThreshold: 3, accountWalkDelayDays: 2 });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/dictionaries/worker-account-action-settings'))
+      .flush({ enabled: true, cooldownSeconds: 60 });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/telegram-reports'))
+      .flush({ morningEnabled: true, morningTime: '11:30', eveningEnabled: true, eveningTime: '22:00', zone: 'Asia/Irkutsk',
+        morningLastRunKey: '', eveningLastRunKey: '' });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/whatsapp-group-sync'))
+      .flush({ enabled: true, intervalMinutes: 30, lastRunAt: '', lastLinkedCount: 0 });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/client-publication-progress-reports'))
+      .flush({ enabled: true });
     facade.settingsForm.controls.workerAccountActionCooldownSeconds.setValue(75);
     facade.saveSettings();
     const first = http.expectOne(request => request.url.endsWith('/dictionaries/worker-account-action-settings'));
@@ -93,6 +107,22 @@ describe('independent dictionary domain lifetimes', () => {
   it('does not hide a duplicate maintenance command behind two confirmation dialogs', () => {
     const facade = new AdminWorkSettingsFacade({ api: TestBed.inject(AdminWorkSettingsApi), toast,
       isActive: () => true, selectedId: signal(null), search: () => '', canApplyMaintenance: () => true });
+    facade.load();
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/nagul'))
+      .flush({ cooldownMinutes: 60, lookaheadDays: 60, accountWalkedCounterThreshold: 3, accountWalkDelayDays: 2 });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/dictionaries/worker-account-action-settings'))
+      .flush({ enabled: true, cooldownSeconds: 60 });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/telegram-reports'))
+      .flush({ morningEnabled: true, morningTime: '11:30', eveningEnabled: true, eveningTime: '22:00', zone: 'Asia/Irkutsk',
+        morningLastRunKey: '', eveningLastRunKey: '' });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/whatsapp-group-sync'))
+      .flush({ enabled: true, intervalMinutes: 30, lastRunAt: '', lastLinkedCount: 0 });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/client-publication-progress-reports'))
+      .flush({ enabled: true });
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/settings/worker-cellular-access'))
+      .flush({ mode: 'AUDIT', enforcedReasons: [], enforceNativeVirtualDevice: true, requireMobileDevice: true,
+        ipIntelligenceEnabled: true, allowedCidrs: [], protectedSections: [] });
+    facade.settingsForm.controls.workerCellularAccessMode.setValue('ENFORCE');
     const confirm = vi.spyOn(window, 'confirm').mockImplementation(() => { facade.saveSettings(); return false; });
     facade.saveSettings();
     expect(confirm).toHaveBeenCalledOnce();

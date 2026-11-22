@@ -43,7 +43,7 @@ class ManagerProblemDiagnosisValidatorTest {
         Fact delivery = new Fact("automation:3:delivery_status", "automation", "delivery_status", "UNCERTAIN");
         Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), List.of(status, delivery));
         assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
-        assertThat(result.actions().getFirst().text()).contains("квитанцией исходного канала", "нужна сверка администратором", "Новое сообщение не создаётся")
+        assertThat(result.actions().getFirst().text()).contains("«Сверка отправки»", "«Сообщение есть в чате»")
                 .doesNotContain("очередь");
     }
 
@@ -56,19 +56,19 @@ class ManagerProblemDiagnosisValidatorTest {
                 new Fact("automation:3:current_cycle", "automation", "current_cycle", "true"),
                 new Fact("automation:4:scenario", "automation", "scenario", "REVIEW_CHECK_REMINDER"));
         Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), facts);
-        assertThat(result.actions().getFirst().text()).contains("нужна сверка администратором").doesNotContain("очередь");
+        assertThat(result.actions().getFirst().text()).contains("«Сверка отправки»").doesNotContain("очередь");
         assertThat(result.verification().getFirst()).doesNotContain("очередь");
     }
 
     @Test
-    void uncertainCurrentPeriodicReminderPreservesConditionalRestorationAdvice() {
+    void uncertainCurrentPeriodicReminderAsksForTheSameChatCheck() {
         var facts = List.of(status,
                 new Fact("automation:3:delivery_status", "automation", "delivery_status", "UNKNOWN"),
                 new Fact("automation:3:scenario", "automation", "scenario", "REVIEW_CHECK_REMINDER"),
                 new Fact("automation:3:state_status", "automation", "state_status", "ACTIVE"),
                 new Fact("automation:3:current_cycle", "automation", "current_cycle", "true"));
         Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), facts);
-        assertThat(result.actions().getFirst().text()).contains("автоматически восстанавливает очередь", "полным интервалом ожидания");
+        assertThat(result.actions().getFirst().text()).contains("«Сверка отправки»").doesNotContain("очередь");
     }
 
     @Test

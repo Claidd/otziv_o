@@ -1,51 +1,142 @@
 <app-admin-layout title="Справочники" active="dictionaries" rightPanelMode="custom">
-  <section class="dictionary-workspace">
-    <header class="dictionary-toolbar">
-      <nav class="dictionary-tabs" aria-label="Справочники">
-        @for (tab of tabs(); track trackTab($index, tab)) {
-          <button
-            type="button"
-            [class.active]="activeTab() === tab.key"
-            (click)="setTab(tab.key)"
-          >
-            <span class="material-icons-sharp">{{ tab.icon }}</span>
-            {{ tab.label }}
-            <small>{{ tabTotal(tab.key) }}</small>
-          </button>
-        }
+  <section class="dictionary-workspace" [attr.aria-busy]="activeLoading()">
+    @if (tabs().length > 1) {
+      <nav class="dictionary-menu" [class.dictionary-menu--open]="menuOpen()" aria-label="Справочники">
+        <button
+          type="button"
+          class="dictionary-menu-toggle"
+          (click)="toggleMenu()"
+          [attr.aria-expanded]="menuOpen()"
+          aria-controls="dictionary-menu-columns"
+        >
+          <span class="dictionary-menu-toggle-icon material-icons-sharp" aria-hidden="true">{{ activeTabIcon() }}</span>
+          <span class="dictionary-menu-toggle-text">
+            <small>{{ activeGroup().label }}</small>
+            <strong>{{ activeLabel() }}</strong>
+          </span>
+          <span class="dictionary-menu-toggle-hint">{{ menuOpen() ? 'Свернуть' : 'Все разделы' }}</span>
+          <span class="material-icons-sharp" aria-hidden="true">{{ menuOpen() ? 'expand_less' : 'expand_more' }}</span>
+        </button>
+
+        <div class="dictionary-menu-columns" id="dictionary-menu-columns">
+          @for (group of menuGroups(); track group.key) {
+            <div class="dictionary-menu-group" role="group" [attr.aria-labelledby]="'dictionary-menu-' + group.key">
+              <p class="dictionary-menu-caption" [id]="'dictionary-menu-' + group.key">
+                <span class="material-icons-sharp" aria-hidden="true">{{ group.icon }}</span>
+                {{ group.label }}
+              </p>
+              @for (tab of group.tabs; track trackTab($index, tab)) {
+                @let total = tabTotal(tab.key);
+                <button
+                  type="button"
+                  class="dictionary-menu-item"
+                  [class.active]="activeTab() === tab.key"
+                  [attr.aria-current]="activeTab() === tab.key ? 'page' : null"
+                  (click)="setTab(tab.key)"
+                >
+                  <span class="material-icons-sharp" aria-hidden="true">{{ tab.icon }}</span>
+                  <span class="dictionary-menu-label">{{ tab.label }}</span>
+                  @if (total !== null) {
+                    <small class="dictionary-menu-count">{{ total }}</small>
+                  }
+                </button>
+              }
+            </div>
+          }
+        </div>
       </nav>
+    }
 
-      <div class="dictionary-actions">
-        @if (activeTab() !== 'settings' && activeTab() !== 'audit' && activeTab() !== 'aiProvider' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
-          <label class="dictionary-search" [appTooltip]="searchTooltip()">
-            <span class="material-icons-sharp">search</span>
-            <input
-              type="text"
-              [placeholder]="searchPlaceholder()"
-              [value]="search()"
-              (input)="search.set($any($event.target).value)"
-              (keyup.enter)="searchActive()"
+    <header class="dictionary-tab-head">
+      <span class="dictionary-tab-tile material-icons-sharp" aria-hidden="true">{{ activeTabIcon() }}</span>
+      <div class="dictionary-tab-copy">
+        <p class="dictionary-kicker">{{ activeGroup().label }}</p>
+        <h2 tabindex="-1">{{ activeHelp().title }}</h2>
+        <p>{{ activeHelp().summary }}</p>
+        @if (canManageAllDictionaries()) {
+          <p class="dictionary-howto"><strong>Как править:</strong> {{ activeHelp().howTo }}</p>
+        } @else {
+          <p class="dictionary-howto"><strong>Только просмотр:</strong> категории и подкатегории меняют администратор и владелец.</p>
+        }
+        @if (activeHelp().caution) {
+          <p class="dictionary-caution-inline">
+            <span class="material-icons-sharp" aria-hidden="true">warning_amber</span>
+            {{ activeHelp().caution }}
+          </p>
+        }
+        @if (activeHelp().steps.length) {
+          <!-- The help column is hidden by the layout between 861 and 1320 px and sits at the very end on a phone. -->
+          <details class="dictionary-howto-steps">
+            <summary>Как работать с разделом</summary>
+            <ol>
+              @for (step of activeHelp().steps; track $index) {
+                <li>{{ step }}</li>
+              }
+            </ol>
+          </details>
+        }
+      </div>
+
+      <div class="dictionary-tab-actions">
+        @switch (activeTab()) {
+          @case ('cities') {
+            <label
+              class="dictionary-head-action"
+              [class.dictionary-head-action--busy]="rebuildingCityDistances()"
+              title="Файл CSV или TSV: в каждой строке ID города, широта и долгота. Первая строка может быть заголовком. После загрузки расстояния пересчитываются для городов с ID от 150; город с меньшим ID пересчитайте кнопкой «Пересчитать город»."
             >
-          </label>
-
-          <button type="button" class="dictionary-icon-action" (click)="searchActive()" [disabled]="activeLoading()" title="Искать">
-            <span class="material-icons-sharp">manage_search</span>
-          </button>
-
-          <button type="button" class="dictionary-icon-action reset" (click)="clearSearch()" [disabled]="activeLoading()" title="Сбросить поиск">
-            <span class="material-icons-sharp">filter_alt_off</span>
-          </button>
+              <span class="material-icons-sharp" aria-hidden="true">upload_file</span>
+              Загрузить координаты
+              <input
+                type="file"
+                accept=".csv,.tsv,text/csv,text/tab-separated-values"
+                [disabled]="rebuildingCityDistances()"
+                (change)="importCityCoordinates($event)"
+              >
+            </label>
+            <button
+              type="button"
+              class="dictionary-head-action"
+              (click)="rebuildCityDistances()"
+              [disabled]="rebuildingCityDistances()"
+              title="Считает расстояния между городами с ID от 150. По ним задания достаются исполнителям из ближайших городов. Город с меньшим ID пересчитайте кнопкой «Пересчитать город» в его карточке."
+            >
+              <span class="material-icons-sharp" aria-hidden="true">route</span>
+              {{ rebuildingCityDistances() ? 'Пересчитываю' : 'Пересчитать новые города' }}
+            </button>
+          }
+          @case ('accounts') {
+            <button type="button" class="dictionary-head-action" (click)="openBotImport()" title="Файл TXT, CSV, TSV, XLS или XLSX; в TXT каждая строка — логин:пароль.">
+              <span class="material-icons-sharp" aria-hidden="true">upload_file</span>
+              Добавить из файла
+            </button>
+            <button type="button" class="dictionary-head-action" (click)="openBotImport('city')" title="Те же файлы, но все аккаунты получат выбранный город.">
+              <span class="material-icons-sharp" aria-hidden="true">add_location_alt</span>
+              В город из файла
+            </button>
+          }
+          @case ('autoresponder') {
+            <button type="button" class="dictionary-head-action" (click)="setTab('autoresponderMonitor')">
+              <span class="material-icons-sharp" aria-hidden="true">monitor_heart</span>
+              Мониторинг
+            </button>
+            <a class="dictionary-head-action" routerLink="/admin/client-offers">
+              <span class="material-icons-sharp" aria-hidden="true">campaign</span>
+              Рассылки предложений
+            </a>
+          }
+          @case ('autoresponderMonitor') {
+            @if (canManageAllDictionaries()) {
+              <a class="dictionary-head-action" routerLink="/admin/company-contacts" title="Компании на стопе, у которых чат недоступен для сообщений.">
+                <span class="material-icons-sharp" aria-hidden="true">link_off</span>
+                Недоступные чаты
+              </a>
+            }
+          }
         }
-
-        @if (activeTab() !== 'settings' && activeTab() !== 'audit' && activeTab() !== 'aiProvider' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
-          <button type="button" class="dictionary-action create" (click)="openActiveCreate()">
-            <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
-            {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
-          </button>
-        }
-        @if (activeTab() !== 'audit') {
-          <button type="button" class="dictionary-action" (click)="loadAll()" [disabled]="activeLoading()">
-            <span class="material-icons-sharp">refresh</span>
+        @if (activeTab() !== 'audit' && activeTab() !== 'specialistTransfer' && activeTab() !== 'autoresponderMonitor') {
+          <button type="button" class="dictionary-head-action" (click)="loadAll()" [disabled]="activeLoading() || (activeTab() === 'cities' && rebuildingCityDistances())">
+            <span class="material-icons-sharp" aria-hidden="true">refresh</span>
             {{ activeLoading() ? 'Загрузка' : 'Обновить' }}
           </button>
         }
@@ -53,24 +144,49 @@
     </header>
 
     @if (activeError()) {
-      <app-load-error-card title="Справочники не загрузились" [message]="activeError()!" actionLabel="Повторить" [loading]="activeLoading()" (retry)="loadAll()" />
+      <!-- One error line serves both reading and saving of the open tab: the title does not claim which one failed,
+           the message names it («Не удалось сохранить город…»). -->
+      <app-load-error-card
+        [title]="'Действие не выполнено'"
+        icon="error_outline"
+        [message]="activeError()!"
+        actionLabel="Обновить список"
+        [loading]="activeLoading()"
+        (retry)="loadAll()"
+      />
     }
 
     @if (activeTab() === 'categories') {
     <section class="dictionary-grid category-builder-grid">
       <article class="dictionary-card category-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Справочник</p>
-            <h2>Категории</h2>
-          </div>
-          <div class="panel-actions">
+        <div class="list-head">
+          <div class="list-title">
+            <h3>Категории</h3>
             <span class="total-badge">{{ categories().length }}</span>
-            <button type="button" class="compact-action" (click)="openNewCategory()">
-              <span class="material-icons-sharp">add</span>
+          </div>
+          <form class="list-search" role="search" (submit)="$event.preventDefault(); searchActive()">
+            <span class="material-icons-sharp" aria-hidden="true">search</span>
+            <input
+              type="text"
+              enterkeyhint="search"
+              [placeholder]="searchPlaceholder()"
+              [attr.aria-label]="searchPlaceholder()"
+              [value]="searchDraft()"
+              (input)="searchDraft.set($any($event.target).value)"
+            >
+            @if (searchDraft() || search()) {
+              <button type="button" class="list-search-clear" (click)="clearSearch()" [disabled]="activeLoading()" title="Сбросить поиск" aria-label="Сбросить поиск">
+                <span class="material-icons-sharp" aria-hidden="true">close</span>
+              </button>
+            }
+            <button type="submit" class="list-search-go" [disabled]="activeLoading()">Найти</button>
+          </form>
+          @if (canManageAllDictionaries()) {
+            <button type="button" class="list-create" (click)="openNewCategory()">
+              <span class="material-icons-sharp" aria-hidden="true">add</span>
               Новая категория
             </button>
-          </div>
+          }
         </div>
 
         <div class="table-scroll category-list-scroll">
@@ -84,7 +200,7 @@
             </thead>
             <tbody>
               @for (category of categories(); track trackCategory($index, category)) {
-                <tr [class.selected]="activeCategoryId() === category.id" (click)="selectCategory(category)">
+                <tr [class.selected]="activeCategoryId() === category.id" tabindex="0" (keydown.enter)="rowKey($event) && selectCategory(category)" (keydown.space)="rowKey($event) && selectCategory(category)" (click)="selectCategory(category)">
                   <td>
                     <strong>{{ category.title }}</strong>
                     <span>ID {{ category.id }}</span>
@@ -93,13 +209,15 @@
                     <span class="count-pill">{{ category.subCategoryCount }}</span>
                   </td>
                   <td class="row-tools">
-                    <button type="button" class="row-icon-button edit-button" (click)="editCategory($event, category)" title="Редактировать категорию">
-                      <span class="material-icons-sharp">edit</span>
-                    </button>
+                    @if (canManageAllDictionaries()) {
+                      <button type="button" class="row-icon-button edit-button" (click)="editCategory($event, category)" title="Переименовать или удалить категорию" aria-label="Переименовать или удалить категорию">
+                        <span class="material-icons-sharp" aria-hidden="true">edit</span>
+                      </button>
+                    }
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="3" class="no-results">Категорий нет.</td></tr>
+                <tr><td colspan="3" class="no-results">{{ activeLoading() ? 'Загружаю категории…' : (search() ? 'Ничего не найдено.' : 'Категорий нет.') }}</td></tr>
               }
             </tbody>
           </table>
@@ -108,18 +226,18 @@
 
       <article class="dictionary-card subcategory-panel">
         @if (activeCategory(); as category) {
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Подкатегории</p>
-              <h2>{{ category.title }}</h2>
-            </div>
-            <div class="panel-actions">
+          <div class="list-head">
+            <div class="list-title">
+              <p class="dictionary-kicker">Подкатегории</p>
+              <h3>{{ category.title }}</h3>
               <span class="total-badge">{{ selectedCategorySubCategories().length }}</span>
-              <button type="button" class="compact-action" (click)="openNewSubCategory()">
-                <span class="material-icons-sharp">add</span>
+            </div>
+            @if (canManageAllDictionaries()) {
+              <button type="button" class="list-create list-create--soft" (click)="openNewSubCategory()">
+                <span class="material-icons-sharp" aria-hidden="true">add</span>
                 Новая подкатегория
               </button>
-            </div>
+            }
           </div>
 
           <div class="table-scroll category-list-scroll">
@@ -133,30 +251,28 @@
               </thead>
               <tbody>
                 @for (subCategory of selectedCategorySubCategories(); track trackSubCategory($index, subCategory)) {
-                  <tr [class.selected]="editingSubCategoryId() === subCategory.id" (click)="editSubCategory($event, subCategory)">
+                  <tr [class.selected]="editingSubCategoryId() === subCategory.id" (click)="canManageAllDictionaries() && editSubCategory($event, subCategory)">
                     <td><strong>{{ subCategory.title }}</strong></td>
                     <td>{{ subCategory.id }}</td>
                     <td class="row-tools">
-                      <button type="button" class="row-icon-button edit-button" (click)="editSubCategory($event, subCategory)" title="Редактировать подкатегорию">
-                        <span class="material-icons-sharp">edit</span>
-                      </button>
+                      @if (canManageAllDictionaries()) {
+                        <button type="button" class="row-icon-button edit-button" (click)="editSubCategory($event, subCategory)" title="Переименовать или удалить подкатегорию" aria-label="Переименовать или удалить подкатегорию">
+                          <span class="material-icons-sharp" aria-hidden="true">edit</span>
+                        </button>
+                      }
                     </td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="3" class="no-results">У категории пока нет подкатегорий.</td></tr>
+                  <tr><td colspan="3" class="no-results">{{ activeLoading() ? 'Загружаю…' : 'У категории пока нет подкатегорий.' }}</td></tr>
                 }
               </tbody>
             </table>
           </div>
         } @else {
           <div class="empty-picker">
-            <span class="material-icons-sharp">account_tree</span>
-            <h2>Выберите категорию</h2>
-            <p>Подкатегории появятся справа после выбора категории слева.</p>
-            <button type="button" class="compact-action" (click)="openNewCategory()">
-              <span class="material-icons-sharp">add</span>
-              Новая категория
-            </button>
+            <span class="material-icons-sharp" aria-hidden="true">account_tree</span>
+            <h3>Выберите категорию</h3>
+            <p>Подкатегории выбранной категории появятся здесь.</p>
           </div>
         }
       </article>
@@ -165,56 +281,50 @@
     <app-specialist-transfer />
     } @else if (activeTab() === 'autoresponderMonitor') {
     <section class="dictionary-monitor-page">
-      @if (canManageAllDictionaries()) {
-        <a class="dictionary-action" routerLink="/admin/company-contacts">Недоступные чаты компаний на стопе</a>
-      }
       <app-review-archive-checks />
       <article class="dictionary-card editor-card autoresponder-monitor">
         <div class="monitor-head">
-          <div class="editor-guide">
-            <span class="material-icons-sharp">monitor_heart</span>
-            <div>
-              <h3>Кабинет мониторинга автоответчика</h3>
-              <p>
-                Здесь видно, кто стоит в очереди, какие сценарии активны, что уже отправлено и где есть ошибки. Переключатель включает только наблюдение и polling, отправка автоответчика продолжает жить по своим настройкам.
-              </p>
-            </div>
+          <div class="monitor-head-copy">
+            <h3>Очередь и отправки</h3>
+            <p>
+              Кто стоит в очереди, какие сценарии активны, что уже отправлено и где ошибки. Наблюдение — общая настройка для всех администраторов; на отправку сообщений оно не влияет.
+            </p>
           </div>
 
           <div class="actions monitor-actions">
-            <label class="checkbox monitor-toggle" appTooltip="Включает только кабинет наблюдения и периодическое обновление страницы. На отправку сообщений не влияет.">
+            <label class="checkbox monitor-toggle" appTooltip="Общая настройка для всех администраторов: выключение останавливает мониторинг у всех. На отправку сообщений не влияет.">
               <input
                 class="switch"
                 type="checkbox"
-                [checked]="clientMessageSettings()?.monitorEnabled"
+                [checked]="monitorSwitchChecked()"
                 [disabled]="clientMessageMonitorSaving()"
                 (change)="setClientMessageMonitorEnabled($any($event.target).checked)"
               >
-              <span>{{ clientMessageMonitorSaving() ? 'Переключаю' : (clientMessageSettings()?.monitorEnabled ? 'Наблюдение включено' : 'Наблюдение выключено') }}</span>
+              <span>{{ monitorSwitchLabel() }}</span>
             </label>
 
-            <button type="button" class="dictionary-action" (click)="loadClientMessageMonitor()" [disabled]="clientMessageMonitorLoading() || !clientMessageSettings()?.monitorEnabled">
-              <span class="material-icons-sharp">refresh</span>
+            <button type="button" class="dictionary-head-action" (click)="loadClientMessageMonitor()" [disabled]="clientMessageMonitorLoading() || monitorEnabled() === false">
+              <span class="material-icons-sharp" aria-hidden="true">refresh</span>
               {{ clientMessageMonitorLoading() ? 'Обновляю' : 'Обновить' }}
             </button>
 
-            <button type="button" class="dictionary-action" (click)="loadClientMessageMaintenancePreview()" [disabled]="clientMessageMaintenancePreviewLoading()">
-              <span class="material-icons-sharp">fact_check</span>
-              {{ clientMessageMaintenancePreviewLoading() ? 'Проверяю' : 'Dry-run' }}
+            <button type="button" class="dictionary-head-action" (click)="loadClientMessageMaintenancePreview()" [disabled]="clientMessageMaintenancePreviewLoading() || monitorEnabled() !== true || !clientMessageMonitor()" [title]="monitorEnabled() === false ? 'Включите наблюдение: результат проверки показывается в кабинете.' : 'Показывает, что в базе можно исправить. Ничего не меняет.'">
+              <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+              {{ clientMessageMaintenancePreviewLoading() ? 'Проверяю' : 'Проверить базу' }}
             </button>
           </div>
         </div>
 
-        @if (!clientMessageSettings()?.monitorEnabled) {
+        @if (monitorEnabled() === false) {
           <div class="empty-picker monitor-empty">
             <span class="material-icons-sharp">visibility_off</span>
             <h2>Наблюдение выключено</h2>
-            <p>Страница не опрашивает мониторинг и не нагружает сервер. Планировщик, очередь и отправка продолжают работать по настройкам автоответчика.</p>
+            <p>Это общая настройка для всех администраторов. Планировщик, очередь и отправка работают по настройкам автоответчика и без наблюдения.</p>
           </div>
         } @else {
           @if (clientMessageMonitorError()) {
             <app-load-error-card
-              title="Мониторинг не загрузился"
+              [title]="'Мониторинг не загрузился'"
               [message]="clientMessageMonitorError()!"
               actionLabel="Повторить"
               [loading]="clientMessageMonitorLoading()"
@@ -225,11 +335,11 @@
           @if (clientMessageMonitor(); as monitor) {
             <div class="monitor-status-row">
               <div class="monitor-status-pills">
-                <span tabindex="0" appTooltip="Фоновый worker регулярно разбирает наступившие задачи. Если он выключен, очередь сохраняется, но автоматически не обрабатывается." [class]="monitor.workerEnabled ? 'status-pill' : 'status-pill off'">
-                  {{ monitor.workerEnabled ? 'worker включен' : 'worker выключен' }}
+                <span tabindex="0" appTooltip="Фоновая очередь регулярно разбирает наступившие задачи. Если она выключена, очередь сохраняется, но автоматически не обрабатывается." [class]="monitor.workerEnabled ? 'status-pill' : 'status-pill off'">
+                  {{ monitor.workerEnabled ? 'фоновая очередь работает' : 'фоновая очередь выключена' }}
                 </span>
-                <span tabindex="0" appTooltip="Live-режим разрешает реальную отправку клиентам. В dry-run задачи проверяются без отправки сообщений." [class]="monitor.liveEnabled ? 'status-pill' : 'status-pill off'">
-                  {{ monitor.liveEnabled ? 'live-отправка' : 'dry-run' }}
+                <span tabindex="0" appTooltip="Реальная отправка разрешает сообщения клиентам. В пробном режиме задачи проверяются без отправки сообщений." [class]="monitor.liveEnabled ? 'status-pill' : 'status-pill off'">
+                  {{ monitor.liveEnabled ? 'реальная отправка' : 'пробный режим без отправки' }}
                 </span>
                 <span tabindex="0" appTooltip="Показывает, разрешена ли отправка прямо сейчас по настроенным рабочим окнам. Вне окна задачи не теряются и ждут следующего." [class]="monitor.windowAllowed ? 'status-pill' : 'status-pill off'">
                   {{ monitor.windowAllowed ? 'рабочее окно сейчас' : 'вне рабочего окна' }}
@@ -282,9 +392,11 @@
                   </span>
                 </div>
 
-                <blockquote class="archive-offer-copy">
-                  {{ monitorArchiveOfferText() }}
-                </blockquote>
+                @if (clientMessageSettings()) {
+                  <blockquote class="archive-offer-copy">
+                    {{ monitorArchiveOfferText() }}
+                  </blockquote>
+                }
 
                 <p class="settings-hint">
                   План {{ offer.plannedToday }} = отправлено {{ offer.sentToday }} + осталось {{ offer.remainingToday }}.
@@ -338,13 +450,13 @@
             <section class="monitor-table-card maintenance-preview-card">
               <div class="monitor-table-head">
                 <div>
-                  <h3>Dry-run актуализации базы</h3>
+                  <h3>Проверка базы без изменений</h3>
                   <p class="settings-hint">
                     Безопасная проверка: показывает, что можно исправить, но не меняет компании, заказы и очередь.
                   </p>
                 </div>
                 <span class="monitor-table-count">
-                  {{ clientMessageMaintenancePreview()?.updatedAt ? ('обновлено ' + (clientMessageMaintenancePreview()!.updatedAt | date:'HH:mm:ss')) : 'еще не загружено' }}
+                  {{ clientMessageMaintenancePreview()?.updatedAt ? ('обновлено ' + (clientMessageMaintenancePreview()!.updatedAt | date:'HH:mm:ss')) : 'ещё не запускалась' }}
                 </span>
               </div>
 
@@ -353,6 +465,12 @@
                   <b>!</b>
                   <span>{{ clientMessageMaintenancePreviewError() }}</span>
                 </div>
+              }
+
+              @if (maintenanceResult(); as result) {
+                <p class="maintenance-note" [class.monitor-error]="result.tone === 'error'" role="status">
+                  Последнее применение в {{ result.at | date:'HH:mm' }} — {{ result.title }}: {{ result.message }}
+                </p>
               }
 
               @if (clientMessageMaintenancePreview(); as preview) {
@@ -469,6 +587,8 @@
                   <p class="maintenance-note">
                     Даты публикаций исправляются только у неопубликованных отзывов, если дата отсутствует, график растянут больше 75 дней или дата ушла дальше чем на 90 дней. Маленькая просрочка по датам остается в списке для ручной проверки. Завершенные публикации переводятся в Опубликовано через обычную бизнес-логику финального счета.
                   </p>
+                } @else {
+                  <p class="maintenance-note">Применять изменения может только администратор.</p>
                 }
 
                 @if (preview.companyStatuses.samplesToWork.length || preview.companyStatuses.samplesBannedWithActiveOrders.length || preview.unpaidRecovery.oldSamples.length || preview.publication.oldSamples.length) {
@@ -531,8 +651,8 @@
               } @else {
                 <div class="empty-picker monitor-empty compact">
                   <span class="material-icons-sharp">fact_check</span>
-                  <h2>Dry-run еще не загружен</h2>
-                  <p>Нажмите Dry-run, чтобы увидеть безопасный план актуализации без изменений в базе.</p>
+                  <h2>Проверка ещё не запускалась</h2>
+                  <p>Нажмите «Проверить базу», чтобы увидеть безопасный план актуализации без изменений в базе.</p>
                 </div>
               }
             </section>
@@ -568,13 +688,13 @@
                     </div>
                     <div class="monitor-scenario-stat">
                       <b>{{ scenario.missingChannelBindings || 0 }}</b>
-                      <span>нет chatId/groupId</span>
+                      <span>нет привязки чата</span>
                     </div>
                     <div class="monitor-scenario-stat">
                       <b>{{ scenario.sentToday }}</b>
-                      <span>отправлено сегодня</span>
+                      <span>{{ monitorScenarioSentWord(scenario) }} сегодня</span>
                     </div>
-                    <div class="monitor-scenario-stat failed">
+                    <div class="monitor-scenario-stat" [class.failed]="scenario.failedToday > 0">
                       <b>{{ scenario.failedToday }}</b>
                       <span>ошибок сегодня</span>
                     </div>
@@ -584,13 +704,13 @@
                     </div>
                     <div class="monitor-scenario-stat">
                       <b>{{ scenario.sentSevenDays }}</b>
-                      <span>отправлено за 7 дней</span>
+                      <span>{{ monitorScenarioSentWord(scenario) }} за 7 дней</span>
                     </div>
                   </div>
                   @if (scenario.lastError) {
                     <div class="monitor-scenario-error">
                       <b>!</b>
-                      <span>Последняя ошибка: {{ scenario.lastError }}</span>
+                      <span>Последняя ошибка{{ scenario.lastErrorAt ? ' ' + (scenario.lastErrorAt | date:'dd.MM HH:mm') : '' }}: {{ scenario.lastError }}</span>
                     </div>
                   }
                 </article>
@@ -601,17 +721,17 @@
               <div class="monitor-table-head">
                 <div>
                   <h3>Очередь кандидатов</h3>
-                  <p class="settings-hint">Кто встал в рассылку, когда следующая попытка и почему задача может не уйти.</p>
+                  <p class="settings-hint">Кто встал в рассылку, когда следующая попытка и почему задача может не уйти. Показаны только ближайшие по времени проверки задачи: {{ monitor.queue.length }} из {{ monitor.activeCandidates }} активных. Фильтры ищут только среди них; «Сценарий» и поиск действуют и на журнал ниже.</p>
                 </div>
-                <span class="monitor-table-count">Показано {{ filteredMonitorQueue().length }} из {{ monitor.activeCandidates }}</span>
+                <span class="monitor-table-count">Показано {{ filteredMonitorQueue().length }} из {{ monitor.queue.length }} загруженных</span>
               </div>
               <div class="monitor-filter-row">
                 <label>
                   <span>Сценарий</span>
-                  <select [value]="monitorScenarioFilter()" (change)="setMonitorScenarioFilter($any($event.target).value)">
-                    <option value="ALL">Все сценарии</option>
+                  <select (change)="setMonitorScenarioFilter($any($event.target).value)">
+                    <option value="ALL" [selected]="monitorScenarioFilter() === 'ALL'">Все сценарии</option>
                     @for (scenario of monitor.scenarios; track trackMonitorScenario($index, scenario)) {
-                      <option [value]="scenario.scenario">{{ scenario.label }}</option>
+                      <option [value]="scenario.scenario" [selected]="monitorScenarioFilter() === scenario.scenario">{{ scenario.label }}</option>
                     }
                   </select>
                 </label>
@@ -624,7 +744,7 @@
                   </select>
                 </label>
                 <label>
-                  <span>Журнал</span>
+                  <span>Журнал ниже</span>
                   <select [value]="monitorAttemptStatusFilter()" (change)="setMonitorAttemptStatusFilter($any($event.target).value)">
                     <option value="ALL">Все попытки</option>
                     <option value="SENT">Отправлено</option>
@@ -662,8 +782,8 @@
                           <span>реально отправлено: {{ item.sentCount }} · ошибок подряд: {{ item.consecutiveFailures }}</span>
                         </td>
                         <td>
-                          @if (item.link) {
-                            <a [href]="item.link">{{ item.orderTitle || item.companyTitle }}</a>
+                          @if (item.link?.startsWith('/manager/orders/')) {
+                            <a [routerLink]="item.link">{{ item.orderTitle || item.companyTitle }}</a>
                           } @else {
                             <strong>{{ item.orderTitle || item.companyTitle }}</strong>
                           }
@@ -681,7 +801,7 @@
                           @if (monitorQueueTimingLabel(item)) {
                             <span [class]="monitorQueueTimingClass(item)">{{ monitorQueueTimingLabel(item) }}</span>
                           }
-                          <span>{{ item.targetType }}</span>
+                          <span>{{ monitorTargetTypeLabel(item.targetType) }}</span>
                         </td>
                         <td>
                           <strong>{{ item.lastAttemptAt ? (item.lastAttemptAt | date:'dd.MM HH:mm') : '-' }}</strong>
@@ -689,13 +809,13 @@
                         </td>
                         <td>
                           @if (item.lastErrorMessage) {
-                            <small class="monitor-error">{{ item.lastErrorMessage }}</small>
+                            <small [class.monitor-error]="monitorQueueHasError(item)">{{ item.lastErrorMessage }}</small>
                           } @else {
                             <span>ошибок нет</span>
                           }
                           <div class="monitor-row-actions">
                             <button type="button" class="row-icon-button monitor-details-button" (click)="toggleMonitorQueueDetails(item)" title="Показать превью">
-                              <span class="material-icons-sharp">{{ expandedMonitorQueueKey() === item.targetKey ? 'expand_less' : 'preview' }}</span>
+                              <span class="material-icons-sharp">{{ isMonitorQueueExpanded(item) ? 'expand_less' : 'preview' }}</span>
                             </button>
                             <button
                               type="button"
@@ -727,13 +847,15 @@
                           </div>
                         </td>
                       </tr>
-                      @if (expandedMonitorQueueKey() === item.targetKey) {
+                      @if (isMonitorQueueExpanded(item)) {
                         <tr class="monitor-detail-row">
                           <td colspan="6">
                             <div class="monitor-preview-grid">
                               <span><b>Канал</b>{{ item.expectedChannel || '-' }}</span>
                               <span><b>Детали</b>{{ item.channelDetails || '-' }}</span>
-                              <span><b>Оплата</b>{{ paymentInstructionSourceLabel(item.paymentInstructionSource) }}</span>
+                              @if (monitorScenarioHasPayment(item)) {
+                                <span><b>Оплата</b>{{ paymentInstructionSourceLabel(item.paymentInstructionSource) }}</span>
+                              }
                               <p>{{ item.messagePreview || 'Превью пока недоступно' }}</p>
                             </div>
                           </td>
@@ -741,7 +863,7 @@
                       }
                     } @empty {
                       <tr>
-                        <td colspan="6" class="no-results">В очереди пока пусто</td>
+                        <td colspan="6" class="no-results">{{ monitor.queue.length ? 'Среди загруженных задач ничего не найдено' : 'В очереди пока пусто' }}</td>
                       </tr>
                     }
                   </tbody>
@@ -753,9 +875,9 @@
               <div class="monitor-table-head">
                 <div>
                   <h3>Журнал попыток</h3>
-                  <p class="settings-hint">Что реально происходило: отправлено, пропущено, ошибка, канал и превью сообщения.</p>
+                  <p class="settings-hint">Что реально происходило: отправлено, пропущено, ошибка, канал и превью сообщения. Показаны только последние попытки всех сценариев ({{ monitor.attempts.length }}); фильтры ищут только среди них.</p>
                 </div>
-                <span class="monitor-table-count">Показано {{ filteredMonitorAttempts().length }} из {{ monitor.attempts.length }}</span>
+                <span class="monitor-table-count">Показано {{ filteredMonitorAttempts().length }} из {{ monitor.attempts.length }} загруженных</span>
               </div>
               <div class="table-scroll monitor-table-scroll">
                 <table>
@@ -773,21 +895,18 @@
                       <tr>
                         <td>
                           <strong>{{ attempt.attemptedAt | date:'dd.MM HH:mm:ss' }}</strong>
-                          <span>{{ attempt.channel || 'канал не выбран' }}</span>
+                          <span>{{ monitorChannelLabel(attempt.channel) }}</span>
                         </td>
                         <td>
                           <strong>{{ attempt.scenarioLabel }}</strong>
-                          <span>{{ attempt.targetType }}</span>
+                          <span>{{ monitorTargetTypeLabel(attempt.targetType) }}</span>
                         </td>
                         <td>
                           <span [class]="monitorAttemptStatusClass(attempt.status)">{{ attempt.statusLabel }}</span>
-                          @if (attempt.errorCode) {
-                            <span>{{ attempt.errorCode }}</span>
-                          }
                         </td>
                         <td>
-                          @if (attempt.link) {
-                            <a [href]="attempt.link">{{ attempt.orderTitle || attempt.companyTitle }}</a>
+                          @if (attempt.link?.startsWith('/manager/orders/')) {
+                            <a [routerLink]="attempt.link">{{ attempt.orderTitle || attempt.companyTitle }}</a>
                           } @else {
                             <strong>{{ attempt.orderTitle || attempt.companyTitle }}</strong>
                           }
@@ -795,7 +914,7 @@
                         </td>
                         <td>
                           @if (attempt.errorMessage) {
-                            <small class="monitor-error">{{ attempt.errorMessage }}</small>
+                            <small [class.monitor-error]="attempt.status === 'FAILED'">{{ attempt.errorMessage }}</small>
                           } @else {
                             <span>{{ attempt.messagePreview || 'без превью' }}</span>
                           }
@@ -803,7 +922,7 @@
                       </tr>
                     } @empty {
                       <tr>
-                        <td colspan="5" class="no-results">Попыток пока нет</td>
+                        <td colspan="5" class="no-results">{{ monitor.attempts.length ? 'Среди загруженных попыток ничего не найдено' : 'Попыток пока нет' }}</td>
                       </tr>
                     }
                   </tbody>
@@ -811,7 +930,7 @@
               </div>
             </section>
           } @else if (clientMessageMonitorLoading()) {
-            <p class="settings-hint">Загружаю мониторинг...</p>
+            <p class="settings-hint">Загружаю мониторинг…</p>
           }
         }
       </article>
@@ -825,11 +944,12 @@
           <div>
             <p class="eyebrow">Системная настройка</p>
             <h2>AI-провайдер</h2>
-            <p class="ai-provider-intro">Выбранная модель используется для запросов «О компании», «Помощь» и инструментов AI-репутации. Настройка сохраняется после перезапуска.</p>
+            <p class="ai-provider-intro">Выбранная модель используется для запросов «О компании», «Помощь» и инструментов AI-репутации. Настройка общая для всей системы и сохраняется после перезапуска.</p>
+            <p class="ai-provider-intro">Проверки контроля менеджеров работают только с DeepSeek: «Проверить: ответ не нужен» в неотвеченных сообщениях, вопросы по отчётам менеджеров оценка пояснений исполнителей по рискам и AI-разбор в ежедневных сводках. С YandexGPT или OpenAI они отключатся, а менеджеры получат ошибку при попытке закрыть сообщение как «ответ не нужен».</p>
           </div>
           @if (aiProviderStatus(); as status) {
             <span class="ai-provider-state" [class.available]="status.aiAvailable">
-              {{ status.aiAvailable ? 'доступен' : 'не доступен' }}
+              {{ status.aiAvailable ? 'доступен' : 'недоступен' }}
             </span>
           }
         </div>
@@ -876,26 +996,26 @@
           </div>
 
           <div class="ai-provider-details">
-            <span><strong>Активный маршрут:</strong> {{ aiProviderDisplayName(status.aiProvider) }}</span>
+            <span><strong>Сейчас используется:</strong> {{ aiProviderDisplayName(status.aiProvider) }}</span>
             <span><strong>Модель:</strong> {{ aiProviderModel(status.aiProvider, status) }}</span>
             @if (status.aiProvider === 'deepseek') {
               <span>
                 <strong>Поиск:</strong>
-                DeepSeek Anthropic Web Search · {{ status.deepSeekAnthropicWebSearchEnabled ? 'доступен' : 'выключен' }}
-                + сборщик {{ status.searchProvider }} · {{ status.searchAvailable ? 'доступен' : 'не доступен' }}
+                встроенный веб-поиск DeepSeek · {{ status.deepSeekAnthropicWebSearchEnabled ? 'доступен' : 'выключен' }}
+                + поиск по картам и сайтам ({{ aiSearchProviderLabel(status.searchProvider) }}) · {{ status.searchAvailable ? 'доступен' : 'недоступен' }}
               </span>
             } @else {
-              <span><strong>Поиск:</strong> {{ status.searchProvider }} · {{ status.searchAvailable ? 'доступен' : 'не доступен' }}</span>
+              <span><strong>Поиск:</strong> {{ aiSearchProviderLabel(status.searchProvider) }} · {{ status.searchAvailable ? 'доступен' : 'недоступен' }}</span>
             }
             @if (status.aiProvider === 'deepseek') {
               <span>
                 <strong>Глубокий поиск:</strong>
                 {{ status.deepSeekAnthropicWebSearchEnabled
                   ? (status.deepSeekAnthropicDeepSearchEnabled
-                      ? 'Anthropic Web Search + карты/сайты через внешний сборщик · этапов: ' + status.deepSeekAnthropicDeepSearchPasses
+                      ? 'веб-поиск DeepSeek, карты и сайты · этапов: ' + status.deepSeekAnthropicDeepSearchPasses
                         + ' · до ' + status.deepSeekAnthropicWebSearchMaxUses + ' обращений на этап'
-                      : 'Anthropic Web Search + внешний сборщик · один этап · до ' + status.deepSeekAnthropicWebSearchMaxUses + ' обращений')
-                  : 'Chat Completions без встроенного поиска' }}
+                      : 'веб-поиск DeepSeek, карты и сайты · один этап · до ' + status.deepSeekAnthropicWebSearchMaxUses + ' обращений')
+                  : 'выключен: DeepSeek отвечает без поиска в интернете' }}
               </span>
             }
           </div>
@@ -913,22 +1033,62 @@
       </article>
     </section>
     } @else {
-    <section class="dictionary-grid" [class.autoresponder-layout]="activeTab() === 'autoresponder'">
+    <section
+      class="dictionary-grid"
+      [class.autoresponder-layout]="activeTab() === 'autoresponder'"
+      [class.dictionary-grid--form]="activeTab() === 'messageDictionary' || activeTab() === 'settings'"
+    >
+      @if (activeTab() !== 'messageDictionary' && activeTab() !== 'settings') {
       <article class="dictionary-card table-card">
-        <div class="table-head">
-          <div>
-            <p class="eyebrow">{{ activeTab() === 'autoresponder' || activeTab() === 'gamification' ? 'Обзор' : 'Список' }}</p>
-            <h2>
+        <div class="list-head">
+          <div class="list-title">
+            @if (activeTab() === 'autoresponder' || activeTab() === 'gamification') {
+              <p class="dictionary-kicker">Обзор</p>
+            }
+            <h3>
               {{
                 activeTab() === 'autoresponder'
-                  ? 'Пульт автоответчика'
+                  ? 'Сводка автоответчика'
                   : activeTab() === 'gamification'
                     ? 'Срез геймификации'
                     : activeLabel()
               }}
-            </h2>
+            </h3>
+            @if (activeTab() !== 'autoresponder') {
+              <span class="total-badge">{{ activeTab() === 'gamification' ? (gamificationProgress()?.totalEvents ?? 0) : activeItemsTotal() }}</span>
+            }
           </div>
-          <span>{{ activeTab() === 'gamification' ? (gamificationProgress()?.totalEvents ?? 0) : activeItemsTotal() }}</span>
+          @if (searchableTab()) {
+            <form class="list-search" role="search" (submit)="$event.preventDefault(); searchActive()">
+              <span class="material-icons-sharp" aria-hidden="true">search</span>
+              <input
+                type="text"
+                enterkeyhint="search"
+                [placeholder]="searchPlaceholder()"
+                [attr.aria-label]="searchPlaceholder()"
+                [value]="searchDraft()"
+                (input)="searchDraft.set($any($event.target).value)"
+              >
+              @if (searchDraft() || search()) {
+                <button type="button" class="list-search-clear" (click)="clearSearch()" [disabled]="activeLoading()" title="Сбросить поиск" aria-label="Сбросить поиск">
+                  <span class="material-icons-sharp" aria-hidden="true">close</span>
+                </button>
+              }
+              <button type="submit" class="list-search-go" [disabled]="activeLoading()">Найти</button>
+            </form>
+          }
+          @if (activeTab() === 'accounts' && cityLinkTitle() && search() === cityLinkTitle()) {
+            <p class="list-note">
+              Показан поиск по названию города «{{ cityLinkTitle() }}»: в список попадают и аккаунты, у которых
+              это слово есть в логине, ФИО или имени владельца, а также выключенные.
+            </p>
+          }
+          @if (createLabel(); as label) {
+            <button type="button" class="list-create" (click)="openActiveCreate()">
+              <span class="material-icons-sharp" aria-hidden="true">add</span>
+              {{ label }}
+            </button>
+          }
         </div>
 
         <div class="table-scroll">
@@ -984,79 +1144,69 @@
             }
 
             @case ('cities') {
-              <div class="dictionary-inline-actions">
-                <label class="city-coordinate-import">
-                  <span class="material-icons-sharp">upload_file</span>
-                  Импорт координат
-                  <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" (change)="importCityCoordinates($event)">
-                </label>
-                <button type="button" class="secondary" (click)="rebuildCityDistances()" [disabled]="rebuildingCityDistances()">
-                  <span class="material-icons-sharp">route</span>
-                  {{ rebuildingCityDistances() ? 'Пересчитываю' : 'Пересчитать id >= 150' }}
-                </button>
-              </div>
-              <table>
+              <table class="card-table">
                 <thead>
                   <tr>
                     <th>Город</th>
-                    <th>ID</th>
                     <th>Координаты</th>
-                    <th>Близость</th>
+                    <th title="Сколько расстояний до других городов рассчитано. Нужна для выбора ближайшего исполнителя.">Близость</th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (city of cities(); track trackCity($index, city)) {
-                    <tr [class.selected]="selectedId() === city.id" (click)="selectCity(city)">
-                      <td><strong>{{ city.title }}</strong></td>
-                      <td>{{ city.id }}</td>
-                      <td>
+                    <tr [class.selected]="selectedId() === city.id" tabindex="0" (keydown.enter)="rowKey($event) && pickCity(city)" (keydown.space)="rowKey($event) && pickCity(city)" (click)="pickCity(city)">
+                      <td data-label="Город">
+                        <strong>{{ city.title }}</strong>
+                        <span>ID {{ city.id }}</span>
+                      </td>
+                      <td data-label="Координаты">
                         @if (city.latitude != null && city.longitude != null) {
                           {{ city.latitude }}, {{ city.longitude }}
                         } @else {
-                          <span class="muted">нет</span>
+                          <span class="muted">не заданы</span>
                         }
                       </td>
-                      <td>
+                      <td data-label="Близость">
                         @if (city.distanceMatrixReady) {
-                          {{ city.distanceCount }}
+                          рассчитано: {{ city.distanceCount }}
                         } @else {
-                          <span class="muted">не готово</span>
+                          <span class="muted">{{ city.latitude != null && city.longitude != null ? 'не рассчитана' : 'нужны координаты' }}</span>
                         }
                       </td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="4" class="no-results">Городов нет.</td></tr>
+                    <tr><td colspan="3" class="no-results">{{ activeLoading() ? 'Загружаю города…' : (search() ? 'Ничего не найдено.' : 'Городов нет.') }}</td></tr>
                   }
                 </tbody>
               </table>
             }
 
             @case ('products') {
-              <table>
+              <table class="card-table">
                 <thead>
                   <tr>
                     <th>Продукт</th>
                     <th>Цена</th>
-                    <th>Категория</th>
+                    <th>Категория продукта</th>
                     <th>Фото</th>
                     <th>Публикует</th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (product of products(); track trackProduct($index, product)) {
-                    <tr [class.selected]="selectedId() === product.id" (click)="selectProduct(product)">
-                      <td>
+                    <tr [class.selected]="selectedId() === product.id" tabindex="0" (keydown.enter)="rowKey($event) && pickProduct(product)" (keydown.space)="rowKey($event) && pickProduct(product)" (click)="pickProduct(product)">
+                      <td data-label="Продукт">
                         <strong>{{ product.title }}</strong>
                         <span>ID {{ product.id }}</span>
                       </td>
-                      <td>{{ product.price }}</td>
-                      <td>{{ categoryTitle(product.category) }}</td>
-                      <td>
-                        <span class="status-pill" [class.off]="!product.photo">{{ product.photo ? 'Да' : 'Нет' }}</span>
+                      <td data-label="Цена">{{ product.price }}</td>
+                      <td data-label="Категория продукта">{{ categoryTitle(product.category) }}</td>
+                      <td data-label="Фото">
+                        <span class="status-pill" [class.off]="!product.photo">{{ product.photo ? 'Нужна' : 'Нет' }}</span>
                       </td>
-                      <td>
+                      <td data-label="Публикует">
                         <span class="status-pill" [class.off]="!product.requiresPerformer">
-                          {{ product.requiresPerformer ? ('Исполнитель · ' + product.targetPlatform) : 'Специалист' }}
+                          {{ product.requiresPerformer ? ('Исполнитель · ' + productPlatformLabel(product.targetPlatform)) : 'Специалист' }}
                         </span>
                         @if (product.requiresPerformer) {
                           <span>{{ product.performerRewardPercent || 0 }}% исполнителю</span>
@@ -1064,61 +1214,59 @@
                       </td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="5" class="no-results">Продуктов нет.</td></tr>
+                    <tr><td colspan="5" class="no-results">{{ activeLoading() ? 'Загружаю продукты…' : (search() ? 'Ничего не найдено.' : 'Продуктов нет.') }}</td></tr>
                   }
                 </tbody>
               </table>
             }
 
             @case ('phones') {
-              <table class="phone-table">
+              <table class="phone-table card-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
                     <th>Номер</th>
-                    <th>ФИО</th>
-                    <th>Разрешено</th>
-                    <th>Отправлено</th>
-                    <th>Блок</th>
-                    <th>Таймер</th>
+                    <th title="Отправлено в текущем цикле из разрешённых до паузы">Отправки</th>
+                    <th title="Пауза после достижения лимита и её состояние сейчас">Блокировка</th>
                     <th>Оператор</th>
-                    <th>Токены</th>
-                    <th>Активен</th>
+                    <th>Устройства</th>
+                    <th>Статус</th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (phone of phones(); track trackPhone($index, phone)) {
-                    <tr [class.selected]="selectedPhone()?.id === phone.id" (click)="selectPhone(phone)">
-                      <td>{{ phone.id }}</td>
-                      <td>
+                    <tr [class.selected]="selectedPhone()?.id === phone.id" tabindex="0" (keydown.enter)="rowKey($event) && pickPhone(phone)" (keydown.space)="rowKey($event) && pickPhone(phone)" (click)="pickPhone(phone)">
+                      <td data-label="Номер">
                         <strong>{{ phone.number }}</strong>
-                        <span>{{ phone.mailLoginMasked || phone.googleLoginMasked || '-' }}</span>
+                        <span>{{ phone.fio || 'ФИО не указано' }}</span>
+                        <span>ID {{ phone.id }}</span>
                       </td>
-                      <td>{{ phone.fio || '-' }}</td>
-                      <td>{{ phone.amountAllowed }}</td>
-                      <td>{{ phone.amountSent }}</td>
-                      <td>{{ phone.blockTime }} мин</td>
-                      <td>
-                        <strong>{{ phone.timer | date:'dd.MM.yyyy HH:mm' }}</strong>
+                      <td data-label="Отправки">
+                        <strong>{{ phone.amountSent }} из {{ phone.amountAllowed }}</strong>
+                      </td>
+                      <td data-label="Блокировка">
+                        <strong>{{ phone.blockTime }} мин</strong>
                         <span class="status-pill" [class.off]="!isTimerReady(phone)">{{ timerState(phone) }}</span>
+                        @if (!isTimerReady(phone) && phone.timer) {
+                          <span>до {{ phone.timer | date:'dd.MM HH:mm' }}</span>
+                        }
                       </td>
-                      <td>{{ phoneOperatorName(phone.operator) }}</td>
-                      <td>
+                      <td data-label="Оператор">{{ phoneOperatorName(phone.operator) }}</td>
+                      <td data-label="Устройства">
                         <span class="status-pill" [class.off]="deviceTokenCount(phone) === 0">{{ deviceTokenCount(phone) }}</span>
                       </td>
-                      <td>
-                        <span class="status-pill" [class.off]="!phone.active">{{ phone.active ? 'Да' : 'Нет' }}</span>
+                      <td data-label="Статус">
+                        <span class="status-pill" [class.off]="!phone.active">{{ phone.active ? 'Активен' : 'Выключен' }}</span>
                       </td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="10" class="no-results">Телефонов нет.</td></tr>
+                    <tr><td colspan="6" class="no-results">{{ activeLoading() ? 'Загружаю телефоны…' : (search() ? 'Ничего не найдено.' : 'Телефонов нет.') }}</td></tr>
                   }
                 </tbody>
               </table>
             }
 
             @case ('accounts') {
-              <table>
+              <table class="card-table">
                 <thead>
                   <tr>
                     <th>Аккаунт</th>
@@ -1126,22 +1274,25 @@
                     <th>Город</th>
                     <th>Статус</th>
                     <th>Публикаций</th>
-                    <th>Активность</th>
-                    <th></th>
+                    <th>Работа</th>
+                    <th><span class="visually-hidden">Браузер</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (bot of bots(); track trackBot($index, bot)) {
-                    <tr [class.selected]="selectedId() === bot.id" [class.loading]="botDetailLoadingId() === bot.id" (click)="selectBot(bot)">
-                      <td>
+                    <tr [class.selected]="selectedId() === bot.id" [class.loading]="botDetailLoadingId() === bot.id" tabindex="0" (keydown.enter)="rowKey($event) && pickBot(bot)" (keydown.space)="rowKey($event) && pickBot(bot)" (click)="pickBot(bot)">
+                      <td data-label="Аккаунт">
                         <strong>{{ bot.fio }}</strong>
                         <span>{{ bot.login }} · ID {{ bot.id }}</span>
+                        @if (botDetailLoadingId() === bot.id) {
+                          <span class="muted">Открываю…</span>
+                        }
                       </td>
-                      <td>{{ categoryTitle(bot.worker) }}</td>
-                      <td>{{ categoryTitle(bot.city) }}</td>
-                      <td>{{ categoryTitle(bot.status) }}</td>
-                      <td>{{ bot.counter }}</td>
-                      <td>
+                      <td data-label="Владелец">{{ categoryTitle(bot.worker) }}</td>
+                      <td data-label="Город">{{ categoryTitle(bot.city) }}</td>
+                      <td data-label="Статус">{{ categoryTitle(bot.status) }}</td>
+                      <td data-label="Публикаций">{{ bot.counter }}</td>
+                      <td data-label="Работа">
                         <span class="status-pill" [class.off]="!bot.active">{{ bot.active ? 'Активен' : 'Выключен' }}</span>
                       </td>
                       <td class="row-tools">
@@ -1151,14 +1302,15 @@
                           target="_blank"
                           rel="noopener"
                           title="Открыть браузер аккаунта"
+                          aria-label="Открыть браузер аккаунта"
                           (click)="$event.stopPropagation()"
                         >
-                          <span class="material-icons-sharp">open_in_new</span>
+                          <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
                         </a>
                       </td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="7" class="no-results">Аккаунтов нет.</td></tr>
+                    <tr><td colspan="7" class="no-results">{{ activeLoading() ? 'Загружаю аккаунты…' : (search() ? 'Ничего не найдено.' : 'Аккаунтов нет.') }}</td></tr>
                   }
                 </tbody>
               </table>
@@ -1179,18 +1331,18 @@
                 </label>
 
                 <div class="pagination-actions">
-                  <button type="button" class="row-icon-button" (click)="goToBotPage(0)" [disabled]="activeLoading() || botPage() === 0" title="Первая страница">
-                    <span class="material-icons-sharp">first_page</span>
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(0)" [disabled]="activeLoading() || botPage() === 0" title="Первая страница" aria-label="Первая страница">
+                    <span class="material-icons-sharp" aria-hidden="true">first_page</span>
                   </button>
-                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() - 1)" [disabled]="activeLoading() || botPage() === 0" title="Предыдущая страница">
-                    <span class="material-icons-sharp">chevron_left</span>
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() - 1)" [disabled]="activeLoading() || botPage() === 0" title="Предыдущая страница" aria-label="Предыдущая страница">
+                    <span class="material-icons-sharp" aria-hidden="true">chevron_left</span>
                   </button>
                   <span class="pagination-page">{{ botPage() + 1 }} / {{ botTotalPages() }}</span>
-                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() + 1)" [disabled]="activeLoading() || botPage() + 1 >= botTotalPages()" title="Следующая страница">
-                    <span class="material-icons-sharp">chevron_right</span>
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() + 1)" [disabled]="activeLoading() || botPage() + 1 >= botTotalPages()" title="Следующая страница" aria-label="Следующая страница">
+                    <span class="material-icons-sharp" aria-hidden="true">chevron_right</span>
                   </button>
-                  <button type="button" class="row-icon-button" (click)="goToBotPage(botTotalPages() - 1)" [disabled]="activeLoading() || botPage() + 1 >= botTotalPages()" title="Последняя страница">
-                    <span class="material-icons-sharp">last_page</span>
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botTotalPages() - 1)" [disabled]="activeLoading() || botPage() + 1 >= botTotalPages()" title="Последняя страница" aria-label="Последняя страница">
+                    <span class="material-icons-sharp" aria-hidden="true">last_page</span>
                   </button>
                 </div>
               </div>
@@ -1207,18 +1359,18 @@
                 </thead>
                 <tbody>
                   @for (promoText of promoTexts(); track trackPromoText($index, promoText)) {
-                    <tr [class.selected]="selectedId() === promoText.id" (click)="selectPromoText(promoText)">
+                    <tr [class.selected]="selectedId() === promoText.id" tabindex="0" (keydown.enter)="rowKey($event) && pickPromoText(promoText)" (keydown.space)="rowKey($event) && pickPromoText(promoText)" (click)="pickPromoText(promoText)">
                       <td>
                         <strong>{{ promoTextLabel(promoText) }}</strong>
                         <span class="promo-preview">{{ promoTextPreview(promoText.text) }}</span>
                       </td>
                       <td>
-                        <span class="usage-pill">{{ promoUsageSummary(promoText) }}</span>
+                        <span class="usage-pill" [title]="promoUsageSummary(promoText)">{{ promoUsageSummary(promoText) }}</span>
                       </td>
                       <td>{{ promoTextMeta(promoText) }}</td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="3" class="no-results">Промо-текстов нет.</td></tr>
+                    <tr><td colspan="3" class="no-results">{{ activeLoading() ? 'Загружаю тексты…' : (search() ? 'Ничего не найдено.' : 'Промо-текстов нет.') }}</td></tr>
                   }
                 </tbody>
               </table>
@@ -1230,12 +1382,12 @@
                   <tr>
                     <th>Менеджер</th>
                     <th>Заполнено</th>
-                    <th>Пример текста</th>
+                    <th>Текст оплаты</th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (managerText of managerTexts(); track trackManagerText($index, managerText)) {
-                    <tr [class.selected]="selectedId() === managerText.managerId" (click)="selectManagerText(managerText)">
+                    <tr [class.selected]="selectedId() === managerText.managerId" tabindex="0" (keydown.enter)="rowKey($event) && pickManagerText(managerText)" (keydown.space)="rowKey($event) && pickManagerText(managerText)" (click)="pickManagerText(managerText)">
                       <td>
                         <strong>{{ managerText.managerTitle }}</strong>
                         <span>ID {{ managerText.managerId }}</span>
@@ -1248,33 +1400,7 @@
                       </td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="3" class="no-results">Текстов менеджеров нет.</td></tr>
-                  }
-                </tbody>
-              </table>
-            }
-
-            @case ('messageDictionary') {
-              <table>
-                <thead>
-                  <tr>
-                    <th>Фраза</th>
-                    <th>Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (phrase of autoIgnorePhrases(); track phrase; let index = $index) {
-                    <tr [class.selected]="editingAutoIgnorePhraseIndex() === index" (click)="startEditAutoIgnorePhrase(index, phrase)">
-                      <td>
-                        <strong>{{ phrase }}</strong>
-                        <span>короткий ответ клиента</span>
-                      </td>
-                      <td>
-                        <span class="usage-pill">{{ autoresponderForm.controls.unansweredAutoIgnoreEnabled.value ? 'не требует ответа' : 'выключено' }}</span>
-                      </td>
-                    </tr>
-                  } @empty {
-                    <tr><td colspan="2" class="no-results">Фраз пока нет.</td></tr>
+                    <tr><td colspan="3" class="no-results">{{ activeLoading() ? 'Загружаю менеджеров…' : (search() ? 'Ничего не найдено.' : 'Менеджеров с текстами нет.') }}</td></tr>
                   }
                 </tbody>
               </table>
@@ -1451,123 +1577,6 @@
               </table>
             }
 
-            @case ('settings') {
-              <table>
-                <thead>
-                  <tr>
-                    <th>Параметр</th>
-                    <th>Значение</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr class="selected">
-                    <td>
-                      <strong>Время между выгулами</strong>
-                      <span>Пауза для специалиста после кнопки «ВЫГУЛЯЛ»</span>
-                    </td>
-                    <td>
-                      <strong>{{ nagulSettings()?.cooldownMinutes ?? 0 }} мин</strong>
-                      <span>{{ nagulSettings()?.cooldownMinutes === 0 ? 'без паузы' : 'активно' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Пауза между сменой и блокировкой аккаунтов</strong>
-                      <span>Общая для всех карточек специалиста, включая детали заказа</span>
-                    </td>
-                    <td>
-                      <strong>{{ workerAccountActionSettings()?.cooldownSeconds ?? 60 }} сек.</strong>
-                      <span>{{ workerAccountActionSettings()?.enabled === false || workerAccountActionSettings()?.cooldownSeconds === 0 ? 'таймер выключен' : 'таймер включён · только для специалистов' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Горизонт выдачи выгула</strong>
-                      <span>На сколько дней вперёд показывать отзывы в разделе «Выгул»</span>
-                    </td>
-                    <td>
-                      <strong>{{ nagulSettings()?.lookaheadDays ?? 60 }} дн.</strong>
-                      <span>{{ nagulSettings()?.lookaheadDays === 0 ? 'только сегодня' : 'вперёд от сегодня' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Порог выгулянного аккаунта</strong>
-                      <span>Сколько публикаций должен иметь аккаунт, чтобы считаться готовым к публикации без выгула</span>
-                    </td>
-                    <td>
-                      <strong>{{ nagulSettings()?.accountWalkedCounterThreshold ?? 3 }} публ.</strong>
-                      <span>counter аккаунта</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Задержка при невыгулянном аккаунте</strong>
-                      <span>На сколько дней сдвигать отзыв и следующие отзывы после замены на невыгулянный аккаунт</span>
-                    </td>
-                    <td>
-                      <strong>{{ nagulSettings()?.accountWalkDelayDays ?? 2 }} дн.</strong>
-                      <span>{{ nagulSettings()?.accountWalkDelayDays === 0 ? 'без сдвига дат' : 'при смене аккаунта' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Утренняя Telegram-рассылка</strong>
-                      <span>Админский отчёт за сегодня</span>
-                    </td>
-                    <td>
-                      <strong>{{ telegramReportSettings()?.morningEnabled ? (telegramReportSettings()?.morningTime ?? '11:30') : 'выключена' }}</strong>
-                      <span>{{ telegramReportSettings()?.zone ?? 'Asia/Irkutsk' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Вечерняя Telegram-рассылка</strong>
-                      <span>Отчёты специалистам, владельцам и админу</span>
-                    </td>
-                    <td>
-                      <strong>{{ telegramReportSettings()?.eveningEnabled ? (telegramReportSettings()?.eveningTime ?? '22:00') : 'выключена' }}</strong>
-                      <span>{{ telegramReportSettings()?.zone ?? 'Asia/Irkutsk' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>WhatsApp автосинхронизация</strong>
-                      <span>Поиск groupId по invite-ссылкам из карточек компаний</span>
-                    </td>
-                    <td>
-                      <strong>{{ whatsAppGroupSyncSettings()?.enabled ? 'включена' : 'выключена' }}</strong>
-                      <span>каждые {{ whatsAppGroupSyncSettings()?.intervalMinutes ?? 30 }} мин.</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Последняя WhatsApp-проверка</strong>
-                      <span>Сколько групп привязалось за последний запуск</span>
-                    </td>
-                    <td>
-                      @if (whatsAppGroupSyncSettings()?.lastRunAt; as lastRunAt) {
-                        <strong>{{ lastRunAt | date:'dd.MM.yyyy HH:mm' }}</strong>
-                      } @else {
-                        <strong>ещё не запускалась</strong>
-                      }
-                      <span>новых привязок: {{ whatsAppGroupSyncSettings()?.lastLinkedCount ?? 0 }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Последние запуски</strong>
-                      <span>Защита от повторной отправки за один слот</span>
-                    </td>
-                    <td>
-                      <strong>{{ telegramReportSettings()?.morningLastRunKey || 'утро: нет' }}</strong>
-                      <span>{{ telegramReportSettings()?.eveningLastRunKey || 'вечер: нет' }}</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            }
-
             @case ('autoresponder') {
               <div class="autoresponder-overview">
                 <section class="autoresponder-overview-half">
@@ -1583,8 +1592,8 @@
                       <span class="material-icons-sharp">settings_suggest</span>
                       <div>
                         <small>Фоновая очередь</small>
-                        <strong>{{ clientMessageSettings()?.workerEnabled ? 'Включен' : 'Выключен' }}</strong>
-                        <em>{{ clientMessageSettings()?.liveEnabled ? 'может отправлять клиентам' : 'dry-run без отправки' }}</em>
+                        <strong>{{ !clientMessageSettings() ? 'Загрузка…' : clientMessageSettings()?.workerEnabled ? 'Работает' : 'Выключена' }}</strong>
+                        <em>{{ !clientMessageSettings() ? 'настройки загружаются' : !clientMessageSettings()?.workerEnabled ? 'фоновые сообщения не отправляются' : clientMessageSettings()?.liveEnabled ? 'отправляет клиентам' : 'тестовый режим: клиентам не отправляет' }}</em>
                       </div>
                     </article>
 
@@ -1592,7 +1601,7 @@
                       <span class="material-icons-sharp">bolt</span>
                       <div>
                         <small>Смена статусов</small>
-                        <strong>{{ clientMessageSettings()?.immediateEnabled ? 'Включены' : 'Остановлены' }}</strong>
+                        <strong>{{ !clientMessageSettings() ? 'Загрузка…' : clientMessageSettings()?.immediateEnabled ? 'Включены' : 'Остановлены' }}</strong>
                         <em>сообщения уходят сразу при действии</em>
                       </div>
                     </article>
@@ -1601,8 +1610,8 @@
                       <span class="material-icons-sharp">schedule</span>
                       <div>
                         <small>Окна</small>
-                        <strong>{{ clientMessageSettings()?.businessWindows || 'Не заданы' }}</strong>
-                        <em>лимит {{ clientMessageSettings()?.dailyLimit ?? 0 }} сообщений в день</em>
+                        <strong>{{ !clientMessageSettings() ? 'Загрузка…' : clientMessageSettings()?.businessWindows || 'Не заданы' }}</strong>
+                        <em>по Иркутску · лимит {{ clientMessageSettings()?.dailyLimit ?? '…' }} сообщений в день</em>
                       </div>
                     </article>
 
@@ -1610,7 +1619,7 @@
                       <span class="material-icons-sharp">health_and_safety</span>
                       <div>
                         <small>Автопауза ошибок</small>
-                        <strong>{{ clientMessageSettings()?.errorProtectionEnabled ? 'Активна' : 'Выключена' }}</strong>
+                        <strong>{{ !clientMessageSettings() ? 'Загрузка…' : clientMessageSettings()?.errorProtectionEnabled ? 'Защита включена' : 'Защита выключена' }}</strong>
                         <em>{{ clientMessageSettings()?.errorProtectionThreshold ?? 0 }} ошибок за {{ clientMessageSettings()?.errorProtectionWindowMinutes ?? 0 }} мин.</em>
                       </div>
                     </article>
@@ -1619,7 +1628,7 @@
                       <span class="material-icons-sharp">timer</span>
                       <div>
                         <small>Паузы каналов</small>
-                        <strong>{{ clientMessageSettings()?.whatsAppGapSeconds ?? 0 }} / {{ clientMessageSettings()?.telegramGapSeconds ?? 0 }} / {{ clientMessageSettings()?.maxGapSeconds ?? 0 }} сек.</strong>
+                        <strong>WhatsApp {{ clientMessageSettings()?.whatsAppGapSeconds ?? '…' }} · Telegram {{ clientMessageSettings()?.telegramGapSeconds ?? '…' }} · MAX {{ clientMessageSettings()?.maxGapSeconds ?? '…' }} сек.</strong>
                         <em>общая пауза {{ clientMessageSettings()?.defaultGapSeconds ?? 0 }} сек.</em>
                       </div>
                     </article>
@@ -1629,7 +1638,7 @@
                       <div>
                         <small>Журнал</small>
                         <strong>{{ clientMessageSettings()?.retentionDays ?? 0 }} дн.</strong>
-                        <em>пачка {{ clientMessageSettings()?.tickBatchSize ?? 0 }}, кандидатов {{ clientMessageSettings()?.candidateLimit ?? 0 }}</em>
+                        <em>за проход: задач {{ clientMessageSettings()?.tickBatchSize ?? '…' }}, заказов на проверку {{ clientMessageSettings()?.candidateLimit ?? '…' }}</em>
                       </div>
                     </article>
                   </div>
@@ -1639,90 +1648,106 @@
                   <div class="section-head">
                     <div>
                       <h3>Маршрут заказа</h3>
-                      <p class="settings-hint">Что произойдет от проверки текстов до нового предложения.</p>
+                      <p class="settings-hint">Что произойдёт от проверки текстов до нового предложения.</p>
                     </div>
-                    <button type="button" class="compact-action" (click)="setTab('autoresponderMonitor')">
-                      <span class="material-icons-sharp">monitor_heart</span>
-                      Мониторинг
-                    </button>
-                    <a class="compact-action" routerLink="/admin/client-offers">
-                      <span class="material-icons-sharp">campaign</span>
-                      Рассылки предложений
-                    </a>
                   </div>
 
-                  <div class="autoresponder-flow">
-                    <article>
-                      <i>1</i>
-                      <strong>Ждем текст</strong>
-                      <span>Новый заказ</span>
-                      <p>Если включен режим ожидания клиента, напоминание уходит каждые {{ clientMessageSettings()?.clientTextReminderIntervalDays ?? 0 }} дн.</p>
-                    </article>
+                  @if (clientMessageSettings()) {
+                    <div class="autoresponder-flow">
+                      <article>
+                        <i>1</i>
+                        <strong>Ждем текст</strong>
+                        <span>Новый заказ</span>
+                        @if (clientMessageSettings()?.clientTextReminderEnabled === false) {
+                          <p>Выключено: напоминания о тексте не уходят.</p>
+                        } @else {
+                          <p>Если включен режим ожидания клиента, напоминание уходит каждые {{ clientMessageSettings()?.clientTextReminderIntervalDays ?? 0 }} дн.</p>
+                        }
+                      </article>
 
-                    <article>
-                      <i>2</i>
-                      <strong>На проверке</strong>
-                      <span>Ссылка проверки</span>
-                      <p>Повтор каждые {{ clientMessageSettings()?.reviewCheckIntervalDays ?? 0 }} дн., архив после 7 подтверждённых напоминаний</p>
-                    </article>
+                      <article>
+                        <i>2</i>
+                        <strong>На проверке</strong>
+                        <span>Ссылка проверки</span>
+                        @if (clientMessageSettings()?.reviewCheckEnabled === false) {
+                          <p>Выключено: напоминания о проверке не уходят.</p>
+                        } @else {
+                          <p>Повтор каждые {{ clientMessageSettings()?.reviewCheckIntervalDays ?? 0 }} дн., {{ clientMessageSettings()?.reviewCheckAutoArchiveEnabled === false ? 'автоархив выключен' : 'архив после 7 подтверждённых напоминаний' }}</p>
+                        }
+                      </article>
 
-                    <article>
-                      <i>3</i>
-                      <strong>Счет</strong>
-                      <span>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}</span>
-                      <p>Первый повтор через {{ clientMessageSettings()?.paymentReminderIntervalDays ?? 0 }} дн. переводит в "Напоминание".</p>
-                    </article>
+                      <article>
+                        <i>3</i>
+                        <strong>Счет</strong>
+                        <span>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}</span>
+                        @if (clientMessageSettings()?.paymentReminderEnabled === false) {
+                          <p>Выключено: напоминания об оплате не уходят.</p>
+                        } @else {
+                          <p>Первый повтор через {{ clientMessageSettings()?.paymentReminderIntervalDays ?? 0 }} дн. переводит в "Напоминание".</p>
+                        }
+                      </article>
 
-                    <article>
-                      <i>4</i>
-                      <strong>Не оплачено</strong>
-                      <span>Просрочка</span>
-                      <p>Через {{ clientMessageSettings()?.paymentOverdueDays ?? 0 }} дн. готовится статус "{{ clientMessageSettings()?.paymentOverdueTargetStatus || 'не задан' }}".</p>
-                    </article>
+                      <article>
+                        <i>4</i>
+                        <strong>Не оплачено</strong>
+                        <span>Просрочка</span>
+                        @if (clientMessageSettings()?.paymentOverdueEnabled === false) {
+                          <p>Выключено: просрочка не контролируется.</p>
+                        } @else if (clientMessageSettings()?.paymentOverdueLiveEnabled) {
+                          <p>Через {{ clientMessageSettings()?.paymentOverdueDays ?? 0 }} дн. заказ переходит в "{{ clientMessageSettings()?.paymentOverdueTargetStatus || 'не задан' }}".</p>
+                        } @else {
+                          <p>Через {{ clientMessageSettings()?.paymentOverdueDays ?? 0 }} дн. только отметка в журнале: перевод в "{{ clientMessageSettings()?.paymentOverdueTargetStatus || 'не задан' }}" выключен.</p>
+                        }
+                      </article>
 
-                    <article>
-                      <i>5</i>
-                      <strong>Плохие</strong>
-                      <span>Новая сумма</span>
-                      <p>Счет уходит после каждого выполненного плохого без возврата в "Выставлен счет".</p>
-                    </article>
+                      <article>
+                        <i>5</i>
+                        <strong>Плохие</strong>
+                        <span>Новая сумма</span>
+                        @if (clientMessageSettings()?.badReviewInvoiceEnabled === false) {
+                          <p>Выключено: счёт после плохого отзыва не уходит.</p>
+                        } @else {
+                          <p>Счет уходит после каждого выполненного плохого без возврата в "Выставлен счет".</p>
+                        }
+                      </article>
 
-                    <article>
-                      <i>6</i>
-                      <strong>Бан</strong>
-                      <span>Финальная защита</span>
-                      <p>После финальных плохих через {{ clientMessageSettings()?.badReviewAutoBanDelayDays ?? 0 }} дн.</p>
-                    </article>
+                      <article>
+                        <i>6</i>
+                        <strong>Бан</strong>
+                        <span>Финальная защита</span>
+                        @if (clientMessageSettings()?.badReviewAutoBanEnabled === false) {
+                          <p>Выключено: автобана нет.</p>
+                        } @else {
+                          <p>После финальных плохих через {{ clientMessageSettings()?.badReviewAutoBanDelayDays ?? 0 }} дн.</p>
+                        }
+                      </article>
 
-                    <article>
-                      <i>7</i>
-                      <strong>Новый заказ</strong>
-                      <span>Архивное предложение</span>
-                      <p>Компаниям "{{ clientMessageSettings()?.archiveCompanyStatus || 'не задано' }}" раз в {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес. + до {{ clientMessageSettings()?.archiveReorderJitterDays ?? 0 }} дн.</p>
-                    </article>
-                  </div>
+                      <article>
+                        <i>7</i>
+                        <strong>Новый заказ</strong>
+                        <span>Архивное предложение</span>
+                        @if (clientMessageSettings()?.archiveReorderEnabled === false) {
+                          <p>Выключено: архивные предложения не уходят.</p>
+                        } @else {
+                          <p>Компаниям "{{ clientMessageSettings()?.archiveCompanyStatus || 'не задано' }}" раз в {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес. + до {{ clientMessageSettings()?.archiveReorderJitterDays ?? 0 }} дн.</p>
+                        }
+                      </article>
+                    </div>
+                  } @else {
+                    <p class="settings-hint" role="status">Загружаю настройки автоответчика…</p>
+                  }
                 </section>
               </div>
             }
           }
         </div>
       </article>
+      }
 
       <article class="dictionary-card editor-card">
         <div class="editor-title">
-          <div>
-            <p class="eyebrow">Редактирование</p>
-            <h2>{{ selectedTitle() }}</h2>
-          </div>
-          <span>{{ activeLabel() }}</span>
-        </div>
-
-        <div class="editor-guide">
-          <span class="material-icons-sharp">{{ activeTabIcon() }}</span>
-          <div>
-            <strong>{{ activeGuide().title }}</strong>
-            <p>{{ activeGuide().text }}</p>
-          </div>
+          <p class="dictionary-kicker">{{ editorKicker() }}</p>
+          <h3>{{ selectedTitle() }}</h3>
         </div>
 
         @switch (activeTab()) {
@@ -1780,30 +1805,32 @@
               </label>
               <label appTooltip="Широта города. Если указать широту и долготу, сайт сможет рассчитать ближайшие города.">
                 <span>Широта</span>
-                <input type="number" step="0.000001" min="-90" max="90" formControlName="latitude">
+                <input type="text" inputmode="decimal" autocomplete="off" placeholder="например, 52.2870" formControlName="latitude">
               </label>
               <label appTooltip="Долгота города. После сохранения город пересчитывается в матрице расстояний.">
                 <span>Долгота</span>
-                <input type="number" step="0.000001" min="-180" max="180" formControlName="longitude">
+                <input type="text" inputmode="decimal" autocomplete="off" placeholder="например, 104.3050" formControlName="longitude">
               </label>
-              @if (cityForm.invalid && cityForm.touched) {
+              @if (cityForm.controls.title.invalid && cityForm.controls.title.touched) {
                 <p class="error compact">Название обязательно.</p>
+              } @else if (cityForm.touched && cityCoordinatesInvalid()) {
+                <p class="error compact">Широта — число от -90 до 90, долгота — от -180 до 180.</p>
               }
               <div class="actions">
                 @if (selectedId() !== null) {
-                  <button type="button" class="secondary" (click)="rebuildSelectedCityDistances()" [disabled]="rebuildingCityDistances() || activeSaving()">Пересчитать город</button>
-                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
+                  <button type="button" class="secondary" (click)="rebuildSelectedCityDistances()" [disabled]="rebuildingCityDistances() || activeSaving() || activeDeleting()">Пересчитать город</button>
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving() || rebuildingCityDistances()">Удалить</button>
                 }
-                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving() || rebuildingCityDistances()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
 
           @case ('products') {
             <form [formGroup]="productForm" (ngSubmit)="saveActive()">
-              <label appTooltip="Название продукта или услуги, которое будет доступно при создании заказа.">
+              <label appTooltip="Название продукта или услуги, которое будет доступно при создании заказа. Не длиннее 45 символов.">
                 <span>Название продукта</span>
-                <input type="text" formControlName="title">
+                <input type="text" formControlName="title" maxlength="45">
               </label>
 
               <label appTooltip="Справочная цена продукта. Используется как базовое значение в заказах и расчетах.">
@@ -1811,9 +1838,10 @@
                 <input type="number" min="0" step="0.01" formControlName="price">
               </label>
 
-              <label appTooltip="Категория помогает группировать продукты и быстрее находить нужный вариант.">
+              <label appTooltip="Свой список категорий продуктов. Он не связан с вкладкой «Категории».">
                 <span>Категория продукта</span>
                 <select formControlName="categoryId">
+                  <option [ngValue]="null" disabled>Выберите категорию</option>
                   @for (category of productCategories(); track trackOption($index, category)) {
                     <option [ngValue]="category.id">{{ category.title }}</option>
                   }
@@ -1825,7 +1853,7 @@
                 <span>Нужна фотография</span>
               </label>
 
-              <label appTooltip="По умолчанию все продукты публикует специалист. Вариант «Исполнитель» включает раздачу отдельных карточек отзывов исполнителям в разрешенных rollout городах.">
+              <label appTooltip="Обычно отзывы публикует специалист. «Исполнитель» — отзывы раздаются исполнителям отдельными карточками, если раздача включена на странице «Исполнители».">
                 <span>Кто публикует</span>
                 <select formControlName="requiresPerformer">
                   <option [ngValue]="false">Специалист</option>
@@ -1858,10 +1886,34 @@
                   <span>Менеджер, %</span>
                   <input type="number" min="0" max="100" step="0.01" formControlName="managerRewardPercent">
                 </label>
+
+                <p class="settings-hint">
+                  Карточки получат исполнители, только если на странице
+                  <a routerLink="/admin/performers" target="_blank" rel="noopener">«Исполнители»</a>
+                  включена раздача, а продукт и город есть в её списках (пустой список — без ограничения).
+                  @if (!productForm.controls.performerRewardPercent.value) {
+                    Процент исполнителя 0 — за отзыв ему ничего не начислится.
+                  }
+                  @if (productForm.controls.targetPlatform.value === 'OTHER') {
+                    Выберите точную площадку: при «Другая» она не определяется по ссылке филиала.
+                  }
+                </p>
               }
 
               @if (productForm.invalid && productForm.touched) {
-                <p class="error compact">Название, цена и категория обязательны.</p>
+                <p class="error compact">
+                  @if (productForm.controls.title.hasError('maxlength')) {
+                    Название — не длиннее 45 символов.
+                  } @else if (productForm.controls.title.invalid) {
+                    Введите название продукта.
+                  } @else if (productForm.controls.price.invalid) {
+                    Цена — число не меньше 0.
+                  } @else if (productForm.controls.categoryId.invalid) {
+                    Выберите категорию продукта.
+                  } @else {
+                    Проценты — от 0 до 100.
+                  }
+                </p>
               }
               <div class="actions">
                 @if (selectedId() !== null) {
@@ -1880,7 +1932,7 @@
                   <strong>Основное</strong>
                 </div>
 
-                <label appTooltip="Рабочий номер в едином формате. Он используется для отправок и привязки устройств.">
+                <label appTooltip="Рабочий номер, например +79991234567: не меньше 10 цифр и не длиннее 20 символов. Он используется для отправок и привязки устройства.">
                   <span>Номер телефона</span>
                   <input type="text" formControlName="number" autocomplete="off">
                 </label>
@@ -1895,7 +1947,7 @@
                   <input type="date" formControlName="birthday">
                 </label>
 
-                <label appTooltip="Оператор или ответственный, которому назначен этот телефон.">
+                <label appTooltip="Оператор, которому назначен телефон. Телефон без оператора может вести только администратор, и к нему нельзя привязать устройство.">
                   <span>Оператор</span>
                   <select formControlName="operatorId">
                     <option [ngValue]="null">Не выбран</option>
@@ -1910,12 +1962,12 @@
                   <strong>Лимиты и блокировка</strong>
                 </div>
 
-                <label appTooltip="Сколько сообщений или действий разрешено выполнить с этого номера до паузы.">
+                <label appTooltip="Сколько сообщений можно отправить с номера до паузы. 0 и 1 означают паузу после каждой отправки.">
                   <span>Разрешено отправлять</span>
                   <input type="number" min="0" step="1" formControlName="amountAllowed">
                 </label>
 
-                <label appTooltip="Сколько действий уже выполнено. Значение помогает контролировать лимит.">
+                <label appTooltip="Сколько отправлено после последней паузы. На лимите число обнуляется и начинается пауза. Сохранение карточки меняет его, только если вы правили это поле.">
                   <span>Отправлено</span>
                   <input type="number" min="0" step="1" formControlName="amountSent">
                 </label>
@@ -1925,7 +1977,7 @@
                   <input type="number" min="0" step="1" formControlName="blockTime">
                 </label>
 
-                <label appTooltip="Дата и время, до которых номер находится в паузе. Если время прошло, номер считается готовым.">
+                <label appTooltip="До какого времени номер на паузе, по времени Иркутска. Чтобы снять паузу, очистите поле и сохраните. Если поле не трогать, сохранение его не меняет.">
                   <span>Таймер блокировки</span>
                   <input type="datetime-local" formControlName="timer">
                 </label>
@@ -1935,32 +1987,37 @@
                   <strong>Доступы и источники</strong>
                 </div>
 
+                <p class="settings-hint wide secret-hint">
+                  Сохранённые логины и пароли не показываются. Чтобы заменить значение, введите новое;
+                  пустое поле оставляет сохранённое без изменений.
+                </p>
+
                 <label appTooltip="Логин Google-аккаунта, связанного с рабочим номером.">
-                  <span>Google логин</span>
+                  <span>Google логин @if (selectedPhone()?.googleLoginPresent) { <em class="saved-chip">сохранён</em> }</span>
                   <input type="text" formControlName="googleLogin" autocomplete="off"
                          [placeholder]="selectedPhone()?.googleLoginPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Пароль Google-аккаунта. Заполняйте только если он нужен для рабочего процесса.">
-                  <span>Google пароль</span>
+                  <span>Google пароль @if (selectedPhone()?.googlePasswordPresent) { <em class="saved-chip">сохранён</em> }</span>
                   <input type="password" formControlName="googlePassword" autocomplete="new-password"
                          [placeholder]="selectedPhone()?.googlePasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Пароль Avito, если номер используется в сценариях с Avito.">
-                  <span>Avito пароль</span>
+                  <span>Avito пароль @if (selectedPhone()?.avitoPasswordPresent) { <em class="saved-chip">сохранён</em> }</span>
                   <input type="password" formControlName="avitoPassword" autocomplete="new-password"
                          [placeholder]="selectedPhone()?.avitoPasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Логин почты, привязанной к этому телефону или аккаунту.">
-                  <span>Mail логин</span>
+                  <span>Mail логин @if (selectedPhone()?.mailLoginPresent) { <em class="saved-chip">сохранён</em> }</span>
                   <input type="text" formControlName="mailLogin" autocomplete="off"
                          [placeholder]="selectedPhone()?.mailLoginPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Пароль почты. Заполняйте только для рабочих аккаунтов, где он действительно нужен.">
-                  <span>Mail пароль</span>
+                  <span>Mail пароль @if (selectedPhone()?.mailPasswordPresent) { <em class="saved-chip">сохранён</em> }</span>
                   <input type="password" formControlName="mailPassword" autocomplete="new-password"
                          [placeholder]="selectedPhone()?.mailPasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
@@ -1982,34 +2039,34 @@
               </div>
 
               @if (phoneForm.invalid && phoneForm.touched) {
-                <p class="error compact">Номер и числовые поля обязательны.</p>
+                <p class="error compact">{{ phoneForm.errors?.['problem'] ?? 'Номер и числовые поля обязательны.' }}</p>
               }
 
               <div class="actions">
                 @if (selectedPhone()) {
                   <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
                 }
-                <button type="button" class="secondary" (click)="startNewPhone()" [disabled]="activeSaving() || activeDeleting()">Новый</button>
                 <button type="submit" [disabled]="activeSaving() || activeDeleting()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
 
             @if (selectedPhone(); as phone) {
-              <section class="device-token-panel" aria-label="Device tokens">
+              <section class="device-token-panel" aria-label="Привязанное устройство">
                 <div class="assignment-head">
                   <div>
-                    <p class="eyebrow">Device tokens</p>
-                    <h3>Устройства телефона</h3>
+                    <p class="eyebrow">Доступ оператора</p>
+                    <h3>Привязанное устройство</h3>
                   </div>
                   <span>{{ deviceTokenCount(phone) }}</span>
                 </div>
+                <p class="settings-hint">К номеру привязывается одно устройство. Отвяжите его, если оператор сменил телефон или браузер: старое устройство сразу потеряет доступ, а новое можно будет привязать.</p>
 
                 <div class="device-token-list">
                   @for (deviceToken of phone.deviceTokens; track trackDeviceToken($index, deviceToken)) {
                     <div class="device-token-row">
                       <div>
-                        <strong [title]="deviceToken.token">{{ tokenPreview(deviceToken.token) }}</strong>
-                        <span>{{ deviceToken.createdAt | date:'dd.MM.yyyy HH:mm' }}</span>
+                        <strong>Привязано {{ deviceToken.createdAt | date:'dd.MM.yyyy HH:mm' }}</strong>
+                        <span [title]="deviceToken.token">Отпечаток {{ tokenPreview(deviceToken.token) }}</span>
                       </div>
                       <span class="status-pill" [class.off]="!deviceToken.active">{{ deviceToken.active ? 'Активен' : 'Выключен' }}</span>
                       <button
@@ -2017,7 +2074,7 @@
                         class="row-icon-button danger-icon"
                         (click)="deleteDeviceToken(phone, deviceToken)"
                         [disabled]="activeDeleting() || activeSaving()"
-                        title="Удалить токен"
+                        title="Отвязать устройство"
                       >
                         <span class="material-icons-sharp">delete</span>
                       </button>
@@ -2042,8 +2099,8 @@
                 <input type="text" formControlName="login">
               </label>
 
-              <label appTooltip="Пароль аккаунта. Храните актуальное значение, чтобы не терять доступ.">
-                <span>Пароль</span>
+              <label appTooltip="Пароль аккаунта. Сохранённый пароль не показывается: введите новый, чтобы заменить его; пустое поле оставляет прежний.">
+                <span>Пароль @if (selectedBotPasswordPresent()) { <em class="saved-chip">сохранён</em> }</span>
                 <input
                   type="password"
                   formControlName="password"
@@ -2062,9 +2119,10 @@
                 <strong>Назначение</strong>
               </div>
 
-              <label appTooltip="Ответственный работник или менеджер, к которому привязан аккаунт.">
+              <label appTooltip="Специалист, за которым закреплён аккаунт. В списке — активные специалисты.">
                 <span>Владелец</span>
                 <select formControlName="workerId">
+                  <option [ngValue]="null" disabled>Выберите владельца</option>
                   @for (worker of botWorkers(); track trackOption($index, worker)) {
                     <option [ngValue]="worker.id">{{ worker.title }}</option>
                   }
@@ -2074,15 +2132,17 @@
               <label appTooltip="Город аккаунта. Помогает распределять публикации по географии.">
                 <span>Город</span>
                 <select formControlName="cityId">
+                  <option [ngValue]="null">Без города</option>
                   @for (city of botCities(); track trackOption($index, city)) {
                     <option [ngValue]="city.id">{{ city.title }}</option>
                   }
                 </select>
               </label>
 
-              <label appTooltip="Рабочий статус аккаунта. Используется для отбора и контроля доступности.">
+              <label appTooltip="Рабочий статус аккаунта. Автоназначение берёт только аккаунты со статусом «Новый».">
                 <span>Статус</span>
                 <select formControlName="statusId">
+                  <option [ngValue]="null" disabled>Выберите статус</option>
                   @for (status of botStatuses(); track trackOption($index, status)) {
                     <option [ngValue]="status.id">{{ status.title }}</option>
                   }
@@ -2094,7 +2154,7 @@
                 <strong>Активность</strong>
               </div>
 
-              <label appTooltip="Счетчик публикаций или выполненных действий по аккаунту.">
+              <label appTooltip="Сколько отзывов опубликовано с аккаунта. Пока их меньше порога выгулянного аккаунта из «Рабочих настроек» (обычно 2), аккаунт считается невыгулянным. На 10 и 20 публикациях статус меняется на «Средний» и «Высокий», и аккаунт выключается.">
                 <span>Публикаций</span>
                 <input type="number" min="0" step="1" formControlName="counter">
               </label>
@@ -2105,31 +2165,43 @@
               </label>
 
               @if (botForm.invalid && botForm.touched) {
-                <p class="error compact">Для нового аккаунта обязательны логин, пароль, ФИО, владелец и статус.</p>
+                <p class="error compact">
+                  @if (botForm.controls.login.hasError('maxlength')) {
+                    Логин — не длиннее 45 символов.
+                  } @else if (botForm.controls.fio.hasError('maxlength')) {
+                    ФИО — не длиннее 50 символов.
+                  } @else if (botForm.controls.counter.invalid) {
+                    Публикаций — целое число от 0.
+                  } @else if (botForm.controls.password.invalid) {
+                    Для нового аккаунта укажите пароль.
+                  } @else {
+                    Заполните логин, ФИО, владельца и статус.
+                  }
+                </p>
               }
               <div class="actions">
                 @if (selectedId() !== null) {
-                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving() || botDetailLoadingId() !== null">Удалить</button>
                 }
-                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving() || botDetailLoadingId() !== null">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
 
           @case ('promo') {
             <form [formGroup]="promoTextForm" (ngSubmit)="saveActive()">
-              <label appTooltip="Готовый промо-текст, который можно назначить кнопкам менеджера.">
+              <label appTooltip="Текст, который копируют кнопкой. Правка меняет его везде, где он стоит.">
                 <span>Текст для копирования</span>
                 <textarea rows="8" formControlName="text"></textarea>
               </label>
+              @if (selectedPromoTextUsage(); as usage) {
+                <p class="settings-hint">{{ usage }}</p>
+              }
 
               @if (promoTextForm.invalid && promoTextForm.touched) {
                 <p class="error compact">Текст обязателен.</p>
               }
               <div class="actions">
-                @if (selectedId() !== null) {
-                  <button type="button" class="secondary" (click)="clearSelection()" [disabled]="activeSaving()">Новая</button>
-                }
                 <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
@@ -2143,14 +2215,15 @@
                 <span>{{ selectedPromoManagerTitle() }}</span>
               </div>
 
-              <label appTooltip="Менеджер, для которого настраиваются персональные назначения промо-кнопок.">
+              <label appTooltip="Менеджер, которому назначаются личные тексты кнопок.">
                 <span>Менеджер</span>
-                <select [value]="selectedPromoManagerId() ?? ''" (change)="selectPromoManager($any($event.target).value)">
+                <select (change)="selectPromoManager($any($event.target).value)" [disabled]="activeSaving()">
                   @for (manager of promoManagers(); track trackOption($index, manager)) {
-                    <option [value]="manager.id">{{ manager.title }}</option>
+                    <option [value]="manager.id" [selected]="manager.id === selectedPromoManagerId()">{{ manager.title }}</option>
                   }
                 </select>
               </label>
+              <p class="settings-hint">Выбор в списке кнопки сохраняется сразу. Личный текст видит только сам менеджер на своих досках «Лиды» и «Менеджер»; владелец, администратор и специалисты видят текст по умолчанию.</p>
 
               <div class="promo-assignment-list">
                 @for (button of promoButtons(); track trackPromoButton($index, button)) {
@@ -2160,13 +2233,13 @@
                       <span>{{ button.sectionTitle }} · сейчас {{ promoAssignedTextLabel(button) }}</span>
                     </div>
                     <select
-                      [value]="promoAssignmentValue(button)"
                       (change)="savePromoAssignment(button, $any($event.target).value)"
                       [disabled]="activeSaving() || selectedPromoManagerId() === null"
+                      [attr.aria-label]="button.sectionTitle + ' · ' + button.buttonLabel"
                     >
-                      <option value="">По умолчанию: {{ promoDefaultTextLabel(button) }}</option>
-                      @for (promoText of promoTexts(); track trackPromoText($index, promoText)) {
-                        <option [value]="promoText.id">{{ promoTextLabel(promoText) }} · ID {{ promoText.id }}</option>
+                      <option value="" [selected]="promoAssignmentValue(button) === ''">По умолчанию: {{ promoDefaultTextLabel(button) }}</option>
+                      @for (promoText of allPromoTexts(); track trackPromoText($index, promoText)) {
+                        <option [value]="promoText.id" [selected]="promoAssignmentValue(button) === promoText.id">{{ promoTextOptionLabel(promoText) }}</option>
                       }
                     </select>
                   </div>
@@ -2180,27 +2253,27 @@
           @case ('managerTexts') {
             @if (selectedManagerText(); as managerText) {
               <form class="manager-text-form" [formGroup]="managerTextForm" (ngSubmit)="saveActive()">
-                <label appTooltip="Текст, который менеджер отправляет на этапе оплаты.">
+                <label appTooltip="Уходит клиентам в сообщениях и напоминаниях об оплате. Сумму не пишите: «К оплате: N руб.» сайт добавит сам. Не оставляйте поле пустым: часть сообщений подставит стандартный текст, часть уйдёт только с суммой. Если в разделе «Банк» выбраны банковские ссылки, в оплате заказа вместо этого текста уходит ссылка.">
                   <span>Текст оплаты</span>
                   <textarea rows="5" formControlName="payText"></textarea>
                 </label>
 
-                <label appTooltip="Первое сообщение или стартовая заготовка для начала общения.">
+                <label appTooltip="Сейчас нигде не используется: текст сохраняется, но клиентам не уходит.">
                   <span>Начальный текст</span>
                   <textarea rows="5" formControlName="beginText"></textarea>
                 </label>
 
-                <label appTooltip="Основное коммерческое предложение менеджера.">
+                <label appTooltip="Сейчас нигде не используется: текст сохраняется, но клиентам не уходит.">
                   <span>Текст предложения</span>
                   <textarea rows="8" formControlName="offerText"></textarea>
                 </label>
 
-                <label appTooltip="Текст напоминания, если клиент не ответил или нужно вернуть диалог.">
+                <label appTooltip="Сейчас нигде не используется: текст сохраняется, но клиентам не уходит.">
                   <span>Напоминание</span>
                   <textarea rows="5" formControlName="reminderText"></textarea>
                 </label>
 
-                <label appTooltip="Сообщение для старта или запуска группы.">
+                <label appTooltip="Сейчас нигде не используется: текст сохраняется, но клиентам не уходит.">
                   <span>Старт группы</span>
                   <textarea rows="5" formControlName="startText"></textarea>
                 </label>
@@ -2212,71 +2285,90 @@
             } @else {
               <div class="empty-picker">
                 <span class="material-icons-sharp">article</span>
-                <h2>Выберите менеджера</h2>
-                <p>Тексты оплаты, начала, предложения, напоминания и старта откроются здесь.</p>
+                <p>Нажмите на менеджера в списке — здесь откроются его тексты.</p>
               </div>
             }
           }
 
           @case ('messageDictionary') {
-            <form class="settings-form" [formGroup]="autoresponderForm" (ngSubmit)="saveActive()">
+            <form class="settings-form phrase-dictionary-form" [formGroup]="autoresponderForm" (ngSubmit)="saveActive()">
               <section class="settings-section">
                 <div class="section-head">
                   <div>
                     <h3>Фразы без ответа</h3>
-                    <p class="settings-hint">Короткие ответы вроде "ок" и "спасибо" не будут создавать пункт "неотвеченное сообщение" в контроле менеджера.</p>
+                    <p class="settings-hint">Сообщения клиента из этого списка не становятся «неотвеченными» в контроле менеджера. Пустые сообщения и короткие подтверждения из базовых слов (ок, спасибо, понял и т. п.) не требуют ответа, пока правило включено, — список их дополняет. Смайлики и знаки препинания вокруг фразы не мешают («Спасибо 🙏»). Сочетание фраз из списка и базовых слов, до 10 слов, тоже не требует ответа («Добрый день, спасибо»); «да» и «нет» в сочетаниях не учитываются. Фото и файлы требуют ответа всегда, даже с подписью.</p>
                   </div>
                   <span class="total-badge">{{ autoIgnorePhrases().length }}</span>
                 </div>
 
                 <div class="auto-ignore-body">
-                  <div class="auto-ignore-settings-grid">
-                    <label class="checkbox" appTooltip="Если клиент написал только короткое подтверждение вроде 'спасибо' или 'ок', сообщение будет сохранено, но не станет неотвеченным. Вопросы и сообщения с признаками проблемы не игнорируются.">
-                      <input class="switch" type="checkbox" formControlName="unansweredAutoIgnoreEnabled">
-                      <span>Не требовать ответ на короткие подтверждения</span>
-                    </label>
+                  <div class="auto-ignore-settings">
+                    <fieldset class="auto-ignore-group">
+                      <legend>Правило</legend>
+                      <label class="checkbox" appTooltip="Если клиент написал только короткое подтверждение вроде 'спасибо' или 'ок', сообщение будет сохранено, но не станет неотвеченным. Вопросы и сообщения с признаками проблемы не игнорируются.">
+                        <input class="switch" type="checkbox" formControlName="unansweredAutoIgnoreEnabled">
+                        <span>Не требовать ответ на короткие подтверждения</span>
+                      </label>
 
-                    <label appTooltip="Фразы длиннее этого лимита не будут считаться коротким подтверждением и попадут в обычную проверку ответа.">
-                      <span>Максимальная длина фразы</span>
-                      <input type="number" min="1" max="500" step="1" formControlName="unansweredAutoIgnoreMaxLength">
-                    </label>
+                      <div class="auto-ignore-pair">
+                        <label appTooltip="Сообщение клиента длиннее этого числа символов всегда требует ответа, даже если похоже на фразу из списка. Фраза списка длиннее этого числа не сработает.">
+                          <span>Сообщение клиента не длиннее, символов</span>
+                          <input type="number" min="1" max="500" step="1" formControlName="unansweredAutoIgnoreMaxLength">
+                        </label>
 
-                    <div class="checkbox" appTooltip="Вопросы, жалобы и поручения нельзя закрыть без найденного исходящего ответа. Административное исключение всегда попадает в аудит владельца.">
-                      <span>Доказательство ответа обязательно</span>
-                    </div>
+                        <div class="readonly-setting" appTooltip="Вопросы, жалобы и поручения нельзя закрыть без найденного исходящего ответа. Административное исключение всегда попадает в аудит владельца.">
+                          <span>Доказательство ответа</span>
+                          <strong>Всегда включено</strong>
+                        </div>
+                      </div>
+                    </fieldset>
 
-                    <label class="checkbox" appTooltip="После серии слишком быстрых закрытий временно останавливает дальнейшее прокликивание карточек. Включайте после проверки теневой статистики.">
-                      <input class="switch" type="checkbox" formControlName="unansweredFastClickGuardEnabled">
-                      <span>Блокировать быстрые серии</span>
-                    </label>
+                    <fieldset class="auto-ignore-group">
+                      <legend>Быстрые закрытия карточек</legend>
+                      <label class="checkbox" appTooltip="Если включено, при достижении любого из двух порогов ниже менеджер не сможет закрыть следующую карточку, пока серия не закончится. Если выключено, пороги только отмечают риск в оценке контроля. Включайте после проверки теневой статистики.">
+                        <input class="switch" type="checkbox" formControlName="unansweredFastClickGuardEnabled">
+                        <span>Блокировать быстрые серии</span>
+                      </label>
 
-                    <label class="checkbox" appTooltip="Сохраняет теневую оценку: соответствует ли ответ вопросу и указан ли следующий шаг по жалобе.">
-                      <input class="switch" type="checkbox" formControlName="unansweredReplyQualityShadowEnabled">
-                      <span>Проверять качество ответов</span>
-                    </label>
+                      <!-- One row per threshold: how many closings within how many seconds count as a fast series. -->
+                      <div class="threshold-table" role="group" aria-label="Пороги быстрой серии">
+                        <span class="threshold-head" aria-hidden="true"></span>
+                        <span class="threshold-head" aria-hidden="true">Закрытий</span>
+                        <span class="threshold-head" aria-hidden="true">За, секунд</span>
 
-                    <label>
-                      <span>Предупреждение: закрытий</span>
-                      <input type="number" min="3" max="100" step="1" formControlName="unansweredFastClickWarningCount">
-                    </label>
+                        <span class="threshold-name">Первый порог</span>
+                        <label class="threshold-cell" appTooltip="Сколько закрытий за период первого порога считается быстрой серией. От 3 до 100.">
+                          <input type="number" min="3" max="100" step="1" formControlName="unansweredFastClickWarningCount" aria-label="Первый порог: закрытий">
+                        </label>
+                        <label class="threshold-cell" appTooltip="За сколько секунд считаются закрытия первого порога. От 3 до 300.">
+                          <input type="number" min="3" max="300" step="1" formControlName="unansweredFastClickWarningSeconds" aria-label="Первый порог: период, секунд">
+                        </label>
 
-                    <label>
-                      <span>За период, секунд</span>
-                      <input type="number" min="3" max="300" step="1" formControlName="unansweredFastClickWarningSeconds">
-                    </label>
+                        <span class="threshold-name">Второй порог</span>
+                        <label class="threshold-cell" appTooltip="Второй, более длинный порог: сколько закрытий за его период. Если он меньше первого, сервер поднимет его до первого. От 3 до 500.">
+                          <input type="number" min="3" max="500" step="1" formControlName="unansweredFastClickCriticalCount" aria-label="Второй порог: закрытий">
+                        </label>
+                        <label class="threshold-cell" appTooltip="Период второго порога. Если он меньше периода первого, сервер поднимет его до первого. От 3 до 3600.">
+                          <input type="number" min="3" max="3600" step="1" formControlName="unansweredFastClickCriticalSeconds" aria-label="Второй порог: период, секунд">
+                        </label>
+                      </div>
 
-                    <label>
-                      <span>Критический порог</span>
-                      <input type="number" min="3" max="500" step="1" formControlName="unansweredFastClickCriticalCount">
-                    </label>
+                      @if (fastClickThresholdInverted()) {
+                        <p class="settings-hint">Второй порог меньше первого: сервер поднимет его до первого.</p>
+                      }
+                    </fieldset>
 
-                    <label>
-                      <span>Критическое окно, секунд</span>
-                      <input type="number" min="3" max="3600" step="1" formControlName="unansweredFastClickCriticalSeconds">
-                    </label>
+                    <fieldset class="auto-ignore-group">
+                      <legend>Качество ответов</legend>
+                      <label class="checkbox" appTooltip="Сохраняет теневую оценку: соответствует ли ответ вопросу и указан ли следующий шаг по жалобе.">
+                        <input class="switch" type="checkbox" formControlName="unansweredReplyQualityShadowEnabled">
+                        <span>Проверять качество ответов</span>
+                      </label>
+                    </fieldset>
                   </div>
 
                   <div class="auto-ignore-editor">
+                    <p class="auto-ignore-editor-title">Список фраз</p>
                     <label class="auto-ignore-add" appTooltip="Добавьте отдельное слово или короткую фразу. Список сохранится общей кнопкой 'Сохранить'.">
                       <span>Новая фраза</span>
                       <div class="inline-add-control">
@@ -2327,7 +2419,7 @@
                           }
                         </div>
                       } @empty {
-                        <p class="settings-hint">Список пуст. Если правило включено, короткие ответы не будут автоигнорироваться до добавления фраз.</p>
+                        <p class="settings-hint">Список пуст. Пустые сообщения и базовые подтверждения (ок, спасибо, понял и т. п.) всё равно не требуют ответа, пока правило включено.</p>
                       }
                     </div>
                   </div>
@@ -2335,12 +2427,15 @@
               </section>
 
               @if (autoresponderForm.controls.unansweredAutoIgnoreMaxLength.invalid && autoresponderForm.controls.unansweredAutoIgnoreMaxLength.touched) {
-                <p class="error compact">Максимальная длина фразы должна быть от 1 до 500 символов.</p>
+                <p class="error compact">Длина сообщения клиента: укажите число от 1 до 500.</p>
               }
 
               <div class="actions">
-                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="activeSaving()">Сбросить</button>
-                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                @if (hasUnsavedChanges()) {
+                  <span class="muted">Есть несохранённые изменения</span>
+                }
+                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="activeSaving() || !clientMessageSettings()">Сбросить</button>
+                <button type="submit" [disabled]="activeSaving() || !clientMessageSettings()" [title]="clientMessageSettings() ? '' : 'Дождитесь загрузки настроек'">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -2915,10 +3010,10 @@
           }
 
           @case ('settings') {
-            <section class="contractor-system-settings" aria-label="Запуск новой системы расчётов">
+            <section id="contractor-system" class="contractor-system-settings" aria-label="Запуск новой системы расчётов">
               <header class="contractor-system-head">
                 <div>
-                  <p class="eyebrow">GLOBAL CONTROL</p>
+                  <p class="eyebrow">Общий режим</p>
                   <h3>Новая система расчётов по вознаграждениям</h3>
                   <p>
                     До активации действует старый режим. После активации учёт по завершённой работе
@@ -3001,7 +3096,7 @@
                     <strong>{{ status.completionBacklogReady ? 'готово' : 'не готово' }}</strong>
                   </article>
                   <article>
-                    <small>Ревизия настроек</small>
+                    <small>Версия настроек</small>
                     <strong>{{ status.revision }}</strong>
                   </article>
                 </div>
@@ -3051,12 +3146,12 @@
 
                 <div class="contractor-system-deployment">
                   <span>
-                    Routing master:
-                    <strong>{{ status.liveRoutingMasterEnabled ? 'включён' : 'выключен' }}</strong>
+                    Выдача реквизитов в настройках сервера:
+                    <strong>{{ status.liveRoutingMasterEnabled ? 'разрешена' : 'запрещена' }}</strong>
                   </span>
                   <span>
-                    Accounting master:
-                    <strong>{{ status.rewardAttributionMasterEnabled ? 'включён' : 'выключен' }}</strong>
+                    Новый учёт в настройках сервера:
+                    <strong>{{ status.rewardAttributionMasterEnabled ? 'разрешён' : 'запрещён' }}</strong>
                   </span>
                 </div>
 
@@ -3091,8 +3186,8 @@
                 <div>
                   <h3>Сверка старых начислений перед запуском</h3>
                   <p class="settings-hint">
-                    PREPARE создаёт подписанный dry-run и ничего не меняет. Автоматическое применение
-                    и каждое ручное подтверждение доступны только владельцу.
+                    «Подготовить проверку» только находит старые начисления и ничего не меняет. Применить найденное
+                    автоматически и подтвердить заказы вручную может только владелец.
                   </p>
                 </div>
                 <button
@@ -3101,7 +3196,7 @@
                   [disabled]="contractorLegacyReconciliationSaving() || contractorSystemStatus()?.systemEnabled"
                   (click)="prepareContractorLegacyReconciliation()"
                 >
-                  {{ contractorLegacyReconciliationSaving() ? 'Проверяю…' : 'Подготовить PREPARE' }}
+                  {{ contractorLegacyReconciliationSaving() ? 'Проверяю…' : 'Подготовить проверку' }}
                 </button>
               </div>
 
@@ -3109,43 +3204,53 @@
                 @if (reconciliation.runId) {
                   <div class="contractor-system-metrics">
                     <article>
-                      <small>AUTO: строки / осталось</small>
+                      <small>Автоматически: строк / осталось</small>
                       <strong>{{ reconciliation.autoRowCount }} / {{ reconciliation.autoRemainingRows }}</strong>
                     </article>
                     <article>
-                      <small>MANUAL: группы / осталось</small>
+                      <small>Вручную: заказов / осталось</small>
                       <strong>{{ reconciliation.manualOrderCount }} / {{ reconciliation.manualRemainingOrders }}</strong>
                     </article>
                     <article>
                       <small>Снимок</small>
-                      <strong>#{{ reconciliation.runId }} · {{ reconciliation.status }}</strong>
+                      <strong>№{{ reconciliation.runId }} · {{ contractorLegacyRunStatusLabel(reconciliation.status) }}</strong>
                     </article>
                     <article>
-                      <small>Истекает</small>
-                      <strong>{{ reconciliation.expiresAt | date:'dd.MM.yyyy HH:mm:ss' }}</strong>
+                      <small>Действует до</small>
+                      <strong>{{ reconciliation.expiresAt | date:'dd.MM.yyyy HH:mm' }}</strong>
                     </article>
                   </div>
-                  <p class="settings-hint">
-                    Hash: <code>{{ reconciliation.snapshotHash }}</code>
-                  </p>
+                  @if (contractorLegacySnapshotStale()) {
+                    <p class="settings-hint" role="status">
+                      Снимок, похоже, устарел: он действует 30 минут и только в день подготовки. Если сервер откажет,
+                      нажмите «Подготовить проверку» ещё раз.
+                    </p>
+                  }
+                  <details class="settings-hint">
+                    <summary>Подробнее о снимке</summary>
+                    Отпечаток снимка: <code>{{ reconciliation.snapshotHash }}</code>
+                  </details>
 
-                  @if (reconciliation.autoRemainingRows > 0 && canControlContractorSystem()) {
+                  @if (reconciliation.autoRemainingRows > 0 && canApplyContractorLegacy()) {
                     <form
                       class="contractor-system-confirmation-form"
                       [formGroup]="contractorLegacyAutoForm"
                       (ngSubmit)="applyContractorLegacyAutomatic()"
                     >
                       <label>
-                        <span>Причина применения AUTO</span>
-                        <textarea rows="2" formControlName="reason"></textarea>
+                        <span>Причина автоматического применения</span>
+                        <textarea rows="2" formControlName="reason" maxlength="1000"></textarea>
                       </label>
                       <label>
                         <span>Введите без изменений: <strong>{{ contractorLegacyAutoConfirmation }}</strong></span>
                         <input type="text" formControlName="confirmation" autocomplete="off" spellcheck="false">
                       </label>
+                      @if (contractorLegacyAutoForm.touched && !contractorLegacyAutoReady()) {
+                        <p class="error compact" role="alert">Укажите причину и введите фразу без изменений.</p>
+                      }
                       <button
                         type="submit"
-                        [disabled]="contractorLegacyAutoForm.invalid || contractorLegacyReconciliationSaving()"
+                        [disabled]="!contractorLegacyAutoReady() || contractorLegacyReconciliationSaving()"
                       >
                         Применить доказуемые строки
                       </button>
@@ -3168,14 +3273,14 @@
                           @for (group of reconciliation.manualGroups; track group.orderId) {
                             <tr>
                               <td>№{{ group.orderId }}</td>
-                              <td>{{ group.evidenceCategory }}</td>
+                              <td>{{ contractorLegacyCategoryLabel(group.evidenceCategory) }}</td>
                               <td>{{ group.rowCount }}</td>
-                              <td>{{ group.status }}</td>
+                              <td>{{ contractorLegacyGroupStatusLabel(group.status) }}</td>
                               <td>
                                 @if (
                                   group.status === 'PENDING'
                                   && group.evidenceCategory !== 'IDENTITY_OR_SOURCE_AMBIGUOUS'
-                                  && canControlContractorSystem()
+                                  && canApplyContractorLegacy()
                                 ) {
                                   <button
                                     type="button"
@@ -3183,8 +3288,11 @@
                                     [disabled]="contractorLegacyReconciliationSaving()"
                                     (click)="openContractorLegacyManual(group)"
                                   >
-                                    Подтвердить evidence
+                                    Подтвердить вручную
                                   </button>
+                                  @if (group.evidenceCategory === 'ACTIVE_REVIEW_RECOVERY') {
+                                    <small>Сначала завершите восстановление отзывов этого заказа.</small>
+                                  }
                                 } @else if (
                                   group.status === 'PENDING'
                                   && group.evidenceCategory === 'IDENTITY_OR_SOURCE_AMBIGUOUS'
@@ -3199,12 +3307,21 @@
                     </div>
                   }
                 } @else {
-                  <p class="settings-hint">PREPARE ещё не выполнялся.</p>
+                  <p class="settings-hint">Проверка ещё не подготовлена.</p>
                 }
               }
             </section>
 
             <form class="settings-form" [formGroup]="settingsForm" (ngSubmit)="saveActive()">
+              @if (!settingsLoaded()) {
+                @if (activeLoading()) {
+                  <p class="settings-hint" role="status">Загружаю настройки с сервера…</p>
+                } @else {
+                  <p class="error compact" role="alert">
+                    Настройки не загрузились: в форме значения по умолчанию, сохранить их нельзя. Нажмите «Обновить» вверху страницы.
+                  </p>
+                }
+              }
               <div class="settings-section">
                 <h3>Смена и блокировка аккаунтов</h3>
                 <label class="checkbox">
@@ -3252,27 +3369,41 @@
                 <h3>Выгул</h3>
                 <label appTooltip="Минимальная пауза для специалиста после действия «ВЫГУЛЯЛ». 0 минут отключает паузу.">
                   <span>Время между выгулами, минут</span>
-                  <input type="number" min="0" max="1440" step="1" formControlName="nagulCooldownMinutes">
+                  <input type="number" min="0" max="1440" step="1" formControlName="nagulCooldownMinutes" [attr.aria-invalid]="settingsFieldError('nagulCooldownMinutes') ? true : null">
                 </label>
+                @if (settingsFieldError('nagulCooldownMinutes'); as message) {
+                  <p class="settings-hint" role="alert">{{ message }}</p>
+                }
 
                 <label appTooltip="На сколько дней вперед показывать отзывы в разделе «Выгул». 0 означает только сегодняшний день.">
                   <span>Горизонт выдачи выгула, дней</span>
-                  <input type="number" min="0" max="365" step="1" formControlName="nagulLookaheadDays">
+                  <input type="number" min="0" max="365" step="1" formControlName="nagulLookaheadDays" [attr.aria-invalid]="settingsFieldError('nagulLookaheadDays') ? true : null">
                 </label>
+                @if (settingsFieldError('nagulLookaheadDays'); as message) {
+                  <p class="settings-hint" role="alert">{{ message }}</p>
+                }
 
                 <label appTooltip="Аккаунт считается выгулянным, когда он реальный, активный, не «Впиши Имя Фамилию» и его счетчик публикаций не меньше этого числа.">
                   <span>Порог выгулянного аккаунта, публикаций</span>
-                  <input type="number" min="1" max="30" step="1" formControlName="accountWalkedCounterThreshold">
+                  <input type="number" min="1" max="30" step="1" formControlName="accountWalkedCounterThreshold" [attr.aria-invalid]="settingsFieldError('accountWalkedCounterThreshold') ? true : null">
                 </label>
+                @if (settingsFieldError('accountWalkedCounterThreshold'); as message) {
+                  <p class="settings-hint" role="alert">{{ message }}</p>
+                }
 
                 <label appTooltip="Если при смене, бане или назначении нового аккаунта отзыв получает невыгулянный аккаунт, система сдвигает этот отзыв и следующие неопубликованные отзывы заказа на это число дней. При возврате выгулянного аккаунта эта задержка снимается.">
                   <span>Задержка публикации при невыгулянном аккаунте, дней</span>
-                  <input type="number" min="0" max="30" step="1" formControlName="accountWalkDelayDays">
+                  <input type="number" min="0" max="30" step="1" formControlName="accountWalkDelayDays" [attr.aria-invalid]="settingsFieldError('accountWalkDelayDays') ? true : null">
                 </label>
+                @if (settingsFieldError('accountWalkDelayDays'); as message) {
+                  <p class="settings-hint" role="alert">{{ message }}</p>
+                }
 
                 <p class="settings-hint">
-                  Эти два параметра работают только при последующей замене аккаунта: кнопки «смена», «бан» и
-                  «новый аккаунт». Первичная автоматическая раскладка дат заказа остаётся по старым правилам.
+                  Порог применяется сразу при каждом сохранении настроек: неопубликованные отзывы, у которых аккаунт уже
+                  набрал столько публикаций, отмечаются выгулянными, даты публикации при этом не переносятся. Порог также
+                  решает, какие аккаунты попадают в раздел «Выгул». Задержка срабатывает, когда отзыву назначают
+                  невыгулянный аккаунт, например кнопками «смена», «бан» и «новый аккаунт».
                 </p>
 
                 <p class="settings-hint">
@@ -3302,11 +3433,11 @@
                     </span>
                   </div>
 
-                  <label appTooltip="OFF выключает проверки, AUDIT только записывает нарушения, ENFORCE отклоняет выбранные ниже причины.">
+                  <label appTooltip="«Выключено» — проверок нет. «Наблюдение» — нарушения только записываются. «Боевой режим» — вход по выбранным ниже причинам отклоняется.">
                     <span>Режим работы</span>
                     <select formControlName="workerCellularAccessMode">
                       <option value="OFF">Выключено</option>
-                      <option value="AUDIT">Аудит — только наблюдение</option>
+                      <option value="AUDIT">Наблюдение без блокировки</option>
                       <option value="ENFORCE">Боевой режим — блокировка</option>
                     </select>
                   </label>
@@ -3355,11 +3486,17 @@
                     <p>
                       Проверка телефона:
                       <strong>{{ workerCellularAccessSettings()?.requireMobileDevice ? 'включена' : 'выключена' }}</strong>.
-                      IP-классификатор:
-                      <strong>{{ workerCellularAccessSettings()?.ipIntelligenceEnabled ? 'включён' : 'выключен' }}</strong>.
+                      Определение сети по IP:
+                      <strong>{{ workerCellularAccessSettings()?.ipIntelligenceEnabled ? 'включено' : 'выключено' }}</strong>.
                     </p>
+                    @if (workerCellularAccessSettings() && !workerCellularAccessSettings()!.ipIntelligenceEnabled) {
+                      <p class="settings-hint worker-access-warning">
+                        Без определения сети по IP вход из браузера через Wi-Fi или VPN не распознаётся и считается
+                        «сетью, которую не удалось определить». Пункты про Wi-Fi и VPN для браузера тогда не срабатывают.
+                      </p>
+                    }
                     <p class="settings-hint">
-                      Подтверждённые мобильные CIDR доступны только для просмотра и меняются через деплой:
+                      Разрешённые мобильные сети (диапазоны адресов) только для просмотра, их меняют при обновлении сервера:
                     </p>
                     <div class="worker-access-cidrs">
                       @for (cidr of workerCellularAccessSettings()?.allowedCidrs || []; track cidr) {
@@ -3392,10 +3529,19 @@
                   <input type="time" formControlName="eveningReportTime">
                 </label>
 
-                <label appTooltip="IANA-часовой пояс для расписаний, например Asia/Irkutsk.">
+                <label appTooltip="Часовой пояс расписаний в виде Регион/Город, например Asia/Irkutsk.">
                   <span>Часовой пояс</span>
-                  <input type="text" formControlName="telegramReportZone" placeholder="Asia/Irkutsk">
+                  <input type="text" formControlName="telegramReportZone" placeholder="Asia/Irkutsk" [attr.aria-invalid]="settingsFieldError('telegramReportZone') ? true : null">
                 </label>
+                @if (settingsFieldError('telegramReportZone') || telegramZoneWarning(); as message) {
+                  <p class="settings-hint" role="alert">{{ message }}</p>
+                }
+
+                <p class="settings-hint settings-status-line">
+                  Последние запуски (защита от повторной отправки за один слот):
+                  <strong>{{ telegramRunLabel(telegramReportSettings()?.morningLastRunKey, 'утро') }}</strong>,
+                  <strong>{{ telegramRunLabel(telegramReportSettings()?.eveningLastRunKey, 'вечер') }}</strong>.
+                </p>
               </div>
 
               <div class="settings-section">
@@ -3407,8 +3553,11 @@
 
                 <label appTooltip="Пауза между реальными обходами WhatsApp-групп. Слишком маленькое значение может лишне нагружать шлюз.">
                   <span>Интервал проверки, минут</span>
-                  <input type="number" min="5" max="1440" step="5" formControlName="whatsAppGroupSyncIntervalMinutes">
+                  <input type="number" min="5" max="1440" step="5" formControlName="whatsAppGroupSyncIntervalMinutes" [attr.aria-invalid]="settingsFieldError('whatsAppGroupSyncIntervalMinutes') ? true : null">
                 </label>
+                @if (settingsFieldError('whatsAppGroupSyncIntervalMinutes'); as message) {
+                  <p class="settings-hint" role="alert">{{ message }}</p>
+                }
 
                 <p class="settings-hint">
                   Включение означает, что сервер сам сверяет ссылки вида chat.whatsapp.com из карточек компаний
@@ -3417,17 +3566,29 @@
                 </p>
 
                 <p class="settings-hint">
-                  Работает только если шлюз поддерживает GET /groups и возвращает groupId вместе с invite-ссылкой
-                  или invite-code. Если шлюз этого не умеет, старый сценарий не ломается: компания привяжется после
-                  входящего сообщения из нужной группы.
+                  Работает, только если WhatsApp-шлюз умеет отдавать список групп вместе со ссылками-приглашениями.
+                  Если не умеет, ничего не ломается: компания привяжется после входящего сообщения из нужной группы.
+                </p>
+
+                <p class="settings-hint settings-status-line">
+                  Последняя проверка:
+                  @if (whatsAppGroupSyncSettings()?.lastRunAt; as lastRunAt) {
+                    <strong>{{ lastRunAt | date:'dd.MM.yyyy HH:mm' }}</strong>,
+                  } @else {
+                    <strong>ещё не запускалась</strong>,
+                  }
+                  новых привязок: <strong>{{ whatsAppGroupSyncSettings()?.lastLinkedCount ?? 0 }}</strong>.
                 </p>
 
                 <div class="actions">
-                  <button type="button" class="secondary" (click)="runWhatsAppGroupSync()" [disabled]="syncingWhatsAppGroups() || activeSaving()">
+                  <button type="button" class="secondary" (click)="runWhatsAppGroupSync()" [disabled]="syncingWhatsAppGroups() || !canRunSettingsSync()">
                     <span class="material-icons-sharp">sync</span>
                     {{ syncingWhatsAppGroups() ? 'Синхронизирую' : 'Синхронизировать сейчас' }}
                   </button>
                 </div>
+                @if (whatsAppSyncError(); as message) {
+                  <p class="error compact" role="alert">{{ message }}</p>
+                }
               </div>
 
               <div class="settings-section">
@@ -3446,12 +3607,15 @@
                     type="button"
                     class="secondary"
                     (click)="runSharedChatLinkSync()"
-                    [disabled]="syncingSharedChatLinks() || activeSaving()"
+                    [disabled]="syncingSharedChatLinks() || !canRunSettingsSync()"
                   >
                     <span class="material-icons-sharp">hub</span>
                     {{ syncingSharedChatLinks() ? 'Синхронизирую' : 'Скопировать id общих чатов' }}
                   </button>
                 </div>
+                @if (sharedChatSyncError(); as message) {
+                  <p class="error compact" role="alert">{{ message }}</p>
+                }
               </div>
 
               <div class="settings-section">
@@ -3474,11 +3638,11 @@
               </p>
 
               @if (settingsForm.invalid && settingsForm.touched) {
-                <p class="error compact">Проверьте паузу, горизонт, порог аккаунта, задержку дат, время рассылок, часовой пояс и интервал WhatsApp.</p>
+                <p class="error compact">{{ settingsInvalidSummary() }}</p>
               }
 
               <div class="actions">
-                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="!canSaveSettings()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -3504,17 +3668,17 @@
                       <em>{{ clientMessageSettings()?.workerEnabled ? 'очередь включена' : 'очередь выключена' }}</em>
                     </summary>
                     <div class="scenario-body form-grid">
-                      <label class="checkbox" appTooltip="Полностью включает или останавливает фоновый worker: напоминания, ретраи, архивные предложения и контроль просрочки.">
+                      <label class="checkbox" appTooltip="Главный выключатель фоновой работы: напоминания, повторы после сбоев, автоархив, архивные предложения, контроль просрочки и рассылки предложений. Если выключить, всё это останавливается, а новые маршруты оплаты на специалистов не выдаются. Задачи продолжатся после включения.">
                         <input class="switch" type="checkbox" formControlName="workerEnabled">
                         <span>Фоновая очередь задач работает</span>
                       </label>
 
-                      <label class="checkbox" appTooltip="Если выключить, фоновые задачи будут планироваться и логироваться, но фоновые сообщения не уйдут клиентам. Моментальные сообщения при смене статусов управляются отдельным переключателем.">
+                      <label class="checkbox" appTooltip="Общий выключатель исходящих сообщений клиентам, не только фоновых. Если выключить, не уходят: сообщения автоответчика, счёт после плохого отзыва, общие счета (и ручные отправки тоже), рассылки предложений, сообщения менеджеров из «Контроля» и ответы в WhatsApp; новые маршруты оплаты на специалистов не выдаются. Сообщения из очереди уйдут после включения.">
                         <input class="switch" type="checkbox" formControlName="liveEnabled">
                         <span>Фоновой очереди разрешено отправлять клиентам</span>
                       </label>
 
-                      <label class="checkbox" appTooltip="Управляет сообщениями, которые отправляются сразу при событиях заказа: ссылка проверки, передача в публикацию, счет после публикации, доплата после плохого отзыва, короткий отчет и успешная банковская оплата.">
+                      <label class="checkbox" appTooltip="Сообщения сразу при событиях заказа: ссылка проверки, передача в публикацию, счёт после публикации, доплата после плохого отзыва, короткий отчёт и успешная оплата через банк. Если выключить, счёт после публикации всё равно уйдёт позже фоном — через срок «Повтор счета после сбоя».">
                         <input class="switch" type="checkbox" formControlName="immediateEnabled">
                         <span>Отправлять сразу при смене статуса заказа</span>
                       </label>
@@ -3524,7 +3688,7 @@
                         <span>Показывать страницу мониторинга</span>
                       </label>
 
-                      <label class="checkbox" appTooltip="Если за короткое время накопится много ошибок отправки, worker временно поставит авторассылку на паузу.">
+                      <label class="checkbox" appTooltip="Если за короткое время накопится много ошибок отправки, фоновая очередь временно поставит авторассылку на паузу.">
                         <input class="switch" type="checkbox" formControlName="errorProtectionEnabled">
                         <span>Автопауза при серии ошибок</span>
                       </label>
@@ -3622,16 +3786,16 @@
                         <span>Контролировать просрочку оплаты</span>
                       </label>
 
-                      <label class="checkbox" appTooltip="Если включить, просрочка будет переводить заказ в целевой статус. Сейчас лучше держать выключенным до проверки на бою.">
+                      <label class="checkbox" appTooltip="Если включено, просроченный заказ переходит в целевой статус, просроченный общий счёт — в «Не оплачено», а менеджер заранее получает карточку о сроке оплаты. Если выключено, статусы не меняются: остаётся только отметка в журнале.">
                         <input class="switch" type="checkbox" formControlName="paymentOverdueLiveEnabled">
-                        <span>Live-перевод просрочки в целевой статус</span>
+                        <span>Переводить просрочку в целевой статус</span>
                       </label>
 
                       <div class="readonly-setting" appTooltip="Источник платежной инструкции меняется только в разделе «Банк», чтобы не вернуть старый текст менеджера случайным сохранением автоответчика.">
                         <span>Источник оплаты</span>
                         <strong>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}</strong>
                         <small>Меняется в разделе «Банк».</small>
-                        <a href="/admin/bank-payments">Открыть раздел «Банк»</a>
+                        <a routerLink="/admin/bank-payments">Открыть раздел «Банк»</a>
                       </div>
 
                       <label appTooltip="Через сколько дней после выставления счета отправлять и повторять напоминание.">
@@ -3659,7 +3823,7 @@
                         <input type="text" formControlName="paymentOverdueStatuses">
                       </label>
 
-                      <label appTooltip="В этот статус будет переведен просроченный заказ, если live-перевод включен.">
+                      <label appTooltip="В этот статус будет переведен просроченный заказ, если включён перевод просрочки в целевой статус.">
                         <span>Целевой статус просрочки</span>
                         <input type="text" formControlName="paymentOverdueTargetStatus">
                       </label>
@@ -3675,7 +3839,7 @@
                     <summary>
                       <span class="material-icons-sharp">report</span>
                       <div>
-                        <strong>Плохие отзывы, бан и live-архив</strong>
+                        <strong>Плохие отзывы, бан и архив заказов</strong>
                         <small>Бан через {{ clientMessageSettings()?.badReviewAutoBanDelayDays ?? 0 }} дн., архив через {{ clientMessageSettings()?.archiveOrderRetentionDays ?? 0 }} дн.</small>
                       </div>
                       <em>{{ clientMessageSettings()?.badReviewInvoiceEnabled ? 'счета включены' : 'счета выключены' }}</em>
@@ -3701,8 +3865,8 @@
                         <input type="number" min="1" max="365" step="1" formControlName="badReviewAutoBanDelayDays">
                       </label>
 
-                      <label class="wide" appTooltip="Через сколько дней закрытые live-заказы, включая статус 'Бан', переносить в архивные таблицы и убирать с рабочей доски.">
-                        <span>Архив live-заказов, дней</span>
+                      <label class="wide" appTooltip="Через сколько дней закрытые заказы, включая статус «Бан», переносить в архив и убирать с рабочей доски.">
+                        <span>Архив закрытых заказов, дней</span>
                         <input type="number" min="1" max="3650" step="1" formControlName="archiveOrderRetentionDays">
                       </label>
                     </div>
@@ -3769,7 +3933,7 @@
                         <input type="text" formControlName="archiveInactiveOrderStatuses">
                       </label>
 
-                      <label class="wide" appTooltip="Статусы заявок на следующий заказ, при которых повторное предложение не отправляется.">
+                      <label class="wide" appTooltip="Статусы заявок на следующий заказ, при которых повторное предложение не отправляется. Коды: PENDING — заявка ждёт создания заказа, FAILED — создать заказ не удалось; бывают ещё CREATED — заказ создан и CANCELED — заявка отменена. Через запятую, коды пишутся точно.">
                         <span>Открытые статусы заявок</span>
                         <input type="text" formControlName="openNextOrderRequestStatuses">
                       </label>
@@ -3796,13 +3960,13 @@
                         <input type="number" min="1" max="5000" step="1" formControlName="dailyLimit">
                       </label>
 
-                      <label appTooltip="Сколько активных задач брать за один тик планировщика.">
-                        <span>Размер пачки за тик</span>
+                      <label appTooltip="Сколько задач очереди фоновая работа берёт за один проход.">
+                        <span>Задач за один проход</span>
                         <input type="number" min="1" max="100" step="1" formControlName="tickBatchSize">
                       </label>
 
-                      <label appTooltip="Сколько кандидатов по каждому сценарию искать за один проход сверки.">
-                        <span>Лимит кандидатов</span>
+                      <label appTooltip="Сколько заказов по каждому сценарию проверять за один проход сверки.">
+                        <span>Заказов на проверку за проход</span>
                         <input type="number" min="1" max="5000" step="1" formControlName="candidateLimit">
                       </label>
 
@@ -3908,13 +4072,13 @@
                     <textarea rows="5" formControlName="publicationProgressReportText"></textarea>
                   </label>
 
-                  <label appTooltip="Основной текст для напоминаний в режиме Текст менеджера. В режиме банковской /pay-ссылки стандартный шаблон берется из поля ниже; здесь можно собрать свой шаблон с переменными: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
+                  <label appTooltip="Основной текст напоминания в режиме «текст менеджера». В режиме ссылки банка стандартный текст берётся из поля ниже; здесь можно собрать свой шаблон. Переменные: {company}, {filial}, {companyAndFilial}, {sum}; {managerPayText} и {paymentInstruction} — способ оплаты по текущему режиму; {legacyManagerPayText} — текст оплаты менеджера; {paymentLink} — ссылка на оплату ({tbankPaymentLink} — её старое имя); {tbankPaymentCopyText} — готовый текст оплаты по ссылке банка.">
                     <span>Напоминание об оплате</span>
                     <textarea rows="5" formControlName="paymentReminderText"></textarea>
                   </label>
 
-                  <label appTooltip="Используется кнопкой Счет, автоответчиком в режиме банковских ссылок и счетом после плохого отзыва. Переменные: {company}, {filial}, {companyAndFilial}, {sum}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {recipient}, {comment}, {paymentAfterword}.">
-                    <span>Счет /pay</span>
+                  <label appTooltip="Используется кнопкой «Счет», автоответчиком в режиме ссылок банка и счетом после плохого отзыва. Переменные: {company}, {filial}, {companyAndFilial}, {sum}, {paymentInstruction}, {paymentLink}, {recipient}, {comment}, {paymentAfterword} (или {afterword}); {tbankPaymentLink} — старое имя ссылки на оплату.">
+                    <span>Текст счёта клиенту</span>
                     <textarea rows="6" formControlName="paymentLinkCopyText"></textarea>
                   </label>
 
@@ -3940,8 +4104,11 @@
               }
 
               <div class="actions">
-                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="activeSaving()">Сбросить</button>
-                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                @if (hasUnsavedChanges()) {
+                  <span class="muted">Есть несохранённые изменения</span>
+                }
+                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="activeSaving() || !clientMessageSettings()">Сбросить</button>
+                <button type="submit" [disabled]="activeSaving() || !clientMessageSettings()" [title]="clientMessageSettings() ? '' : 'Дождитесь загрузки настроек'">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -3951,35 +4118,39 @@
     }
   </section>
 
-  <section admin-right-content class="dictionary-stats">
-    @for (metric of metrics(); track trackMetric($index, metric)) {
-      <article class="stat-card" [class]="metric.tone">
-        <div>
-          <span>{{ metric.label }}</span>
-          <strong>{{ metric.value }}</strong>
-        </div>
-        <i class="material-icons-sharp">{{ metric.icon }}</i>
-      </article>
-    }
+  <section admin-right-content class="dictionary-help" aria-label="Справка по разделу">
+    <article class="dictionary-help-card">
+      <p class="dictionary-kicker">Справка · {{ activeLabel() }}</p>
+      <h3>Как работать с разделом</h3>
+      @if (activeHelp().steps.length) {
+        <ol class="dictionary-help-steps">
+          @for (step of activeHelp().steps; track $index) {
+            <li><span aria-hidden="true">{{ $index + 1 }}</span><p>{{ step }}</p></li>
+          }
+        </ol>
+      }
 
-    @if (activeTab() === 'accounts') {
-      <article class="stat-card teal tracked-city-accounts">
-        <div>
-          <span>Город {{ trackedBotCityId }} · не заблокировано</span>
-          <strong>{{ trackedCityUnblockedAccounts() ?? '—' }}</strong>
-          <small>На момент входа на страницу</small>
-        </div>
-        <i class="material-icons-sharp">verified_user</i>
-      </article>
-      <button type="button" class="import-accounts-button" (click)="openBotImport()">
-        <span class="material-icons-sharp">upload_file</span>
-        Добавить аккаунты
-      </button>
-      <button type="button" class="import-accounts-button city-import" (click)="openBotImport('city')">
-        <span class="material-icons-sharp">add_location_alt</span>
-        Добавить из файла по городу
-      </button>
-    }
+      @if (helpFacts().length) {
+        <dl class="dictionary-help-facts">
+          @for (fact of helpFacts(); track trackFact($index, fact)) {
+            <div>
+              <dt>{{ fact.label }}</dt>
+              <dd>{{ fact.value }}</dd>
+            </div>
+          }
+        </dl>
+      }
+
+      @if (activeHelp().usedIn) {
+        <p class="dictionary-help-note"><strong>Где используется:</strong> {{ activeHelp().usedIn }}</p>
+      }
+      @if (activeHelp().caution) {
+        <p class="dictionary-help-caution">
+          <span class="material-icons-sharp" aria-hidden="true">warning_amber</span>
+          {{ activeHelp().caution }}
+        </p>
+      }
+    </article>
   </section>
 
   @if (contractorLegacyManualGroup(); as group) {
@@ -3993,21 +4164,26 @@
       >
         <header>
           <div>
-            <p class="eyebrow">MANUAL EVIDENCE</p>
+            <p class="eyebrow">Ручное подтверждение</p>
             <h2>Заказ №{{ group.orderId }}</h2>
           </div>
           <button
             type="button"
             class="row-icon-button"
+            title="Закрыть"
+            aria-label="Закрыть"
             [disabled]="contractorLegacyReconciliationSaving()"
             (click)="closeContractorLegacyManual()"
           >
-            <span class="material-icons-sharp">close</span>
+            <span class="material-icons-sharp" aria-hidden="true">close</span>
           </button>
         </header>
         <p class="contractor-system-modal-warning">
           Получатель выводится сервером только из неизменяемых связей пользователя и профессии.
-          Сумма, заказ и получатель вручную не выбираются. Дата должна быть раньше даты запуска.
+          Сумма, заказ и получатель вручную не выбираются.
+          @if (contractorLegacyManualMaxDate(); as maxDate) {
+            Дата выполнения должна быть раньше дня подготовки снимка: не позже {{ maxDate | date:'dd.MM.yyyy' }}.
+          }
         </p>
         <form
           class="contractor-system-confirmation-form"
@@ -4016,20 +4192,28 @@
         >
           <label>
             <span>Подтверждённая дата выполнения</span>
-            <input type="date" formControlName="completedOn">
+            <input type="date" formControlName="completedOn" [attr.max]="contractorLegacyManualMaxDate()">
           </label>
           <label>
             <span>Ссылка или номер первичного доказательства</span>
-            <input type="text" formControlName="evidenceReference" autocomplete="off">
+            <input type="text" formControlName="evidenceReference" autocomplete="off" maxlength="500">
           </label>
           <label>
             <span>Причина решения владельца</span>
-            <textarea rows="3" formControlName="reason"></textarea>
+            <textarea rows="3" formControlName="reason" maxlength="1000"></textarea>
           </label>
           <label>
             <span>Введите без изменений: <strong>{{ contractorLegacyManualConfirmation }}</strong></span>
             <input type="text" formControlName="confirmation" autocomplete="off" spellcheck="false">
           </label>
+          @if (contractorLegacyManualForm.touched && !contractorLegacyManualReady()) {
+            <p class="error compact" role="alert">
+              Укажите дату раньше дня подготовки снимка, доказательство и причину, затем введите фразу без изменений.
+            </p>
+          }
+          @if (contractorLegacyManualError(); as message) {
+            <p class="error compact" role="alert">{{ message }}</p>
+          }
           <div class="actions">
             <button
               type="button"
@@ -4041,7 +4225,7 @@
             </button>
             <button
               type="submit"
-              [disabled]="contractorLegacyManualForm.invalid || contractorLegacyReconciliationSaving()"
+              [disabled]="!contractorLegacyManualReady() || contractorLegacyReconciliationSaving()"
             >
               Подтвердить точный снимок
             </button>
@@ -4087,23 +4271,21 @@
           [formGroup]="contractorSystemActivationForm"
           (ngSubmit)="activateContractorSystem()"
         >
-          <label>
-            <span>Дата начала нового учёта</span>
-            <input
-              type="date"
-              formControlName="attributionStartDate"
-              [min]="contractorSystemToday"
-              [max]="contractorSystemToday"
-            >
-          </label>
+          <p class="settings-hint">
+            Дата начала нового учёта:
+            <strong>{{ contractorSystemActivationForm.controls.attributionStartDate.value | date:'dd.MM.yyyy' }}</strong>
+            — текущая рабочая дата. Другую дату сервер не примет.
+          </p>
 
           <label>
             <span>Причина активации</span>
             <textarea
               rows="3"
               formControlName="reason"
+              maxlength="500"
               placeholder="Например: тестовый контур сверен, расхождений нет"
             ></textarea>
+            <small>{{ contractorSystemActivationForm.controls.reason.value.length }} из 500 знаков</small>
           </label>
 
           <label>
@@ -4186,7 +4368,8 @@
         >
           <label>
             <span>Причина изменения</span>
-            <textarea rows="3" formControlName="reason"></textarea>
+            <textarea rows="3" formControlName="reason" maxlength="500"></textarea>
+            <small>{{ contractorSystemRoutingForm.controls.reason.value.length }} из 500 знаков</small>
           </label>
 
           <label>
@@ -4281,9 +4464,13 @@
             <input type="text" formControlName="title">
           </label>
 
-          <label appTooltip="Категория уже выбрана слева, поэтому поле доступно только для проверки.">
+          <label appTooltip="Категория, к которой относится подкатегория. Выберите другую, чтобы перенести подкатегорию.">
             <span>Категория</span>
-            <input type="text" [value]="activeCategory()?.title || ''" readonly>
+            <select formControlName="categoryId">
+              @for (category of categories(); track trackCategory($index, category)) {
+                <option [ngValue]="category.id">{{ category.title }}</option>
+              }
+            </select>
           </label>
 
           @if (subCategoryForm.invalid && subCategoryForm.touched) {
@@ -4302,15 +4489,15 @@
   }
 
   @if (importModalOpen()) {
-    <section class="import-backdrop" (click)="closeBotImport()">
+    <section class="import-backdrop" (click)="!importResult() && closeBotImport()">
       <article class="import-modal" [class.has-duplicates]="importResult()?.duplicates?.length" role="dialog" aria-modal="true" aria-label="Импорт аккаунтов" (click)="$event.stopPropagation()">
         <header>
           <div>
             <p class="eyebrow">Импорт</p>
             <h2>{{ importMode() === 'city' ? 'Добавить аккаунты в город' : 'Добавить аккаунты' }}</h2>
           </div>
-          <button type="button" class="row-icon-button" (click)="closeBotImport()" [disabled]="importing()" title="Закрыть">
-            <span class="material-icons-sharp">close</span>
+          <button type="button" class="row-icon-button" (click)="closeBotImport()" [disabled]="importing()" title="Закрыть" aria-label="Закрыть окно импорта">
+            <span class="material-icons-sharp" aria-hidden="true">close</span>
           </button>
         </header>
 
@@ -4335,8 +4522,9 @@
                   [class.selected]="importCityId() === city.id"
                   (click)="selectBotImportCity(city)"
                 >
-                  <span class="material-icons-sharp">location_city</span>
+                  <span class="material-icons-sharp" aria-hidden="true">location_city</span>
                   <strong>{{ city.title }}</strong>
+                  <small>ID {{ city.id }}</small>
                 </button>
               } @empty {
                 <p class="no-results">Город не найден.</p>
@@ -4345,9 +4533,11 @@
 
             @if (selectedImportCity(); as city) {
               <p class="city-import-selected">
-                <span class="material-icons-sharp">task_alt</span>
+                <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
                 {{ city.title }}
               </p>
+            } @else {
+              <p class="settings-hint">Выберите город в списке: без него файл не загрузить.</p>
             }
           </section>
         }
@@ -4356,7 +4546,10 @@
           <input type="file" accept=".txt,.csv,.tsv,.xls,.xlsx" [disabled]="importing()" (change)="selectBotImportFile($event)">
           <span class="material-icons-sharp">upload_file</span>
           <strong>{{ importFile()?.name || 'Выбрать файл' }}</strong>
-          <small>TXT, CSV, TSV, XLS, XLSX. В TXT каждая строка имеет вид логин:пароль.</small>
+          <small>TXT: каждая строка — логин:пароль.</small>
+          <small>CSV, TSV, XLS, XLSX: логин, пароль, ФИО, публикаций, активен, ID статуса, ID владельца, ID города — по порядку или с заголовками login, password, fio, counter, active, status, worker, city_id.</small>
+          <small>Пустые значения: ФИО «Впиши Имя Фамилию», статус «Новый», владелец {{ importDefaultWorkerTitle() }}, город «{{ trackedCityTitle() }}».{{ importMode() === 'city' ? ' Здесь всем аккаунтам ставится выбранный город, ФИО из файла не берётся.' : '' }}</small>
+          <small>До 5 МБ и 5000 строк.</small>
         </label>
 
         @if (importError()) {
@@ -4364,8 +4557,8 @@
         }
 
         @if (importResult(); as result) {
-          <div class="import-result" [class.has-duplicates]="result.skippedDuplicates > 0">
-            <span class="material-icons-sharp">{{ result.skippedDuplicates ? 'warning_amber' : 'task_alt' }}</span>
+          <div class="import-result" [class.has-duplicates]="result.skippedDuplicates > 0 || result.skippedInvalid > 0 || result.added === 0">
+            <span class="material-icons-sharp" aria-hidden="true">{{ result.skippedDuplicates || result.skippedInvalid || !result.added ? 'warning_amber' : 'task_alt' }}</span>
             <strong>{{ importResultMessage(result) }}</strong>
             <small>Всего строк: {{ result.totalRows }}</small>
             @if (result.sourceFileName) { <small>Проверен файл: {{ result.sourceFileName }}</small> }
@@ -4375,6 +4568,9 @@
                   <li>{{ message }}</li>
                 }
               </ul>
+              @if (result.skippedInvalid > result.errors.length) {
+                <small>Показаны ошибки: {{ result.errors.length }} из {{ result.skippedInvalid }}.</small>
+              }
             }
           </div>
           @if (result.duplicates?.length) {

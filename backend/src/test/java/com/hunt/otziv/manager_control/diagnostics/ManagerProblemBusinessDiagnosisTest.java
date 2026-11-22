@@ -247,34 +247,25 @@ class ManagerProblemBusinessDiagnosisTest {
                 f("automation", "delivery_status", state)));
         assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
         assertThat(result.summary()).contains("не подтверждён");
+        // The system re-checks and re-sends once by itself; what is left is the manager's decision by the chat.
         assertThat(result.actions()).allSatisfy(action -> {
-            assertThat(action.text()).contains("Система сверяет", "существующую отправку", "нужна сверка администратором")
-                    .doesNotContain("восстановить очередь", "восстановит очередь", "Откройте историю", "администратору", "вручную");
-            assertThat(action.owner()).isEqualTo("Система");
-            assertThat(action.verification()).contains("Отсутствие сообщения", "не доказывает");
+            assertThat(action.text()).contains("«Сверка отправки»", "«Сообщение есть в чате»",
+                            "«Сообщения нет — отправить снова»", "«Не отправлять»")
+                    .doesNotContain("восстановить очередь", "восстановит очередь", "администратор", "вручную");
+            assertThat(action.owner()).isEqualTo("Менеджер");
+            assertThat(action.verification()).contains("Решение сохранено");
         });
-        assertThat(result.verification().getFirst()).contains("Запуск проверки сам по себе замечание не закрывает");
+        assertThat(result.verification().getFirst()).contains("решением менеджера");
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"REVIEW_CHECK_REMINDER", "PAYMENT_REMINDER"})
-    void currentPeriodicReminderCanOfferConditionalQueueRestoration(String scenario) {
+    @ValueSource(strings = {"REVIEW_CHECK_REMINDER", "PAYMENT_REMINDER", "PAYMENT_INVOICE_RETRY", "BAD_REVIEW_INVOICE",
+            "ARCHIVE_REORDER_OFFER", "CLIENT_TEXT_REMINDER"})
+    void everyUncertainDeliveryAsksForTheSameChatCheckWithoutPromisingAQueue(String scenario) {
         Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(List.of(f("automation", "delivery_status", "UNKNOWN"),
                 f("automation", "scenario", scenario), f("automation", "state_status", "ACTIVE"), f("automation", "current_cycle", "true")));
 
-        assertThat(result.actions().getFirst().text()).contains("Система проверяет", "автоматически восстанавливает очередь", "Старая неподтверждённая отправка не повторяется");
-        assertThat(result.actions().getFirst().verification()).contains("либо проверяемый срок следующего планового напоминания");
-        assertThat(result.verification().getFirst()).contains("восстановлена очередь плановых напоминаний", "только по их фактическому результату");
-        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"PAYMENT_INVOICE_RETRY", "BAD_REVIEW_INVOICE", "ARCHIVE_REORDER_OFFER", "CLIENT_TEXT_REMINDER"})
-    void nonPeriodicDeliveryNeverPromisesReminderQueueRestoration(String scenario) {
-        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(List.of(f("automation", "delivery_status", "UNKNOWN"),
-                f("automation", "scenario", scenario), f("automation", "state_status", "ACTIVE"), f("automation", "current_cycle", "true")));
-
-        assertThat(result.actions().getFirst().text()).contains("Система сверяет", "нужна сверка администратором", "Новое сообщение не создаётся")
+        assertThat(result.actions().getFirst().text()).contains("«Сверка отправки»", "«Сообщения нет — отправить снова»")
                 .doesNotContain("очередь");
         assertThat(result.verification().getFirst()).doesNotContain("очередь");
         assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();

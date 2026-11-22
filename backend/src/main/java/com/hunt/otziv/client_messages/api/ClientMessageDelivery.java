@@ -88,7 +88,9 @@ public interface ClientMessageDelivery {
                 // Held before any provider call for a new operation (never for a replay).
                 "whatsapp_group_unavailable", ClientContactHealth.HELD_CODE,
                 // MAX: the file never uploaded, or MAX refused the message while it processed the file.
-                "max_upload_failed", "max_attachment_not_ready")
+                "max_upload_failed", "max_attachment_not_ready",
+                // A definitive Bot API / MAX refusal (bot removed, chat not found, no right to write) or sending off.
+                "telegram_chat_unavailable", "telegram_not_configured", "max_chat_unavailable")
                 .contains(result.errorCode().trim().toLowerCase(java.util.Locale.ROOT));
     }
 }

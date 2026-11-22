@@ -1,6 +1,7 @@
 package com.hunt.otziv.archive.repository;
 
 import com.hunt.otziv.archive.dto.ArchiveCandidateCounts;
+import com.hunt.otziv.archive.dto.ArchiveRecoveryWorkerOption;
 import com.hunt.otziv.archive.exception.ArchiveRestoreConflictException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -70,6 +71,152 @@ public class OrderArchiveRestoreRepository {
                     order_pay_day = NULL
                 WHERE order_id = :orderId
                 """, Map.of("orderId", orderId));
+    }
+
+    /** The archived specialist of an order and whether that person still works as a specialist. */
+    public record ArchiveOrderWorker(Long workerId, boolean active) {
+    }
+
+    public ArchiveOrderWorker findArchiveOrderWorker(Long orderId) {
+        List<ArchiveOrderWorker> workers = jdbc.query("""
+                SELECT ao.order_worker AS worker_id,
+                       CASE
+                           WHEN u.id IS NOT NULL
+                            AND u.active = true
+                            AND EXISTS (
+                                SELECT 1
+                                FROM users_roles ur
+                                JOIN roles r ON r.id = ur.role_id
+                                WHERE ur.user_id = u.id
+                                  AND r.name = 'ROLE_WORKER'
+                            )
+                           THEN 1
+                           ELSE 0
+                       END AS active_worker
+                FROM archive_orders ao
+                LEFT JOIN workers w ON w.worker_id = ao.order_worker
+                LEFT JOIN users u ON u.id = w.user_id
+                WHERE ao.order_id = :orderId
+                """, Map.of("orderId", orderId), (rs, rowNum) -> {
+                    long workerId = rs.getLong("worker_id");
+                    return new ArchiveOrderWorker(rs.wasNull() ? null : workerId, rs.getBoolean("active_worker"));
+                });
+        return workers.stream().findFirst().orElse(new ArchiveOrderWorker(null, false));
+    }
+
+    /**
+     * Specialists an archived order may be returned to: active workers of the company's
+     * manager, the same team the order editor accepts. Company specialists come first.
+     */
+    public List<ArchiveRecoveryWorkerOption> findRestoreWorkerOptions(Long orderId) {
+        return jdbc.query("""
+                SELECT w.worker_id,
+                       COALESCE(NULLIF(TRIM(u.fio), ''), NULLIF(TRIM(u.username), ''),
+                                CONCAT('Специалист #', w.worker_id)) AS worker_label,
+                       EXISTS (SELECT 1 FROM workers_companies wc
+                               WHERE wc.worker_id = w.worker_id AND wc.company_id = c.company_id) AS company_worker
+                FROM archive_orders ao
+                JOIN companies c ON c.company_id = ao.order_company
+                JOIN managers_users mu ON mu.manager_id = c.company_manager
+                JOIN users u ON u.id = mu.user_id
+                JOIN workers w ON w.user_id = u.id
+                WHERE ao.order_id = :orderId
+                  AND u.active = true
+                  AND EXISTS (SELECT 1 FROM users_roles ur JOIN roles r ON r.id = ur.role_id
+                              WHERE ur.user_id = u.id AND r.name = 'ROLE_WORKER')
+                ORDER BY company_worker DESC, worker_label, w.worker_id
+                """, Map.of("orderId", orderId), (rs, rowNum) -> new ArchiveRecoveryWorkerOption(
+                rs.getLong("worker_id"),
+                rs.getString("worker_label"),
+                rs.getBoolean("company_worker")
+        ));
+    }
+
+    /**
+     * Same evidence as ContractorPaymentShadowService.hasFrozenLiveRoute: once a client holds a
+     * contractor's requisites, the payment recipient is fixed and the specialist may not change.
+     * The archive module reads the table because it may not depend on the ledger's internals.
+     */
+    public boolean hasFrozenLivePaymentRoute(Long orderId) {
+        Long routes = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM contractor_payment_allocations allocation
+                WHERE allocation.mode = 'LIVE'
+                  AND allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                  AND (
+                      allocation.order_id = :orderId
+                      OR EXISTS (
+                          SELECT 1
+                          FROM common_invoice_orders item
+                          WHERE item.invoice_id = allocation.common_invoice_id
+                            AND item.order_id = :orderId
+                      )
+                  )
+                """, Map.of("orderId", orderId), Long.class);
+        return routes != null && routes > 0;
+    }
+
+    /**
+     * Moves a just-restored order and its unfinished work to the specialist chosen in the
+     * restore window, with the scope of a specialist change in the order editor: published
+     * reviews keep their author, waiting bad-review and recovery tasks follow, and the
+     * specialist joins the company. Plain SQL keeps it inside the restore statements; the
+     * live-order methods take identity entities the archive module may not use.
+     */
+    public void reassignRestoredOrderWorker(Long orderId, Long workerId) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("orderId", orderId)
+                .addValue("workerId", workerId);
+        int orders = jdbc.update("""
+                UPDATE orders
+                SET order_worker = :workerId,
+                    row_version = row_version + 1
+                WHERE order_id = :orderId
+                """, params);
+        if (orders != 1) {
+            throw new IllegalStateException("Restored order not found for specialist change: " + orderId);
+        }
+        jdbc.update("""
+                UPDATE reviews r
+                JOIN order_details od ON od.order_detail_id = r.review_order_details
+                SET r.review_worker = :workerId,
+                    r.row_version = r.row_version + 1
+                WHERE od.order_detail_order = :orderId
+                  AND (r.review_publish = 0 OR r.review_publish IS NULL)
+                """, params);
+        jdbc.update("""
+                UPDATE bad_review_tasks
+                SET bad_review_task_worker = :workerId
+                WHERE bad_review_task_order = :orderId
+                  AND bad_review_task_status = 'NEW'
+                """, params);
+        // Recovery tasks of an archived order point at it by archive id; the live link is
+        // covered too so the rule matches the live-order transfer exactly.
+        jdbc.update("""
+                UPDATE review_recovery_tasks t
+                JOIN review_recovery_batches b
+                  ON b.review_recovery_batch_id = t.review_recovery_task_batch
+                SET t.review_recovery_task_worker = :workerId,
+                    t.review_recovery_task_updated_at = CURRENT_TIMESTAMP(6)
+                WHERE (t.review_recovery_task_order = :orderId
+                       OR t.review_recovery_task_archive_order_id = :orderId)
+                  AND t.review_recovery_task_status = 'PLANNED'
+                  AND b.review_recovery_batch_status = 'OPEN'
+                  AND (t.review_recovery_task_worker IS NULL
+                       OR t.review_recovery_task_worker <> :workerId)
+                """, params);
+        // Anti-join instead of NOT EXISTS: MySQL accepts the insert target only in the SELECT's FROM.
+        jdbc.update("""
+                INSERT INTO workers_companies (company_id, worker_id)
+                SELECT o.order_company, :workerId
+                FROM orders o
+                LEFT JOIN workers_companies existing
+                  ON existing.company_id = o.order_company
+                 AND existing.worker_id = :workerId
+                WHERE o.order_id = :orderId
+                  AND o.order_company IS NOT NULL
+                  AND existing.worker_id IS NULL
+                """, params);
     }
 
     public Long findStatusId(String status) {
@@ -281,10 +428,18 @@ public class OrderArchiveRestoreRepository {
                 + "SELECT " + selectList("ao", columns) + " "
                 + "FROM archive_orders ao WHERE ao.order_id = :orderId";
         long restored = jdbc.update(sql, params);
+        // The archived status-change time would make the reopened order look overdue at once:
+        // payment reminders, autoarchive and age checks all count from order_status_changed_at.
         jdbc.update("""
                 UPDATE orders
                 SET order_status = :targetStatusId,
                     order_changed = CURRENT_DATE(),
+                    -- Only a return to work starts a new status cycle; a paid or published order keeps its
+                    -- original time (contractor rewards fall back to it as the completion date).
+                    order_status_changed_at = CASE
+                        WHEN (SELECT os.order_status_title FROM order_statuses os WHERE os.order_status_id = :targetStatusId)
+                             IN ('Новый', 'В проверку', 'На проверке', 'Коррекция', 'Публикация')
+                        THEN CURRENT_TIMESTAMP(6) ELSE order_status_changed_at END,
                     row_version = row_version + 1
                 WHERE order_id = :orderId
                 """, params);

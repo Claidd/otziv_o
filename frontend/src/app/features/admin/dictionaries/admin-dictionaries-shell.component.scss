@@ -1,0 +1,1338 @@
+@use '../../../shared/plain-modal' as plain;
+
+:host {
+  display: block;
+  --dictionary-line: rgba(103, 116, 131, 0.16);
+  --dictionary-control-border: rgba(103, 116, 131, 0.28);
+  --dictionary-chip: rgba(108, 155, 207, 0.12);
+  --dictionary-brand-shadow: rgba(239, 69, 31, 0.24);
+}
+
+:host-context(body.otziv-dark-theme) {
+  --dictionary-line: rgba(159, 184, 215, 0.14);
+  --dictionary-control-border: rgba(159, 184, 215, 0.24);
+  --dictionary-chip: rgba(159, 184, 215, 0.1);
+  --dictionary-brand-shadow: rgba(0, 0, 0, 0.4);
+}
+
+// The working area uses the page font: tables, forms and hints stay readable. The decorative brush font remains
+// only in the page title drawn by the layout.
+.dictionary-workspace,
+.dictionary-help,
+.dictionary-modal,
+.import-modal {
+  font-family: var(--otziv-font-family);
+}
+
+// Windows stay above the mobile header (90) and the bottom navigation (80) of the layout.
+.dictionary-modal-backdrop,
+.import-backdrop {
+  z-index: 1200;
+}
+
+.dictionary-workspace {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.dictionary-kicker {
+  margin: 0;
+  color: var(--otziv-action);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+/* ---------- Menu: one column per group, every item visible ---------- */
+
+.dictionary-menu {
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 1rem;
+  background: var(--otziv-surface-gradient-neutral);
+  box-shadow: 0 0.85rem 1.85rem rgba(132, 139, 200, 0.1);
+  overflow: hidden;
+}
+
+.dictionary-workspace .dictionary-menu-toggle.dictionary-menu-toggle {
+  display: none;
+}
+
+.dictionary-menu-columns {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dictionary-menu-group {
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
+  min-width: 0;
+  border-left: 1px solid var(--dictionary-line);
+  padding: 0.75rem 0.55rem 0.8rem;
+}
+
+.dictionary-menu-group:first-child {
+  border-left: 0;
+}
+
+.dictionary-menu-caption {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.3rem;
+  padding: 0 0.55rem;
+  color: var(--otziv-action);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.dictionary-menu-caption .material-icons-sharp {
+  font-size: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dictionary-workspace .dictionary-menu-item.dictionary-menu-item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.15rem;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0.6rem;
+  padding: 0 0.55rem;
+  color: var(--otziv-dark);
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.dictionary-menu-item .material-icons-sharp {
+  flex: none;
+  color: var(--otziv-info);
+  font-size: 1.05rem;
+}
+
+.dictionary-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dictionary-menu-count {
+  flex: none;
+  margin-left: auto;
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+// Hover only lightens the row: the brand gradient belongs to the one open tab.
+.dictionary-workspace .dictionary-menu-item.dictionary-menu-item.dictionary-menu-item:not(.active):not(:disabled):hover {
+  border: 0;
+  color: var(--otziv-dark);
+  background: var(--dictionary-chip);
+}
+
+.dictionary-workspace .dictionary-menu-item.dictionary-menu-item.dictionary-menu-item.active,
+.dictionary-workspace .dictionary-menu-item.dictionary-menu-item.dictionary-menu-item.active:hover {
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 14px var(--dictionary-brand-shadow);
+}
+
+.dictionary-menu-item.active .material-icons-sharp,
+.dictionary-menu-item.active .dictionary-menu-count {
+  color: #ffffff;
+}
+
+.dictionary-menu-item:focus-visible {
+  outline: 2px solid var(--otziv-action);
+  outline-offset: 1px;
+}
+
+/* ---------- Tab head: what the tab is for and how to edit it ---------- */
+
+.dictionary-tab-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.95rem;
+  border: 1px solid var(--otziv-surface-border-blue);
+  border-radius: 1rem;
+  padding: 1rem 1.1rem;
+  background: var(--otziv-action-fill) top / 100% 3px no-repeat, var(--otziv-surface-gradient-blue);
+}
+
+.dictionary-tab-tile {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border-radius: 12px;
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 14px var(--dictionary-brand-shadow);
+  font-size: 1.4rem;
+}
+
+.dictionary-tab-copy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.dictionary-tab-copy h2 {
+  margin: 0.05rem 0 0.1rem;
+  color: var(--otziv-dark);
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.dictionary-tab-copy p:not(.dictionary-kicker) {
+  margin: 0;
+  max-width: 62rem;
+  color: var(--dictionary-copy);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.dictionary-tab-copy .dictionary-howto strong {
+  color: var(--otziv-dark);
+}
+
+.dictionary-tab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  max-width: 26rem;
+}
+
+// A calm neutral action: the brand colour is in the icon and on hover, never a second gradient.
+.dictionary-workspace :is(button, a, label).dictionary-head-action.dictionary-head-action {
+  position: relative;
+  display: inline-flex;
+  min-height: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--dictionary-control-border);
+  border-radius: 12px;
+  padding: 0 0.9rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dictionary-head-action .material-icons-sharp {
+  color: var(--otziv-action);
+  font-size: 1.1rem;
+}
+
+.dictionary-workspace :is(button, a, label).dictionary-head-action.dictionary-head-action.dictionary-head-action:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+  background: var(--otziv-white);
+  box-shadow: 0 4px 12px var(--otziv-action-soft);
+}
+
+.dictionary-workspace button.dictionary-head-action.dictionary-head-action:disabled,
+.dictionary-workspace label.dictionary-head-action.dictionary-head-action--busy {
+  border-style: dashed;
+  color: var(--otziv-info);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.dictionary-head-action:focus-visible,
+.dictionary-head-action:focus-within {
+  outline: 2px solid var(--otziv-action);
+  outline-offset: 2px;
+}
+
+.dictionary-head-action input[type='file'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ---------- List head: title, count, search and «new» of the list itself ---------- */
+
+.list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.75rem;
+  margin-bottom: 0.8rem;
+}
+
+.list-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.5rem;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.list-title .dictionary-kicker {
+  flex-basis: 100%;
+}
+
+.list-title h3 {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.list-search {
+  display: flex;
+  flex: 1 1 14rem;
+  max-width: 22rem;
+  min-height: 2.35rem;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--dictionary-control-border);
+  border-radius: 10px;
+  padding: 0 0.25rem 0 0.65rem;
+  background: var(--otziv-field-background);
+}
+
+.list-search:focus-within {
+  border-color: var(--otziv-action-border);
+  box-shadow: 0 0 0 3px var(--otziv-action-soft);
+}
+
+.list-search > .material-icons-sharp {
+  color: var(--otziv-info);
+  font-size: 1.1rem;
+}
+
+.list-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2.1rem;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  color: var(--otziv-dark);
+  background: transparent;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.list-search input::placeholder {
+  color: var(--otziv-info);
+}
+
+.dictionary-workspace .list-search button.list-search-go.list-search-go {
+  min-height: 1.85rem;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 0.75rem;
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
+  box-shadow: none;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.dictionary-workspace .list-search button.list-search-go.list-search-go.list-search-go:not(:disabled):hover {
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+}
+
+.dictionary-workspace .list-search button.list-search-clear.list-search-clear {
+  width: 1.85rem;
+  min-width: 1.85rem;
+  min-height: 1.85rem;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  color: var(--otziv-info);
+  background: transparent;
+  box-shadow: none;
+}
+
+.dictionary-workspace .list-search button.list-search-clear.list-search-clear.list-search-clear:not(:disabled):hover {
+  color: var(--otziv-action);
+  background: var(--dictionary-chip);
+}
+
+.list-search-clear .material-icons-sharp {
+  font-size: 1.05rem;
+}
+
+.dictionary-workspace button.list-create.list-create {
+  min-height: 2.35rem;
+  gap: 0.35rem;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 0.95rem;
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 16px var(--dictionary-brand-shadow);
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.dictionary-workspace button.list-create.list-create.list-create:not(:disabled):hover {
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  filter: brightness(1.06);
+}
+
+.dictionary-workspace button.list-create.list-create--soft.list-create--soft {
+  border: 1px solid var(--dictionary-control-border);
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.dictionary-workspace button.list-create.list-create--soft.list-create--soft.list-create--soft:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+  background: var(--otziv-white);
+  filter: none;
+}
+
+.list-create .material-icons-sharp {
+  font-size: 1.1rem;
+}
+
+.list-create--soft .material-icons-sharp {
+  color: var(--otziv-action);
+}
+
+/* ---------- Editor title and the phones table ---------- */
+
+.editor-card .editor-title {
+  display: grid;
+  justify-content: start;
+  gap: 0.15rem;
+  min-height: 0;
+  margin-bottom: 0.2rem;
+}
+
+.editor-card .editor-title h3 {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+// Six short columns fit the list card; the old 68rem minimum pushed «Оператор» and «Статус» out of view.
+.dictionary-workspace table.phone-table {
+  min-width: 0;
+}
+
+/* ---------- Tab head: caution and steps where the help column is not visible ---------- */
+
+:host {
+  // Explanations are read, not glanced at: a stronger shade than --otziv-info keeps them above 4.5:1 in both themes.
+  --dictionary-copy: color-mix(in srgb, var(--otziv-dark) 76%, transparent);
+}
+
+.dictionary-tab-head h2:focus {
+  outline: none;
+}
+
+.dictionary-caution-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0 !important;
+  border: 1px solid var(--otziv-tone-wait-border);
+  border-radius: 0.7rem;
+  padding: 0.45rem 0.6rem;
+  color: var(--otziv-dark) !important;
+  background: var(--otziv-tone-wait-surface);
+  font-size: 0.8rem;
+}
+
+.dictionary-caution-inline .material-icons-sharp {
+  color: var(--otziv-warning);
+  font-size: 1.05rem;
+}
+
+.dictionary-howto-steps {
+  display: none;
+  margin-top: 0.3rem;
+  color: var(--dictionary-copy);
+  font-size: 0.82rem;
+}
+
+.dictionary-howto-steps summary {
+  width: fit-content;
+  color: var(--otziv-action);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dictionary-howto-steps ol {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.45rem 0 0;
+  padding-left: 1.2rem;
+  line-height: 1.42;
+}
+
+@media (max-width: 1320px) {
+  .dictionary-howto-steps {
+    display: block;
+  }
+}
+
+@media (max-width: 860px) {
+  // On a phone the layout puts the help column after the whole tab: the steps are already in the tab head.
+  .dictionary-help {
+    display: none;
+  }
+}
+
+.list-note {
+  flex-basis: 100%;
+  order: 10;
+  margin: 0;
+  border-left: 3px solid var(--otziv-warning);
+  padding: 0.25rem 0 0.25rem 0.6rem;
+  color: var(--dictionary-copy);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.dictionary-grid .editor-card {
+  scroll-margin-top: 4.5rem;
+}
+
+/* ---------- Monitor: the explanations of statuses and numbers were never shown ---------- */
+
+.dictionary-monitor-page :is(.monitor-status-pills span, .monitor-clock-list span, .monitor-metric-card, .archive-diagnostics-grid span, .archive-offer-forecast-count, .archive-offer-forecast)[data-tooltip] {
+  position: relative;
+  cursor: help;
+}
+
+.dictionary-monitor-page :is(.monitor-status-pills span, .monitor-clock-list span, .monitor-metric-card, .archive-diagnostics-grid span, .archive-offer-forecast-count, .archive-offer-forecast)[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 60;
+  width: max-content;
+  max-width: min(20rem, 78vw);
+  border-radius: 0.65rem;
+  padding: 0.6rem 0.7rem;
+  color: #ffffff;
+  background: rgba(28, 41, 57, 0.96);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  text-transform: none;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.dictionary-monitor-page :is(.monitor-status-pills span, .monitor-clock-list span, .monitor-metric-card, .archive-diagnostics-grid span, .archive-offer-forecast-count, .archive-offer-forecast)[data-tooltip]:is(:hover, :focus-visible, .tooltip-open)::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ---------- Help column ---------- */
+
+.dictionary-help {
+  display: grid;
+  gap: 1rem;
+}
+
+.dictionary-help-card {
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 1rem;
+  padding: 1rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-surface-gradient-neutral);
+  box-shadow: 0 0.85rem 1.85rem rgba(132, 139, 200, 0.1);
+}
+
+.dictionary-help-card h3 {
+  margin: 0.2rem 0 0.75rem;
+  color: var(--otziv-dark);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.dictionary-help-steps {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dictionary-help-steps li {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.55rem;
+}
+
+.dictionary-help-steps li > span {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 3px 8px var(--dictionary-brand-shadow);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.dictionary-help-steps p {
+  margin: 0;
+  color: var(--dictionary-copy);
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+.dictionary-help-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0.95rem 0 0;
+}
+
+.dictionary-help-facts div {
+  min-width: 0;
+  border: 1px solid var(--dictionary-line);
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--otziv-white);
+}
+
+.dictionary-help-facts dt {
+  color: var(--otziv-info);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.dictionary-help-facts dd {
+  margin: 0.15rem 0 0;
+  color: var(--otziv-dark);
+  font-size: 1.15rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.dictionary-help-note {
+  margin: 0.95rem 0 0;
+  border-left: 3px solid var(--otziv-action);
+  padding: 0.1rem 0 0.1rem 0.6rem;
+  color: var(--dictionary-copy);
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.dictionary-help-note strong {
+  color: var(--otziv-dark);
+}
+
+.dictionary-help-caution {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  border: 1px solid var(--otziv-tone-wait-border);
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-tone-wait-surface);
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.dictionary-help-caution .material-icons-sharp {
+  color: var(--otziv-warning);
+  font-size: 1.05rem;
+}
+
+/* ---------- Small shared pieces ---------- */
+
+.saved-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.13);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 800;
+  vertical-align: 0.05rem;
+}
+
+.secret-hint {
+  margin: 0;
+  border: 1px solid var(--dictionary-line);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--dictionary-chip);
+}
+
+.settings-status-line strong {
+  color: var(--otziv-dark);
+}
+
+/* ---------- Compact actions of the monitor and editors ---------- */
+
+.dictionary-workspace button.compact-action.compact-action {
+  min-height: 2.2rem;
+  gap: 0.35rem;
+  border: 1px solid var(--dictionary-control-border);
+  border-radius: 10px;
+  padding: 0 0.8rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.dictionary-workspace button.compact-action .material-icons-sharp {
+  color: var(--otziv-action);
+  font-size: 1rem;
+}
+
+.dictionary-workspace button.compact-action.compact-action.compact-action:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+  background: var(--otziv-white);
+}
+
+.dictionary-workspace button.row-icon-button.edit-button.edit-button {
+  color: var(--otziv-action);
+}
+
+/* Provider cards: hover only outlines a card, the chosen provider stays the only green one. */
+.dictionary-workspace .ai-provider-switch button:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-dark);
+  background: var(--otziv-muted-surface);
+  box-shadow: 0 4px 12px var(--otziv-action-soft);
+}
+
+.dictionary-workspace .ai-provider-switch button.active:not(:disabled):hover {
+  border-color: rgba(27, 156, 133, 0.62);
+  background: rgba(27, 156, 133, 0.08);
+}
+
+/* Light-theme amber and green text of older blocks: lighter shades on dark surfaces. */
+:host-context(body.otziv-dark-theme) {
+  .contractor-system-mode.paused,
+  .contractor-system-modal-warning,
+  .worker-access-warning,
+  .ai-provider-warnings p,
+  .maintenance-action.warning b,
+  .maintenance-button-row .compact-action.warning {
+    color: #f0cf83;
+  }
+
+  .archive-offer-forecast-count,
+  .archive-offer-forecast > .material-icons-sharp,
+  .archive-offer-forecast strong {
+    color: var(--otziv-success);
+  }
+}
+
+/* ---------- Editor actions in the accepted window look ---------- */
+
+.dictionary-workspace .actions button[type='submit']:not(.secondary):not(.danger) {
+  min-height: 2.45rem;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 1.25rem;
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 16px var(--dictionary-brand-shadow);
+  font-weight: 800;
+}
+
+.dictionary-workspace .actions button[type='submit']:not(.secondary):not(.danger):not(:disabled):hover {
+  color: #ffffff;
+  background: var(--otziv-action-fill);
+  filter: brightness(1.06);
+}
+
+.dictionary-workspace .actions button[type='submit']:not(.secondary):not(.danger):disabled {
+  border: 1px dashed var(--dictionary-control-border);
+  color: var(--otziv-info);
+  background: var(--otziv-muted-surface);
+  box-shadow: none;
+}
+
+.dictionary-workspace .actions button.secondary.secondary {
+  min-height: 2.45rem;
+  border: 1px solid var(--dictionary-control-border);
+  border-radius: 12px;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+}
+
+.dictionary-workspace .actions button.secondary.secondary .material-icons-sharp {
+  color: var(--otziv-action);
+}
+
+.dictionary-workspace .actions button.secondary.secondary:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+  background: var(--otziv-white);
+}
+
+.dictionary-workspace .actions button.danger.danger {
+  min-height: 2.45rem;
+  border: 1px solid rgba(234, 51, 98, 0.35);
+  border-radius: 12px;
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.06);
+}
+
+.dictionary-workspace .actions button.danger.danger:not(:disabled):hover {
+  border-color: var(--otziv-danger);
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.1);
+}
+
+/* ---------- Windows of the page: category, subcategory, account import, payment system ---------- */
+
+.dictionary-modal,
+.import-modal {
+  @include plain.tokens;
+  border: 1px solid var(--plain-border);
+  border-radius: 18px;
+  color: var(--plain-text);
+  background: var(--plain-surface);
+  box-shadow: 0 24px 60px rgba(8, 12, 18, 0.35);
+}
+
+:host-context(body.otziv-dark-theme) :is(.dictionary-modal, .import-modal) {
+  @include plain.dark-tokens;
+}
+
+.dictionary-modal > header {
+  @include plain.head-band;
+  margin: -1rem -1rem 0;
+  padding: 0.95rem 1rem;
+}
+
+.import-modal > header {
+  @include plain.head-band;
+  margin: -1.1rem -1.1rem 0;
+  padding: 0.95rem 1.1rem;
+}
+
+:is(.dictionary-modal, .import-modal) > header .eyebrow {
+  margin: 0;
+  color: var(--otziv-action);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+:is(.dictionary-modal, .import-modal) > header h2 {
+  margin: 0.1rem 0 0;
+  color: var(--plain-text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+:is(.dictionary-modal, .import-modal) > header button.row-icon-button.row-icon-button {
+  display: grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  min-height: 0;
+  place-items: center;
+  border: 1px solid var(--plain-control-border);
+  border-radius: 999px;
+  padding: 0;
+  color: var(--plain-text);
+  background: var(--plain-surface);
+}
+
+:is(.dictionary-modal, .import-modal) > header button.row-icon-button.row-icon-button:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+  background: var(--plain-surface);
+}
+
+:is(.dictionary-modal, .import-modal) .actions button.secondary.secondary {
+  @include plain.button;
+}
+
+:is(.dictionary-modal, .import-modal) .actions button.danger.danger {
+  @include plain.button;
+  @include plain.button-danger;
+}
+
+:is(.dictionary-modal, .import-modal) .actions button:not(.secondary):not(.danger) {
+  @include plain.button;
+  @include plain.button-save;
+}
+
+/* ---------- Full-width forms: «Фразы без ответа» and «Рабочие настройки» ---------- */
+
+.dictionary-grid.dictionary-grid--form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dictionary-grid--form .editor-card > .settings-form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.dictionary-grid--form .editor-card > .settings-form > :is(p, .error, .actions) {
+  grid-column: 1 / -1;
+}
+
+.dictionary-grid--form .editor-card > .settings-form > .settings-section {
+  border: 1px solid var(--dictionary-line);
+  border-radius: 0.9rem;
+  padding: 0.9rem 1rem;
+  background: var(--otziv-white);
+}
+
+// «Фразы без ответа» has a single section. The shared rule above builds 24rem columns for the many sections of
+// «Рабочие настройки»; the actions row spans all of them, so the empty columns were not collapsed and the only
+// section was squeezed into the first third of the page. This form keeps one full-width column.
+.dictionary-grid--form .editor-card > .settings-form.phrase-dictionary-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.phrase-dictionary-form .auto-ignore-settings {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+  min-width: 0;
+}
+
+// Settings grouped by meaning: the rule, fast closings, reply quality.
+.phrase-dictionary-form :is(.auto-ignore-group, .auto-ignore-editor) {
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--dictionary-line);
+  border-radius: 0.85rem;
+  padding: 0.8rem 0.9rem 0.9rem;
+  background: var(--otziv-muted-surface);
+}
+
+.phrase-dictionary-form .auto-ignore-group > legend,
+.phrase-dictionary-form .auto-ignore-editor-title {
+  margin: 0;
+  padding: 0 0.35rem;
+  color: var(--otziv-primary);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.phrase-dictionary-form .auto-ignore-editor-title {
+  padding: 0;
+}
+
+.phrase-dictionary-form .auto-ignore-group > .checkbox {
+  justify-self: start;
+  max-width: 100%;
+  background: var(--otziv-white);
+}
+
+.phrase-dictionary-form .auto-ignore-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.65rem;
+  align-items: stretch;
+}
+
+.phrase-dictionary-form .auto-ignore-pair > .readonly-setting {
+  min-height: 0;
+  background: var(--otziv-white);
+}
+
+// The two thresholds as a small table: a row per threshold, columns «закрытий» and «за, секунд».
+.phrase-dictionary-form .threshold-table {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.45rem 0.6rem;
+  align-items: center;
+}
+
+.phrase-dictionary-form .threshold-head {
+  color: var(--otziv-info);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.phrase-dictionary-form .threshold-name {
+  color: var(--otziv-dark);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.phrase-dictionary-form .threshold-cell {
+  display: block;
+  margin: 0;
+}
+
+.phrase-dictionary-form .threshold-cell input {
+  width: 100%;
+  min-width: 0;
+}
+
+.phrase-dictionary-form .auto-ignore-chip-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 1fr));
+}
+
+.phrase-dictionary-form .auto-ignore-chip {
+  min-height: 2.75rem;
+  border: 1px solid var(--dictionary-line);
+  background: var(--otziv-white);
+}
+
+@media (min-width: 1181px) {
+  // «Фразы без ответа»: the rule settings and the phrase list side by side; the list gets the wider half.
+  .dictionary-grid--form .auto-ignore-body {
+    grid-template-columns: minmax(24rem, 0.85fr) minmax(0, 1.15fr);
+    align-items: start;
+  }
+}
+
+/* ---------- Medium widths: three menu columns ---------- */
+
+@media (min-width: 861px) and (max-width: 1080px) {
+  .dictionary-menu-columns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dictionary-menu-group:nth-child(3n + 1) {
+    border-left: 0;
+  }
+
+  .dictionary-menu-group:nth-child(n + 4) {
+    border-top: 1px solid var(--dictionary-line);
+  }
+}
+
+@media (max-width: 1180px) {
+  .dictionary-tab-actions {
+    max-width: 18rem;
+  }
+}
+
+/* ---------- Phone: the menu folds into one button, rows become cards ---------- */
+
+@media (max-width: 860px) {
+  .dictionary-workspace .dictionary-menu-toggle.dictionary-menu-toggle {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    min-height: 3.3rem;
+    border: 0;
+    border-radius: 0;
+    padding: 0.55rem 0.8rem;
+    color: var(--otziv-dark);
+    background: transparent;
+    box-shadow: none;
+    text-align: left;
+  }
+
+  .dictionary-workspace .dictionary-menu-toggle.dictionary-menu-toggle.dictionary-menu-toggle:hover {
+    color: var(--otziv-dark);
+    background: transparent;
+  }
+
+  .dictionary-menu-toggle-icon {
+    display: grid;
+    width: 2.2rem;
+    height: 2.2rem;
+    place-items: center;
+    border-radius: 10px;
+    color: #ffffff;
+    background: var(--otziv-action-fill);
+    font-size: 1.15rem;
+  }
+
+  .dictionary-menu-toggle-text {
+    display: grid;
+    min-width: 0;
+  }
+
+  .dictionary-menu-toggle-text small {
+    color: var(--otziv-action);
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .dictionary-menu-toggle-text strong {
+    overflow: hidden;
+    font-size: 0.95rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dictionary-menu-toggle-hint {
+    color: var(--otziv-info);
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+
+  .dictionary-menu-columns {
+    display: none;
+    grid-template-columns: minmax(0, 1fr);
+    border-top: 1px solid var(--dictionary-line);
+  }
+
+  .dictionary-menu--open .dictionary-menu-columns {
+    display: grid;
+  }
+
+  .dictionary-menu-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.2rem;
+    border-top: 1px solid var(--dictionary-line);
+    border-left: 0;
+    padding: 0.55rem 0.45rem;
+  }
+
+  .dictionary-menu-group:first-child {
+    border-top: 0;
+  }
+
+  .dictionary-menu-caption {
+    grid-column: 1 / -1;
+  }
+
+  .dictionary-menu-label {
+    white-space: normal;
+  }
+
+  .dictionary-workspace .dictionary-menu-item.dictionary-menu-item {
+    min-height: 2.6rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .dictionary-tab-head {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.85rem 0.9rem;
+  }
+
+  .dictionary-tab-tile {
+    width: 2.35rem;
+    height: 2.35rem;
+    font-size: 1.2rem;
+  }
+
+  .dictionary-tab-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .list-search {
+    flex-basis: 100%;
+    max-width: none;
+    order: 3;
+  }
+
+  .card-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .card-table,
+  .card-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .card-table.phone-table {
+    min-width: 0;
+  }
+
+  .card-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.1rem 0.6rem;
+    border-bottom: 1px solid var(--otziv-light);
+    padding: 0.55rem 0.3rem;
+  }
+
+  .card-table td {
+    display: block;
+    min-width: 0;
+    border: 0;
+    padding: 0.3rem 0.35rem;
+  }
+
+  .card-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.15rem;
+    color: var(--otziv-info);
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .card-table td:first-child,
+  .card-table td.row-tools,
+  .card-table td.no-results {
+    grid-column: 1 / -1;
+  }
+
+  .card-table td:first-child::before,
+  .card-table td.row-tools::before,
+  .card-table td.no-results::before {
+    display: none;
+  }
+
+  .card-table td.row-tools {
+    width: auto;
+    text-align: left;
+  }
+
+  .card-table tr.selected {
+    background: rgba(108, 155, 207, 0.14);
+    box-shadow: inset 3px 0 0 var(--otziv-primary);
+  }
+
+  .card-table tr.selected td,
+  .card-table tbody tr:hover td {
+    background: transparent;
+  }
+
+  .card-table tr.selected td:first-child {
+    box-shadow: none;
+  }
+}
+
+/* ---------- Review notes: row focus, invalid fields, overview states, pills ---------- */
+
+// List rows open with Enter or Space: the focused row is outlined like the menu items.
+.dictionary-workspace tbody tr[tabindex]:focus-visible {
+  outline: 2px solid var(--otziv-action);
+  outline-offset: -2px;
+}
+
+// A field left invalid is marked, so the error line under the form points at it.
+:is(.editor-card, .category-form, .subcategory-form) :is(input, select, textarea).ng-invalid.ng-touched {
+  border-color: var(--otziv-danger);
+}
+
+// A switched-off overview card is grey instead of green like a working one.
+.autoresponder-status-card.off {
+  color: var(--otziv-info);
+  background: rgba(103, 116, 131, 0.06);
+}
+
+// The usage pill ends with an ellipsis (an inline-flex box would cut the text without one); the full text is in its title.
+.usage-pill {
+  display: inline-block;
+  line-height: 1.45rem;
+}
+
+.assignment-head {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .usage-pill,
+  .promo-preview {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+// In the dark theme the page under a window is dimmed instead of washed with a light grey.
+:host-context(body.otziv-dark-theme) :is(.dictionary-modal-backdrop, .import-backdrop) {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+// Windows taller than a low screen scroll inside instead of hiding their buttons below the edge.
+.dictionary-modal {
+  max-height: calc(100dvh - 2.5rem);
+  overflow-y: auto;
+}
+
+.dictionary-modal-backdrop {
+  overflow-y: auto;
+}
+
+// Long codes and numbers of the payment system block wrap instead of widening the card on a phone.
+.contractor-legacy-reconciliation code,
+.contractor-system-metrics :is(small, strong) {
+  overflow-wrap: anywhere;
+}
+
+// City picker of the account import: the ID tells cities with one name apart.
+.city-import-list button small {
+  margin-left: auto;
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 700;
+}

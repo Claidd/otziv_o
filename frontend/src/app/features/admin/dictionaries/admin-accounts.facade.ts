@@ -1,6 +1,6 @@
 import { computed, signal, WritableSignal } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
-import { Observable, Subscription } from 'rxjs';
+import { Observable, Subscription, finalize, tap } from 'rxjs';
 import {
   AdminBot,
   BotImportResponse,
@@ -15,23 +15,40 @@ import { AdminAccountsApi } from '../../../core/admin-accounts.api';
 type BotImportMode = 'file' | 'city';
 type Deps = {
   api: AdminAccountsApi;
-  toast: Pick<ToastService, 'success' | 'error'>;
+  /** warning is optional: without it a partial result is reported as an error toast. */
+  toast: Pick<ToastService, 'success' | 'error'> & Partial<Pick<ToastService, 'warning'>>;
   isActive: () => boolean;
   selectedId: WritableSignal<number | null>;
   search: () => string;
+  /** Called after a page of accounts with its workers, statuses and cities has been applied. */
+  afterLoad?: () => void;
 };
+
+/** Column sizes of bots.bot_login and bots.bot_fio: a longer value fails in the database with a technical error. */
+const BOT_LOGIN_MAX_LENGTH = 45;
+const BOT_FIO_MAX_LENGTH = 50;
+/** The only status auto-assignment takes; the import gives it to every new account. */
+const NEW_BOT_STATUS_TITLE = 'новый';
 
 export class AdminAccountsFacade {
   private readonly fb = new FormBuilder();
   private formRevision = 0;
   private readonly formChanges: Subscription;
+  private destroyed = false;
+  /** The login of the opened account as the server has it, for the delete question. */
+  private selectedBotLogin = '';
+  /** Counter, status and activity as the open card received them; they also change in the background. */
+  private loadedLifecycle: { counter: number; statusId: number | null; active: boolean } | null = null;
+  /** An import finished while the page was hidden: the list has not been read again since. */
+  private listStale = false;
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly deleting = signal(false);
   readonly error = signal<string | null>(null);
   readonly scope: DictionaryViewScope;
   constructor(private readonly deps: Deps) {
-    this.scope = new DictionaryViewScope(deps.isActive);
+    // A save that ends after the tab was left and opened again reads the list again (see DictionaryViewScope).
+    this.scope = new DictionaryViewScope(deps.isActive, () => this.load());
     this.formChanges = this.botForm.valueChanges.subscribe(() => this.formRevision++);
   }
   private get dictionariesApi() {
@@ -48,6 +65,7 @@ export class AdminAccountsFacade {
     this.cancelDetail();
   }
   destroy(): void {
+    this.destroyed = true;
     this.scope.destroy();
     this.formChanges.unsubscribe();
   }
@@ -59,8 +77,15 @@ export class AdminAccountsFacade {
     this.error.set(message);
     this.toastService.error('Справочник не загрузился', message);
   }
+  /** A partial result: a warning toast when the page has one, otherwise an error toast. */
+  private warn(title: string, message: string): void {
+    const toast = this.toastService;
+    if (toast.warning) toast.warning(title, message);
+    else toast.error(title, message);
+  }
   load(): void {
     if (!this.scope.active()) return;
+    this.listStale = false;
     this.error.set(null);
     this.scope
       .read(
@@ -78,30 +103,72 @@ export class AdminAccountsFacade {
           }
           this.applyBotsResponse(payload);
           this.ensureDefaults();
+          this.deps.afterLoad?.();
         },
         error: (error) => this.failLoad(error)
       });
     if (this.trackedCityUnblockedAccounts() == null)
       this.loadTrackedCityUnblockedAccountsSnapshot();
   }
-  private runSave(request: Observable<AdminBot>, title: string): void {
+  private runSave(
+    request: Observable<AdminBot>,
+    title: string,
+    sentPassword: string,
+    sentLifecycle?: { counter: number; statusId: number | null; active: boolean }
+  ): void {
     const editor = this.captureEditor();
     this.saving.set(true);
     this.error.set(null);
-    this.scope.write(request, this.saving).subscribe({
+    this.scope.write(request, this.saving, (outcome) => outcome.failed
+      ? this.toastService.error('Аккаунт не сохранен', this.errorMessage(outcome.error, 'Не удалось сохранить аккаунт'))
+      : this.toastService.success(title, outcome.value ? `ID ${outcome.value.id}` : 'Аккаунты')
+    ).subscribe({
       next: (saved) => {
-        if (!this.sameSelection(editor)) return;
+        if (!this.sameSelection(editor)) {
+          // Another account is open by now: its card stays, but the saved one is named so the result is not lost.
+          this.toastService.success(title, `ID ${saved.id}`);
+          this.trackedCityUnblockedAccounts.set(null);
+          return;
+        }
         this.deps.selectedId.set(saved.id);
+        if (saved.login) this.selectedBotLogin = saved.login;
+        // The server may have kept a newer counter, status or activity (a publication, «Блок»): the card shows what is
+        // stored, so the next save does not send the old values back as if the user had chosen them. A field changed
+        // during the request keeps the user's value and is written by the next save.
+        if (sentLifecycle) this.syncSavedLifecycle(saved, sentLifecycle);
+        this.loadedLifecycle = { counter: saved.counter ?? 0, statusId: saved.status?.id ?? null, active: saved.active };
+        this.syncSavedPassword(saved, sentPassword);
         this.toastService.success(title, `ID ${saved.id}`);
+        // A save may move the account into or out of the tracked city: its count is read again with the list.
+        this.trackedCityUnblockedAccounts.set(null);
         this.load();
       },
       error: (error) => {
-        if (!this.sameEditor(editor)) return;
+        // The same account is still open: the reason is shown even when a field was changed during the request.
+        // Another account opened meanwhile keeps its card clean; the failure is still reported in a toast.
         const message = this.errorMessage(error, 'Не удалось сохранить аккаунт');
-        this.error.set(message);
+        if (this.sameSelection(editor)) this.error.set(message);
         this.toastService.error('Аккаунт не сохранен', message);
       }
     });
+  }
+  private syncSavedLifecycle(saved: AdminBot, sent: { counter: number; statusId: number | null; active: boolean }): void {
+    const controls = this.botForm.controls;
+    if (Number(controls.counter.value || 0) === sent.counter) controls.counter.setValue(String(saved.counter ?? 0));
+    if (controls.statusId.value === sent.statusId) controls.statusId.setValue(saved.status?.id ?? null);
+    if (controls.active.value === sent.active) controls.active.setValue(saved.active);
+  }
+
+  /**
+   * After a save the password field is empty again, and the «сохранён» mark follows the server. A password typed
+   * during the request is kept.
+   */
+  private syncSavedPassword(saved: AdminBot, sentPassword: string): void {
+    const password = this.botForm.controls.password;
+    if (sentPassword && password.value === sentPassword) password.setValue('');
+    this.selectedBotPasswordPresent.set(typeof saved.passwordPresent === 'boolean'
+      ? saved.passwordPresent
+      : this.selectedBotPasswordPresent() || sentPassword.trim() !== '');
   }
   deleteSelectedBot(): void {
     const id = this.deps.selectedId();
@@ -110,31 +177,50 @@ export class AdminAccountsFacade {
       !this.scope.active() ||
       this.scope.writing() ||
       this.deleting() ||
-      this.saving()
+      this.saving() ||
+      // Another row is opening: until it arrives the card and «Удалить» still belong to the previous account.
+      this.botDetailLoadingId() != null
     )
       return;
     const editor = this.captureEditor();
     this.deleting.set(true);
-    if (!window.confirm('Удалить запись из справочника "Аккаунты"?')
+    if (!window.confirm(this.deleteBotQuestion(id))
       || !this.scope.active() || !this.sameEditor(editor)) {
       this.deleting.set(false);
       return;
     }
     this.error.set(null);
-    this.scope.write(this.dictionariesApi.deleteBot(id), this.deleting).subscribe({
+    this.scope.write(this.dictionariesApi.deleteBot(id), this.deleting, (outcome) => outcome.failed
+      ? this.toastService.error('Запись не удалена', this.errorMessage(outcome.error, 'Не удалось удалить запись'))
+      : this.toastService.success('Запись удалена', `Аккаунт ID ${id}`)
+    ).subscribe({
       next: () => {
-        if (!this.sameEditor(editor)) return;
+        // The account is gone whatever was typed meanwhile; only another opened account keeps its card.
+        if (!this.sameSelection(editor)) {
+          this.toastService.success('Запись удалена', `Аккаунт ID ${id}`);
+          this.trackedCityUnblockedAccounts.set(null);
+          this.load();
+          return;
+        }
         this.clearSelection();
         this.toastService.success('Запись удалена', 'Аккаунты');
+        this.trackedCityUnblockedAccounts.set(null);
         this.load();
       },
       error: (error) => {
-        if (!this.sameEditor(editor)) return;
         const message = this.errorMessage(error, 'Не удалось удалить запись');
-        this.error.set(message);
+        if (this.sameSelection(editor)) this.error.set(message);
         this.toastService.error('Запись не удалена', message);
       }
     });
+  }
+  /** Names the account and offers the safe alternative: its reviews keep no link to a deleted account. */
+  private deleteBotQuestion(id: number): string {
+    const login = this.selectedBotLogin || this.botForm.controls.login.value.trim();
+    const name = login ? `${login} (ID ${id})` : `ID ${id}`;
+    return `Удалить аккаунт ${name}?\n\n`
+      + 'Отзывы этого аккаунта останутся без аккаунта. Удаление не отменить. '
+      + 'Чтобы аккаунт просто не брался в работу, снимите «Аккаунт активен» и сохраните.';
   }
   cancelDetail(): void {
     this.scope.cancel('selectBot');
@@ -170,6 +256,7 @@ export class AdminAccountsFacade {
 
   readonly botsTotal = signal(0);
 
+  /** The shared pool city: imported accounts go there by default and its unblocked accounts are counted. */
   readonly trackedBotCityId = 325;
 
   readonly trackedCityUnblockedAccounts = signal<number | null>(null);
@@ -189,9 +276,9 @@ export class AdminAccountsFacade {
   );
 
   readonly botForm = this.fb.group({
-    login: this.fb.nonNullable.control('', Validators.required),
+    login: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(BOT_LOGIN_MAX_LENGTH)]),
     password: this.fb.nonNullable.control(''),
-    fio: this.fb.nonNullable.control('', Validators.required),
+    fio: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(BOT_FIO_MAX_LENGTH)]),
     workerId: this.fb.control<number | null>(null, Validators.required),
     cityId: this.fb.control<number | null>(null),
     statusId: this.fb.control<number | null>(null, Validators.required),
@@ -246,20 +333,31 @@ export class AdminAccountsFacade {
     const requestId = ++this.botDetailLoadEpoch;
     this.botDetailLoadingId.set(bot.id);
     this.error.set(null);
-    this.scope.read('selectBot', this.dictionariesApi.getBot(bot.id)).subscribe({
+    this.scope.read('selectBot', this.dictionariesApi.getBot(bot.id)).pipe(
+      // A read cancelled by a command (an import) ends without a value: the row must not stay «loading» for good,
+      // since saving and deleting wait for it.
+      finalize(() => {
+        if (requestId === this.botDetailLoadEpoch && this.botDetailLoadingId() === bot.id) {
+          this.botDetailLoadingId.set(null);
+        }
+      })
+    ).subscribe({
       next: (details) => {
         if (requestId !== this.botDetailLoadEpoch) {
           return;
         }
         this.selectedId.set(details.id);
+        this.selectedBotLogin = details.login;
+        this.loadedLifecycle = { counter: details.counter ?? 0, statusId: details.status?.id ?? null, active: details.active };
         this.selectedBotPasswordPresent.set(details.passwordPresent);
+        // An empty owner, city or status stays empty: a guessed first option would be saved without notice.
         this.botForm.setValue({
           login: details.login,
           password: '',
           fio: details.fio,
-          workerId: details.worker?.id ?? this.defaultBotWorkerId(),
-          cityId: details.city?.id ?? this.defaultBotCityId(),
-          statusId: details.status?.id ?? this.defaultBotStatusId(),
+          workerId: details.worker?.id ?? null,
+          cityId: details.city?.id ?? null,
+          statusId: details.status?.id ?? null,
           counter: String(details.counter ?? 0),
           active: details.active
         });
@@ -301,11 +399,15 @@ export class AdminAccountsFacade {
     this.importError.set(null);
     this.importCitySearch.set('');
     this.importCityId.set(null);
+    // An import that finished while the page was hidden has not refreshed the list yet.
+    if (this.listStale) this.load();
   }
 
   selectBotImportFile(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.importFile.set(input.files?.[0] ?? null);
+    // The chosen file is kept in importFile; clearing the field lets the same file be chosen again later.
+    input.value = '';
     this.importResult.set(null);
     this.importError.set(null);
   }
@@ -343,21 +445,43 @@ export class AdminAccountsFacade {
     this.importError.set(null);
     this.importResult.set(null);
 
-    this.scope.write(this.dictionariesApi.importBots(file, cityId), this.importing).subscribe({
-      next: (result) => {
-        this.importing.set(false);
-        this.importResult.set(result);
-        this.importFile.set(null);
-        this.toastService.success('Импорт аккаунтов завершен', this.importResultMessage(result));
-        this.load();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось импортировать аккаунты');
-        this.importError.set(message);
-        this.importing.set(false);
-        this.toastService.error('Аккаунты не импортированы', message);
-      }
+    // The result belongs to the open import window, not to the visible page: a hidden browser tab must not swallow
+    // it, otherwise the same file looks unsent and is uploaded twice (every row then counts as a duplicate).
+    const request = this.dictionariesApi.importBots(file, cityId).pipe(tap({
+      next: (result) => this.applyImportResult(result),
+      error: (err) => this.applyImportError(err)
+    }));
+    this.scope.write(request, this.importing).subscribe({
+      // Reached only while the page is visible and on this tab; otherwise closing the window reads the list.
+      next: () => this.load(),
+      error: () => undefined
     });
+  }
+
+  private importWindowShown(): boolean {
+    return !this.destroyed && this.importModalOpen();
+  }
+
+  private applyImportResult(result: BotImportResponse): void {
+    if (!this.importWindowShown()) return;
+    this.importResult.set(result);
+    this.importFile.set(null);
+    this.listStale = true;
+    // New accounts usually land in the tracked city: its count is read again with the list.
+    this.trackedCityUnblockedAccounts.set(null);
+    const message = this.importResultMessage(result);
+    if (result.added > 0 && !result.skippedInvalid) {
+      this.toastService.success('Импорт аккаунтов завершен', message);
+    } else {
+      this.warn(result.added > 0 ? 'Импорт завершён с ошибками' : 'Аккаунты не добавлены', message);
+    }
+  }
+
+  private applyImportError(err: unknown): void {
+    if (!this.importWindowShown()) return;
+    const message = this.errorMessage(err, 'Не удалось импортировать аккаунты');
+    this.importError.set(message);
+    this.toastService.error('Аккаунты не импортированы', message);
   }
 
   importResultMessage(result: BotImportResponse): string {
@@ -398,24 +522,36 @@ export class AdminAccountsFacade {
       active: raw.active
     };
     const selectedId = this.selectedId();
+    // Publications and «Блок» move the counter, status and activity while the card is open: the server keeps their
+    // current values for every field the user left as it was opened.
+    if (selectedId != null && this.loadedLifecycle) {
+      request.expectedCounter = this.loadedLifecycle.counter;
+      request.expectedStatusId = this.loadedLifecycle.statusId;
+      request.expectedActive = this.loadedLifecycle.active;
+    }
     const call =
       selectedId == null
         ? this.dictionariesApi.createBot(request)
         : this.dictionariesApi.updateBot(selectedId, request);
 
-    this.runSave(call, 'Аккаунт сохранен');
+    this.runSave(call, 'Аккаунт сохранен', raw.password,
+      { counter: request.counter, statusId: request.statusId, active: request.active });
   }
 
+  /** No owner is guessed for a new account: the first name of the list is an arbitrary choice. */
   defaultBotWorkerId(): number | null {
-    return this.botWorkers()[0]?.id ?? null;
+    return null;
   }
 
+  /** A new account goes to the shared pool city like an imported one, when that city is listed. */
   defaultBotCityId(): number | null {
-    return this.botCities()[0]?.id ?? null;
+    return this.botCities().some((city) => city.id === this.trackedBotCityId) ? this.trackedBotCityId : null;
   }
 
+  /** «Новый», the status auto-assignment takes; without it the status is chosen by hand. */
   defaultBotStatusId(): number | null {
-    return this.botStatuses()[0]?.id ?? null;
+    return this.botStatuses()
+      .find((status) => (status.title ?? '').trim().toLowerCase() === NEW_BOT_STATUS_TITLE)?.id ?? null;
   }
 
   applyBotsResponse(response: BotsResponse): void {
@@ -441,7 +577,7 @@ export class AdminAccountsFacade {
   }
   clearSelection(): void {
     this.cancelDetail(); this.selectedId.set(null); this.botDetailLoadingId.set(null);
-    this.selectedBotPasswordPresent.set(false); this.error.set(null);
+    this.selectedBotPasswordPresent.set(false); this.error.set(null); this.selectedBotLogin = ''; this.loadedLifecycle = null;
     this.botForm.reset({
       login: '',
       password: '',
@@ -454,9 +590,9 @@ export class AdminAccountsFacade {
     });
   }
 
+  /** Fills the defaults of an untouched new-account form once the lists are known; an opened account keeps its values. */
   private ensureDefaults(): void {
-    if (this.botForm.dirty) return;
-    if (this.botForm.controls.workerId.value == null) this.botForm.controls.workerId.setValue(this.defaultBotWorkerId());
+    if (this.botForm.dirty || this.selectedId() != null || this.botDetailLoadingId() != null) return;
     if (this.botForm.controls.statusId.value == null) this.botForm.controls.statusId.setValue(this.defaultBotStatusId());
     if (this.botForm.controls.cityId.value == null) this.botForm.controls.cityId.setValue(this.defaultBotCityId());
   }

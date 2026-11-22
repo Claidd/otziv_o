@@ -22,6 +22,24 @@ type Deps = {
   search: () => string;
 };
 
+/** Asked before a category or subcategory window drops text the user typed. */
+const CLOSE_UNSAVED_QUESTION = 'Есть несохранённые изменения. Закрыть окно без сохранения?';
+
+/** Russian plural form: 1 подкатегория, 2 подкатегории, 5 подкатегорий. */
+function plural(count: number, one: string, few: string, many: string): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+/** «категорию «Автосервис»», or just the noun when the record has no title. */
+function named(noun: string, title: string | null | undefined): string {
+  const text = (title ?? '').trim();
+  return text ? `${noun} «${text}»` : noun;
+}
+
 export class AdminTaxonomyFacade {
   private readonly fb = new FormBuilder();
   private readonly scope: DictionaryViewScope;
@@ -65,15 +83,20 @@ export class AdminTaxonomyFacade {
     return this.subCategories().filter((subCategory) => subCategory.category?.id === categoryId);
   });
 
-  readonly categoryEditorTitle = computed(() =>
-    this.editingCategoryId() == null ? 'Новая категория' : `Категория #${this.editingCategoryId()}`,
-  );
+  /** The window title names the saved record («Категория «Автосервис»»), not its internal number. */
+  readonly categoryEditorTitle = computed(() => {
+    const id = this.editingCategoryId();
+    if (id == null) return 'Новая категория';
+    const title = this.categories().find((category) => category.id === id)?.title;
+    return title ? `Категория «${title}»` : 'Категория';
+  });
 
-  readonly subCategoryEditorTitle = computed(() =>
-    this.editingSubCategoryId() == null
-      ? 'Новая подкатегория'
-      : `Подкатегория #${this.editingSubCategoryId()}`,
-  );
+  readonly subCategoryEditorTitle = computed(() => {
+    const id = this.editingSubCategoryId();
+    if (id == null) return 'Новая подкатегория';
+    const title = this.subCategories().find((subCategory) => subCategory.id === id)?.title;
+    return title ? `Подкатегория «${title}»` : 'Подкатегория';
+  });
   private readonly categoryEditor = new DictionaryEditorSession(this.categoryForm);
   private readonly subCategoryEditor = new DictionaryEditorSession(this.subCategoryForm);
   constructor(private readonly deps: Deps) {
@@ -91,6 +114,19 @@ export class AdminTaxonomyFacade {
   }
   private canMutate(): boolean {
     return this.scope.active() && this.deps.canWrite() && !this.saving() && !this.deleting();
+  }
+
+  /**
+   * A manager only reads categories: the page hides the edit controls for that role. A change that still reaches
+   * the facade is refused with a message instead of silently doing nothing.
+   */
+  private writeAllowed(): boolean {
+    if (this.deps.canWrite()) return true;
+    this.deps.toast.error(
+      'Только просмотр',
+      'Категории и подкатегории меняют администратор и владелец.',
+    );
+    return false;
   }
 
   load(): void {
@@ -170,23 +206,30 @@ export class AdminTaxonomyFacade {
   }
 
   openNewCategory(): void {
+    if (!this.writeAllowed()) return;
     this.startNewCategory();
     this.categoryEditorOpen.set(true);
   }
 
   editCategory(event: Event, category: AdminCategory): void {
-    this.categoryEditor.change();
     event.preventDefault();
     event.stopPropagation();
+    if (!this.writeAllowed()) return;
+    this.categoryEditor.change();
     this.activeCategoryId.set(category.id);
     this.editingCategoryId.set(category.id);
-    this.categoryForm.setValue({ title: category.title });
+    // reset, not setValue: the window opens clean, so closing it asks only about edits typed in it.
+    this.categoryForm.reset({ title: category.title });
     this.categoryEditorOpen.set(true);
     this.error.set(null);
   }
 
   closeCategoryEditor(): void {
     if (this.saving() || this.deleting()) {
+      return;
+    }
+    // A click on the dark background or «Закрыть» must not silently drop a typed name.
+    if (this.categoryForm.dirty && !window.confirm(CLOSE_UNSAVED_QUESTION)) {
       return;
     }
     this.categoryEditorOpen.set(false);
@@ -200,7 +243,8 @@ export class AdminTaxonomyFacade {
       subCategory.category?.id ?? this.activeCategoryId() ?? this.defaultCategoryId();
     this.editingSubCategoryId.set(subCategory.id);
     this.activeCategoryId.set(categoryId);
-    this.subCategoryForm.setValue({
+    // reset, not setValue: the form starts clean for this subcategory, so only new edits count as unsaved.
+    this.subCategoryForm.reset({
       title: subCategory.title,
       categoryId,
     });
@@ -208,6 +252,7 @@ export class AdminTaxonomyFacade {
   }
 
   openNewSubCategory(): void {
+    if (!this.writeAllowed()) return;
     if (this.activeCategoryId() == null) {
       this.activeCategoryId.set(this.defaultCategoryId());
     }
@@ -218,12 +263,16 @@ export class AdminTaxonomyFacade {
   editSubCategory(event: Event, subCategory: AdminSubCategory): void {
     event.preventDefault();
     event.stopPropagation();
+    if (!this.writeAllowed()) return;
     this.selectSubCategory(subCategory);
     this.subCategoryEditorOpen.set(true);
   }
 
   closeSubCategoryEditor(): void {
     if (this.saving() || this.deleting()) {
+      return;
+    }
+    if (this.subCategoryForm.dirty && !window.confirm(CLOSE_UNSAVED_QUESTION)) {
       return;
     }
     this.subCategoryEditorOpen.set(false);
@@ -258,7 +307,7 @@ export class AdminTaxonomyFacade {
   }
 
   saveCategory(): void {
-    if (!this.canMutate()) return;
+    if (!this.writeAllowed() || !this.canMutate()) return;
     if (this.categoryForm.invalid) {
       this.categoryForm.markAllAsTouched();
       return;
@@ -292,7 +341,7 @@ export class AdminTaxonomyFacade {
   }
 
   saveSubCategory(): void {
-    if (!this.canMutate()) return;
+    if (!this.writeAllowed() || !this.canMutate()) return;
     if (this.subCategoryForm.invalid) {
       this.subCategoryForm.markAllAsTouched();
       return;
@@ -316,6 +365,9 @@ export class AdminTaxonomyFacade {
         if (this.subCategoryEditor.sameSelection(editor, this.editingSubCategoryId())) {
           const unchanged = this.subCategoryEditor.sameDraft(editor, this.editingSubCategoryId());
           this.editingSubCategoryId.set(saved.id);
+          // A subcategory moved to another category stays in view: the list switches to that category.
+          const categoryId = saved.category?.id ?? request.categoryId;
+          if (categoryId != null) this.activeCategoryId.set(categoryId);
           if (unchanged) this.subCategoryEditorOpen.set(false);
         }
         this.deps.toast.success('Подкатегория сохранена', `ID ${saved.id}`);
@@ -329,9 +381,9 @@ export class AdminTaxonomyFacade {
   }
   deleteEditingCategory(): void {
     const id = this.editingCategoryId();
-    if (id == null || !this.canMutate()) return;
+    if (id == null || !this.writeAllowed() || !this.canMutate()) return;
     const editor = this.categoryEditor.capture(id);
-    if (!window.confirm('Удалить категорию?')) return;
+    if (!window.confirm(this.categoryDeleteQuestion(id))) return;
     if (!this.canMutate() || !this.categoryEditor.sameSelection(editor, this.editingCategoryId()))
       return;
     this.deleting.set(true);
@@ -360,9 +412,9 @@ export class AdminTaxonomyFacade {
 
   deleteEditingSubCategory(): void {
     const id = this.editingSubCategoryId();
-    if (id == null || !this.canMutate()) return;
+    if (id == null || !this.writeAllowed() || !this.canMutate()) return;
     const editor = this.subCategoryEditor.capture(id);
-    if (!window.confirm('Удалить подкатегорию?')) return;
+    if (!window.confirm(this.subCategoryDeleteQuestion(id))) return;
     if (
       !this.canMutate() ||
       !this.subCategoryEditor.sameSelection(editor, this.editingSubCategoryId())
@@ -389,6 +441,46 @@ export class AdminTaxonomyFacade {
           this.fail(err, 'Подкатегория не удалена', 'Не удалось удалить запись');
       },
     });
+  }
+
+  /**
+   * Deleting a category cannot be undone: the database removes its subcategories with it and empties the field of
+   * companies and reviews that had it. The question names the category and says so.
+   */
+  private categoryDeleteQuestion(id: number): string {
+    const category = this.categories().find((item) => item.id === id);
+    const count = category
+      ? category.subCategoryCount
+      : this.subCategories().filter((item) => item.category?.id === id).length;
+    const lines = [
+      `Удалить ${named('категорию', category?.title || this.categoryForm.controls.title.value)}?`,
+    ];
+    if (count > 0) {
+      const verb = plural(count, 'удалится', 'удалятся', 'удалятся');
+      const noun = plural(count, 'подкатегория', 'подкатегории', 'подкатегорий');
+      lines.push(`Вместе с ней ${verb} ${count} ${noun}.`);
+      lines.push(
+        'У компаний и отзывов с этой категорией поля «Категория» и «Подкатегория» станут пустыми.',
+      );
+    } else {
+      lines.push('Подкатегорий у неё нет.');
+      lines.push('У компаний и отзывов с этой категорией поле «Категория» станет пустым.');
+    }
+    lines.push('Если по категории уже есть опубликованные отзывы, удалить её не получится.');
+    lines.push('Отменить нельзя.');
+    return lines.join('\n');
+  }
+
+  private subCategoryDeleteQuestion(id: number): string {
+    const subCategory = this.subCategories().find((item) => item.id === id);
+    const title = subCategory?.title || this.subCategoryForm.controls.title.value;
+    const parent = subCategory?.category?.title || this.activeCategory()?.title;
+    return [
+      `Удалить ${named('подкатегорию', title)}${parent ? ` из категории «${parent}»` : ''}?`,
+      'У компаний и отзывов с этой подкатегорией поле «Подкатегория» станет пустым.',
+      'Если по подкатегории уже есть опубликованные отзывы, удалить её не получится.',
+      'Отменить нельзя.',
+    ].join('\n');
   }
 
   ensureDefaults(): void {

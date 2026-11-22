@@ -34,6 +34,11 @@ export class BotBrowserComponent implements OnDestroy {
   private routeSubscription?: Subscription;
 
   readonly bot = signal<BotBrowserMetadata | null>(null);
+  /** Back to the card of this account in «Аккаунты» (other roles are sent home by the route guard, as before). */
+  readonly backLink = computed(() => {
+    const id = this.bot()?.botId ?? Number(this.route.snapshot?.paramMap?.get('botId'));
+    return id > 0 ? `/admin/dictionaries?tab=accounts&botId=${id}` : '/admin/dictionaries?tab=accounts';
+  });
   readonly status = signal('Запуск браузера...');
   readonly error = signal<string | null>(null);
   readonly vncUrl = signal<string | null>(null);

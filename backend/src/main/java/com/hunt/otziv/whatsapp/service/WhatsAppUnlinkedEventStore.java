@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 /** Stored in the same transaction as the inbound receipt, before acknowledging the gateway. */
 @Repository @RequiredArgsConstructor
 public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
+    /** The gateway's text for a sticker sent without a caption. */
+    static final String STICKER_PLACEHOLDER = "[Вложение: sticker]";
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
 
@@ -33,6 +35,13 @@ public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
     public void resolved(WhatsAppGroupReplyDTO reply) {
         jdbc.update("UPDATE whatsapp_unlinked_events SET completed_at=NOW(6) WHERE receipt_key=? AND completed_at IS NULL",
                 WhatsAppGroupWebhookDeduplicator.key(reply));
+    }
+    /** A client's message of the group (not our own, not a bare sticker) still waits for the group to be linked. */
+    public boolean hasWaitingClientMessage(String clientId,String groupId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM whatsapp_unlinked_events WHERE client_id=? AND group_id=? AND completed_at IS NULL
+                AND NOT (payload_json->>'$.fromMe' <=> 'true') AND NOT (payload_json->>'$.message' <=> ?))
+            """,Boolean.class,clientId,groupId,STICKER_PLACEHOLDER));
     }
     public List<String> due() {
         // Oldest message first: replaying out of order could reopen an already answered thread.
@@ -55,7 +64,9 @@ public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
     /**
      * Inbound messages from groups that were never linked are personal data kept only while they
      * can still be attributed: after 30 days they are closed and their payload dropped; closed
-     * rows are deleted after 90 days.
+     * rows are deleted after 90 days. A bare sticker is closed after a day: it holds nothing worth a
+     * sender's number, and groups no company claims had piled up hundreds of them before stickers from
+     * such groups stopped being kept.
      */
     public int expireStale() {
         int expired=jdbc.update("""
@@ -63,6 +74,12 @@ public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
             WHERE completed_at IS NULL AND created_at<DATE_SUB(NOW(6),INTERVAL 30 DAY)
             ORDER BY created_at LIMIT 500
             """);
+        expired+=jdbc.update("""
+            UPDATE whatsapp_unlinked_events SET completed_at=NOW(6),payload_json='{}',reason='sticker_expired'
+            WHERE completed_at IS NULL AND created_at<DATE_SUB(NOW(6),INTERVAL 1 DAY)
+              AND payload_json->>'$.message' <=> ?
+            ORDER BY created_at LIMIT 500
+            """,STICKER_PLACEHOLDER);
         jdbc.update("DELETE FROM whatsapp_unlinked_events WHERE completed_at<DATE_SUB(NOW(6),INTERVAL 90 DAY) ORDER BY completed_at LIMIT 500");
         return expired;
     }
@@ -181,9 +198,12 @@ public class WhatsAppUnlinkedEventStore implements DeliveryQueueHealth {
     }
 
     @Override public String queueName() {return "whatsapp_unlinked";}
+    /** A bare sticker only waits for its own expiry: no one has to act on it, so it is not backlog. */
     @Override @Transactional(readOnly=true,timeout=3)
     public List<Row> deliveryQueueHealth() {
-        return jdbc.query("SELECT COUNT(*),GREATEST(0,TIMESTAMPDIFF(SECOND,MIN(created_at),NOW(6))) FROM whatsapp_unlinked_events WHERE completed_at IS NULL",
-                (rs,n)->new Row(State.QUEUED,rs.getLong(1),rs.getDouble(2),0));
+        return jdbc.query("""
+            SELECT COUNT(*),GREATEST(0,TIMESTAMPDIFF(SECOND,MIN(created_at),NOW(6))) FROM whatsapp_unlinked_events
+            WHERE completed_at IS NULL AND NOT (payload_json->>'$.message' <=> ?)
+            """,(rs,n)->new Row(State.QUEUED,rs.getLong(1),rs.getDouble(2),0),STICKER_PLACEHOLDER);
     }
 }

@@ -19,7 +19,7 @@ describe('dictionary AI provider tab', () => {
     facade.destroy();
   });
 
-  it('keeps the submitted write alive while rejecting duplicate selection and stale completion', () => {
+  it('keeps the submitted write alive, rejects a duplicate selection and keeps the switched provider after a return', () => {
     const write = new Subject<ReputationAiStatus>();
     const api = { status: vi.fn(), selectProvider: vi.fn().mockReturnValue(write) };
     const toast = { success: vi.fn(), error: vi.fn() };
@@ -31,9 +31,11 @@ describe('dictionary AI provider tab', () => {
     expect(api.selectProvider).toHaveBeenCalledOnce();
     expect(write.observed).toBe(true);
     write.next(status('openai')); write.complete();
-    expect(facade.aiProviderStatus()).toBeNull();
+    // The provider is one setting for the whole system: the card shows it and the switch is reported, although the
+    // tab was left and opened again while the request ran.
+    expect(facade.aiProviderStatus()).toEqual(status('openai'));
     expect(facade.switchingAiProvider()).toBe(false);
-    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledOnce();
     facade.destroy();
   });
 

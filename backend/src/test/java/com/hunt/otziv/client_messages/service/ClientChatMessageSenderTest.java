@@ -194,8 +194,8 @@ class ClientChatMessageSenderTest {
     @Test
     void persistentFenceIncludesPaymentCopyMetadataInEnvelopeBeforeDispatch() throws Exception {
         Company company = company("https://t.me/example", 12345L, null);
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(12345L), eq("invoice"), isNull(), any()))
-                .thenReturn(java.util.Optional.of(77));
+        when(telegramService.sendMessageOnceWithInlineKeyboard(eq(12345L), eq("invoice"), isNull(), any()))
+                .thenReturn(TelegramService.SendOnceResult.sent(77));
         assertTrue(sender.sendWithOperationId(company, "client", "group", "invoice", copyButton, "stable-operation").sent());
         var envelope = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(operationFence).execute(eq("stable-operation"), eq("TELEGRAM"), eq("12345"), envelope.capture(), any());
@@ -374,8 +374,8 @@ class ClientChatMessageSenderTest {
     @Test
     void keyedTelegramReplyUsesOneAttemptAndRequiresPositiveMessageId() {
         Company company = company("https://t.me/example", 12345L, null);
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(12345L, "fixture", null, java.util.List.of()))
-                .thenReturn(java.util.Optional.of(81));
+        when(telegramService.sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of()))
+                .thenReturn(TelegramService.SendOnceResult.sent(81));
 
         var result = sender.sendToPlatformWithOperationId(
                 com.hunt.otziv.client_chat_control.model.ClientChatPlatform.TELEGRAM,
@@ -383,53 +383,109 @@ class ClientChatMessageSenderTest {
 
         assertTrue(result.sent());
         assertEquals("81", result.messageId());
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(12345L, "fixture", null, java.util.List.of());
+        verify(telegramService).sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of());
         verifyNoMoreInteractions(telegramService);
     }
 
     @Test
     void keyedTelegramUnconfirmedAttemptRemainsUnknownWithoutLegacyRetry() {
         Company company = company("https://t.me/example", 12345L, null);
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(12345L, "fixture", null, java.util.List.of()))
-                .thenReturn(java.util.Optional.empty());
+        when(telegramService.sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of()))
+                .thenReturn(TelegramService.SendOnceResult.unknown());
 
         var result = sender.sendWithOperationId(company, null, null, "fixture", null, "stable-operation");
 
         assertFalse(result.sent());
         assertFalse(ClientChatMessageSender.isKnownUnsent(result));
         assertEquals("operation_unknown", result.errorCode());
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(12345L, "fixture", null, java.util.List.of());
+        verify(telegramService).sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of());
         verifyNoMoreInteractions(telegramService);
     }
 
     @Test
     void keyedTelegramExceptionRemainsUnknownWithoutRetry() {
         Company company = company("https://t.me/example", 12345L, null);
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(12345L, "fixture", null, java.util.List.of()))
+        when(telegramService.sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of()))
                 .thenThrow(new IllegalStateException("fixture timeout"));
 
         var result = sender.sendWithOperationId(company, null, null, "fixture", null, "stable-operation");
 
         assertFalse(result.sent());
         assertFalse(ClientChatMessageSender.isKnownUnsent(result));
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(12345L, "fixture", null, java.util.List.of());
+        verify(telegramService).sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of());
         verifyNoMoreInteractions(telegramService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"chat_not_found", "bot_removed", "bot_blocked", "chat_permission_denied"})
+    void keyedTelegramChatRefusalIsReportedAsNotSentWithItsReason(String reason) {
+        Company company = company("https://t.me/example", 12345L, null);
+        when(telegramService.sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of()))
+                .thenReturn(TelegramService.SendOnceResult.refused(reason));
+
+        var result = sender.sendWithOperationId(company, null, null, "fixture", null, "stable-operation");
+
+        assertFalse(result.sent());
+        assertEquals(ClientChatMessageSender.TELEGRAM_CHAT_UNAVAILABLE, result.errorCode());
+        assertTrue(result.errorMessage().contains("Сообщение не отправлено"), result.errorMessage());
+        verify(telegramService).sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of());
+        verifyNoMoreInteractions(telegramService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {TelegramService.SEND_ONCE_SENDING_DISABLED, TelegramService.SEND_ONCE_NOT_CONFIGURED})
+    void keyedTelegramWithoutTransportIsReportedAsNotConfigured(String refusal) {
+        Company company = company("https://t.me/example", 12345L, null);
+        when(telegramService.sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of()))
+                .thenReturn(TelegramService.SendOnceResult.refused(refusal));
+
+        var result = sender.sendToPlatformWithOperationId(
+                com.hunt.otziv.client_chat_control.model.ClientChatPlatform.TELEGRAM,
+                company, null, null, "12345", "fixture", "stable-operation");
+
+        assertFalse(result.sent());
+        assertEquals(ClientChatMessageSender.TELEGRAM_NOT_CONFIGURED, result.errorCode());
+    }
+
+    @Test
+    void keyedTelegramUnrecognisedRefusalLabelStaysUnknown() {
+        Company company = company("https://t.me/example", 12345L, null);
+        when(telegramService.sendMessageOnceWithInlineKeyboard(12345L, "fixture", null, java.util.List.of()))
+                .thenReturn(TelegramService.SendOnceResult.refused("future_reason"));
+
+        var result = sender.sendWithOperationId(company, null, null, "fixture", null, "stable-operation");
+
+        assertEquals("operation_unknown", result.errorCode());
+        assertFalse(ClientChatMessageSender.isKnownUnsent(result));
+    }
+
+    /**
+     * The fence records FAILED_KNOWN only for codes in ClientMessageDelivery.isKnownUnsent; then the same
+     * occurrence may be tried again. A refusal is not permanent: the chat can be fixed and the bot returned.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {ClientChatMessageSender.TELEGRAM_CHAT_UNAVAILABLE, ClientChatMessageSender.TELEGRAM_NOT_CONFIGURED,
+            ClientChatMessageSender.MAX_CHAT_UNAVAILABLE})
+    void definitiveProviderRefusalIsKnownUnsentAndMayBeRetried(String code) {
+        var result = ClientMessageSendResult.failed(code, "fixture");
+        assertTrue(ClientChatMessageSender.isKnownUnsent(result));
+        assertFalse(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isPermanentlyUnsent(result));
     }
 
     @Test
     void keyedTelegramPreservesNativeCopyButtonInTheSingleRequest() {
         Company company = company("https://t.me/example", 12345L, null);
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(12345L), eq("fixture"), isNull(), anyList()))
+        when(telegramService.sendMessageOnceWithInlineKeyboard(eq(12345L), eq("fixture"), isNull(), anyList()))
                 .thenAnswer(call -> {
                     var json = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(call.getArgument(3));
                     assertEquals("Скопировать номер карты", json.path(0).path(0).path("text").asText());
                     assertEquals(copyButton.copyText(), json.path(0).path(0).path("copy_text").path("text").asText());
-                    return java.util.Optional.of(82);
+                    return TelegramService.SendOnceResult.sent(82);
                 });
 
         assertTrue(sender.sendWithOperationId(company, null, null, "fixture", copyButton, "stable-operation").sent());
 
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(12345L), eq("fixture"), isNull(), anyList());
+        verify(telegramService).sendMessageOnceWithInlineKeyboard(eq(12345L), eq("fixture"), isNull(), anyList());
         verifyNoMoreInteractions(telegramService);
     }
 
@@ -482,6 +538,53 @@ class ClientChatMessageSenderTest {
         assertEquals(code, result.errorCode());
         verify(maxBotClient).sendMessageToChatOnce(98765L, "fixture");
         verifyNoMoreInteractions(maxBotClient);
+    }
+
+    @Test
+    void keyedMaxChatRefusalIsReportedWithItsReasonAndSkipsTheCopyMessage() {
+        Company company = company("https://max.ru/example", null, 98765L);
+        when(maxBotClient.sendMessageToChatOnce(98765L, "fixture"))
+                .thenReturn(new MaxBotClient.SendOnceResult(null, MaxBotClient.CHAT_UNAVAILABLE));
+
+        var result = sender.sendWithOperationId(company, null, null, "fixture", copyButton, "stable-operation");
+
+        assertFalse(result.sent());
+        assertEquals(ClientChatMessageSender.MAX_CHAT_UNAVAILABLE, result.errorCode());
+        assertTrue(result.errorMessage().contains("Сообщение не отправлено"), result.errorMessage());
+        verify(maxBotClient).sendMessageToChatOnce(98765L, "fixture");
+        verifyNoMoreInteractions(maxBotClient, telegramService, whatsAppService);
+    }
+
+    @Test
+    void fencedKnownUnsentAttemptKeepsTheReasonTheProviderJustGave() {
+        Company company = company("https://max.ru/example", null, 98765L);
+        when(maxBotClient.sendMessageToChatOnce(98765L, "fixture"))
+                .thenReturn(new MaxBotClient.SendOnceResult(null, "max_not_configured"));
+        // The real ledger answers a FAILED_KNOWN attempt with its code and a generic text.
+        when(operationFence.execute(eq("stable-operation"), eq("MAX"), eq("98765"), anyString(), any()))
+                .thenAnswer(call -> {
+                    call.<java.util.function.Supplier<ClientMessageSendResult>>getArgument(4).get();
+                    return ClientMessageSendResult.failed("max_not_configured", "ledger text");
+                });
+
+        var result = sender.sendWithOperationId(company, null, null, "fixture", null, "stable-operation");
+
+        assertEquals("max_not_configured", result.errorCode());
+        assertEquals("MAX не начал отправку: проверьте текст и настройки канала", result.errorMessage());
+        assertTrue(ClientChatMessageSender.isKnownUnsent(result));
+    }
+
+    @Test
+    void recordedKnownUnsentReplayWithoutANewAttemptKeepsTheLedgerAnswer() {
+        Company company = company("https://max.ru/example", null, 98765L);
+        when(operationFence.execute(eq("stable-operation"), eq("MAX"), eq("98765"), anyString(), any()))
+                .thenReturn(ClientMessageSendResult.failed("max_not_configured", "ledger text"));
+
+        var result = sender.sendWithOperationId(company, null, null, "fixture", null, "stable-operation");
+
+        assertEquals("max_not_configured", result.errorCode());
+        assertEquals("ledger text", result.errorMessage());
+        verify(maxBotClient, never()).sendMessageToChatOnce(anyLong(), anyString());
     }
 
     @Test
@@ -590,6 +693,7 @@ class ClientChatMessageSenderTest {
         assertTrue(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isPermanentlyUnsent(result));
         verify(operationFence, never()).execute(anyString(), anyString(), nullable(String.class), anyString(), any());
         verify(maxBotClient, never()).sendMessageToChatOnce(anyLong(), anyString());
+        verify(telegramService, never()).sendMessageOnceWithInlineKeyboard(anyLong(), anyString(), any(), anyList());
         verify(telegramService, never()).sendMessageOnceWithInlineKeyboardMessageId(anyLong(), anyString(), any(), anyList());
     }
 

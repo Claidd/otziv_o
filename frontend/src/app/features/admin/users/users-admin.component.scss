@@ -1,109 +1,349 @@
+// «Пользователи»: the list of accounts, the card of the chosen user and a short help in the side column.
+// The look is the one accepted for the windows of the site (shared/plain-modal.scss), written with the theme
+// tokens: the page font, an accent uppercase kicker above a bold title, bordered blocks, the brand gradient only
+// for the main action of a block, the one active filter and the icon tiles, neutral buttons with a brand icon and
+// soft red only for removing actions. Rows and pills stay readable in both themes.
+
 :host {
   display: block;
+  // Accounts without a Keycloak link: a soft warning tone and an accent line on the left.
+  --users-warn-row: color-mix(in srgb, var(--otziv-warning) 16%, transparent);
+  --users-warn-row-hover: color-mix(in srgb, var(--otziv-warning) 24%, transparent);
+  --users-warn-line: color-mix(in srgb, var(--otziv-warning) 70%, var(--otziv-action));
+  --users-row-hover: color-mix(in srgb, var(--otziv-dark) 5%, transparent);
+  // Text on soft surfaces: a state colour pulled towards the main text, readable at small sizes.
+  --users-warn-text: color-mix(in srgb, var(--otziv-warning) 34%, var(--otziv-dark));
+  --users-success-text: color-mix(in srgb, var(--otziv-success) 72%, var(--otziv-dark));
+  --users-danger-text: color-mix(in srgb, var(--otziv-danger) 72%, var(--otziv-dark));
+  --users-muted-text: color-mix(in srgb, var(--otziv-info) 60%, var(--otziv-dark));
+  --users-control-border: color-mix(in srgb, var(--otziv-info) 38%, transparent);
+  --users-brand-shadow: color-mix(in srgb, var(--otziv-action) 26%, transparent);
+}
+
+// In the dark theme the pulled colours are already light; only the warning keeps its own gold and the brand
+// elements cast a dark shadow instead of a glow.
+:host-context(body.otziv-dark-theme) {
+  --users-warn-text: var(--otziv-warning);
+  --users-brand-shadow: var(--otziv-light);
 }
 
 .users-workspace {
   display: grid;
+  min-width: 0;
   gap: 0.85rem;
   container-type: inline-size;
+  color: var(--otziv-dark);
   font-family: var(--otziv-font-family);
   font-size: 0.94rem;
   line-height: 1.45;
 }
 
-.users-toolbar,
-.users-search {
+.users-help {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.75rem;
-  align-items: center;
+  margin-top: 0.85rem;
+  font-family: var(--otziv-font-family);
 }
 
-.user-tabs,
-.quick-links,
-.users-search {
+/* ---------- Buttons ----------
+   The global .admin-layout rule of styles.scss outlines every button in the brand colour and fills a hovered one
+   with the brand gradient, which reads as a second active item. The repeated class outweighs it. */
+
+// Neutral: a calm surface with a brand icon; hover only outlines it.
+.users-workspace .users-btn.users-btn {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--users-control-border);
+  border-radius: 0.75rem;
+  padding: 0 1.05rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1px 2px var(--otziv-light);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  opacity: 1;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+}
+
+.users-btn .material-icons-sharp {
+  color: var(--otziv-action);
+  font-size: 1.1rem;
+}
+
+.users-workspace .users-btn.users-btn:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+  background: var(--otziv-white);
+  box-shadow: 0 4px 12px var(--otziv-action-soft);
+}
+
+.users-workspace .users-btn.users-btn:focus-visible {
+  outline: 2px solid var(--otziv-action);
+  outline-offset: 2px;
+}
+
+.users-workspace .users-btn.users-btn:disabled {
+  border-style: dashed;
+  color: var(--otziv-info);
+  background: var(--otziv-muted-surface);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+// The main action of a block: «Новый пользователь», «Сохранить», «Сохранить фото», «Сменить пароль»,
+// «Сохранить связи».
+.users-workspace .users-btn.users-btn--save:not(:disabled),
+.users-workspace .users-btn.users-btn--save:not(:disabled):hover {
+  border-color: transparent;
+  color: #fff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 16px var(--users-brand-shadow);
+}
+
+.users-workspace .users-btn.users-btn--save:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+
+// Removing actions only: «Удалить», «Отключить доступ», «Сбросить личный Telegram».
+.users-workspace .users-btn.users-btn--danger:not(:disabled),
+.users-workspace .users-btn.users-btn--danger:not(:disabled):hover {
+  border-color: var(--otziv-surface-border-red);
+  color: var(--users-danger-text);
+  background: var(--otziv-surface-gradient-red);
+  box-shadow: none;
+}
+
+.users-workspace .users-btn.users-btn--danger:not(:disabled):hover {
+  border-color: var(--users-danger-text);
+}
+
+// «Восстановить доступ».
+.users-workspace .users-btn.users-btn--confirm:not(:disabled),
+.users-workspace .users-btn.users-btn--confirm:not(:disabled):hover {
+  border-color: var(--otziv-tone-success-border);
+  color: var(--users-success-text);
+  background: var(--otziv-tone-success-surface);
+  box-shadow: none;
+}
+
+.users-btn:disabled .material-icons-sharp,
+.users-btn--save:not(:disabled) .material-icons-sharp,
+.users-btn--danger:not(:disabled) .material-icons-sharp,
+.users-btn--confirm:not(:disabled) .material-icons-sharp {
+  color: inherit;
+}
+
+// Other buttons of the page (payment profiles, journal) keep their look; hover only tints them.
+.users-workspace.users-workspace button:not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
+}
+
+/* ---------- Titles: an icon tile, an accent kicker and a bold title ---------- */
+
+.users-workspace .eyebrow,
+.users-help .eyebrow {
+  margin: 0;
+  color: var(--otziv-action);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.table-head,
+.editor-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.table-head > div,
+.editor-title > div,
+.users-help-head {
+  display: grid;
   min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.7rem;
+}
+
+.block-tile,
+.block-chip,
+.empty-icon,
+.users-help-list li > .material-icons-sharp {
+  display: grid;
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
+  font-size: 1.15rem;
+}
+
+.block-tile,
+.block-chip {
+  grid-row: 1 / span 2;
+}
+
+.block-tile {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.75rem;
+  color: #fff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 14px var(--users-brand-shadow);
+  font-size: 1.3rem;
+}
+
+.table-head h2,
+.editor-title h2,
+.users-help-head h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+// The state beside a title: green when ready, the warning tone when the account has no Keycloak link.
+.editor-title > span,
+.table-head > span {
+  flex: none;
+  border: 1px solid var(--otziv-tone-success-border);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  color: var(--users-success-text);
+  background: var(--otziv-tone-success-surface);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.table-head > span {
+  border-color: var(--otziv-surface-border-neutral);
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-title > span.warn {
+  border-color: var(--users-warn-line);
+  color: var(--users-warn-text);
+  background: var(--otziv-tone-wait-surface);
+}
+
+/* ---------- Toolbar: filter buttons and quick actions ---------- */
+
+.users-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .user-tabs,
 .quick-links {
   display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 0.55rem;
-}
-
-.user-tabs {
-  overflow: hidden;
-  border-radius: 0.55rem;
-  background: var(--otziv-white);
-  box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.14);
-  transition: box-shadow 0.65s ease;
-}
-
-.user-tabs:hover,
-.users-card:hover,
-.user-stats .stat-card:hover,
-.mobile-user-stats .stat-card:hover {
-  box-shadow: none;
-}
-
-.user-tabs button {
-  flex: 1 1 0;
-  min-width: 5.9rem;
-  min-height: 2.8rem;
-  padding: 0 0.65rem;
-  color: var(--otziv-dark);
-  background: transparent;
-  font-size: 0.82rem;
-}
-
-.user-tabs button.active {
-  color: var(--otziv-primary);
-}
-
-.user-tabs .material-icons-sharp,
-.quick-links .material-icons-sharp {
-  font-size: 1rem;
-}
-
-.user-tabs small {
-  color: var(--otziv-info);
-  font-size: 0.72rem;
+  gap: 0.5rem;
 }
 
 .quick-links {
   justify-content: flex-end;
 }
 
-.quick-links a,
-.quick-links button,
-.users-search select,
-.users-search input {
-  min-height: 2.2rem;
-  border: 1px solid rgba(103, 116, 131, 0.24);
-  border-radius: var(--otziv-small-radius);
-  color: var(--otziv-dark);
-  background: var(--otziv-light);
-  font-size: 0.74rem;
-  font-weight: 800;
-  text-decoration: none;
+// All five filters stay visible: on a narrower page the chips wrap instead of shrinking or scrolling away.
+.user-tabs {
+  flex-wrap: wrap;
 }
 
-.quick-links a,
-.quick-links button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 0.72rem;
+// Calm bordered chips with a brand icon. The brand gradient marks only the active filter; hover just outlines
+// a chip, so it never looks like a second active filter.
+.user-tabs .user-tab.user-tab {
+  flex: 1 1 auto;
+  min-height: 2.6rem;
+  gap: 0.45rem;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.8rem;
+  padding: 0 0.85rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1px 2px var(--otziv-light);
+  font-size: 0.82rem;
+  font-weight: 750;
+  white-space: nowrap;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
+
+.user-tab .material-icons-sharp {
+  color: var(--otziv-action);
+  font-size: 1.05rem;
+}
+
+.user-tab small {
+  min-width: 1.45rem;
+  border-radius: 999px;
+  padding: 0.05rem 0.42rem;
+  color: var(--users-muted-text);
+  background: var(--otziv-muted-surface);
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.user-tabs .user-tab.user-tab:not(.active):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 4px 12px var(--otziv-action-soft);
+}
+
+.user-tabs .user-tab.user-tab.active,
+.user-tabs .user-tab.user-tab.active:hover {
+  border-color: transparent;
+  color: #fff;
+  background: var(--otziv-action-fill);
+  box-shadow: 0 6px 14px var(--users-brand-shadow);
+}
+
+.user-tab.active .material-icons-sharp {
+  color: inherit;
+}
+
+.user-tab.active small {
+  color: inherit;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* ---------- Search and fields ---------- */
 
 .users-search {
-  grid-template-columns: minmax(12rem, 1fr) minmax(8.5rem, auto) 2.55rem;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(12rem, 1fr) minmax(8.5rem, auto) 2.6rem;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .users-search label {
   position: relative;
   display: block;
+  min-width: 0;
 }
 
 .users-search label > span {
@@ -112,133 +352,187 @@
   left: 0.85rem;
   margin: 0;
   transform: translateY(-50%);
-  color: var(--otziv-info);
-  font-size: 1rem;
+  color: var(--otziv-action);
+  font-size: 1.1rem;
+  pointer-events: none;
 }
 
-.users-search input,
-.users-search select {
+// Calm field borders as in the windows of the site; the brand colour shows only on hover and focus.
+.users-field.users-field {
   width: 100%;
+  min-height: 2.6rem;
+  border: 1px solid var(--users-control-border);
+  border-radius: 0.75rem;
+  padding: 0 0.8rem;
+  color: var(--otziv-dark);
   background: var(--otziv-field-background);
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.users-field::placeholder {
+  color: var(--otziv-info);
+  font-weight: 500;
+}
+
+.users-field.users-field:hover {
+  border-color: var(--otziv-action-border);
+}
+
+.users-field.users-field:focus {
+  border-color: var(--otziv-action-border);
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--otziv-action-soft);
 }
 
 .users-search input {
-  padding: 0 0.85rem 0 2.35rem;
+  padding-left: 2.5rem;
 }
 
-.users-search select {
-  padding: 0 0.65rem;
+select.users-field.users-field {
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.icon-button {
-  width: 2.55rem;
+.users-workspace .users-btn.icon-button {
+  width: 2.6rem;
+  min-width: 2.6rem;
   padding: 0;
 }
+
+// Field captions: quiet but readable (the global caption grey is too dim in the dark theme).
+.editor-grid label > span,
+.worker-chat-block label > span,
+.password-row label > span {
+  margin: 0 0 0.35rem;
+  color: var(--otziv-info);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+/* ---------- List and card ---------- */
 
 .users-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.18fr) minmax(20rem, 0.82fr);
-  gap: 0.85rem;
   align-items: start;
+  gap: 0.85rem;
 }
 
-.users-card {
+.users-card,
+.users-help-card {
   min-width: 0;
+  border: 1px solid var(--otziv-surface-border-neutral);
   border-radius: 1.05rem;
   padding: 1rem;
-  background: var(--otziv-white);
-  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
-  transition: box-shadow 0.65s ease;
+  background: var(--otziv-surface-gradient-neutral);
+  box-shadow: 0 0.85rem 1.85rem var(--otziv-light);
 }
 
 .table-card {
   overflow: hidden;
 }
 
-.table-head,
-.editor-title {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.8rem;
-}
-
-.table-head h2,
-.editor-title h2 {
-  margin: 0.1rem 0 0;
-  font-size: 1.15rem;
-  line-height: 1;
-}
-
-.table-head > span,
-.editor-title > span {
-  border-radius: 999px;
-  padding: 0.35rem 0.65rem;
-  color: var(--otziv-success);
-  background: rgba(27, 156, 133, 0.13);
-  font-size: 0.72rem;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.editor-title > span.warn {
-  color: #8a5200;
-  background: rgba(247, 208, 96, 0.2);
-}
-
 .table-scroll {
-  overflow: auto;
+  min-width: 0;
+  overflow-x: auto;
 }
 
-table {
+.table-card table {
   width: 100%;
   border-collapse: collapse;
 }
 
-th,
-td {
-  border-bottom: 1px solid var(--otziv-light);
-  padding: 0.75rem 0.55rem;
+.table-card th,
+.table-card td {
+  border-bottom: 1px solid var(--otziv-surface-border-neutral);
+  padding: 0.7rem 0.6rem;
   text-align: left;
   vertical-align: top;
 }
 
-th {
+.table-card th {
   color: var(--otziv-info);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
-td {
-  font-size: 0.82rem;
+.table-card td {
+  font-size: 0.84rem;
 }
 
-td span {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--otziv-info);
-  font-size: 0.72rem;
-}
-
-tr {
+.table-card tbody tr {
   cursor: pointer;
 }
 
-tr.selected td {
-  background: rgba(108, 155, 207, 0.14);
+// Hover is a light tint. Accounts without a Keycloak link keep normal text on a soft warning tone with an
+// accent line; the open user takes the brand tone.
+.table-card tbody tr:hover {
+  background: var(--users-row-hover);
 }
 
-tr.unlinked td {
-  color: #8a5200;
-  background: rgba(247, 208, 96, 0.12);
+.table-card tbody tr.unlinked {
+  background: var(--users-warn-row);
+}
+
+.table-card tbody tr.unlinked:hover {
+  background: var(--users-warn-row-hover);
+}
+
+.table-card tbody tr.selected,
+.table-card tbody tr.selected:hover {
+  background: var(--otziv-action-soft);
+}
+
+.table-card tbody tr.unlinked > td:first-child {
+  box-shadow: inset 3px 0 0 var(--users-warn-line);
+}
+
+.table-card tbody tr.selected > td:first-child {
+  box-shadow: inset 3px 0 0 var(--otziv-action);
+}
+
+.table-card tbody tr:has(> .no-results) {
+  cursor: default;
+}
+
+.user-login-cell strong {
+  display: block;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.user-source {
+  display: inline-block;
+  margin-top: 0.3rem;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.4rem;
+  padding: 0 0.35rem;
+  color: var(--users-muted-text);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  line-height: 1.55;
+}
+
+.unlinked .user-source {
+  border-color: var(--users-warn-line);
+  color: var(--users-warn-text);
+}
+
+.user-email-cell {
+  overflow-wrap: anywhere;
 }
 
 .role-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  margin: 0;
 }
 
 .role-pills b,
@@ -246,124 +540,143 @@ tr.unlinked td {
   display: inline-flex;
   min-height: 1.45rem;
   align-items: center;
+  border: 1px solid var(--otziv-surface-border-neutral);
   border-radius: 999px;
-  padding: 0 0.5rem;
-  color: var(--otziv-primary);
-  background: rgba(108, 155, 207, 0.14);
-  font-size: 0.68rem;
-  font-weight: 900;
+  padding: 0 0.55rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font-size: 0.7rem;
+  font-weight: 750;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .status-pill {
   width: fit-content;
-  margin: 0;
-  color: var(--otziv-success);
-  background: rgba(27, 156, 133, 0.13);
+  gap: 0.25rem;
+  border-color: var(--otziv-tone-success-border);
+  color: var(--users-success-text);
+  background: var(--otziv-tone-success-surface);
+  font-weight: 800;
+  white-space: normal;
 }
 
 .status-pill.off {
-  color: var(--otziv-info);
-  background: rgba(125, 141, 161, 0.14);
+  border-color: var(--otziv-surface-border-neutral);
+  color: var(--users-muted-text);
+  background: var(--otziv-muted-surface);
 }
 
 .status-pill.warn {
-  margin-top: 0.3rem;
-  color: #8a5200;
-  background: rgba(247, 208, 96, 0.2);
+  border-color: var(--users-warn-line);
+  color: var(--users-warn-text);
+  background: var(--otziv-tone-wait-surface);
 }
+
+.status-pill .material-icons-sharp {
+  color: var(--users-warn-line);
+  font-size: 0.95rem;
+}
+
+.user-status-cell .status-pill {
+  display: flex;
+  white-space: nowrap;
+}
+
+.user-status-cell .status-pill + .status-pill {
+  margin-top: 0.3rem;
+}
+
+.no-results,
+.empty {
+  color: var(--users-muted-text);
+  text-align: center;
+}
+
+.table-card .no-results {
+  padding: 1.4rem 0.6rem;
+}
+
+/* ---------- Pagination ---------- */
 
 .table-pagination {
   display: grid;
   grid-template-columns: auto minmax(6rem, 1fr) auto;
-  gap: 0.7rem;
   align-items: center;
-  border-top: 1px solid var(--otziv-light);
-  margin-top: 0.25rem;
+  gap: 0.7rem;
+  margin-top: 0.35rem;
+  border-top: 1px solid var(--otziv-surface-border-neutral);
   padding-top: 0.85rem;
 }
 
 .page-size {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  color: var(--otziv-info);
-  font-size: 0.72rem;
-  font-weight: 900;
+  gap: 0.5rem;
 }
 
 .page-size span,
 .pagination-summary {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.76rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .page-size select {
-  min-height: 2rem;
-  border: 1px solid rgba(103, 116, 131, 0.24);
-  border-radius: var(--otziv-small-radius);
-  padding: 0 0.45rem;
-  color: var(--otziv-dark);
-  background: var(--otziv-field-background);
-  font-size: 0.74rem;
-  font-weight: 900;
+  width: auto;
+  min-height: 2.2rem;
+  padding: 0 0.55rem;
 }
 
 .pagination-summary {
   justify-self: center;
-  color: var(--otziv-info);
-  font-size: 0.74rem;
-  font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
 
 .pagination-controls,
 .page-numbers {
   display: flex;
   align-items: center;
+  gap: 0.3rem;
 }
 
 .pagination-controls {
   justify-content: flex-end;
-  gap: 0.35rem;
 }
 
-.page-numbers {
-  gap: 0.3rem;
-}
-
-.pagination-controls .icon-button,
-.page-numbers button {
-  display: inline-flex;
-  width: 2.1rem;
-  height: 2.1rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(103, 116, 131, 0.2);
-  border-radius: var(--otziv-small-radius);
+// Page buttons are neutral buttons in a smaller size; the current page keeps a soft brand tone.
+.users-workspace .users-btn.pager-button {
+  width: 2.2rem;
+  min-width: 2.2rem;
+  min-height: 2.2rem;
+  border-radius: 0.65rem;
   padding: 0;
-  color: var(--otziv-info);
-  background: var(--otziv-light);
-  font-size: 0.74rem;
-  font-weight: 900;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
-.page-numbers button.active {
+.users-workspace .users-btn.pager-button.active,
+.users-workspace .users-btn.pager-button.active:hover {
   border-color: var(--otziv-action-border);
   color: var(--otziv-action);
   background: var(--otziv-action-soft);
 }
 
-.pagination-controls .icon-button:disabled,
-.page-numbers button:disabled {
-  cursor: default;
-  opacity: 0.45;
+// Another page under the cursor: only a calm surface, so it never looks like the current page.
+.users-workspace .users-btn.pager-button:not(.active):not(:disabled):hover {
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-dark);
+  background: var(--otziv-muted-surface);
+  box-shadow: none;
 }
 
-.pagination-controls .material-icons-sharp {
-  font-size: 1rem;
-}
+/* ---------- The card of a user ---------- */
 
 .editor-card,
-.assignments,
 .password-reset,
+.assignments,
 .editor-grid {
   display: grid;
   gap: 0.75rem;
@@ -373,77 +686,52 @@ tr.unlinked td {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.worker-chat-block {
-  display: grid;
-  gap: 0.55rem;
-  border: 1px solid rgba(108, 155, 207, 0.18);
-  border-radius: var(--otziv-small-radius);
-  padding: 0.75rem;
-  background: rgba(108, 155, 207, 0.055);
-}
-
-.worker-chat-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.worker-chat-actions a,
-.worker-chat-actions button {
-  display: inline-flex;
-  min-height: 1.9rem;
-  align-items: center;
-  gap: 0.28rem;
-  border: 1px solid rgba(108, 155, 207, 0.28);
-  border-radius: 999px;
-  padding: 0 0.62rem;
-  color: var(--otziv-primary);
+// Blocks inside the card: a plain surface with a calm border on the soft gradient of the card.
+.profile-photo-editor,
+.worker-chat-block,
+.employment-card,
+.password-reset,
+.assignments {
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.9rem;
+  padding: 0.85rem;
   background: var(--otziv-white);
-  font-size: 0.72rem;
-  font-weight: 900;
-  text-decoration: none;
 }
 
-.worker-chat-actions button {
-  cursor: pointer;
-  font-family: inherit;
+.password-reset > .editor-title,
+.assignments > .editor-title {
+  margin-bottom: 0;
 }
 
-.worker-chat-actions button.telegram-reset-action {
-  border-color: rgba(239, 49, 100, 0.3);
-  color: var(--otziv-danger);
-  background: rgba(239, 49, 100, 0.07);
+.editor-card .role-block > span {
+  margin: 0 0 0.45rem;
+  color: var(--otziv-dark);
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
-.worker-chat-actions button:disabled {
-  cursor: wait;
-  opacity: 0.58;
-}
-
-.worker-chat-actions .material-icons-sharp {
-  font-size: 1rem;
+.editor-card .role-grid .checkbox:has(input:checked) {
+  border-color: var(--otziv-action-border);
+  background: var(--otziv-action-soft);
 }
 
 .profile-photo-editor {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.9rem;
   align-items: center;
-  border-bottom: 1px solid var(--otziv-light);
-  padding-bottom: 0.9rem;
+  gap: 0.9rem;
 }
 
 .profile-photo-preview {
   display: grid;
-  width: 5.2rem;
-  height: 5.2rem;
+  width: 4.8rem;
+  height: 4.8rem;
   place-items: center;
   overflow: hidden;
-  border: 2px solid rgba(108, 155, 207, 0.35);
+  border: 2px solid var(--otziv-surface-border-neutral);
   border-radius: 50%;
-  color: var(--otziv-primary);
-  background: var(--otziv-field-background);
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
 }
 
 .profile-photo-preview img {
@@ -453,7 +741,7 @@ tr.unlinked td {
 }
 
 .profile-photo-preview .material-icons-sharp {
-  font-size: 2.4rem;
+  font-size: 2.3rem;
 }
 
 .profile-photo-controls {
@@ -464,20 +752,20 @@ tr.unlinked td {
 
 .profile-photo-controls > div:first-child {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.15rem;
 }
 
-.profile-photo-controls span {
+.profile-photo-controls > div:first-child > span {
   color: var(--otziv-dark);
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .profile-photo-controls small {
   min-width: 0;
   overflow: hidden;
   color: var(--otziv-info);
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.74rem;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -486,27 +774,31 @@ tr.unlinked td {
   display: none;
 }
 
-.photo-actions {
+.photo-actions,
+.worker-chat-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.editor-actions {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.45rem;
 }
 
-.user-delete-button {
-  min-height: 1.95rem !important;
-  padding: 0 0.65rem !important;
-  font-size: 0.7rem !important;
+.worker-chat-block {
+  display: grid;
+  gap: 0.6rem;
 }
 
-.user-delete-button .material-icons-sharp {
-  font-size: 1rem;
+.worker-chat-actions .users-btn.users-btn {
+  min-height: 2rem;
+  border-radius: 999px;
+  padding: 0 0.75rem;
+  font-size: 0.76rem;
+}
+
+.worker-chat-block .form-hint {
+  margin: 0;
+  color: var(--users-muted-text);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .checkbox.wide {
@@ -518,24 +810,15 @@ tr.unlinked td {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.75rem;
-  border: 1px solid rgba(239, 49, 100, 0.22);
-  border-radius: var(--otziv-small-radius);
-  padding: 0.75rem;
-  background: rgba(239, 49, 100, 0.06);
-}
-
-.employment-card.inactive {
-  border-color: rgba(27, 156, 133, 0.24);
-  background: rgba(27, 156, 133, 0.07);
 }
 
 .employment-card > .material-icons-sharp {
-  color: var(--otziv-danger);
+  color: var(--users-danger-text);
   font-size: 1.55rem;
 }
 
 .employment-card.inactive > .material-icons-sharp {
-  color: var(--otziv-success);
+  color: var(--users-success-text);
 }
 
 .employment-card > div {
@@ -545,28 +828,14 @@ tr.unlinked td {
 }
 
 .employment-card strong {
-  color: var(--otziv-dark);
-  font-size: 0.78rem;
+  font-size: 0.84rem;
 }
 
 .employment-card small {
-  color: var(--otziv-info);
-  font-size: 0.7rem;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.employment-action {
-  border-color: rgba(239, 49, 100, 0.34) !important;
-  color: #a8173f !important;
-  background: #fff5f7 !important;
-  white-space: nowrap;
-}
-
-.employment-action.restore {
-  border-color: rgba(27, 156, 133, 0.32) !important;
-  color: #287767 !important;
-  background: #f2fbf6 !important;
+  color: var(--users-muted-text);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 @media (max-width: 720px) {
@@ -580,15 +849,130 @@ tr.unlinked td {
   }
 }
 
-.assignments {
-  border-top: 1px solid var(--otziv-light);
-  padding-top: 0.9rem;
+.actions.editor-actions {
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.password-reset {
-  border-top: 1px solid var(--otziv-light);
-  padding-top: 0.9rem;
+.users-workspace .users-btn.user-delete-button {
+  min-height: 2.15rem;
+  padding: 0 0.8rem;
+  font-size: 0.78rem;
 }
+
+.password-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.success,
+.hint {
+  border: 1px solid var(--otziv-surface-border-green);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  color: var(--users-success-text);
+  background: var(--otziv-surface-gradient-green);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.hint {
+  border-color: var(--otziv-surface-border-neutral);
+  color: var(--users-muted-text);
+  background: var(--otziv-surface-gradient-neutral);
+}
+
+// The global error box has light-only colours; on this page it follows the theme.
+.users-workspace .error {
+  border-color: var(--otziv-surface-border-red);
+  border-radius: 0.75rem;
+  color: var(--users-danger-text);
+  background: var(--otziv-surface-gradient-red);
+}
+
+.compact {
+  margin: 0;
+}
+
+.empty {
+  display: grid;
+  min-height: 14rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.4rem;
+  padding: 1.5rem 1rem;
+}
+
+.empty-icon {
+  width: 3.4rem;
+  height: 3.4rem;
+  font-size: 1.8rem;
+}
+
+.empty h2 {
+  margin: 0.35rem 0 0;
+  color: var(--otziv-dark);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.empty p {
+  max-width: 26rem;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+/* ---------- Side column: how to work with the page ---------- */
+
+.users-help-head {
+  margin-bottom: 0.9rem;
+}
+
+.users-help-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.users-help-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.6rem;
+}
+
+.users-help-list li > .material-icons-sharp {
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1.05rem;
+}
+
+.users-help-list strong {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.users-help-list p {
+  margin: 0.2rem 0 0;
+  color: var(--users-muted-text);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.users-help-list b {
+  color: var(--otziv-dark);
+  font-weight: 800;
+}
+
+/* ---------- Payment profiles of contractors (behaviour and texts unchanged) ---------- */
 
 .contractor-payments {
   display: grid;
@@ -608,20 +992,21 @@ tr.unlinked td {
 }
 
 .routing-mode-badge.shadow {
-  border-color: rgba(218, 155, 48, 0.28) !important;
-  color: #8a5c12 !important;
-  background: rgba(255, 190, 69, 0.13) !important;
+  border-color: var(--users-warn-line) !important;
+  color: var(--users-warn-text) !important;
+  background: var(--otziv-tone-wait-surface) !important;
 }
 
 .routing-mode-badge.live {
-  border-color: rgba(27, 156, 133, 0.3) !important;
-  color: #176b5b !important;
-  background: rgba(27, 156, 133, 0.12) !important;
+  border-color: var(--otziv-tone-success-border) !important;
+  color: var(--users-success-text) !important;
+  background: var(--otziv-tone-success-surface) !important;
 }
 
 .routing-mode-badge.disabled {
-  color: var(--otziv-info) !important;
-  background: rgba(103, 116, 131, 0.08) !important;
+  border-color: var(--otziv-surface-border-neutral) !important;
+  color: var(--users-muted-text) !important;
+  background: var(--otziv-muted-surface) !important;
 }
 
 .contractor-global-mode {
@@ -730,7 +1115,7 @@ tr.unlinked td {
   border: 1px solid rgba(218, 155, 48, 0.28);
   border-radius: 0.75rem;
   padding: 0.65rem 0.75rem;
-  color: #765116;
+  color: var(--users-warn-text);
   background: rgba(255, 190, 69, 0.1);
   font-size: 0.7rem;
   font-weight: 750;
@@ -1233,7 +1618,7 @@ tr.unlinked td {
 }
 
 .accrual-reversal summary {
-  color: #a83f47;
+  color: var(--users-danger-text);
   font-weight: 800;
   cursor: pointer;
 }
@@ -1636,7 +2021,7 @@ tr.unlinked td {
 .journal-status[data-status='RETURNED'],
 .journal-status[data-status='PARTIALLY_RETURNED'],
 .journal-status[data-status='RETURN_AMOUNT_PENDING'] {
-  color: #9a5f00;
+  color: var(--users-warn-text);
   background: rgba(255, 190, 69, 0.15);
 }
 
@@ -1965,16 +2350,6 @@ tr.unlinked td {
   outline-offset: 2px;
 }
 
-:host-context(body.otziv-dark-theme) .journal-status[data-status='RETURNED'],
-:host-context(body.otziv-dark-theme) .journal-status[data-status='PARTIALLY_RETURNED'],
-:host-context(body.otziv-dark-theme) .journal-status[data-status='RETURN_AMOUNT_PENDING'] {
-  color: var(--otziv-warning);
-}
-
-:host-context(body.otziv-dark-theme) .contractor-profile-readonly {
-  color: var(--otziv-warning);
-}
-
 :host-context(body.otziv-dark-theme) .direct-settlements > summary {
   color: var(--otziv-dark);
 }
@@ -2151,176 +2526,184 @@ tr.unlinked td {
   }
 }
 
-.password-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.75rem;
-  align-items: end;
-}
+/* ---------- Layout ---------- */
 
-.success {
-  border: 1px solid rgba(27, 156, 133, 0.24);
-  border-radius: var(--otziv-small-radius);
-  padding: 0.75rem 0.9rem;
-  color: #14532d;
-  background: #dcfce7;
-  font-weight: 800;
-}
-
-.hint {
-  border: 1px solid rgba(108, 155, 207, 0.22);
-  border-radius: var(--otziv-small-radius);
-  padding: 0.65rem 0.8rem;
-  color: var(--otziv-info);
-  background: rgba(108, 155, 207, 0.08);
-  font-weight: 800;
-}
-
-.danger-button {
-  background: var(--otziv-danger) !important;
-}
-
-.danger-button:disabled {
-  opacity: 0.55;
-}
-
-.compact,
-.success.compact {
-  margin: 0;
-}
-
-.no-results,
-.empty {
-  color: var(--otziv-info);
-  text-align: center;
-}
-
-.empty {
-  display: grid;
-  min-height: 18rem;
-  place-items: center;
-  align-content: center;
-}
-
-.empty > span {
-  font-size: 3rem;
-}
-
-.empty h2 {
-  margin: 0.5rem 0 0;
-}
-
-.mobile-user-stats {
-  display: none;
-}
-
-@media (max-width: 1500px) {
-  .users-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
+// The card sits beside the list only on a very wide page; otherwise it opens under the list.
 @container (max-width: 96rem) {
   .users-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 1280px) {
-  .mobile-user-stats {
+// A narrow page shows every user as a card instead of a table row, so nothing scrolls sideways.
+@container (max-width: 44rem) {
+  .table-card thead {
+    display: none;
+  }
+
+  .table-card table,
+  .table-card tbody {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .table-card tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'login status'
+      'name status'
+      'email email'
+      'roles roles';
+    gap: 0.3rem 0.75rem;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 0.85rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .table-card tbody td {
+    display: block;
+    min-width: 0;
+    border: 0;
+    padding: 0;
+  }
+
+  .table-card tbody tr.unlinked > td:first-child,
+  .table-card tbody tr.selected > td:first-child {
+    box-shadow: none;
+  }
+
+  .table-card tbody tr.unlinked {
+    box-shadow: inset 3px 0 0 var(--users-warn-line);
+  }
+
+  .table-card tbody tr.selected {
+    border-color: var(--otziv-action-border);
+    box-shadow: inset 3px 0 0 var(--otziv-action);
+  }
+
+  .table-card tbody td.user-login-cell {
+    grid-area: login;
+  }
+
+  .table-card tbody td.user-name-cell {
+    grid-area: name;
+  }
+
+  .table-card tbody td.user-email-cell {
+    grid-area: email;
+    color: var(--users-muted-text);
+    font-size: 0.8rem;
+  }
+
+  .table-card tbody td.user-roles-cell {
+    grid-area: roles;
+    padding-top: 0.15rem;
+  }
+
+  .table-card tbody td.user-status-cell {
+    display: grid;
+    grid-area: status;
+    align-content: start;
+    justify-items: end;
+    gap: 0.3rem;
+  }
+
+  .user-status-cell .status-pill + .status-pill {
+    margin-top: 0;
+  }
+
+  .table-card tbody td.no-results {
+    grid-column: 1 / -1;
+    padding: 1rem 0.4rem;
   }
 }
 
 @media (max-width: 860px) {
   .users-toolbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
   }
 
-  .users-search {
-    grid-template-columns: minmax(0, 1fr) 2.75rem;
+  .user-tabs {
     gap: 0.4rem;
   }
 
+  .user-tabs .user-tab.user-tab {
+    min-height: 2.35rem;
+    padding: 0 0.6rem;
+    font-size: 0.78rem;
+  }
+
+  .quick-links {
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .quick-links .users-btn.users-btn {
+    flex: 1 1 auto;
+    min-height: 2.35rem;
+    padding: 0 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .users-search {
+    grid-template-columns: minmax(0, 1fr) 2.15rem;
+    gap: 0.4rem;
+  }
+
+  // On a phone the label draws the search box; the field inside it stays transparent.
   .users-search label {
     display: grid;
-    min-width: 0;
-    min-height: 2.8rem;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: 0.45rem;
-    border: 1px solid rgba(103, 116, 131, 0.24);
-    border-radius: 1rem;
+    border: 1px solid var(--users-control-border);
     padding: 0 0.75rem;
-    background: var(--otziv-white);
+    background: var(--otziv-field-background);
+  }
+
+  .users-search label:focus-within {
+    border-color: var(--otziv-action-border);
+    box-shadow: 0 0 0 3px var(--otziv-action-soft);
   }
 
   .users-search label > span {
     position: static;
-    display: inline-block;
     transform: none;
-    font-size: 1.15rem;
   }
 
-  .users-search input {
-    min-height: 2.65rem;
-    height: 100%;
+  .users-search input,
+  .users-search input:hover,
+  .users-search input:focus {
     border: 0;
     border-radius: 0;
     padding: 0;
-    outline: 0;
     background: transparent;
-    font-family: inherit;
-    font-size: 0.82rem;
-    font-weight: 400;
-    line-height: 2.65rem;
+    box-shadow: none;
+    font-size: 0.84rem;
   }
 
   .users-search select {
     grid-column: 1 / -1;
-    min-height: 2.75rem;
-    border-radius: 0.9rem;
-    font-size: 0.82rem;
   }
 
-  .users-search .icon-button {
+  .users-workspace .users-btn.icon-button {
     grid-column: 2;
     grid-row: 1;
-    width: 2.75rem;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    height: 2.75rem;
-    border-radius: 0.9rem;
   }
 
-  .user-tabs,
-  .quick-links {
-    overflow-x: auto;
-    padding-bottom: 0.15rem;
-    scrollbar-width: thin;
-  }
-
-  .user-tabs button,
-  .quick-links a,
-  .quick-links button {
-    flex: 0 0 auto;
-  }
-
-  .quick-links {
-    justify-content: center;
-  }
-
-  .table-scroll {
-    max-width: 100%;
+  .users-card,
+  .users-help-card {
+    border-radius: 1rem;
+    padding: 0.8rem;
   }
 
   .editor-grid,
   .profile-photo-editor,
   .password-row,
-  .table-pagination,
-  .mobile-user-stats {
-    grid-template-columns: 1fr;
+  .table-pagination {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .page-size {

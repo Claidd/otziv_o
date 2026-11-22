@@ -389,7 +389,29 @@
                 }
               </div>
 
-              <button type="button" class="restore-confirm-inline" (click)="confirmRestore()" [disabled]="restoreLoading() || restoring() || !!recoveryTaskMutationKey() || !restoreDetails()">
+              @if (restoreWorkerOptions(); as workers) {
+                <div class="restore-specialist" role="group" aria-label="Специалист после восстановления">
+                  <p class="restore-specialist-note" role="status">
+                    <span class="material-icons-sharp">person_search</span>
+                    {{ restoreWorkerNotice() }}
+                  </p>
+                  <label for="archive-restore-worker">Новый специалист заказа</label>
+                  <select id="archive-restore-worker" [ngModel]="restoreWorkerId()" (ngModelChange)="restoreWorkerId.set($event)"
+                    [disabled]="restoring()">
+                    <option [ngValue]="null" disabled>Выберите специалиста</option>
+                    @for (worker of workers; track worker.id) {
+                      <option [ngValue]="worker.id">{{ worker.label }}{{ worker.companyWorker ? ' — специалист компании' : '' }}</option>
+                    }
+                  </select>
+                  @if (workers.length) {
+                    <p>Заказу, неопубликованным отзывам и ожидающим задачам назначится выбранный специалист.</p>
+                  } @else {
+                    <p role="alert">У менеджера компании нет действующих специалистов. Привяжите специалиста к менеджеру и повторите.</p>
+                  }
+                </div>
+              }
+
+              <button type="button" class="restore-confirm-inline" (click)="confirmRestore()" [disabled]="restoreLoading() || restoring() || !!recoveryTaskMutationKey() || !restoreDetails() || restoreWorkerMissing()">
                 <span class="material-icons-sharp">settings_backup_restore</span>
                 {{ restoring() ? 'Восстанавливаю' : 'Восстановить' }}
               </button>

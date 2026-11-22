@@ -257,7 +257,7 @@ class ManagerControlServiceTest {
     ManagerControlWorkerTaskLookup workerTaskLookup = new ManagerControlWorkerTaskLookup(badReviewTaskService, reviewRecoveryTaskService, reviewRepository, orderRepository, riskIncidentRepository, userRepository);
     var workerExplanationQueries = new ManagerControlWorkerExplanationQueries(dailyControlConcreteItemRepository, riskIncidentRepository, userRepository, workerTaskLookup);
     var qualityQueries = new ManagerControlQualityQueries(dailyControlEventRepository, appSettingService);
-    var orderAutomationDiagnostics = new ManagerControlOrderAutomationDiagnostics(orderRepository, scheduledClientMessageStateRepository);
+    var orderAutomationDiagnostics = new ManagerControlOrderAutomationDiagnostics(orderRepository, scheduledClientMessageStateRepository, scenario -> null);
     invoiceDiagnostics = new ManagerControlInvoiceDiagnostics(commonInvoiceRepository, commonInvoiceOrderRepository, commonInvoicePublicationBlockerService, paymentLinkRepository, appSettingService);
     invoiceRepairWorkflow = new ManagerControlInvoiceRepairWorkflow(commonInvoiceRepository, commonInvoiceOrderRepository, commonInvoicePublicationBlockerService, commonBillingService, invoiceDiagnostics);
     ManagerControlAccessPolicy accessPolicy = new ManagerControlAccessPolicy(managerRepository, userService, managerAccessService, managerPermissionService);
@@ -284,7 +284,7 @@ class ManagerControlServiceTest {
     var clientSendWorkflow = new ManagerControlClientSendWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, orderRepository, orderService, clientChatMessageSender, deliveryQueue, deliveryActors, paymentInstructionOrchestrator, accessPolicy, cardLifecycle, clientMessageText, concretePresenter, mock(ManagerControlOrderDeliveryState.class));
     var clientReplyWorkflow = new ManagerControlClientReplyWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, replyOperations, clientChatMessageSender, deliveryQueue, deliveryActors, org.mockito.Mockito.mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class), clientChatMessageTrackerService, accessPolicy, cardLifecycle, concretePresenter);
     var clientConversationWorkflow = new ManagerControlClientConversationWorkflow(dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, clientChatMessageTrackerService, clientChatReplySuggestionService, clientChatMessageReconciliationService, replyOperations, accessPolicy, cardLifecycle, concretePresenter);
-    var problemExamples = new ManagerControlProblemExamples(clientMessageText, concretePresenter, new ManagerControlOrderAutomationDiagnostics(orderRepository, scheduledClientMessageStateRepository), orderService, clientMessageOrderStatusService, appSettingService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewRepository, orderRepository, companyRepository, paymentLinkRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlConcreteItemRepository, mock(com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.class));
+    var problemExamples = new ManagerControlProblemExamples(clientMessageText, concretePresenter, new ManagerControlOrderAutomationDiagnostics(orderRepository, scheduledClientMessageStateRepository, scenario -> null), orderService, clientMessageOrderStatusService, appSettingService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewRepository, orderRepository, companyRepository, paymentLinkRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlConcreteItemRepository, mock(com.hunt.otziv.whatsapp.api.WhatsAppInviteLinkHealth.class), scenario -> null);
     var concreteSnapshot = new ManagerControlConcreteSnapshotWorkflow(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), problemExamples, cardLifecycle, slaPolicy, concretePresenter, dailyControlConcreteItemRepository, mock(ManagerControlOrderDeliveryState.class));
     var dayLifecycle = new ManagerControlDayLifecycle(problemExamples, accessPolicy, cardLifecycle, qualityQueries, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository);
     var dailySnapshot = new ManagerControlDailySnapshotWorkflow(dayLifecycle, problemExamples, cardLifecycle, slaPolicy, workerTaskLookup, workerExplanationQueries, orderAutomationDiagnostics, orderService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewService, reviewRepository, orderRepository, companyRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository, managerActionBalanceService, managerOperationalMetricsService, leadsRepository);
@@ -611,6 +611,7 @@ class ManagerControlServiceTest {
         Worker worker = new Worker();
         User workerUser = new User();
         workerUser.setId(501L);
+        workerUser.setActive(true);
         workerUser.setWorkerTelegramGroupChatId(-100123L);
         worker.setUser(workerUser);
         task.setWorker(worker);
@@ -681,6 +682,7 @@ class ManagerControlServiceTest {
         Worker worker = new Worker();
         User workerUser = new User();
         workerUser.setId(501L);
+        workerUser.setActive(true);
         workerUser.setWorkerTelegramGroupChatId(-100123L);
         worker.setUser(workerUser);
         task.setWorker(worker);
@@ -879,6 +881,7 @@ class ManagerControlServiceTest {
         Worker worker = new Worker();
         User workerUser = new User();
         workerUser.setId(501L);
+        workerUser.setActive(true);
         worker.setUser(workerUser);
         task.setWorker(worker);
         when(badReviewTaskService.getTask(concrete.getEntityId())).thenReturn(task);
@@ -896,6 +899,40 @@ class ManagerControlServiceTest {
         assertNotNull(concrete.getWorkerNotificationAttemptedAt());
         assertNull(concrete.getWorkerNotificationSentAt());
         assertEquals("Telegram-группа специалиста не привязана", concrete.getWorkerNotificationFailureReason());
+        assertEquals("OPEN", response.itemStatus());
+        verify(telegramService, never()).sendMessageWithInlineKeyboard(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void manualWorkerActionNeverSendsOrderDetailsToADeactivatedSpecialist() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "BAD_REVIEW_TASK");
+        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyControlRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        BadReviewTask task = new BadReviewTask();
+        Worker worker = new Worker();
+        User workerUser = new User();
+        workerUser.setId(501L);
+        workerUser.setActive(false);
+        workerUser.setWorkerTelegramGroupChatId(-100123L);
+        worker.setUser(workerUser);
+        task.setWorker(worker);
+        when(badReviewTaskService.getTask(concrete.getEntityId())).thenReturn(task);
+
+        ManagerControlConcreteItemResponse response = service.actionConcreteItem(
+                concrete.getId(),
+                new ManagerControlItemActionRequest("ACTION_TAKEN", null, true),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.OPEN, concrete.getStatus());
+        assertNull(concrete.getWorkerNotificationSentAt());
+        assertEquals("Специалист деактивирован: переназначьте заказ действующему специалисту",
+                concrete.getWorkerNotificationFailureReason());
         assertEquals("OPEN", response.itemStatus());
         verify(telegramService, never()).sendMessageWithInlineKeyboard(anyLong(), any(), any(), any());
     }

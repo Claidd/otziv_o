@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ManagerDeliveryHandoffDialogComponent } from './manager-delivery-handoff-dialog.component';
 
-describe('manual delivery handoff dialog', () => {
+describe('«Сверка отправки» decision dialog', () => {
   const base = '/api/admin/manager-control/concrete-items/41';
   const preview = {
     stateId: 9, operationId: '00000000-0000-0000-0000-000000000041',
@@ -32,112 +32,106 @@ describe('manual delivery handoff dialog', () => {
     await fixture.whenStable();
   }
 
-  async function fill(note = 'В чате проверена история. Свяжусь с клиентом лично.', checked = true) {
-    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('textarea');
-    textarea.value = note;
-    textarea.dispatchEvent(new Event('input'));
+  async function checkChat(checked = true, note = '') {
     const checkbox: HTMLInputElement = fixture.nativeElement.querySelector('input[type=checkbox]');
     checkbox.checked = checked;
     checkbox.dispatchEvent(new Event('change'));
+    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('textarea');
+    textarea.value = note;
+    textarea.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     await fixture.whenStable();
   }
 
-  function submit() {
-    fixture.nativeElement.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  function decisionButtons(): HTMLButtonElement[] {
+    return Array.from(fixture.nativeElement.querySelectorAll('footer button'));
+  }
+
+  function press(label: string) {
+    const button = decisionButtons().find(item => item.textContent?.includes(label));
+    if (!button) throw new Error('no button ' + label);
+    button.click();
     fixture.detectChanges();
   }
 
   it('loads the operation and renders its message as text without browser-native dialogs', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockImplementation(() => { throw new Error('unsupported'); });
-    const prompt = vi.spyOn(window, 'prompt').mockImplementation(() => { throw new Error('unsupported'); });
     expect(fixture.nativeElement.textContent).toContain('Загружаем сведения');
-    expect(fixture.nativeElement.querySelector('button[type=submit]').disabled).toBe(true);
     await ready();
     const element: HTMLElement = fixture.nativeElement;
-    expect(element.textContent).toContain(preview.operationId);
-    expect(element.textContent).toContain(preview.preparedAt);
+    expect(element.textContent).toContain('22.10.2026 09:30');
     expect(element.textContent).toContain(preview.message);
     expect(element.querySelector('img')).toBeNull();
+    expect(decisionButtons().map(button => button.textContent?.trim())).toEqual(
+      ['Сообщение есть в чате', 'Сообщения нет — отправить снова', 'Не отправлять']);
     expect(confirm).not.toHaveBeenCalled();
-    expect(prompt).not.toHaveBeenCalled();
     http.expectNone(req => req.method === 'POST');
   });
 
-  it('cancels without POST and cancels the preview read when the dialog is removed', () => {
-    const read = http.expectOne(`${base}/uncertain-delivery`);
-    const closed = vi.fn();
-    fixture.componentInstance.closed.subscribe(closed);
-    const cancel: HTMLButtonElement = fixture.nativeElement.querySelector('footer button[type=button]');
-    cancel.click();
-    expect(closed).toHaveBeenCalledOnce();
-    fixture.destroy();
-    expect(read.cancelled).toBe(true);
+  it('asks to open the chat first: every decision stays disabled until the check is ticked', async () => {
+    await ready();
+    expect(decisionButtons().every(button => button.disabled)).toBe(true);
+    press('Сообщение есть в чате');
     http.expectNone(req => req.method === 'POST');
+    await checkChat(true);
+    expect(decisionButtons().every(button => !button.disabled)).toBe(true);
   });
 
   it.each([
-    ['Коротко', true], [' '.repeat(12), true], ['x'.repeat(401), true],
-    ['Проверил историю клиентского чата.', false]
-  ])('rejects an invalid note or missing explicit chat check: %s / %s', async (note, checked) => {
+    ['Сообщение есть в чате', 'SEEN_IN_CHAT'],
+    ['Сообщения нет — отправить снова', 'NOT_IN_CHAT'],
+    ['Не отправлять', 'CLOSE'],
+  ])('sends «%s» once with the pinned operation, the decision and the comment', async (label, decision) => {
     await ready();
-    await fill(note as string, checked as boolean);
-    expect(fixture.nativeElement.querySelector('button[type=submit]').disabled).toBe(true);
-    submit();
-    http.expectNone(req => req.method === 'POST');
-  });
-
-  it('sends the pinned operation and checkedChat exactly once, including a double submit', async () => {
-    await ready();
-    const note = '  Проверил историю чата; отвечу клиенту вручную.  ';
-    await fill(note);
+    await checkChat(true, '  Проверил чат  ');
     const saved = vi.fn(), closed = vi.fn();
     fixture.componentInstance.saved.subscribe(saved);
     fixture.componentInstance.closed.subscribe(closed);
-    submit();
-    submit();
+    const button = decisionButtons().find(item => item.textContent?.includes(label))!;
+    button.click();
+    fixture.detectChanges();
+    expect(button.textContent?.trim()).toBe('Сохраняем…');
+    button.click();
+    fixture.detectChanges();
     const write = http.expectOne(`${base}/handoff-uncertain-delivery`);
-    expect(write.request.method).toBe('POST');
-    expect(write.request.body).toEqual({ operationId: preview.operationId, note: note.trim(), checkedChat: true });
-    expect(fixture.nativeElement.querySelector('button[type=submit]').disabled).toBe(true);
+    expect(write.request.body).toEqual({ operationId: preview.operationId, note: 'Проверил чат', checkedChat: true, decision });
+    expect(decisionButtons().every(button => button.disabled)).toBe(true);
     fixture.componentInstance.cancel();
     expect(closed).not.toHaveBeenCalled();
-    const updated = { controlEntityId: 41, type: 'AUTOMATION_FAILURE', itemStatus: 'OPEN' };
+    const updated = { controlEntityId: 41, type: 'AUTOMATION_FAILURE', itemStatus: 'RESOLVED' };
     write.flush(updated);
     expect(saved).toHaveBeenCalledExactlyOnceWith(updated);
-    submit();
     http.expectNone(req => req.method === 'POST');
   });
 
-  it('retains the note and shows a save error without automatically repeating the POST', async () => {
+  it('keeps the comment and shows a save error without repeating the POST', async () => {
     await ready();
-    const note = 'Проверил историю чата. Требуется ручная связь.';
-    await fill(note);
+    await checkChat(true, 'Клиент не отвечает');
     const saved = vi.fn();
     fixture.componentInstance.saved.subscribe(saved);
-    submit();
+    press('Сообщения нет — отправить снова');
     http.expectOne(`${base}/handoff-uncertain-delivery`).flush(
-      { message: 'Состояние операции изменилось' }, { status: 409, statusText: 'Conflict' });
+      { message: 'Сообщение отправлялось меньше часа назад' }, { status: 409, statusText: 'Conflict' });
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role=alert]').textContent).toContain('Состояние операции изменилось');
-    expect(fixture.componentInstance.note()).toBe(note);
+    expect(fixture.nativeElement.querySelector('[role=alert]').textContent).toContain('меньше часа назад');
+    expect(fixture.componentInstance.note()).toBe('Клиент не отвечает');
     expect(fixture.componentInstance.saving()).toBe(false);
     expect(saved).not.toHaveBeenCalled();
     http.expectNone(req => req.method === 'POST');
   });
 
   it('shows preview errors and retries only the GET', async () => {
-    http.expectOne(`${base}/uncertain-delivery`).flush({ message: 'Отправка недоступна' }, { status: 503, statusText: 'Unavailable' });
+    http.expectOne(`${base}/uncertain-delivery`).flush({ message: 'Отправка недоступна' }, { status: 409, statusText: 'Conflict' });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role=alert]').textContent).toContain('Отправка недоступна');
-    expect(fixture.nativeElement.querySelector('button[type=submit]').disabled).toBe(true);
+    expect(decisionButtons()).toEqual([]);
     fixture.componentInstance.loadPreview();
     await ready();
     expect(fixture.componentInstance.checkedChat()).toBe(false);
     http.expectNone(req => req.method === 'POST');
   });
 
-  it('keeps keyboard focus in the dialog and supports Escape cancellation', async () => {
+  it('cancels without POST and keeps focus inside, Escape closes', async () => {
     await ready();
     const closed = vi.fn();
     fixture.componentInstance.closed.subscribe(closed);

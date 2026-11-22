@@ -183,6 +183,25 @@ class ApiAdminPhoneControllerSecurityTest {
     }
 
     @Test
+    void createdPhoneIsAnsweredFromAFreshReadNotFromTheClosedTransaction() {
+        Authentication actor = adminAuthentication();
+        // The operator of the created DTO belongs to a closed session: reading its user fails like a lazy proxy.
+        com.hunt.otziv.u_users.model.Operator detached = org.mockito.Mockito.mock(com.hunt.otziv.u_users.model.Operator.class);
+        org.mockito.Mockito.lenient().when(detached.getUser())
+                .thenThrow(new org.hibernate.LazyInitializationException("Could not initialize proxy - no session"));
+        when(telephoneService.createEmptyDTO()).thenReturn(TelephoneDTO.builder().build());
+        when(telephoneService.createTelephone(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(TelephoneDTO.builder().id(7L).number("79990000000").operator(detached).build());
+        when(telephoneService.getTelephoneDTOById(7L)).thenReturn(phoneWithSecrets());
+        when(deviceTokenRepository.findByTelephone_IdOrderByCreatedAtDesc(7L)).thenReturn(List.of());
+
+        PhoneResponse response = controller.createPhone(request(null, null, null, null, null), actor);
+
+        assertEquals(7L, response.id());
+        verify(telephoneService).getTelephoneDTOById(7L);
+    }
+
+    @Test
     void scopedOwnerCannotDetachPhoneFromOperator() {
         Authentication actor = ownerAuthentication();
 

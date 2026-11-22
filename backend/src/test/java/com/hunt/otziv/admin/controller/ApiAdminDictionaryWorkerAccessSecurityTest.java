@@ -244,7 +244,7 @@ class ApiAdminDictionaryWorkerAccessSecurityTest {
         ApiAdminDictionaryController.BotResponse response = controller.updateBot(
                 42L,
                 new ApiAdminDictionaryController.BotRequest(
-                        "79990001122", "  ", "Owned Bot", 5L, 7L, 6L, true, 0
+                        "79990001122", "  ", "Owned Bot", 5L, 7L, 6L, true, 0, null, null, null
                 ),
                 owner
         );
@@ -254,6 +254,53 @@ class ApiAdminDictionaryWorkerAccessSecurityTest {
         JsonNode serialized = new ObjectMapper().valueToTree(response);
         assertFalse(serialized.has("password"));
         assertFalse(serialized.toString().contains("stored-secret"));
+    }
+
+    @Test
+    void unchangedCounterStatusAndActivityKeepWhatTheBackgroundWroteWhileTheCardWasOpen() throws Exception {
+        BotCrudAccessService crudAccessService = mock(BotCrudAccessService.class);
+        BotsRepository botsRepository = mock(BotsRepository.class);
+        WorkerRepository workerRepository = mock(WorkerRepository.class);
+        StatusBotRepository statusBotRepository = mock(StatusBotRepository.class);
+        CityRepository cityRepository = mock(CityRepository.class);
+        ApiAdminDictionaryController controller = mock(ApiAdminDictionaryController.class, CALLS_REAL_METHODS);
+        ReflectionTestUtils.setField(controller, "botCrudAccessService", crudAccessService);
+        ReflectionTestUtils.setField(controller, "botsRepository", botsRepository);
+        ReflectionTestUtils.setField(controller, "workerRepository", workerRepository);
+        ReflectionTestUtils.setField(controller, "statusBotRepository", statusBotRepository);
+        ReflectionTestUtils.setField(controller, "cityRepository", cityRepository);
+        ReflectionTestUtils.setField(controller, "botAssignmentService", mock(BotAssignmentService.class));
+
+        Authentication owner = new TestingAuthenticationToken("owner", "n/a", "ROLE_OWNER");
+        Worker worker = new Worker();
+        worker.setId(5L);
+        StatusBot opened = new StatusBot();
+        opened.setId(6L);
+        StatusBot medium = new StatusBot();
+        medium.setId(8L);
+        medium.setBotStatusTitle("Средний");
+        Bot bot = new Bot();
+        bot.setId(42L);
+        bot.setLogin("79990001122");
+        bot.setFio("Owned Bot");
+        bot.setWorker(worker);
+        // The card was opened at counter 9, status 6, active; a publication then moved the row to 10, «Средний», off.
+        bot.setStatus(medium);
+        bot.setCounter(10);
+        bot.setActive(false);
+        when(crudAccessService.requireLockedGlobalAccess(42L, owner)).thenReturn(
+                new BotCrudAccessService.LockedCrudBot(bot, 5L, false));
+        when(botsRepository.findByLogin("79990001122")).thenReturn(Optional.of(bot));
+        when(workerRepository.findById(5L)).thenReturn(Optional.of(worker));
+        when(botsRepository.save(bot)).thenReturn(bot);
+
+        controller.updateBot(42L, new ApiAdminDictionaryController.BotRequest(
+                "79990001122", "", "Новое ФИО", 5L, null, 6L, true, 9, 9, 6L, true), owner);
+
+        assertEquals("Новое ФИО", bot.getFio());
+        assertEquals(10, bot.getCounter());
+        assertEquals(8L, bot.getStatus().getId());
+        assertFalse(bot.isActive());
     }
 
     private void assertAdminOnly(Method method) {

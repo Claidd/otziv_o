@@ -1243,6 +1243,15 @@
                                   {{ repairActionLabel(example) }}
                                 </button>
                               }
+                              @if (isUncertainDeliveryForHandoff(example)) {
+                                <button type="button" class="review-action secondary-action"
+                                  (click)="handoffUncertainDelivery(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Открыть чат клиента и выбрать: сообщение есть, отправить снова или не отправлять">
+                                  <span class="material-icons-sharp">fact_check</span>
+                                  Сверка отправки
+                                </button>
+                              }
                               @if (canContactOrder(example)) {
                                 <button type="button" class="review-action text-action" [class.done]="isContactTextCopied(example)" (click)="copyContactText(example)"
                                   [disabled]="isConcreteUpdating(example.controlEntityId) || deliveryBlocked(example)"
@@ -1369,6 +1378,15 @@
                                   {{ repairActionLabel(example) }}
                                 </button>
                               }
+                              @if (isUncertainDeliveryForHandoff(example)) {
+                                <button type="button" class="review-action secondary-action"
+                                  (click)="handoffUncertainDelivery(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Открыть чат клиента и выбрать: сообщение есть, отправить снова или не отправлять">
+                                  <span class="material-icons-sharp">fact_check</span>
+                                  Сверка отправки
+                                </button>
+                              }
                               @if (canShowWorkerClientAction(example)) {
                                 <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
                                   <span class="material-icons-sharp">forum</span>
@@ -1424,6 +1442,15 @@
                                   {{ repairActionLabel(example) }}
                                 </button>
                               }
+                              @if (isUncertainDeliveryForHandoff(example)) {
+                                <button type="button" class="review-action secondary-action"
+                                  (click)="handoffUncertainDelivery(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Открыть чат клиента и выбрать: сообщение есть, отправить снова или не отправлять">
+                                  <span class="material-icons-sharp">fact_check</span>
+                                  Сверка отправки
+                                </button>
+                              }
                               <small>сначала карточка в заказах, затем правая панель счета</small>
                             </div>
                           }
@@ -1443,6 +1470,15 @@
                                   <span class="material-icons-sharp">{{ isTelegramBindingFailure(example) ? 'link' : 'build' }}</span>
                                   {{ isTelegramBindingFailure(example) && !isDeliveryReconciliation(example) && !isConcreteUpdating(example.controlEntityId)
                                     ? 'Привязать Telegram' : repairActionLabel(example) }}
+                                </button>
+                              }
+                              @if (isUncertainDeliveryForHandoff(example)) {
+                                <button type="button" class="review-action secondary-action"
+                                  (click)="handoffUncertainDelivery(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Открыть чат клиента и выбрать: сообщение есть, отправить снова или не отправлять">
+                                  <span class="material-icons-sharp">fact_check</span>
+                                  Сверка отправки
                                 </button>
                               }
                               @if (isTelegramBindingFailure(example)) {

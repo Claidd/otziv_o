@@ -1,133 +1,201 @@
+@use '../../../shared/plain-modal' as plain;
+
+// «Аудит» in «Справочники». The block follows the look the owner accepted for the windows
+// (shared/plain-modal.scss): the page font, an accent kicker above a bold title, calm bordered cards,
+// the brand gradient only for the head stripe and «Сохранить», brand coloured switches and focus rings.
+// Every colour comes from the site tokens of styles.scss, so both themes follow without a second palette.
+
 :host {
+  // The plain-modal mixins read --plain-*; here they point at the site tokens instead of a fixed palette.
+  --plain-surface: var(--otziv-white);
+  --plain-soft: var(--otziv-muted-surface);
+  --plain-border: var(--otziv-surface-border-neutral);
+  --plain-control-border: color-mix(in srgb, var(--otziv-info) 40%, transparent);
+  --plain-text: var(--otziv-dark);
+  --plain-muted: color-mix(in srgb, var(--otziv-info) 70%, var(--otziv-dark));
+  --plain-disabled-text: var(--otziv-info);
+  --plain-brand-shadow: color-mix(in srgb, var(--otziv-action) 26%, transparent);
+
+  --audit-divider: var(--otziv-surface-border-neutral);
+  --audit-control-hover: color-mix(in srgb, var(--otziv-info) 65%, transparent);
+  --audit-track: color-mix(in srgb, var(--otziv-info) 45%, transparent);
+  --audit-knob: var(--otziv-white);
+  --audit-danger-text: color-mix(in srgb, var(--otziv-danger) 72%, var(--otziv-dark));
+  --audit-success-text: color-mix(in srgb, var(--otziv-success) 70%, var(--otziv-dark));
+  --audit-warning-text: color-mix(in srgb, var(--otziv-warning) 70%, var(--otziv-dark));
+  --audit-card-shadow: 0 1px 2px var(--otziv-light), 0 10px 22px -18px var(--otziv-light);
+
   display: block;
+  // The block measures its own width (the desktop sidebar narrows it too); the width keeps it from
+  // collapsing if a parent ever lays it out at its content size.
+  width: 100%;
+  min-width: 0;
+  container-name: audit-settings;
+  container-type: inline-size;
+}
+
+:host-context(body.otziv-dark-theme) {
+  --plain-brand-shadow: var(--otziv-light);
+  // --otziv-white is dark in this theme, so the knob of a switch takes the light text colour.
+  --audit-knob: var(--otziv-dark);
+  color-scheme: dark;
 }
 
 .audit-settings {
   display: grid;
-  gap: 18px;
-  color: #182235;
+  gap: 0.9rem;
+  min-width: 0;
+  color: var(--otziv-dark);
+  font-family: var(--otziv-font-family);
+  font-size: 0.9rem;
+  line-height: 1.4;
 }
 
-.audit-hero,
-.audit-card,
-.audit-summary article,
-.save-bar {
-  border: 1px solid #dde5ef;
-  background: #fff;
-  box-shadow: 0 12px 32px rgba(31, 49, 76, .06);
-}
-
-.audit-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 24px;
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at 88% 18%, rgba(77, 171, 247, .16), transparent 30%),
-    linear-gradient(135deg, #fff 0%, #f7fbff 100%);
-}
-
-.audit-hero h2,
-.audit-card h3 {
-  margin: 3px 0 7px;
-}
-
-.audit-hero p,
-.managers-heading p {
-  max-width: 760px;
+.audit-settings h2,
+.audit-settings h3 {
   margin: 0;
-  color: #64748b;
-  line-height: 1.55;
-}
-
-.eyebrow {
-  margin: 0;
-  color: #3178c6;
-  font-size: 12px;
+  color: var(--otziv-dark);
+  font-family: inherit;
   font-weight: 800;
-  letter-spacing: .08em;
+  line-height: 1.25;
+}
+
+.audit-settings .eyebrow {
+  margin: 0;
+  color: var(--otziv-action);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
   text-transform: uppercase;
 }
 
-.secondary-button,
-.primary-button {
-  display: inline-flex;
+/* ---- Head: compact, the page header above already names the tab ---- */
+
+.audit-hero {
+  @include plain.head-band;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'title action'
+    'text action';
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 0 17px;
-  border: 0;
-  border-radius: 12px;
-  font: inherit;
-  font-weight: 750;
-  cursor: pointer;
+  gap: 0.3rem 1.25rem;
+  border: 1px solid var(--otziv-surface-border-blue);
+  border-radius: 16px;
+  padding: 0.95rem 1.15rem 0.9rem;
+  box-shadow: var(--audit-card-shadow);
 }
 
-.secondary-button {
-  color: #2f6eac;
-  background: #eaf4ff;
+.audit-hero-title {
+  grid-area: title;
+  min-width: 0;
 }
 
-.primary-button {
-  color: #fff;
-  background: linear-gradient(135deg, #2475c5, #18579c);
+.audit-hero h2 {
+  margin-top: 0.1rem;
+  font-size: 1.05rem;
 }
 
-button:disabled {
-  cursor: wait;
-  opacity: .6;
+.audit-hero-text {
+  grid-area: text;
+  max-width: 120ch;
+  margin: 0;
+  color: var(--plain-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
+
+.audit-hero .secondary-button {
+  grid-area: action;
+}
+
+/* ---- Buttons: calm neutral «Обновить», the brand gradient only for «Сохранить» ----
+   The selectors repeat the class to outweigh the .admin-layout button rules of styles.scss. */
+
+.audit-settings button.secondary-button.secondary-button,
+.audit-settings button.primary-button.primary-button {
+  flex: none;
+  white-space: nowrap;
+  @include plain.button;
+}
+
+.audit-settings button.primary-button.primary-button {
+  min-height: 2.6rem;
+  padding: 0 1.25rem;
+  @include plain.button-save;
+
+  .material-icons-sharp {
+    color: inherit;
+  }
+}
+
+/* ---- Messages ---- */
 
 .audit-error,
 .audit-loading {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 15px 18px;
-  border-radius: 14px;
+  gap: 0.6rem;
+  border-radius: 12px;
+  padding: 0.75rem 0.95rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.audit-error .material-icons-sharp,
+.audit-loading .material-icons-sharp {
+  flex: none;
+  font-size: 1.25rem;
 }
 
 .audit-error {
-  color: #a52d36;
-  border: 1px solid #f3c5ca;
-  background: #fff2f3;
+  border: 1px solid var(--otziv-tone-bad-border);
+  color: var(--audit-danger-text);
+  background: var(--otziv-tone-bad-surface);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.audit-error .material-icons-sharp {
+  color: var(--otziv-danger);
 }
 
 .audit-loading {
-  color: #49657f;
-  background: #eef6fc;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  color: var(--plain-muted);
+  background: var(--otziv-surface-gradient-neutral);
 }
+
+.audit-loading .material-icons-sharp {
+  color: var(--otziv-action);
+}
+
+/* ---- Summary ---- */
 
 .audit-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 0.75rem;
 }
 
 .audit-summary article {
+  @include plain.block;
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 17px 19px;
-  border-radius: 16px;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.8rem 0.95rem;
 }
 
-.audit-summary article.disabled {
-  color: #9f343b;
-  background: #fff5f5;
+.audit-summary article > div {
+  min-width: 0;
 }
 
 .audit-summary .material-icons-sharp {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 13px;
-  color: #246eb5;
-  background: #eaf4ff;
+  @include plain.icon-chip;
+  width: 2.3rem;
+  height: 2.3rem;
 }
 
 .audit-summary strong,
@@ -135,184 +203,388 @@ button:disabled {
   display: block;
 }
 
-.audit-summary small {
-  margin-top: 3px;
-  color: #718096;
+.audit-summary strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.25;
 }
+
+.audit-summary small {
+  margin-top: 0.15rem;
+  color: var(--plain-muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.audit-summary article.disabled {
+  border-color: var(--otziv-surface-border-red);
+  background: var(--otziv-surface-gradient-red);
+}
+
+.audit-summary article.disabled strong {
+  color: var(--audit-danger-text);
+}
+
+.audit-summary article.disabled .material-icons-sharp {
+  color: var(--otziv-danger);
+  background: color-mix(in srgb, var(--otziv-danger) 12%, transparent);
+}
+
+/* ---- Cards ---- */
 
 .audit-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 0.9rem;
+  min-width: 0;
 }
 
 .audit-card {
-  padding: 22px;
-  border-radius: 18px;
+  min-width: 0;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 16px;
+  padding: 1.05rem 1.2rem 1.15rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: var(--audit-card-shadow);
+}
+
+.audit-card h3 {
+  margin-top: 0.1rem;
+  font-size: 1rem;
 }
 
 .card-heading,
 .managers-heading {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 18px;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.card-heading > div,
+.managers-heading > div {
+  min-width: 0;
 }
 
 .card-heading > .material-icons-sharp {
-  color: #3683ca;
-  font-size: 28px;
+  @include plain.icon-chip;
+  order: -1;
 }
 
+/* ---- Switches ---- */
+
 .switch-row {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18px;
-  padding: 15px 0;
-  border-top: 1px solid #edf1f6;
+  gap: 1rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--audit-divider);
   cursor: pointer;
 }
 
-.switch-row:first-of-type {
+.card-heading + .switch-row {
   border-top: 0;
+  padding-top: 0.2rem;
 }
 
-.switch-row span,
+.field-grid + .switch-row {
+  margin-top: 0.9rem;
+}
+
+.switch-row:last-child,
+.field-grid + .switch-row {
+  padding-bottom: 0;
+}
+
+.switch-row > span {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  color: inherit;
+  font-weight: inherit;
+}
+
 .switch-row strong,
 .switch-row small {
   display: block;
 }
 
-.switch-row small,
-.field-grid small {
-  margin-top: 4px;
-  color: #748397;
+.switch-row strong {
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.switch-row small {
+  margin-top: 0.2rem;
+  color: var(--plain-muted);
+  font-size: 0.76rem;
   line-height: 1.4;
 }
 
 .switch-row input {
   position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
   opacity: 0;
   pointer-events: none;
 }
 
 .switch-row > i,
-.manager-switch {
+.audit-settings button.manager-switch.manager-switch,
+.audit-settings button.manager-switch.manager-switch:not(:disabled):hover {
   position: relative;
-  width: 48px;
-  height: 27px;
+  display: block;
+  flex: none;
+  width: 2.75rem;
+  height: 1.5rem;
+  min-height: 0;
+  margin: 0;
   border: 0;
   border-radius: 999px;
-  background: #cbd5e1;
-  transition: .18s ease;
+  padding: 0;
+  background: var(--audit-track);
+  box-shadow: none;
+  transition: background-color 0.18s ease;
 }
 
 .switch-row > i::after,
 .manager-switch i {
   position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 19px;
-  height: 19px;
+  top: 3px;
+  left: 3px;
+  width: 1.125rem;
+  height: 1.125rem;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 2px 5px rgba(20, 32, 51, .25);
-  transition: .18s ease;
+  background: var(--audit-knob);
+  box-shadow: 0 1px 3px var(--otziv-light);
+  transition: transform 0.18s ease;
   content: '';
 }
 
 .switch-row input:checked + i,
-.manager-switch.on {
-  background: #2a87d6;
+.audit-settings button.manager-switch.manager-switch.on,
+.audit-settings button.manager-switch.manager-switch.on:not(:disabled):hover {
+  background: var(--otziv-action);
 }
 
 .switch-row input:checked + i::after,
 .manager-switch.on i {
-  transform: translateX(21px);
+  transform: translateX(1.25rem);
 }
+
+.switch-row input:focus-visible + i,
+.audit-settings button.manager-switch.manager-switch:focus-visible {
+  outline: 2px solid var(--otziv-action);
+  outline-offset: 2px;
+}
+
+.audit-settings button.manager-switch.manager-switch {
+  cursor: pointer;
+}
+
+.audit-settings button.manager-switch.manager-switch:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+/* ---- Fields ---- */
 
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 15px;
+  gap: 0.8rem 0.9rem;
+}
+
+.field-grid label {
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .field-grid label > span {
   display: block;
-  margin-bottom: 7px;
-  font-size: 13px;
-  font-weight: 750;
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.field-grid small {
+  color: var(--plain-muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.full-field {
+  grid-column: 1 / -1;
 }
 
 .field-grid input,
 .field-grid select,
 .manager-search input {
-  width: 100%;
   box-sizing: border-box;
-  border: 1px solid #ccd7e4;
-  border-radius: 11px;
-  color: #17243a;
-  background: #f9fbfd;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.5rem;
+  margin: 0;
+  border: 1px solid var(--plain-control-border);
+  border-radius: 10px;
+  padding: 0 0.75rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  box-shadow: none;
   font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
   outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
-.field-grid select { min-height: 42px; padding: 9px; }
-.field-grid select[multiple] { min-height: 120px; }
-.full-field { grid-column: 1 / -1; }
-.setting-note { color: #64748b; font-size: 13px; line-height: 1.5; margin: 12px 0 0; }
+.field-grid select {
+  cursor: pointer;
+}
 
-.field-grid input {
-  min-height: 43px;
-  padding: 0 12px;
+.field-grid select[multiple] {
+  min-height: 7.5rem;
+  padding: 0.35rem;
+}
+
+.field-grid input:hover,
+.field-grid select:hover,
+.manager-search input:hover {
+  border-color: var(--audit-control-hover);
 }
 
 .field-grid input:focus,
+.field-grid select:focus,
 .manager-search input:focus {
-  border-color: #3788d3;
-  box-shadow: 0 0 0 3px rgba(55, 136, 211, .12);
+  border-color: var(--otziv-action-border);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--otziv-action-soft);
 }
+
+.field-grid input.ng-invalid.ng-touched {
+  border-color: color-mix(in srgb, var(--otziv-danger) 70%, transparent);
+}
+
+.field-grid input.ng-invalid.ng-touched:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-danger) 16%, transparent);
+}
+
+.setting-note {
+  margin: 0.75rem 0 0;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  color: var(--plain-muted);
+  background: var(--otziv-muted-surface);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.setting-note + .setting-note {
+  margin-top: 0.5rem;
+}
+
+/* ---- Question generation (folded) ---- */
 
 .advanced-card {
   grid-column: 1 / -1;
 }
 
 .advanced-card summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 0.25rem 0.9rem;
+  border-radius: 10px;
   cursor: pointer;
   list-style: none;
+}
+
+.advanced-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-card summary::after {
+  color: var(--plain-muted);
+  font-family: 'Material Icons Sharp';
+  font-size: 1.35rem;
+  font-feature-settings: 'liga';
+  line-height: 1;
+  transition: transform 0.18s ease;
+  content: 'expand_more';
+  // The icon name must not become part of the accessible name of «Генерация вопросов».
+  content: 'expand_more' / '';
+}
+
+.advanced-card[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.advanced-card summary:focus-visible {
+  outline: 2px solid var(--otziv-action);
+  outline-offset: 4px;
 }
 
 .advanced-card summary > span {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.advanced-card summary .material-icons-sharp {
+  @include plain.icon-chip;
+}
+
+.advanced-card summary strong {
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 .advanced-card summary small {
-  color: #718096;
+  color: var(--plain-muted);
+  font-size: 0.76rem;
+  text-align: right;
 }
 
-.advanced-grid {
+.field-grid.advanced-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #edf1f6;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--audit-divider);
 }
+
+.advanced-evidence > .field-grid.advanced-grid {
+  margin-top: 0.8rem;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* ---- Save ---- */
 
 .save-bar {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 17px 20px;
+  gap: 1rem;
+  border: 1px solid var(--otziv-surface-border-neutral);
   border-radius: 16px;
+  padding: 0.85rem 1rem 0.85rem 1.2rem;
+  background: var(--otziv-surface-gradient-neutral);
+  box-shadow: var(--audit-card-shadow);
+}
+
+.save-bar > div {
+  min-width: 0;
 }
 
 .save-bar strong,
@@ -320,59 +592,108 @@ button:disabled {
   display: block;
 }
 
-.save-bar small {
-  margin-top: 4px;
-  color: #748397;
+.save-bar strong {
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
+.save-bar small {
+  margin-top: 0.2rem;
+  color: var(--plain-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+/* ---- Managers ---- */
+
 .managers-card {
-  padding-bottom: 10px;
+  padding-bottom: 0.4rem;
+}
+
+.managers-heading {
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.managers-heading h3 + p {
+  max-width: 60ch;
+  margin: 0.3rem 0 0;
+  color: var(--plain-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .manager-search {
   position: relative;
-  width: min(320px, 100%);
+  display: block;
+  flex: 0 1 20rem;
+  width: min(20rem, 100%);
+  min-width: 0;
 }
 
 .manager-search .material-icons-sharp {
   position: absolute;
-  top: 11px;
-  left: 12px;
-  color: #7b8a9e;
-  font-size: 20px;
+  top: 50%;
+  left: 0.7rem;
+  margin: 0;
+  color: var(--plain-muted);
+  font-size: 1.15rem;
+  font-weight: normal;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .manager-search input {
-  min-height: 42px;
-  padding: 0 12px 0 40px;
+  padding-left: 2.3rem;
+}
+
+.manager-search input::placeholder {
+  color: var(--otziv-info);
+  font-weight: 500;
+  opacity: 1;
 }
 
 .manager-list {
-  border-top: 1px solid #edf1f6;
+  border-top: 1px solid var(--audit-divider);
 }
 
 .manager-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 15px 4px;
-  border-bottom: 1px solid #edf1f6;
+  gap: 0.8rem;
+  padding: 0.75rem 0.25rem;
+  border-bottom: 1px solid var(--audit-divider);
+}
+
+.manager-row:last-child {
+  border-bottom: 0;
 }
 
 .manager-row.manager-disabled {
-  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, .07));
+  background: linear-gradient(90deg, transparent, var(--otziv-muted-surface));
 }
 
 .manager-avatar {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 2.35rem;
+  height: 2.35rem;
   place-items: center;
-  border-radius: 13px;
-  color: #245f9d;
-  background: #e8f3fd;
-  font-weight: 850;
+  border-radius: 999px;
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.manager-disabled .manager-avatar {
+  color: var(--plain-muted);
+  background: var(--otziv-muted-surface);
+  box-shadow: inset 0 0 0 1px var(--audit-divider);
+}
+
+.manager-main {
+  min-width: 0;
 }
 
 .manager-main strong,
@@ -380,94 +701,248 @@ button:disabled {
   display: block;
 }
 
+.manager-main strong {
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .manager-main span {
-  margin-top: 4px;
-  color: #718096;
-  font-size: 13px;
+  margin-top: 0.2rem;
+  color: var(--plain-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 
 .manager-main span i {
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 5px;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.3rem;
   border-radius: 50%;
-  background: #d49b3c;
+  background: var(--otziv-warning);
+  vertical-align: 0.05em;
 }
 
 .manager-main span i.connected {
-  background: #32a56b;
+  background: var(--otziv-success);
 }
 
 .manager-state {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .manager-state > span {
-  color: #9d3d45;
-  font-size: 13px;
-  font-weight: 750;
+  color: var(--audit-danger-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .manager-state > span.on {
-  color: #278259;
-}
-
-.manager-switch {
-  cursor: pointer;
+  color: var(--audit-success-text);
 }
 
 .empty-managers {
-  padding: 28px;
-  color: #718096;
+  padding: 1.5rem 1rem;
+  color: var(--plain-muted);
+  font-size: 0.85rem;
   text-align: center;
 }
 
-@media (max-width: 900px) {
-  .audit-summary,
+/* ---- What is saved, what a mode does, what is wrong ---- */
+
+.audit-summary small.summary-unsaved {
+  color: var(--audit-warning-text);
+  font-weight: 700;
+}
+
+// What the selected answer check does to the restriction: a quiet line, set apart from the description above it.
+.switch-row small.mode-note {
+  margin-top: 0.35rem;
+  border-left: 2px solid var(--otziv-action-border);
+  padding-left: 0.5rem;
+  color: var(--otziv-dark);
+  font-weight: 600;
+}
+
+// The hint under a number already names the allowed range; after a save attempt with a wrong value it turns red.
+.field-grid small.field-error {
+  color: var(--audit-danger-text);
+  font-weight: 700;
+}
+
+// A pilot manager the list cannot show any more (deactivated or without the manager role).
+.hidden-pilot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  margin: 0;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 10px;
+  padding: 0.45rem 0.5rem 0.45rem 0.75rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-muted-surface);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.hidden-pilot > span {
+  min-width: 0;
+  margin: 0;
+  color: inherit;
+  font-weight: 600;
+}
+
+.audit-settings button.link-button.link-button {
+  @include plain.button;
+  min-height: 2rem;
+  padding: 0 0.85rem;
+  font-size: 0.78rem;
+}
+
+// A refused save is shown next to «Сохранить настройки», where the owner pressed it.
+.save-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.6rem 0 0;
+  border: 1px solid var(--otziv-tone-bad-border);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  color: var(--audit-danger-text);
+  background: var(--otziv-tone-bad-surface);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.save-error .material-icons-sharp {
+  flex: none;
+  color: var(--otziv-danger);
+  font-size: 1.1rem;
+}
+
+/* ---- Narrow widths: the block measures itself, so the sidebar of the desktop is taken into account ---- */
+
+@container audit-settings (max-width: 56rem) {
   .audit-form {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .advanced-card,
-  .save-bar {
-    grid-column: auto;
-  }
-
-  .advanced-grid {
+  .field-grid.advanced-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 640px) {
-  .audit-hero,
-  .card-heading,
-  .managers-heading,
+@container audit-settings (max-width: 40rem) {
+  .audit-hero {
+    grid-template-areas:
+      'title action'
+      'text text';
+    align-items: start;
+    gap: 0.3rem 0.75rem;
+    padding: 0.8rem 0.9rem;
+  }
+
+  .audit-hero-text {
+    margin-top: 0.2rem;
+  }
+
+  .audit-settings button.secondary-button.secondary-button {
+    min-height: 2.2rem;
+    padding: 0 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .audit-summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .audit-summary article {
+    padding: 0.6rem 0.8rem;
+  }
+
+  .managers-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .manager-search {
+    flex: none;
+    width: 100%;
+  }
+
   .save-bar {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .audit-summary,
-  .field-grid,
-  .advanced-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .secondary-button,
-  .primary-button,
-  .manager-search {
+  .audit-settings button.primary-button.primary-button {
     width: 100%;
+  }
+
+  .advanced-card summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .advanced-card summary small {
+    grid-column: 1;
+    grid-row: 2;
+    padding-left: 2.85rem;
+    text-align: left;
+  }
+
+  .advanced-card summary::after {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+@container audit-settings (max-width: 30rem) {
+  .audit-settings,
+  .audit-form {
+    gap: 0.65rem;
+  }
+
+  .audit-card {
+    border-radius: 14px;
+    padding: 0.85rem 0.9rem 0.95rem;
+  }
+
+  .managers-card {
+    padding-bottom: 0.3rem;
+  }
+
+  .field-grid,
+  .field-grid.advanced-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .manager-row {
     grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 0.4rem;
   }
 
   .manager-state {
     grid-column: 1 / -1;
     justify-content: space-between;
-    padding-left: 56px;
+    padding-left: 3.15rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-row > i,
+  .switch-row > i::after,
+  .manager-switch i,
+  .audit-settings button.manager-switch.manager-switch,
+  .advanced-card summary::after {
+    transition: none;
   }
 }

@@ -142,6 +142,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     public static final String AUTO_RECOVERED_ERROR_CODE = "client_message_state_auto_recovered";
     public static final int DEFAULT_NO_SEND_MAX_FAILURES = 30;
     public static final int DEFAULT_ERROR_PROTECTION_THRESHOLD = 20;
+    /** A refused order status change of a status-only scenario (overdue escalation, auto-ban). */
+    static final String STATUS_CHANGE_ROLLED_BACK = "status_change_rolled_back";
+    /** Status-only scenarios retry a refused status change after this many hours, not every tick. */
+    static final int STATUS_CHANGE_RETRY_HOURS = 6;
     public static final int DEFAULT_ERROR_PROTECTION_WINDOW_MINUTES = 10;
     public static final int DEFAULT_ERROR_PROTECTION_COOLDOWN_MINUTES = 60;
     private static final Duration SUMMARY_LOG_INTERVAL = Duration.ofMinutes(5);
@@ -822,11 +826,37 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 state.setArchiveCheckedAt(messageTime.nowStorage());
                 state.setArchiveCheckStatus(outcome);
                 state.setArchiveCheckChannel(channel);
+                escalateUndecidedArchiveCheck(state, outcome, reason);
                 stateRepository.save(state);
             }
             return null;
         });
         return new Decision(false,reason);
+    }
+
+    /**
+     * An archive check that cannot read the chat (no history source, bot removed, provider unavailable) must not wait
+     * forever unseen: 2 days past its due time the task carries a failure code, so manager control shows the order
+     * with the reason and the manager decides (archive the order by hand or keep working). A later decided check clears it.
+     */
+    private void escalateUndecidedArchiveCheck(ScheduledClientMessageState state, String outcome, String reason) {
+        boolean undecidable = "HISTORY_MISSING".equals(outcome) || "HISTORY_UNAVAILABLE".equals(outcome);
+        LocalDateTime now = messageTime.nowStorage();
+        int interval = Math.max(2, state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER
+                ? clientTextReminderIntervalDays() : reviewCheckIntervalDays());
+        boolean overdue = state.getLastSuccessAt() != null
+                && !state.getLastSuccessAt().plusDays(interval + 2L).isAfter(now);
+        if (undecidable && overdue) {
+            if (!ClientMessageStateSafety.ARCHIVE_CHECK_UNDECIDED.equals(state.getLastErrorCode())) {
+                state.setLastAttemptAt(now);
+            }
+            state.setLastErrorCode(ClientMessageStateSafety.ARCHIVE_CHECK_UNDECIDED);
+            state.setLastErrorMessage(limit("Автоархив не может проверить переписку клиента: " + reason
+                    + " Решите сами: переведите заказ в архив вручную или продолжайте работу с клиентом.", 1000));
+        } else if (ClientMessageStateSafety.ARCHIVE_CHECK_UNDECIDED.equals(state.getLastErrorCode())) {
+            state.setLastErrorCode(null);
+            state.setLastErrorMessage(null);
+        }
     }
 
     private boolean silenceThresholdReached(ScheduledClientMessageState state, LocalDateTime now) {
@@ -985,13 +1015,252 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 result.message(), result.preparedAt());
     }
 
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public UncertainClientMessageDelivery.DecisionOutcome decide(Long stateId, String operationId,
+            UncertainClientMessageDelivery.DeliveryDecision decision, Long actorUserId, Long controlEntityId, String note) {
+        if (decision == null || actorUserId == null || actorUserId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите, что вы увидели в чате клиента");
+        }
+        String cleanNote = note == null ? "" : note.trim();
+        if (cleanNote.length() > 400) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Комментарий — не длиннее 400 символов");
+        }
+        UncertainDeliveryPreview preview = uncertainDeliveryPreview(stateId);
+        if (!Objects.equals(preview.operationId(), operationId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Отправка изменилась. Обновите карточку.");
+        }
+        // The system's own evidence wins: a receipt or a confirmed refusal settles the send without the decision.
+        OrdinaryDeliveryRecoveryResult check = recoverUncertainOrdinaryDelivery(stateId);
+        if (check == OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED) {
+            return new UncertainClientMessageDelivery.DecisionOutcome(decision,
+                    "WhatsApp подтвердил доставку: отправка засчитана, расписание продолжено.");
+        }
+        LocalDateTime now = messageTime.databaseTimestamp(messageTime.nowStorage());
+        String actor = "manager:" + actorUserId + (controlEntityId == null ? "" : ":card:" + controlEntityId);
+        // Locks in the order the send paths use (order, then task), so a decision never deadlocks with the queue.
+        Long orderId = stateRepository.findById(stateId).map(ScheduledClientMessageState::getOrderId).orElse(null);
+        String reasonNote = cleanNote.isEmpty() ? "" : " Комментарий: " + cleanNote;
+        if (check == OrdinaryDeliveryRecoveryResult.PROVIDER_REJECTED
+                || check == OrdinaryDeliveryRecoveryResult.UNSENT_CONFIRMED) {
+            if (decision != UncertainClientMessageDelivery.DeliveryDecision.CLOSE) {
+                return new UncertainClientMessageDelivery.DecisionOutcome(decision,
+                        "WhatsApp подтвердил, что сообщение не дошло: система уже вернула его в работу.");
+            }
+            // The check already queued the message again; the manager said not to write, so the task still closes.
+            transactionRunner.runInNewTransaction(() -> {
+                if (orderId != null) orderDeliveryContext.lock(orderId);
+                ScheduledClientMessageState locked = stateRepository.findByIdForUpdate(stateId).orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Задача отправки не найдена"));
+                if (locked.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                        || locked.getDeliveryStatus() != null && DELIVERY_STATUSES_IN_FLIGHT.contains(locked.getDeliveryStatus())
+                        || locked.getLockedUntil() != null && locked.getLockedUntil().isAfter(now)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Отправка изменилась во время решения. Обновите карточку.");
+                }
+                closeByManager(locked, operationId, actor, reasonNote, now);
+            });
+            return new UncertainClientMessageDelivery.DecisionOutcome(decision,
+                    "WhatsApp подтвердил, что прежнее сообщение не дошло. Задача закрыта: автоответчик больше не пишет "
+                            + "клиенту на этом этапе заказа.");
+        }
+        if (decision == UncertainClientMessageDelivery.DeliveryDecision.NOT_IN_CHAT && preview.preparedAt() != null
+                && preview.preparedAt().isAfter(now.minusHours(1))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Сообщение отправлялось меньше часа назад, WhatsApp ещё может подтвердить его. Проверьте позже.");
+        }
+        if (decision == UncertainClientMessageDelivery.DeliveryDecision.SEEN_IN_CHAT) {
+            transactionRunner.runInNewTransaction(() -> {
+                if (orderId != null) orderDeliveryContext.lock(orderId);
+                ScheduledClientMessageState locked = lockSameUnconfirmed(stateId, operationId, preview);
+                PreparedScheduledDelivery saved = decodeScheduledDelivery(locked);
+                // The person saw the message, nothing was sent now: the task's own channel, and no «WhatsApp снова
+                // авторизован» alert (that one belongs to a real send through the account).
+                ClientMessageSendResult attested = new ClientMessageSendResult(true, expectedChannel(saved.target()),
+                        "manual_receipt_attested", null, null);
+                recordDecisionAudit(locked, operationId, actor, "manager_seen_in_chat." + reasonNote, null, now);
+                if (!finalizeScheduledDelivery(saved, attested, now, 0)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Отправка изменилась во время решения. Обновите карточку.");
+                }
+            });
+            return new UncertainClientMessageDelivery.DecisionOutcome(decision,
+                    "Отправка засчитана по вашей проверке чата, расписание продолжено.");
+        }
+        transactionRunner.runInNewTransaction(() -> {
+            if (orderId != null) orderDeliveryContext.lock(orderId);
+            ScheduledClientMessageState locked = lockSameUnconfirmed(stateId, operationId, preview);
+            if (decision == UncertainClientMessageDelivery.DeliveryDecision.NOT_IN_CHAT) {
+                if (decodeScheduledDelivery(locked).orderAction() != null) {
+                    // An invoice or review-check message keeps its operation id until it is confirmed (no second
+                    // invoice), so a re-send from here would only replay the unconfirmed one.
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, ORDER_ACTION_NO_RESEND);
+                }
+                resendUnconfirmedOccurrence(locked, operationId, actor, "manager_not_in_chat_resend." + reasonNote, now);
+                // The manager is already involved: if the new send stays unconfirmed too, the card returns at once.
+                locked.setUncertainAutoResendAt(now);
+                stateRepository.save(locked);
+            } else {
+                closeByManager(locked, operationId, actor, reasonNote, now);
+            }
+        });
+        return new UncertainClientMessageDelivery.DecisionOutcome(decision,
+                decision == UncertainClientMessageDelivery.DeliveryDecision.NOT_IN_CHAT
+                        ? "Сообщение отправится заново в ближайшее разрешённое время отправки."
+                        : "Задача закрыта: автоответчик больше не пишет клиенту на этом этапе заказа.");
+    }
+
+    static final String ORDER_ACTION_NO_RESEND = "Счёт и ссылка на проверку отзывов отсюда повторно не отправляются: "
+            + "у них один номер операции до подтверждения, чтобы клиент не получил второй счёт. Отправьте сообщение "
+            + "клиенту сами из карточки заказа (кнопки «текст» и «счет») и выберите «Сообщение есть в чате».";
+
+    /** Deliveries that may still be on their way: a decision must not close or rewrite them. */
+    private static final Set<String> DELIVERY_STATUSES_IN_FLIGHT = Set.of("CLAIMED", "PREPARED", "UNKNOWN", "SENT");
+
+    /** «Не отправлять»: the task closes as the manager's decision; a late receipt of the old send is still recorded. */
+    private void closeByManager(ScheduledClientMessageState locked, String operationId, String actor, String reasonNote,
+                                LocalDateTime now) {
+        recordDecisionAudit(locked, operationId, actor, "manager_closed_without_send." + reasonNote, null, now);
+        String message = "Закрыто менеджером: сообщение не отправлять, дальше клиента ведёт менеджер.";
+        recordAttempt(locked, ScheduledMessageAttemptStatus.SKIPPED, null, ClientMessageStateSafety.MANUAL_DONE,
+                message, message, 0);
+        locked.setStatus(ScheduledMessageStateStatus.DONE);
+        locked.setLastAttemptAt(now);
+        locked.setLastErrorCode(ClientMessageStateSafety.MANUAL_DONE);
+        locked.setLastErrorMessage(message);
+        locked.setConsecutiveFailures(0);
+        locked.setNextAttemptAt(null);
+        locked.setLockedUntil(null);
+        stateRepository.save(locked);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> unconfirmedStateForOrder(Long orderId) {
+        if (orderId == null) return Optional.empty();
+        return stateRepository.findByOrderIdIn(List.of(orderId)).stream()
+                .filter(state -> state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                        && "UNKNOWN".equals(state.getDeliveryStatus())
+                        && isUnconfirmedOrdinaryCode(state.getLastErrorCode())
+                        && state.getScenario() != ClientMessageScenario.BAD_REVIEW_INVOICE
+                        && hasText(state.getDeliveryEnvelope()))
+                .map(ScheduledClientMessageState::getId)
+                .max(Long::compareTo);
+    }
+
+    private static boolean isUnconfirmedOrdinaryCode(String code) {
+        return ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)
+                || ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(code);
+    }
+
+    /** The locked task still holds the very operation the decision was made on. */
+    private ScheduledClientMessageState lockSameUnconfirmed(Long stateId, String operationId, UncertainDeliveryPreview preview) {
+        ScheduledClientMessageState locked = stateRepository.findByIdForUpdate(stateId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Задача отправки не найдена"));
+        PreparedScheduledDelivery saved;
+        try {
+            saved = decodeScheduledDelivery(locked);
+        } catch (RuntimeException unreadable) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Сохранённая отправка не читается. Обновите карточку.");
+        }
+        if (locked.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || !"UNKNOWN".equals(locked.getDeliveryStatus())
+                || !isUnconfirmedOrdinaryCode(locked.getLastErrorCode())
+                || !Objects.equals(locked.getDeliveryToken(), saved.token())
+                || !Objects.equals(saved.operationId(), operationId)
+                || !Objects.equals(locked.getDeliveryPreparedAt(), preview.preparedAt())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Отправка изменилась во время решения. Обновите карточку.");
+        }
+        return locked;
+    }
+
+    /** One audited decision per operation (the audit keeps the previous snapshot of the task). */
+    private void recordDecisionAudit(ScheduledClientMessageState state, String operationId, String actor, String reason,
+                                     Long newGeneration, LocalDateTime nextAttemptAt) {
+        try {
+            jdbcTemplate.update("""
+                    INSERT INTO client_reminder_restart_audit
+                      (request_key,subject_type,subject_id,old_operation_id,actor,reason,previous_snapshot,new_generation,next_attempt_at)
+                    SELECT ?, 'SCHEDULED', state_id, ?, ?, ?,
+                      JSON_OBJECT('deliveryStatus',delivery_status,'envelope',delivery_envelope,'token',delivery_token,
+                        'preparedAt',delivery_prepared_at,'errorCode',last_error_code,'sentCount',sent_count,
+                        'lastSuccessAt',last_success_at,'generation',dispatch_generation,'channel',delivery_channel,
+                        'targetKey',target_key), ?, ?
+                    FROM scheduled_client_message_state WHERE state_id=?
+                    """, limit("decision:" + operationId, 100), operationId, limit(actor, 160), limit(reason, 1000),
+                    newGeneration, nextAttemptAt, state.getId());
+        } catch (org.springframework.dao.DuplicateKeyException alreadyDecided) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "По этой отправке решение уже принято. Обновите карточку.");
+        }
+    }
+
+    /**
+     * Sends an unconfirmed occurrence again as a NEW operation: a new operation id, so the gateway never replays the
+     * old one. The business checks of processState run again before anything goes out (switches, pause, windows,
+     * limits, the order's current stage), so an obsolete task closes instead of sending.
+     */
+    private void resendUnconfirmedOccurrence(ScheduledClientMessageState state, String operationId, String actor,
+                                             String reason, LocalDateTime now) {
+        long generation = Math.addExact(state.getDispatchGeneration(), 1);
+        recordDecisionAudit(state, operationId, actor, reason, generation, now);
+        String message = "Доставка прошлого сообщения не подтвердилась; сообщение поставлено на повторную отправку.";
+        recordAttempt(state, ScheduledMessageAttemptStatus.SKIPPED, null, ClientMessageStateSafety.UNCONFIRMED_RESEND_QUEUED,
+                message, message, 0);
+        clearDeliveryPreparation(state);
+        state.setDispatchGeneration(generation);
+        state.setLastAttemptAt(now);
+        state.setLastErrorCode(ClientMessageStateSafety.UNCONFIRMED_RESEND_QUEUED);
+        state.setLastErrorMessage(message);
+        state.setLockedUntil(null);
+        state.setNextAttemptAt(now);
+        stateRepository.save(state);
+    }
+
+    /** Hours an unconfirmed send waits for its receipt before the autoresponder sends it once more by itself. */
+    static final int UNCONFIRMED_AUTO_RESEND_HOURS = 24;
+
+    /**
+     * The owner's rule: an unconfirmed send never waits forever and never closes silently. After 24 hours without a
+     * receipt or the text in the chat history the autoresponder sends it once more as a new operation; if that send
+     * stays unconfirmed too, the manager's card offers the decision. Archive offers (their own follow-up path) and
+     * bad-review invoices (a separate recovery) are not touched here.
+     */
+    private void autoResendUnconfirmed(String envelope, LocalDateTime nowStorage) {
+        PreparedScheduledDelivery prepared;
+        try {
+            prepared = decodeScheduledDelivery(envelope);
+        } catch (RuntimeException unreadable) {
+            return;
+        }
+        if (prepared.scenario() == ClientMessageScenario.ARCHIVE_REORDER_OFFER
+                || prepared.scenario() == ClientMessageScenario.BAD_REVIEW_INVOICE
+                // An invoice or review-check message keeps its operation id until confirmed: a re-send only replays it.
+                || prepared.orderAction() != null) return;
+        LocalDateTime now = messageTime.databaseTimestamp(nowStorage);
+        transactionRunner.runInNewTransaction(() -> {
+            if (prepared.orderId() != null) orderDeliveryContext.lock(prepared.orderId());
+            ScheduledClientMessageState state = stateRepository.findByIdForUpdate(prepared.stateId()).orElse(null);
+            if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                    || !"UNKNOWN".equals(state.getDeliveryStatus())
+                    || !isUnconfirmedOrdinaryCode(state.getLastErrorCode())
+                    || state.getUncertainAutoResendAt() != null
+                    || !Objects.equals(state.getDeliveryToken(), prepared.token())
+                    || state.getDeliveryPreparedAt() == null
+                    || state.getDeliveryPreparedAt().isAfter(now.minusHours(UNCONFIRMED_AUTO_RESEND_HOURS))) return;
+            resendUnconfirmedOccurrence(state, prepared.operationId(), "system:auto_resend",
+                    "auto_resend_after_" + UNCONFIRMED_AUTO_RESEND_HOURS + "h_without_receipt", now);
+            state.setUncertainAutoResendAt(now);
+            stateRepository.save(state);
+            log.info("Unconfirmed client message queued again automatically: stateId={}, scenario={}",
+                    state.getId(), state.getScenario());
+        });
+    }
+
     @Transactional(readOnly = true)
     public UncertainDeliveryPreview uncertainDeliveryPreview(Long stateId) {
         ScheduledClientMessageState state = stateRepository.findById(stateId).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Задача отправки не найдена"));
         if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE
                 || !"UNKNOWN".equals(state.getDeliveryStatus())
-                || !ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())
+                || !isUnconfirmedOrdinaryCode(state.getLastErrorCode())
                 || state.getScenario() == ClientMessageScenario.BAD_REVIEW_INVOICE
                 || !hasText(state.getDeliveryEnvelope())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Эта отправка не ожидает ручной проверки");
@@ -1089,6 +1358,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
         ClientMessageSendResult receipt = messageSender.recoverRecordedOutcomeFromChat(
                 prepared.operationId(), snapshot.getDeliveryPreparedAt());
+        if (receipt != null && !receipt.sent() && !ClientMessageDelivery.isDeliveryRejected(receipt)
+                && restoreRefusedAttempt(prepared, snapshot.getDeliveryPreparedAt())) {
+            return OrdinaryDeliveryRecoveryResult.UNSENT_CONFIRMED;
+        }
         if (receipt != null && "whatsapp_history_unavailable".equals(receipt.errorCode())) {
             return OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE;
         }
@@ -1208,6 +1481,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 );
                 return false;
             }
+            if (ClientMessageStateSafety.isManualDecision(state)) {
+                log.info("Client-text reminder stays closed by an administrator stateId={} code={}",
+                        state.getId(), state.getLastErrorCode());
+                return false;
+            }
             state.setStatus(ScheduledMessageStateStatus.ACTIVE);
             state.setTargetType(ClientMessageTargetType.ORDER);
             state.setCompanyId(order.getCompany() == null ? null : order.getCompany().getId());
@@ -1297,6 +1575,62 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                         "client_text_cycle_changed",
                         "Заказ перешел в новый цикл ожидания текста клиента"
                 ));
+    }
+
+    /** The waiting-for-texts reminder of the order's current cycle was closed or disabled by an administrator. */
+    @Transactional(readOnly = true)
+    public boolean clientTextReminderClosedByAdministrator(Order order) {
+        if (order == null || order.getId() == null) {
+            return false;
+        }
+        String targetKey = clientTextWaitingTargetKey(order.getId(), clientTextWaitingChangedAt(order));
+        return stateRepository.findByScenarioAndTargetKey(ClientMessageScenario.CLIENT_TEXT_REMINDER, targetKey)
+                .map(ClientMessageStateSafety::isManualDecision)
+                .orElse(false);
+    }
+
+    /**
+     * The autoresponder will not run this scenario now: its own switch, the whole autoresponder or a pause is off.
+     * A repair must not create or restart a task for it (it would only be postponed again as «automation_paused»).
+     */
+    @Transactional(readOnly = true)
+    public boolean scenarioStoppedBySettings(ClientMessageScenario scenario) {
+        return scenarioStopReason(scenario) != null;
+    }
+
+    /** Why the scenario does not run now, in the words of the settings page («выключен переключатель «…»»); or null. */
+    @Transactional(readOnly = true)
+    public String scenarioStopReason(ClientMessageScenario scenario) {
+        return scenario == null ? null
+                : ClientMessageAutomationPolicy.stopReason(appSettingService, scenario, messageTime.nowStorage());
+    }
+
+    /** Reminders for a client text will not run now (their switch, the whole autoresponder or a pause is off). */
+    @Transactional(readOnly = true)
+    public boolean clientTextRemindersStoppedBySettings() {
+        return scenarioStoppedBySettings(ClientMessageScenario.CLIENT_TEXT_REMINDER);
+    }
+
+    /** See {@link #scenarioStopReason}: for the reminders asking a client for a text. */
+    @Transactional(readOnly = true)
+    public String clientTextRemindersStopReason() {
+        return scenarioStopReason(ClientMessageScenario.CLIENT_TEXT_REMINDER);
+    }
+
+    /** The automation of the order's current status cycle was closed or disabled by an administrator. */
+    @Transactional(readOnly = true)
+    public boolean orderAutomationClosedByAdministrator(Order order) {
+        if (order == null || order.getId() == null) {
+            return false;
+        }
+        Optional<ClientMessageScenario> scenario = orderAutomationScenario(order);
+        if (scenario.isEmpty()) {
+            return false;
+        }
+        String targetKey = orderTargetKey(order.getId(), orderStatusChangedAt(order));
+        return stateRepository.findByScenarioAndTargetKey(scenario.get(), targetKey)
+                .map(ClientMessageStateSafety::isManualDecision)
+                .orElse(false);
     }
 
     @Transactional
@@ -1643,6 +1977,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 );
                 return;
             }
+            if (ClientMessageStateSafety.isManualDecision(state)) {
+                log.info("Order automation stays closed by an administrator stateId={} code={}",
+                        state.getId(), state.getLastErrorCode());
+                return;
+            }
             state.setStatus(ScheduledMessageStateStatus.ACTIVE);
             state.setTargetType(ClientMessageTargetType.ORDER);
             state.setCompanyId(order.getCompany() == null ? null : order.getCompany().getId());
@@ -1947,7 +2286,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             if (state.getStatus() == ScheduledMessageStateStatus.DONE
                     && state.getSentCount() == 0
                     && state.getLastSuccessAt() == null
-                    && !ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+                    && !ClientMessageStateSafety.blocksAutomaticRearm(state)
+                    // «Пометить выполненным» in the monitor is final for this cycle: the reconciliation finds the same
+                    // order and target key every few minutes and used to reopen it with an already passed deadline.
+                    && !ClientMessageStateSafety.isManualDecision(state)) {
                 state.setStatus(ScheduledMessageStateStatus.ACTIVE);
                 state.setTargetType(targetType);
                 state.setCompanyId(companyId);
@@ -2152,7 +2494,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
         if (!scenarioEnabled) {
             postponeScenarioDisabled(state, nowStorage, "bad_review_invoice_disabled",
-                    "Отправка счета после дополнительной задачи выключена настройкой");
+                    switchedOffMessage("выключен переключатель «"
+                            + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.switchTitle("BAD_REVIEW_INVOICE") + "»"));
             return null;
         }
         if (snapshot == null || !Objects.equals(snapshot.getOrderId(), state.getOrderId())) {
@@ -2353,6 +2696,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         stateRepository.save(state);
     }
 
+    /** «Не отправлено: в настройках автоответчика (Справочники → Автоответчик) <reason>.» */
+    static String switchedOffMessage(String reason) {
+        return "Не отправлено: в настройках автоответчика ("
+                + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.SETTINGS_PAGE + ") " + reason + ".";
+    }
+
     private void postponeScenarioDisabled(
             ScheduledClientMessageState state,
             LocalDateTime nowStorage,
@@ -2541,8 +2890,16 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             result = ClientMessageOperationFence.unknown();
         }
         ClientMessageSendResult outcome = result;
-        boolean finalized = transactionRunner.callInNewTransaction(() -> finalizeScheduledDelivery(prepared, outcome,
-                messageTime.databaseTimestamp(messageTime.nowStorage()), System.currentTimeMillis() - startedAt));
+        java.util.function.Supplier<Boolean> recordOutcome = () -> finalizeScheduledDelivery(prepared, outcome,
+                messageTime.databaseTimestamp(messageTime.nowStorage()), System.currentTimeMillis() - startedAt);
+        boolean finalized;
+        try {
+            finalized = transactionRunner.callInNewTransaction(recordOutcome);
+        } catch (org.springframework.dao.PessimisticLockingFailureException rollback) {
+            if (!WhatsAppDispatchRefusal.explicit(outcome.errorCode(), outcome.errorMessage())) throw rollback;
+            // Only repeat the rolled-back database transaction. No transport call inside this supplier.
+            finalized = transactionRunner.callInNewTransaction(recordOutcome);
+        }
         if (finalized) notifyScheduledDeliveryOutcome(prepared, outcome, nowStorage);
     }
 
@@ -2664,6 +3021,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             // saved operation is released: a later attempt prepares a new one, which the group hold stops
             // before any provider call until the chat is fixed. Nothing is sent from here.
             clearDeliveryPreparation(state);
+            // A new operation id for the next preparation: reusing the refused one made the gateway replay its old
+            // ledger record and the next attempt ended as «unknown» in milliseconds.
+            state.setDispatchGeneration(Math.addExact(state.getDispatchGeneration(), 1));
             registerFailure(state, nowStorage, com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_CODE,
                     com.hunt.otziv.whatsapp.api.WhatsAppGroupDeliveryBlocks.UNAVAILABLE_MESSAGE + ". Прошлое сообщение клиенту не доставлено.",
                     prepared.message(), durationMs);
@@ -2728,7 +3088,55 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     boolean finalized = transactionRunner.callInNewTransaction(
                             () -> finalizeScheduledDelivery(prepared, receipt, nowStorage, 0));
                     if (finalized) notifyScheduledDeliveryOutcome(prepared, receipt, nowStorage);
-                }, this::recoverArchiveContactWithFollowup);
+                }, envelope -> {
+                    recoverArchiveContactWithFollowup(envelope);
+                    try {
+                        autoResendUnconfirmed(envelope, nowStorage);
+                    } catch (RuntimeException deferred) {
+                        log.warn("Automatic re-send of an unconfirmed message deferred: errorType={}",
+                                deferred.getClass().getSimpleName());
+                    }
+                },
+                (envelope, preparedAt) -> restoreRefusedAttempt(decodeScheduledDelivery(envelope), preparedAt));
+    }
+
+    /** A missing gateway entry alone never releases an uncertain send. The rollback and its original
+     * refusal must still be the only two journal records for the locked preparation. */
+    private boolean restoreRefusedAttempt(PreparedScheduledDelivery prepared, LocalDateTime preparedAt) {
+        if (preparedAt == null || prepared.orderId() == null || prepared.orderAction() != null
+                || prepared.scenario() != ClientMessageScenario.PAYMENT_REMINDER
+                && prepared.scenario() != ClientMessageScenario.REVIEW_RECOVERY_NOTICE) return false;
+        var snapshot = stateRepository.findById(prepared.stateId()).orElse(null);
+        if (!sameRefusalCandidate(snapshot, prepared, preparedAt) || !hasDispatchRefusal(snapshot)
+                || !messageSender.confirmsUnsentGatewayRejection(prepared.operationId())) return false;
+        return transactionRunner.callInNewTransaction(() -> {
+            var state = stateRepository.findByIdForUpdate(prepared.stateId()).orElse(null);
+            if (!sameRefusalCandidate(state, prepared, preparedAt) || !hasDispatchRefusal(state)) return false;
+            state.setDeliveryStatus("RETRYABLE");
+            state.setLastErrorCode(ClientMessageStateSafety.CONFIRMED_NOT_DISPATCHED);
+            state.setLastErrorMessage("Шлюз WhatsApp подтвердил отказ до отправки. Повтор в очереди.");
+            state.setNextAttemptAt(nextTransientAttemptAt(messageTime.databaseTimestamp(messageTime.nowStorage())));
+            stateRepository.save(state);
+            return true;
+        });
+    }
+
+    private boolean sameRefusalCandidate(ScheduledClientMessageState state, PreparedScheduledDelivery prepared, LocalDateTime preparedAt) {
+        return state != null && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && "UNKNOWN".equals(state.getDeliveryStatus()) && "WhatsApp".equalsIgnoreCase(state.getDeliveryChannel())
+                && ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())
+                && state.getNextAttemptAt() == null && state.getLockedUntil() == null
+                && Objects.equals(state.getDeliveryPreparedAt(), preparedAt)
+                && state.getScenario() == prepared.scenario() && Objects.equals(state.getDeliveryToken(), prepared.token())
+                && Objects.equals(state.getTargetKey(), prepared.targetKey()) && Objects.equals(state.getOrderId(), prepared.orderId())
+                && Objects.equals(state.getDeliveryMessage(), prepared.message()) && hasText(state.getDeliveryEnvelope())
+                && prepared.equals(decodeScheduledDelivery(state));
+    }
+
+    private boolean hasDispatchRefusal(ScheduledClientMessageState state) {
+        var attempts = attemptRepository.findTop3ByStateIdAndAttemptedAtGreaterThanEqualOrderByAttemptedAtDescIdDesc(
+                state.getId(), state.getDeliveryPreparedAt());
+        return WhatsAppDispatchRefusal.matchesRollback(state, attempts);
     }
 
     private record ArchiveFollowupContext(ClientMessageDelivery.Target target, String clientId, String version,
@@ -2872,6 +3280,14 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         return prepared;
     }
 
+    /** Overdue escalation and auto-ban change the order status only: no envelope, no token, no transport call. */
+    private boolean isStatusOnlyRollback(ScheduledClientMessageState state) {
+        return (state.getScenario() == ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION
+                || state.getScenario() == ClientMessageScenario.BAD_REVIEW_AUTO_BAN)
+                && !hasText(state.getDeliveryEnvelope())
+                && !hasText(state.getDeliveryToken());
+    }
+
     private void quarantineRolledBackState(
             Long stateId,
             LocalDateTime expectedLockedUntil,
@@ -2895,8 +3311,47 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     );
                     return;
                 }
+                if (isStatusOnlyRollback(state)) {
+                    // Overdue escalation and auto-ban only change the order status and never call a transport, so a
+                    // refused status change (bank documents issued, zero task price, a wrong target status) is no
+                    // «unknown delivery»: the task stays in the queue and tries again later, visible as a failure.
+                    String statusMessage = limit("Смена статуса заказа не выполнена: " + readableException(failure)
+                            + ". Автоответчик повторит попытку позже.", 1000);
+                    // SKIPPED, not FAILED: a refused status change is not a sending error for the mass-error protection.
+                    recordAttempt(state, ScheduledMessageAttemptStatus.SKIPPED, null, STATUS_CHANGE_ROLLED_BACK,
+                            statusMessage, statusMessage, 0);
+                    state.setDeliveryStatus(null);
+                    state.setLastAttemptAt(nowStorage);
+                    state.setLastErrorCode(STATUS_CHANGE_ROLLED_BACK);
+                    state.setLastErrorMessage(statusMessage);
+                    state.setConsecutiveFailures(state.getConsecutiveFailures() + 1);
+                    state.setNextAttemptAt(nowStorage.plusHours(STATUS_CHANGE_RETRY_HOURS));
+                    state.setLockedUntil(null);
+                    stateRepository.save(state);
+                    return;
+                }
                 boolean preparationFailure = failure instanceof com.hunt.otziv.p_products.api.LegacyOrderNotificationException
                         && LegacyOrderMessagePreparationRecovery.hasNoDeliveryEvidence(state);
+                if (!preparationFailure && "CLAIMED".equals(state.getDeliveryStatus())) {
+                    // Claims take only tasks without a delivery or with a known-unsent one, and the transport is only
+                    // called after a committed PREPARED (a separate transaction). A rollback of the claimed processing
+                    // therefore happened before any send: the client got nothing and nothing may be «reconciled».
+                    // The task returns to the queue (the saved known-unsent envelope, if any, is kept) instead of
+                    // waiting forever as «unknown»; repeated rollbacks still count as failures for manager control.
+                    String unsent = limit("Обработка прервалась до отправки (откат транзакции); сообщение клиенту не "
+                            + "отправлялось, повтор поставлен в очередь. Причина: " + readableException(failure), 1000);
+                    recordAttempt(state, ScheduledMessageAttemptStatus.FAILED, null,
+                            ClientMessageStateSafety.ROLLED_BACK_BEFORE_SEND, unsent, unsent, 0);
+                    state.setDeliveryStatus(hasText(state.getDeliveryEnvelope()) ? "RETRYABLE" : null);
+                    state.setLastAttemptAt(nowStorage);
+                    state.setLastErrorCode(ClientMessageStateSafety.ROLLED_BACK_BEFORE_SEND);
+                    state.setLastErrorMessage(unsent);
+                    state.setConsecutiveFailures(state.getConsecutiveFailures() + 1);
+                    state.setNextAttemptAt(nextTransientAttemptAt(nowStorage));
+                    state.setLockedUntil(null);
+                    stateRepository.save(state);
+                    return;
+                }
                 String errorCode = preparationFailure ? ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED
                         : ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN;
                 String message = preparationFailure
@@ -2942,8 +3397,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
             return null;
         }
-        if (!ClientMessageAutomationPolicy.allowed(appSettingService, state.getScenario(), nowStorage)) {
-            postponeScenarioDisabled(state, nowStorage, "automation_paused", "Сценарий приостановлен настройками автоответчика");
+        String stopReason = ClientMessageAutomationPolicy.stopReason(appSettingService, state.getScenario(), nowStorage);
+        if (stopReason != null) {
+            // The message names the switch, so the monitor and the manager's card say what is off and where.
+            postponeScenarioDisabled(state, nowStorage, "automation_paused", switchedOffMessage(stopReason));
             return null;
         }
         if (state.getScenario() == ClientMessageScenario.BAD_REVIEW_AUTO_BAN
@@ -2953,7 +3410,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     state,
                     nowStorage,
                     "bad_review_auto_ban_disabled",
-                    "Автобан после дополнительных задач выключен настройкой"
+                    switchedOffMessage("выключен переключатель «" + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.switchTitle("BAD_REVIEW_AUTO_BAN") + "»")
             );
             return null;
         }
@@ -3352,7 +3809,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     state,
                     nowStorage,
                     "bad_review_auto_ban_disabled",
-                    "Автобан после дополнительных задач выключен настройкой"
+                    switchedOffMessage("выключен переключатель «" + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.switchTitle("BAD_REVIEW_AUTO_BAN") + "»")
             );
             return;
         }
@@ -3720,6 +4177,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         state.setLastErrorMessage(null);
         state.setConsecutiveFailures(0);
         state.setSentCount(state.getSentCount() + 1);
+        state.setUncertainAutoResendAt(null);
         state.setLockedUntil(null);
         state.setNextAttemptAt(nextSuccessAttemptAt(
                 state.getScenario(),

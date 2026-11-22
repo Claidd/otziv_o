@@ -42,7 +42,7 @@ describe('city dictionary commands and view lifetime', () => {
     expect(facade.loading()).toBe(false);
   });
 
-  it('snapshots comma coordinates and never applies save A to a reopened A editor', () => {
+  it('snapshots comma coordinates, never applies save A to a reopened A editor, but reports it and rereads the list', () => {
     facade.selectCity(city);
     facade.cityForm.patchValue({ title: '  Иркутск новый  ', latitude: '52,4', longitude: '' });
     facade.saveCity();
@@ -56,7 +56,31 @@ describe('city dictionary commands and view lifetime', () => {
     expect(facade.saving()).toBe(false);
     expect(selectedId()).toBe(18);
     expect(facade.cityForm.controls.title.value).toBe('Новый черновик');
-    expect(toast.success).not.toHaveBeenCalled();
+    // The saved city is named, and the list is read again so its row does not keep the old coordinates.
+    expect(toast.success).toHaveBeenCalledWith('Город сохранен', '«Иркутск новый», ID 18');
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/cities')).flush([city]);
+    expect(facade.cityForm.controls.title.value).toBe('Новый черновик');
+  });
+
+  it('reports a failed save of a city that is no longer open', () => {
+    facade.selectCity(city);
+    facade.saveCity();
+    const write = http.expectOne(request => request.method === 'PUT' && request.url.endsWith('/cities/18'));
+    facade.selectCity({ ...city, id: 19, title: 'Другой город' });
+    write.flush({ message: 'Город с таким названием уже есть' }, { status: 409, statusText: 'Conflict' });
+    expect(facade.error()).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('Город не сохранен', '«Иркутск»: Город с таким названием уже есть');
+  });
+
+  it('reports a save that ends after the tab was left', () => {
+    facade.selectCity(city);
+    facade.saveCity();
+    const write = http.expectOne(request => request.method === 'PUT' && request.url.endsWith('/cities/18'));
+    active = false;
+    facade.deactivate();
+    write.flush({ message: 'Ошибка сервера' }, { status: 500, statusText: 'Server Error' });
+    expect(toast.error).toHaveBeenCalledWith('Город не сохранен', '«Иркутск»: Ошибка сервера');
+    expect(facade.saving()).toBe(false);
     http.expectNone(() => true);
   });
 
@@ -82,8 +106,9 @@ describe('city dictionary commands and view lifetime', () => {
     expect(selectedId()).toBe(19);
     expect(facade.cityForm.controls.title.value).toBe('Новая форма');
     expect(facade.deleting()).toBe(false);
-    expect(toast.success).not.toHaveBeenCalled();
-    http.expectNone(() => true);
+    expect(toast.success).toHaveBeenCalledWith('Запись удалена', 'Города');
+    http.expectOne(request => request.method === 'GET' && request.url.endsWith('/cities')).flush([]);
+    expect(selectedId()).toBe(19);
   });
 
   it('keeps distance rebuild alive on navigation and does not replay it or update another view', () => {

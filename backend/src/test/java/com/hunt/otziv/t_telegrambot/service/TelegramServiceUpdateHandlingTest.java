@@ -157,6 +157,91 @@ class TelegramServiceUpdateHandlingTest {
         verify(tracker).trackEdit(any());
     }
 
+    @Test void captionedGroupPhotoIsTrackedAsAnAttachmentAndNotAsCourtesyText() {
+        CapturingTelegramService service=service();
+        var tracker=mock(com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService.class);
+        ReflectionTestUtils.setField(service,"clientChatMessageTrackerService",tracker);
+        Update update=textUpdate(-100123L,"supergroup",null);
+        update.getMessage().setMessageId(56);
+        update.getMessage().setPhoto(List.of(new org.telegram.telegrambots.meta.api.objects.PhotoSize()));
+        update.getMessage().setCaption("Спасибо 🙏");
+
+        service.onUpdateReceived(update);
+
+        verify(tracker).track(argThat(command->"[Вложение: photo] Спасибо 🙏".equals(command.messageText())
+                && command.externalMessageId().equals("56")));
+        verifyNoInteractions(userService);
+        assertTrue(service.sentMessages.isEmpty());
+    }
+
+    @Test void editedCaptionKeepsTheAttachmentMarkerOfTheOriginalMessage() {
+        CapturingTelegramService service=service();
+        var tracker=mock(com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService.class);
+        ReflectionTestUtils.setField(service,"clientChatMessageTrackerService",tracker);
+        Update edited=textUpdate(-100123L,"supergroup",null);
+        Message message=edited.getMessage();
+        message.setMessageId(79);
+        message.setEditDate(1_793_900_000);
+        message.setDocument(new org.telegram.telegrambots.meta.api.objects.Document());
+        message.setCaption("Оплатила, чек во вложении");
+        edited.setMessage(null);
+        edited.setEditedMessage(message);
+
+        service.onUpdateReceived(edited);
+
+        verify(tracker).trackEdit(argThat(command->command.externalMessageId().equals("79")
+                && command.editedText().equals("[Вложение: document] Оплатила, чек во вложении")));
+        verify(tracker,never()).track(any());
+    }
+
+    @Test void trackedTextKeepsPlainTextAndMarksMediaLikeTheOtherMessengers() {
+        Message text=new Message();
+        text.setText("Спасибо");
+        assertEquals("Спасибо", TelegramService.telegramTrackedText(text));
+
+        // Without a caption the photo carries the same attachment marker as in WhatsApp and MAX.
+        Message photo=new Message();
+        photo.setPhoto(List.of(new org.telegram.telegrambots.meta.api.objects.PhotoSize()));
+        assertEquals("[Вложение: photo]", TelegramService.telegramTrackedText(photo));
+        photo.setCaption("   ");
+        assertEquals("[Вложение: photo]", TelegramService.telegramTrackedText(photo));
+
+        // A GIF carries both an animation and a document; it is named by what the client sent.
+        Message gif=new Message();
+        gif.setAnimation(new org.telegram.telegrambots.meta.api.objects.games.Animation());
+        gif.setDocument(new org.telegram.telegrambots.meta.api.objects.Document());
+        gif.setCaption(" Готово ");
+        assertEquals("[Вложение: animation] Готово", TelegramService.telegramTrackedText(gif));
+
+        Message voice=new Message();
+        voice.setVoice(new org.telegram.telegrambots.meta.api.objects.Voice());
+        voice.setCaption("Послушайте");
+        assertEquals("[Вложение: voice] Послушайте", TelegramService.telegramTrackedText(voice));
+        assertEquals("", TelegramService.telegramTrackedText(null));
+    }
+
+    @Test
+    void botPromptSentAsCaptionedPictureIsStillMatchedByItsPlainCaption() {
+        CapturingTelegramService service = service();
+        when(telegramGroupLinkService.handleGroupStartCommand(anyLong(), anyString()))
+                .thenReturn(Optional.empty());
+        when(workerRiskTelegramCallbackServiceProvider.getIfAvailable())
+                .thenReturn(workerRiskTelegramCallbackService);
+        when(workerRiskTelegramCallbackService.handleWorkerGroupTextMessage(
+                -100123L, 888L, "Код запроса: risk-78", true, "Пояснение специалиста"
+        )).thenReturn(true);
+        Update update = groupReplyUpdate(-100123L, 888L, "Пояснение специалиста", null);
+        Message prompt = update.getMessage().getReplyToMessage();
+        prompt.setPhoto(List.of(new org.telegram.telegrambots.meta.api.objects.PhotoSize()));
+        prompt.setCaption("Код запроса: risk-78");
+
+        service.onUpdateReceived(update);
+
+        verify(workerRiskTelegramCallbackService).handleWorkerGroupTextMessage(
+                eq(-100123L), eq(888L), eq("Код запроса: risk-78"), eq(true), eq("Пояснение специалиста"));
+        verifyNoInteractions(userService);
+    }
+
     @Test void membershipEventDoesNotBecomeAClientReply() {
         CapturingTelegramService service=service();
         var tracker=mock(com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService.class);

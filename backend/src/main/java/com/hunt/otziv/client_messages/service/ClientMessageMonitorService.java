@@ -272,6 +272,7 @@ public class ClientMessageMonitorService {
         rejectUncertainDelivery(state);
         LocalDateTime nowStorage = LocalDateTime.now(clock).withNano(0);
         rejectActiveProcessingClaim(state, nowStorage);
+        rejectNotRetryable(state);
         state.setNextAttemptAt(nowStorage);
         state.setLockedUntil(null);
         state.setLastErrorCode(null);
@@ -291,8 +292,10 @@ public class ClientMessageMonitorService {
         state.setNextAttemptAt(null);
         state.setLockedUntil(null);
         state.setLastAttemptAt(nowStorage);
-        state.setLastErrorCode("manual_disabled");
+        state.setLastErrorCode(ClientMessageStateSafety.MANUAL_DISABLED);
         state.setLastErrorMessage("Отключено вручную из мониторинга");
+        // A decision, not a failure: earlier failed attempts must not keep the order in manager control.
+        state.setConsecutiveFailures(0);
         stateRepository.save(state);
         recordManualAttempt(state, "manual_disabled", "Кандидат отключен вручную из мониторинга");
         return snapshot();
@@ -308,11 +311,31 @@ public class ClientMessageMonitorService {
         state.setNextAttemptAt(null);
         state.setLockedUntil(null);
         state.setLastAttemptAt(nowStorage);
-        state.setLastErrorCode(null);
-        state.setLastErrorMessage(null);
+        // The mark keeps the decision: the reconciliation and the order events no longer reopen this cycle.
+        state.setLastErrorCode(ClientMessageStateSafety.MANUAL_DONE);
+        state.setLastErrorMessage("Помечено выполненным вручную из мониторинга");
+        state.setConsecutiveFailures(0);
         stateRepository.save(state);
-        recordManualAttempt(state, "manual_done", "Кандидат помечен выполненным вручную из мониторинга");
+        recordManualAttempt(state, ClientMessageStateSafety.MANUAL_DONE, "Кандидат помечен выполненным вручную из мониторинга");
         return snapshot();
+    }
+
+    /**
+     * A task the queue would not pick up again (an old-cycle preparation still being verified, a receipt-only
+     * reconciliation, a claim in progress) must not be «retried»: the button used to report success while the task stayed
+     * stuck for good.
+     */
+    private void rejectNotRetryable(ScheduledClientMessageState state) {
+        if (ClientMessageStateSafety.isLegacyPreparationFailure(state)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Задача ждёт подтверждения нового цикла старого заказа. Повтор выполнит восстановление автоматически.");
+        }
+        String delivery = state.getDeliveryStatus();
+        if (ClientMessageStateSafety.blocksAutomaticRearm(state) || ClientMessageStateSafety.onlyReconcileReceipt(state)
+                || (delivery != null && !"RETRYABLE".equalsIgnoreCase(delivery.trim()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Задача сейчас проходит сверку отправки, поэтому повторить её нельзя. Сверка завершится автоматически.");
+        }
     }
 
     private void rejectUncertainDelivery(ScheduledClientMessageState state) {

@@ -48,7 +48,8 @@ class ManagerControlStaleWhatsAppInviteTest {
                 mock(ManagerAutomationFailureService.class),
                 mock(com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository.class),
                 mock(com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository.class),
-                mock(com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository.class), health);
+                mock(com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository.class), health,
+                scenario -> null);
         manager = new Manager();
         manager.setId(3L);
         when(presenter.companySpecialistName(any())).thenReturn("");

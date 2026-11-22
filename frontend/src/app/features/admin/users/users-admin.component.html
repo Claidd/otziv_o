@@ -5,10 +5,12 @@
         @for (tab of statusTabs; track trackStatus($index, tab)) {
           <button
             type="button"
+            class="user-tab"
             [class.active]="statusFilter() === tab.key"
+            [attr.aria-pressed]="statusFilter() === tab.key"
             (click)="setStatusFilter(tab.key)"
           >
-            <span class="material-icons-sharp">{{ tab.icon }}</span>
+            <span class="material-icons-sharp" aria-hidden="true">{{ tab.icon }}</span>
             {{ tab.label }}
             <small>{{ statusTotal(tab.key) }}</small>
           </button>
@@ -16,9 +18,12 @@
       </nav>
 
       <div class="quick-links">
-        <a routerLink="/admin/users/new">Новый пользователь</a>
-        <button type="button" (click)="loadUsers()" [disabled]="loading()">
-          <span class="material-icons-sharp">refresh</span>
+        <a class="users-btn users-btn--save" routerLink="/admin/users/new">
+          <span class="material-icons-sharp" aria-hidden="true">person_add</span>
+          Новый пользователь
+        </a>
+        <button type="button" class="users-btn" (click)="loadUsers()" [disabled]="loading()">
+          <span class="material-icons-sharp" aria-hidden="true">refresh</span>
           {{ loading() ? 'Загрузка' : 'Обновить' }}
         </button>
       </div>
@@ -26,24 +31,37 @@
 
     <section class="users-search">
       <label>
-        <span class="material-icons-sharp">search</span>
+        <span class="material-icons-sharp" aria-hidden="true">search</span>
         <input
           type="text"
+          class="users-field"
           placeholder="Найти пользователя"
+          aria-label="Найти пользователя"
           [value]="userSearch()"
           (input)="updateUserSearch($any($event.target).value)"
         >
       </label>
 
-      <select [value]="roleFilter()" (change)="setRoleFilter($any($event.target).value)" aria-label="Фильтр по роли">
+      <select
+        class="users-field"
+        [value]="roleFilter()"
+        (change)="setRoleFilter($any($event.target).value)"
+        aria-label="Фильтр по роли"
+      >
         <option value="all">Все роли</option>
         @for (role of availableRoles; track trackRole($index, role)) {
           <option [value]="role">{{ roleLabel(role) }}</option>
         }
       </select>
 
-      <button type="button" class="icon-button" (click)="clearFilters()" title="Сбросить фильтры">
-        <span class="material-icons-sharp">filter_alt_off</span>
+      <button
+        type="button"
+        class="users-btn icon-button"
+        (click)="clearFilters()"
+        title="Сбросить фильтры"
+        aria-label="Сбросить фильтры"
+      >
+        <span class="material-icons-sharp" aria-hidden="true">filter_alt_off</span>
       </button>
     </section>
 
@@ -55,10 +73,13 @@
       <article class="users-card table-card">
         <div class="table-head">
           <div>
-            <p class="eyebrow">ACCOUNT</p>
+            <span class="block-tile material-icons-sharp" aria-hidden="true">group</span>
+            <p class="eyebrow">Учётные записи</p>
             <h2>Список пользователей</h2>
           </div>
-          <span>{{ filteredUsers().length }} / {{ users().length }}</span>
+          <span title="Показано по фильтрам из общего числа пользователей">
+            {{ filteredUsers().length }} из {{ users().length }}
+          </span>
         </div>
 
         <div class="table-scroll">
@@ -79,23 +100,26 @@
                   [class.unlinked]="!user.keycloakLinked"
                   (click)="selectUser(user)"
                 >
-                  <td>
+                  <td class="user-login-cell">
                     <strong>{{ user.username }}</strong>
-                    <span>{{ user.authProvider || '-' }}</span>
+                    <span class="user-source">{{ user.authProvider || '-' }}</span>
                   </td>
-                  <td>{{ user.fio || '-' }}</td>
-                  <td>{{ user.email || '-' }}</td>
-                  <td>
+                  <td class="user-name-cell">{{ user.fio || '-' }}</td>
+                  <td class="user-email-cell">{{ user.email || '-' }}</td>
+                  <td class="user-roles-cell">
                     <span class="role-pills">
                       @for (role of user.roles; track trackRole($index, role)) {
                         <b>{{ roleLabel(role) }}</b>
                       }
                     </span>
                   </td>
-                  <td>
+                  <td class="user-status-cell">
                     <span class="status-pill" [class.off]="!user.active">{{ user.active ? 'Включен' : 'Отключен' }}</span>
                     @if (!user.keycloakLinked) {
-                      <span class="status-pill warn">Нет связи с Keycloak</span>
+                      <span class="status-pill warn">
+                        <span class="material-icons-sharp" aria-hidden="true">link_off</span>
+                        Нет связи с Keycloak
+                      </span>
                     }
                   </td>
                 </tr>
@@ -113,6 +137,7 @@
             <label class="page-size">
               <span>На странице</span>
               <select
+                class="users-field"
                 [value]="pageSize()"
                 (change)="changePageSize($any($event.target).value)"
                 aria-label="Количество пользователей на странице"
@@ -130,18 +155,20 @@
             <nav class="pagination-controls" aria-label="Пагинация пользователей">
               <button
                 type="button"
-                class="icon-button"
+                class="users-btn pager-button"
                 (click)="previousPage()"
                 [disabled]="currentPageIndex() === 0"
                 title="Предыдущая страница"
+                aria-label="Предыдущая страница"
               >
-                <span class="material-icons-sharp">chevron_left</span>
+                <span class="material-icons-sharp" aria-hidden="true">chevron_left</span>
               </button>
 
               <div class="page-numbers">
                 @for (page of visiblePageNumbers(); track page) {
                   <button
                     type="button"
+                    class="users-btn pager-button"
                     [class.active]="currentPageIndex() === page"
                     [attr.aria-current]="currentPageIndex() === page ? 'page' : null"
                     (click)="goToPage(page)"
@@ -153,12 +180,13 @@
 
               <button
                 type="button"
-                class="icon-button"
+                class="users-btn pager-button"
                 (click)="nextPage()"
                 [disabled]="currentPageIndex() >= totalPages() - 1"
                 title="Следующая страница"
+                aria-label="Следующая страница"
               >
-                <span class="material-icons-sharp">chevron_right</span>
+                <span class="material-icons-sharp" aria-hidden="true">chevron_right</span>
               </button>
             </nav>
           </footer>
@@ -169,11 +197,12 @@
         @if (selectedUser()) {
           <div class="editor-title">
             <div>
-              <p class="eyebrow">EDIT</p>
+              <span class="block-tile material-icons-sharp" aria-hidden="true">manage_accounts</span>
+              <p class="eyebrow">Карточка пользователя</p>
               <h2>{{ selectedUser()?.username }}</h2>
             </div>
             <span [class.warn]="!selectedUser()?.keycloakLinked">
-              {{ selectedUser()?.keycloakLinked ? 'Keycloak' : 'Не связан' }}
+              {{ selectedUser()?.keycloakLinked ? 'Связан с Keycloak' : 'Нет связи с Keycloak' }}
             </span>
           </div>
 
@@ -200,14 +229,19 @@
               >
 
               <div class="photo-actions">
-                <button type="button" class="secondary" (click)="profilePhotoInput.click()" [disabled]="photoUploading()">
-                  <span class="material-icons-sharp">photo_camera</span>
+                <button type="button" class="users-btn" (click)="profilePhotoInput.click()" [disabled]="photoUploading()">
+                  <span class="material-icons-sharp" aria-hidden="true">photo_camera</span>
                   Выбрать
                 </button>
 
                 @if (profilePhotoFile()) {
-                  <button type="button" (click)="uploadProfilePhoto(profilePhotoInput)" [disabled]="photoUploading()">
-                    <span class="material-icons-sharp">compress</span>
+                  <button
+                    type="button"
+                    class="users-btn users-btn--save"
+                    (click)="uploadProfilePhoto(profilePhotoInput)"
+                    [disabled]="photoUploading()"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">compress</span>
                     {{ photoUploading() ? 'Сохраняю' : 'Сохранить фото' }}
                   </button>
                 }
@@ -226,27 +260,27 @@
           <div class="editor-grid">
             <label>
               <span>Логин</span>
-              <input type="text" formControlName="username">
+              <input type="text" class="users-field" formControlName="username">
             </label>
 
             <label>
               <span>Email</span>
-              <input type="email" formControlName="email">
+              <input type="email" class="users-field" formControlName="email">
             </label>
 
             <label>
               <span>ФИО</span>
-              <input type="text" formControlName="fio">
+              <input type="text" class="users-field" formControlName="fio">
             </label>
 
             <label>
               <span>Телефон</span>
-              <input type="text" formControlName="phoneNumber">
+              <input type="text" class="users-field" formControlName="phoneNumber">
             </label>
 
             <label>
               <span>Коэффициент</span>
-              <input type="text" inputmode="decimal" formControlName="coefficient">
+              <input type="text" class="users-field" inputmode="decimal" formControlName="coefficient">
             </label>
           </div>
 
@@ -254,7 +288,7 @@
             <section class="worker-chat-block">
               <label>
                 <span>Группа специалиста</span>
-                <input type="url" formControlName="workerChatUrl" placeholder="https://t.me/...">
+                <input type="url" class="users-field" formControlName="workerChatUrl" placeholder="https://t.me/...">
               </label>
               <div class="worker-chat-actions">
                 <span class="status-pill" [class.warn]="selectedUser()?.workerChatUrl && !selectedUser()?.workerTelegramGroupChatId">
@@ -264,30 +298,35 @@
                   {{ personalTelegramStatus(selectedUser()) }}
                 </span>
                 @if (selectedUser()?.workerChatUrl) {
-                  <a [href]="selectedUser()?.workerChatUrl" target="_blank" rel="noopener">
-                    <span class="material-icons-sharp">forum</span>
+                  <a class="users-btn" [href]="selectedUser()?.workerChatUrl" target="_blank" rel="noopener">
+                    <span class="material-icons-sharp" aria-hidden="true">forum</span>
                     Открыть
                   </a>
                 }
                 @if (selectedUser()?.workerTelegramBotInviteUrl) {
-                  <a [href]="selectedUser()?.workerTelegramBotInviteUrl" target="_blank" rel="noopener">
-                    <span class="material-icons-sharp">hub</span>
+                  <a class="users-btn" [href]="selectedUser()?.workerTelegramBotInviteUrl" target="_blank" rel="noopener">
+                    <span class="material-icons-sharp" aria-hidden="true">hub</span>
                     Привязать Telegram
                   </a>
-                  <button type="button" (click)="copyWorkerTelegramInviteUrl(selectedUser())" title="Скопировать ссылку привязки">
-                    <span class="material-icons-sharp">content_copy</span>
+                  <button
+                    type="button"
+                    class="users-btn"
+                    (click)="copyWorkerTelegramInviteUrl(selectedUser())"
+                    title="Скопировать ссылку привязки"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
                     Скопировать ссылку
                   </button>
                 }
                 @if (selectedUser()?.personalTelegramLinked) {
                   <button
                     type="button"
-                    class="telegram-reset-action"
+                    class="telegram-reset-action users-btn users-btn--danger"
                     (click)="resetPersonalTelegramLink()"
                     [disabled]="telegramResetting()"
                     title="Сбросить личный Telegram при передаче аккаунта другому человеку"
                   >
-                    <span class="material-icons-sharp">link_off</span>
+                    <span class="material-icons-sharp" aria-hidden="true">link_off</span>
                     {{ telegramResetting() ? 'Сбрасываю…' : 'Сбросить личный Telegram' }}
                   </button>
                 }
@@ -305,6 +344,7 @@
                 <span>Группа аудита менеджера</span>
                 <input
                   type="url"
+                  class="users-field"
                   formControlName="managerAuditChatUrl"
                   placeholder="https://t.me/..."
                 >
@@ -317,26 +357,28 @@
                   {{ managerAuditChatStatus(selectedUser()) }}
                 </span>
                 @if (selectedUser()?.managerAuditChatUrl) {
-                  <a [href]="selectedUser()?.managerAuditChatUrl" target="_blank" rel="noopener">
-                    <span class="material-icons-sharp">forum</span>
+                  <a class="users-btn" [href]="selectedUser()?.managerAuditChatUrl" target="_blank" rel="noopener">
+                    <span class="material-icons-sharp" aria-hidden="true">forum</span>
                     Открыть
                   </a>
                 }
                 @if (selectedUser()?.managerAuditTelegramBotInviteUrl) {
                   <a
+                    class="users-btn"
                     [href]="selectedUser()?.managerAuditTelegramBotInviteUrl"
                     target="_blank"
                     rel="noopener"
                   >
-                    <span class="material-icons-sharp">hub</span>
+                    <span class="material-icons-sharp" aria-hidden="true">hub</span>
                     Привязать Telegram
                   </a>
                   <button
                     type="button"
+                    class="users-btn"
                     (click)="copyManagerAuditTelegramInviteUrl(selectedUser())"
                     title="Скопировать ссылку привязки аудита"
                   >
-                    <span class="material-icons-sharp">content_copy</span>
+                    <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
                     Скопировать ссылку
                   </button>
                 }
@@ -358,7 +400,7 @@
 
           @if (!isAdminUser(selectedUser())) {
             <section class="employment-card" [class.inactive]="!selectedUser()?.active">
-              <span class="material-icons-sharp">
+              <span class="material-icons-sharp" aria-hidden="true">
                 {{ selectedUser()?.active ? 'person_off' : 'person_add' }}
               </span>
               <div>
@@ -371,12 +413,14 @@
               </div>
               <button
                 type="button"
-                class="employment-action"
+                class="employment-action users-btn"
                 [class.restore]="!selectedUser()?.active"
+                [class.users-btn--danger]="selectedUser()?.active"
+                [class.users-btn--confirm]="!selectedUser()?.active"
                 (click)="changeEmploymentStatus(!selectedUser()?.active)"
                 [disabled]="saving()"
               >
-                <span class="material-icons-sharp">{{ selectedUser()?.active ? 'person_remove' : 'person_add' }}</span>
+                <span class="material-icons-sharp" aria-hidden="true">{{ selectedUser()?.active ? 'person_remove' : 'person_add' }}</span>
                 {{ selectedUser()?.active ? 'Отключить доступ' : 'Восстановить доступ' }}
               </button>
             </section>
@@ -404,21 +448,26 @@
           </section>
 
           @if (form.invalid && form.touched) {
-            <p class="error compact">Проверь логин, email и выбери хотя бы одну роль.</p>
+            <p class="error compact">Проверьте логин, email и выберите хотя бы одну роль.</p>
           }
 
           <div class="actions editor-actions">
             <button
               type="button"
-              class="danger-button user-delete-button"
+              class="users-btn users-btn--danger user-delete-button"
               (click)="deleteSelectedUser()"
               [disabled]="deleteSaving() || isAdminUser(selectedUser())"
             >
-              <span class="material-icons-sharp">delete</span>
+              <span class="material-icons-sharp" aria-hidden="true">delete</span>
               {{ deleteSaving() ? 'Удаляю' : 'Удалить' }}
             </button>
-            <button type="button" (click)="save()" [disabled]="saving() || form.invalid || !hasUnsavedUserChanges()">
-              <span class="material-icons-sharp">save</span>
+            <button
+              type="button"
+              class="users-btn users-btn--save"
+              (click)="save()"
+              [disabled]="saving() || form.invalid || !hasUnsavedUserChanges()"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">save</span>
               {{ saving() ? 'Сохраняю' : 'Сохранить' }}
             </button>
           </div>
@@ -435,7 +484,8 @@
             <section class="contractor-payments">
               <div class="editor-title">
                 <div>
-                  <p class="eyebrow">REWARD ROUTING</p>
+                  <span class="block-chip material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
+                  <p class="eyebrow">Вознаграждения</p>
                   <h2>Платёжные профили вознаграждений</h2>
                 </div>
                 <span
@@ -461,7 +511,7 @@
                     <span>{{ contractorRoutingModeDescription() }}</span>
                   </span>
                 </div>
-                <a routerLink="/admin/dictionaries" [queryParams]="{ tab: 'settings' }">
+                <a routerLink="/admin/dictionaries" [queryParams]="{ tab: 'settings' }" fragment="contractor-system">
                   <span class="material-icons-sharp" aria-hidden="true">tune</span>
                   Открыть общий переключатель
                 </a>
@@ -1371,7 +1421,8 @@
           <section class="password-reset" [formGroup]="passwordForm">
             <div class="editor-title">
               <div>
-                <p class="eyebrow">PASSWORD</p>
+                <span class="block-chip material-icons-sharp" aria-hidden="true">key</span>
+                <p class="eyebrow">Доступ</p>
                 <h2>Пароль для входа</h2>
               </div>
               <span>Постоянный</span>
@@ -1380,14 +1431,23 @@
             <div class="password-row">
               <label>
                 <span>Новый пароль</span>
-                <input type="password" formControlName="password" autocomplete="new-password">
+                <input type="password" class="users-field" formControlName="password" autocomplete="new-password">
               </label>
 
-              <button type="button" (click)="changePassword()" [disabled]="passwordSaving() || !selectedUser()?.keycloakLinked">
-                <span class="material-icons-sharp">key</span>
+              <button
+                type="button"
+                class="users-btn users-btn--save"
+                (click)="changePassword()"
+                [disabled]="passwordSaving() || !selectedUser()?.keycloakLinked"
+              >
+                <span class="material-icons-sharp" aria-hidden="true">key</span>
                 {{ passwordSaving() ? 'Меняю' : 'Сменить пароль' }}
               </button>
             </div>
+
+            @if (!selectedUser()?.keycloakLinked) {
+              <p class="hint compact">Сменить пароль нельзя: учётная запись не связана с Keycloak.</p>
+            }
 
             @if (passwordForm.invalid && passwordForm.touched) {
               <p class="error compact">Пароль должен быть не короче 8 символов.</p>
@@ -1405,7 +1465,8 @@
           <section class="assignments" [formGroup]="assignmentForm">
             <div class="editor-title">
               <div>
-                <p class="eyebrow">LINKS</p>
+                <span class="block-chip material-icons-sharp" aria-hidden="true">hub</span>
+                <p class="eyebrow">Команда</p>
                 <h2>Связи в команде</h2>
               </div>
               <span>{{ assignmentsLoading() ? 'Загрузка' : 'Готово' }}</span>
@@ -1496,8 +1557,13 @@
             </section>
 
             <div class="actions">
-              <button type="button" (click)="saveAssignments()" [disabled]="assignmentsSaving()">
-                <span class="material-icons-sharp">hub</span>
+              <button
+                type="button"
+                class="users-btn users-btn--save"
+                (click)="saveAssignments()"
+                [disabled]="assignmentsSaving()"
+              >
+                <span class="material-icons-sharp" aria-hidden="true">hub</span>
                 {{ assignmentsSaving() ? 'Сохраняю связи' : 'Сохранить связи' }}
               </button>
             </div>
@@ -1508,36 +1574,67 @@
           </section>
         } @else {
           <div class="empty">
-            <span class="material-icons-sharp">person_search</span>
-            <h2>Выбери пользователя</h2>
-            <p>Здесь будут профиль, роли и связи внутри команды.</p>
+            <span class="empty-icon material-icons-sharp" aria-hidden="true">person_search</span>
+            <h2>Выберите пользователя</h2>
+            <p>Нажмите на строку в списке — здесь откроются профиль, роли, пароль и связи внутри команды.</p>
           </div>
         }
       </section>
     </section>
-
-    <section class="mobile-lead-stats mobile-user-stats" aria-label="Статистика пользователей">
-      @for (metric of metrics(); track trackMetric($index, metric)) {
-        <article class="stat-card" [class]="metric.tone">
-          <div>
-            <span>{{ metric.label }}</span>
-            <strong>{{ metric.value }}</strong>
-          </div>
-          <i class="material-icons-sharp">{{ metric.icon }}</i>
-        </article>
-      }
-    </section>
   </section>
 
-  <section admin-right-content class="lead-stats user-stats">
-    @for (metric of metrics(); track trackMetric($index, metric)) {
-      <article class="stat-card" [class]="metric.tone">
-        <div>
-          <span>{{ metric.label }}</span>
-          <strong>{{ metric.value }}</strong>
-        </div>
-        <i class="material-icons-sharp">{{ metric.icon }}</i>
-      </article>
-    }
+  <!-- The counters live in the filter buttons above the list; the side column explains how to work with the page. -->
+  <section admin-right-content class="users-help" aria-label="Как работать с разделом">
+    <article class="users-help-card">
+      <header class="users-help-head">
+        <span class="block-tile material-icons-sharp" aria-hidden="true">tips_and_updates</span>
+        <p class="eyebrow">Подсказка</p>
+        <h2>Как работать</h2>
+      </header>
+
+      <ol class="users-help-list">
+        <li>
+          <span class="material-icons-sharp" aria-hidden="true">search</span>
+          <div>
+            <strong>Найти пользователя</strong>
+            <p>
+              Поиск — по логину, ФИО, почте и телефону, роль — в списке «Все роли». Кнопки над поиском
+              отбирают активных, отключённых, связанных с Keycloak и записи для миграции.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="material-icons-sharp" aria-hidden="true">touch_app</span>
+          <div>
+            <strong>Открыть карточку</strong>
+            <p>
+              Нажмите на строку. «Сохранить» записывает профиль и роли, у фото, пароля и связей в команде
+              свои кнопки.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="material-icons-sharp" aria-hidden="true">verified_user</span>
+          <div>
+            <strong>«Нет связи с Keycloak» и «Миграция»</strong>
+            <p>
+              Строка с жёлтой полосой слева и плашкой «Нет связи с Keycloak» — учётная запись без привязки к
+              Keycloak: пароль для неё в карточке не меняется, все такие записи собирает фильтр «Миграция».
+              Метка <b>KEYCLOAK</b> или <b>LOCAL</b> под логином показывает, откуда запись пришла.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
+          <div>
+            <strong>Платёжные профили</strong>
+            <p>
+              У специалиста и менеджера — в карточке, в блоке «Платёжные профили вознаграждений» ниже кнопки
+              «Сохранить». Изменять их могут администратор и владелец.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </article>
   </section>
 </app-admin-layout>

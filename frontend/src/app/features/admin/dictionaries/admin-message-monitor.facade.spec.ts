@@ -62,6 +62,8 @@ describe('dictionary message monitor tab lifecycle', () => {
 
   it('keeps dispatched mutations alive but suppresses their stale response after leave and reentry', () => {
     vi.useFakeTimers();
+    // «Повторить сейчас» asks first; the owner agrees.
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { facade, api, view, toast } = setup();
     const write = new Subject<AdminClientMessageMonitor>();
     api.retryClientMessageNow.mockReturnValue(write);
@@ -83,6 +85,7 @@ describe('dictionary message monitor tab lifecycle', () => {
 
   it('cancels stale reads before a manual action without canceling or replaying the write', () => {
     vi.useFakeTimers();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { facade, api } = setup();
     const read = new Subject<AdminClientMessageMonitor>();
     const write = new Subject<AdminClientMessageMonitor>();

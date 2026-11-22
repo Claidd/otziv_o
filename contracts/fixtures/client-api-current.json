@@ -4718,6 +4718,7 @@
     },
     "ManagerControlManualDeliveryHandoffWorkflowRequestInput" : {
       "checkedChat" : false,
+      "decision" : "contract-example",
       "note" : "contract-example",
       "operationId" : "contract-example"
     },

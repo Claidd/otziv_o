@@ -151,6 +151,9 @@ public class ManagerControlProblemExamples {
 
     private final WhatsAppInviteLinkHealth whatsAppInviteLinkHealth;
 
+    /** Why a scenario does not run now (switch off, pause): such an order is not a missing-automation fault. */
+    private final com.hunt.otziv.client_messages.api.ClientMessageScenarioStops scenarioStops;
+
     @org.springframework.beans.factory.annotation.Autowired
     private com.hunt.otziv.client_messages.api.ClientContactHealth contactHealth;
 
@@ -312,9 +315,20 @@ public class ManagerControlProblemExamples {
             String label = safe(clientMessageStatus.label());
             String errorCode = safe(clientMessageStatus.errorCode()).toLowerCase(Locale.ROOT);
             String error = safe(clientMessageStatus.errorMessage());
-            if ("rate_limited".equals(errorCode) && hasHealthyActiveClientMessageQueue(order)) {
+            if (!errorCode.isBlank() && hasHealthyActiveClientMessageQueue(order)) {
                 String nextAttempt = clientMessageStatus.nextAttemptAt().toString();
-                return "Очередь автоответчика исправна. Следующий слот отправки: " + nextAttempt + ". Ручное действие до этого времени не требуется.";
+                String wait = intentionalWaitText(errorCode);
+                return "Очередь автоответчика исправна" + (wait.isBlank() ? "" : ": " + wait)
+                        + ". Следующий слот отправки: " + nextAttempt + ". Ручное действие до этого времени не требуется.";
+            }
+            if (com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.isSwitchedOffCode(errorCode)) {
+                // A setting, not a fault: the card names the switch and the step the manager does by hand.
+                return switchedOffReason(switchedOffWhat(error), clientMessageStatus.scenario());
+            }
+            if (com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.isManualDecisionCode(errorCode)) {
+                return "Почему в контроле: администратор закрыл задачу автоответчика по этому заказу в мониторинге, "
+                        + "автоответчик по ней больше не пишет. "
+                        + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.manualAction(clientMessageStatus.scenario());
             }
             if (!error.isBlank()) {
                 return clientMessageControlErrorReason(error);
@@ -328,6 +342,13 @@ public class ManagerControlProblemExamples {
             return "Почему в контроле: автоответчик не может отправить сообщение — " + bindingReason + ".";
         }
         String status = safe(order.getStatus());
+        // No task at all because its scenario is switched off (none is created then): say so, without «Починить».
+        String expectedScenario = expectedAutomationScenario(status, order.isWaitingForClient());
+        String stop = expectedScenario == null || scenarioStops == null ? null : scenarioStops.stopReason(expectedScenario);
+        if (stop != null) {
+            return switchedOffReason(switchedOffWhat("в настройках автоответчика (" + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.SETTINGS_PAGE + ") " + stop),
+                    expectedScenario);
+        }
         if (PAYMENT_AUTOMATION_STATUSES.contains(status)) {
             return "Почему в контроле: для заказа нет активного или успешного автонапоминания об оплате.";
         }
@@ -352,7 +373,54 @@ public class ManagerControlProblemExamples {
             return false;
         }
         String errorCode = safe(status.errorCode()).toLowerCase(Locale.ROOT);
-        return errorCode.isBlank() || "rate_limited".equals(errorCode);
+        if (errorCode.isBlank()) {
+            return true;
+        }
+        // A long overdue planned attempt means the queue is not running (e.g. the whole autoresponder is stopped).
+        return com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.isIntentionalWaitCode(errorCode)
+                && !status.nextAttemptAt().isBefore(java.time.LocalDateTime.now().minusMinutes(
+                        com.hunt.otziv.client_messages.api.ClientMessageStateDecisions.INTENTIONAL_WAIT_OVERDUE_MINUTES));
+    }
+
+    /** A switched-off scenario: what is off, the manager's own step, and who turns it back on. No «Починить» words. */
+    static String switchedOffReason(String what, String scenario) {
+        return "Почему в контроле: автоответчик не пишет клиенту по этому заказу — " + what + " "
+                + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.manualAction(scenario)
+                + " «Починить» здесь не поможет. " + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.whoTurnsItOn(what);
+    }
+
+    /** The scenario the order's status runs (the same mapping as the overdue lists); null when none. */
+    static String expectedAutomationScenario(String status, boolean waitingForClient) {
+        if ("Опубликовано".equals(status)) return "PAYMENT_INVOICE_RETRY";
+        if (PAYMENT_AUTOMATION_STATUSES.contains(status)) return "PAYMENT_REMINDER";
+        if (REVIEW_CHECK_AUTOMATION_STATUSES.contains(status)) return "REVIEW_CHECK_REMINDER";
+        if (DELIVERY_RETRY_AUTOMATION_STATUSES.contains(status)) return "REVIEW_CHECK_DELIVERY_RETRY";
+        if (CLIENT_TEXT_AUTOMATION_STATUSES.contains(status) && waitingForClient) return "CLIENT_TEXT_REMINDER";
+        return null;
+    }
+
+    /** «в настройках автоответчика (…) выключен переключатель «…».» from the task message, without «Не отправлено:». */
+    static String switchedOffWhat(String error) {
+        String text = error == null ? "" : error.trim();
+        if (text.startsWith("Не отправлено:")) text = text.substring("Не отправлено:".length()).trim();
+        // Tasks postponed before the switch was named keep the old generic message.
+        if (text.isBlank() || !text.contains("«")) {
+            text = "в настройках автоответчика (" + com.hunt.otziv.client_messages.api.ClientMessageScenarioSwitches.SETTINGS_PAGE
+                    + ") выключен этот сценарий или весь автоответчик.";
+        }
+        return text.endsWith(".") ? text : text + ".";
+    }
+
+    /** Why a healthy task waits, in the manager's words; empty for an ordinary planned attempt. */
+    String intentionalWaitText(String errorCode) {
+        return switch (safe(errorCode).toLowerCase(Locale.ROOT)) {
+            case "manual_contact_reserved" -> "менеджер уже написал клиенту в этом цикле, напоминание отложено";
+            case "daily_limit" -> "дневной лимит авторассылки исчерпан, отправка продолжится в следующий рабочий день";
+            case "rate_limited" -> "ждёт интервала между отправками";
+            case "outside_messaging_window", "messaging_window_closed" -> "ждёт рабочего окна отправки";
+            case "review_recovery_active" -> "идёт восстановление отзывов, напоминание отложено";
+            default -> "";
+        };
     }
 
     String clientMessageControlErrorReason(String error) {

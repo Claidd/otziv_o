@@ -241,7 +241,7 @@ public class ManagerControlConcreteSnapshotWorkflow {
             item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
             item.setActionType(ManagerDailyControlActionType.RESOLVED);
             item.setComment("AUTOMATION_FAILURE".equals(item.getEntityType())
-                    ? "Карточка больше не требует действия менеджера. Неподтверждённые прежние отправки доступны администратору в разделе контактов; состояние доставки не изменено."
+                    ? "Карточка больше не требует действия менеджера: автоответчик больше не сообщает об этой проблеме; состояние доставки не изменено."
                     : "Проблема больше не актуальна и закрыта автоматически");
             item.setResolvedAt(now);
             item.setAutomaticResolution(true);

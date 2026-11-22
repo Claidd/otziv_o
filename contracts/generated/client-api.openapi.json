@@ -300,7 +300,7 @@
             "type" : "integer"
           }
         } ],
-        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
         "security" : [ {
           "bearerAuth" : [ ]
         } ],
@@ -733,7 +733,7 @@
             "type" : "integer"
           }
         } ],
-        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
         "security" : [ {
           "bearerAuth" : [ ]
         } ],
@@ -7229,6 +7229,73 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/common-billing/invoices/{invoiceId}/paper-invoice/paid/cancel" : {
+      "post" : {
+        "operationId" : "CommonBillingAdminController_cancelPaperInvoicePayment",
+        "x-java-handler" : "com.hunt.otziv.common_billing.controller.CommonBillingAdminController#cancelPaperInvoicePayment",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ManualPaymentConfirmationRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "invoiceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CommonInvoiceDetailsResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/common-billing/invoices/{invoiceId}/payment-mode" : {
       "post" : {
         "operationId" : "CommonBillingAdminController_changePaymentMode",
@@ -8138,6 +8205,21 @@
           }
         }, {
           "name" : "confirm",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          },
+          "x-server-default" : "false"
+        }, {
+          "name" : "targetWorkerId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer"
+          }
+        }, {
+          "name" : "specialistChoice",
           "in" : "query",
           "required" : false,
           "schema" : {
@@ -21377,6 +21459,13 @@
               "type" : "null"
             } ]
           },
+          "decision" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "note" : {
             "anyOf" : [ {
               "type" : "string"
@@ -29217,7 +29306,7 @@
     "sha256" : "dcc533ecc4ad81ed51ceedfee47ed99218270c428f3e34b11689046ad1bc38b4"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/archive/controller/ApiManagerArchiveController.java",
-    "sha256" : "f2a1662e876152bf10aa21b8d8feeb786de757bf2f412791f6c7a9f98d1c51c0"
+    "sha256" : "f48cc129f0feb02bd1911c47b7f15ffcb9dcb629b29134dcf8df998b2d920174"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/archive/dto/ArchiveBadReviewTaskItem.java",
     "sha256" : "431d19c94c1ed86cda59e59cb72a5522f3e2b17f469e8d4b5addf4871740e22c"
@@ -29271,7 +29360,7 @@
     "sha256" : "05942b0d4f2864de138264dc5b85be9dd18c3b85b6b4760bdfa504f0f5089a3c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java",
-    "sha256" : "f732e23d298c4b93961ee0969579616489fc63ef677531c3a90dabef007a6fd7"
+    "sha256" : "eef321d0fc9a86774e9407c5e9f98977d8fc86746d90466b6d2454191036186f"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonInvoiceArchiveController.java",
     "sha256" : "c641daee6dbb7b81406e67f3fb245c6e142dbadce839675e1d39711cae48382b"
@@ -29553,7 +29642,7 @@
     "sha256" : "1dc33d2db0c2ae06fa49ea1d9b1328cd8a47d8ad30f28f1b442e1a4625fdfc03"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ApiManagerControlController.java",
-    "sha256" : "c189b0026939e49f97d24a5317b2fa08576512f552822810b58136c81c8fa5a5"
+    "sha256" : "adb3d0a50dd84adc3aa1dfabd07e77bb9262cebfb51a9bd5c2363ab44999cf60"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ManagerClientReplyOperationController.java",
     "sha256" : "28f7dfb73d90d3fca83eb5b5d988fe7d0833afb39a152e1f232377a4f73117ba"
@@ -29625,10 +29714,10 @@
     "sha256" : "f5c93d6fb354ea4f786eb117ac0cec8e274c04c7d7fabcee10e9c1f01141d126"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerAutomationFailureService.java",
-    "sha256" : "0f592b87343d0763fe889832102e146aa70bfba496efde1e6e7bb17708eb0af5"
+    "sha256" : "00951ffb376dabb64e6fa8764900f475ef2ed66e1f32de6921592c8c76ee09d6"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerControlManualDeliveryHandoffWorkflow.java",
-    "sha256" : "ef85cfcf4b5075d99299e2745e2b2fd63dd84e5eebce73a5f86b3c1db58e258e"
+    "sha256" : "877712c17c43eb1faef246c542be10c97c9e02bbad36d4dc3d4b19e06897eb6d"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/controller/ApiManagerDailySummaryController.java",
     "sha256" : "3b28d51155bc2fea539cec2a5edf112a33cf7c3390137d540f2caef3a7dfe437"

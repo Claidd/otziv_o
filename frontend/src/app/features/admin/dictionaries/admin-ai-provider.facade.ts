@@ -6,6 +6,18 @@ import { apiErrorMessage } from '../../../shared/api-error-message';
 
 type ProviderDeps = { api: Pick<ReputationAiApi, 'status' | 'selectProvider'>; toast: Pick<ToastService, 'success' | 'error'>; isActive: () => boolean };
 
+/**
+ * The checks of manager control that the backend runs only while DeepSeek is the active provider (it compares the provider
+ * name): the no-answer check of unanswered messages, the questions and answer checks of manager reports, and the review
+ * of performers' risk explanations.
+ */
+const DEEPSEEK_ONLY_CHECKS = [
+  '— «Проверить: ответ не нужен» в неотвеченных сообщениях: менеджеры получат ошибку и не смогут так закрыть карточку;',
+  '— вопросы по отчётам менеджеров и проверка ответов на них;',
+  '— оценка пояснений исполнителей по рискам: пояснения уйдут менеджеру без оценки;',
+  '— AI-разбор в ежедневных сводках по менеджерам и команде: в сводках останутся только цифры.'
+];
+
 export class AdminAiProviderFacade {
   private aiProviderLoadEpoch = 0;
   private generation = 0;
@@ -65,27 +77,55 @@ export class AdminAiProviderFacade {
       return;
     }
 
+    const generation = this.generation;
+    // The provider is one setting for the whole system: leaving DeepSeek switches its manager-control checks off.
+    const leavesDeepSeek = this.aiProviderStatus()?.aiProvider === 'deepseek';
+    if (leavesDeepSeek) {
+      // Reserved while the question is open, so a second click cannot start another switch.
+      this.switchingAiProvider.set(true);
+      const confirmed = window.confirm(this.leaveDeepSeekQuestion(provider));
+      this.switchingAiProvider.set(false);
+      if (!confirmed || !this.current(generation)) {
+        return;
+      }
+    }
+
     this.read?.unsubscribe();
     this.aiProviderLoadEpoch += 1;
     this.loading.set(false);
-    const generation = this.generation;
     this.switchingAiProvider.set(true);
     this.aiProviderError.set(null);
     this.deps.api.selectProvider(provider).subscribe({
       next: (status) => {
         this.switchingAiProvider.set(false);
-        if (!this.current(generation)) return;
-        this.aiProviderStatus.set(status);
-        this.deps.toast.success('AI-провайдер переключён', this.aiProviderDisplayName(provider));
+        // The provider is one setting for the whole system: its new status is kept even when the tab was left and
+        // opened again meanwhile (the read on return was skipped while the switch ran), and the result is reported.
+        if (!this.destroyed) this.aiProviderStatus.set(status);
+        this.deps.toast.success(
+          'AI-провайдер переключён',
+          leavesDeepSeek
+            ? `${this.aiProviderDisplayName(provider)}. Проверки контроля менеджеров не работают, пока не выбран DeepSeek.`
+            : this.aiProviderDisplayName(provider)
+        );
       },
       error: (err: unknown) => {
         this.switchingAiProvider.set(false);
-        if (!this.current(generation)) return;
         const message = apiErrorMessage(err, 'Не удалось переключить AI-провайдера');
-        this.aiProviderError.set(message);
+        if (this.current(generation)) this.aiProviderError.set(message);
         this.deps.toast.error('AI-провайдер не переключён', message);
       }
     });
+  }
+
+  private leaveDeepSeekQuestion(provider: ReputationAiProvider): string {
+    return [
+      `Переключить AI на ${this.aiProviderDisplayName(provider)}?`,
+      '',
+      'Эти проверки контроля менеджеров работают только с DeepSeek и отключатся:',
+      ...DEEPSEEK_ONLY_CHECKS,
+      '',
+      'Чтобы вернуть их, снова выберите DeepSeek.'
+    ].join('\n');
   }
 
   aiProviderDisplayName(provider: ReputationAiProvider): string {
@@ -106,6 +146,15 @@ export class AdminAiProviderFacade {
       : provider === 'yandexgpt'
         ? status.yandexModel
         : status.openAiModel;
+  }
+
+  /** The search of the status in words: «local» is the stub the server uses when no public search is set up. */
+  aiSearchProviderLabel(code: string | null | undefined): string {
+    const value = (code ?? '').trim().toLowerCase();
+    if (value === 'yandex') {
+      return 'Яндекс Поиск';
+    }
+    return !value || value === 'local' ? 'не подключён' : (code ?? '');
   }
 
 }

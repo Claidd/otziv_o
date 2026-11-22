@@ -34,7 +34,7 @@ class ManagerControlAutomationRepairWorkflowTest {
             ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult receipt) {
         var messages = mock(ScheduledClientMessageService.class);
         var states = mock(ScheduledClientMessageStateRepository.class);
-        var diagnostics = new ManagerControlOrderAutomationDiagnostics(mock(com.hunt.otziv.p_products.repository.OrderRepository.class), states);
+        var diagnostics = new ManagerControlOrderAutomationDiagnostics(mock(com.hunt.otziv.p_products.repository.OrderRepository.class), states, scenario -> null);
         var outcome = mock(ManagerControlRepairOutcome.class);
         var workflow = new ManagerControlAutomationRepairWorkflow(mock(ManagerControlChatRepairWorkflow.class), outcome,
                 mock(ManagerControlProblemExamples.class), diagnostics, messages, states,
@@ -65,6 +65,44 @@ class ManagerControlAutomationRepairWorkflowTest {
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
     }
 
+    @Test void repairNeitherRestartsNorRecreatesAScenarioSwitchedOffInTheSettings() {
+        var messages = mock(ScheduledClientMessageService.class);
+        var states = mock(ScheduledClientMessageStateRepository.class);
+        var diagnostics = new ManagerControlOrderAutomationDiagnostics(mock(com.hunt.otziv.p_products.repository.OrderRepository.class), states, scenario -> null);
+        var outcome = mock(ManagerControlRepairOutcome.class);
+        var restart = mock(ManagerControlReminderRestart.class);
+        var workflow = new ManagerControlAutomationRepairWorkflow(mock(ManagerControlChatRepairWorkflow.class), outcome,
+                mock(ManagerControlProblemExamples.class), diagnostics, messages, states,
+                mock(ClientChatMessageReconciliationService.class), mock(ManagerAutomationFailureService.class),
+                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(states, mock(org.springframework.jdbc.core.JdbcTemplate.class)), mock(ManagerControlManualDeliveryRepair.class), restart);
+        var order = new com.hunt.otziv.p_products.model.Order(); order.setId(78L);
+        order.setStatusChangedAt(LocalDateTime.of(2026, 7, 14, 0, 0));
+        var paused = ScheduledClientMessageState.builder().id(3939L).orderId(78L)
+                .scenario(ClientMessageScenario.REVIEW_CHECK_REMINDER).targetKey("order:78:2026-07-14T00:00")
+                .status(com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode("automation_paused").build();
+        when(messages.orderAutomationScenario(order)).thenReturn(Optional.of(ClientMessageScenario.REVIEW_CHECK_REMINDER));
+        when(messages.scenarioStoppedBySettings(ClientMessageScenario.REVIEW_CHECK_REMINDER)).thenReturn(true);
+        when(messages.scenarioStopReason(ClientMessageScenario.REVIEW_CHECK_REMINDER))
+                .thenReturn("выключен переключатель «Напоминать о проверке шаблонов»");
+        when(states.findByOrderIdIn(java.util.List.of(78L))).thenReturn(java.util.List.of(paused));
+        var card = new ManagerDailyControlConcreteItem(); card.setId(2L); card.setEntityType("ORDER"); card.setEntityId(78L);
+
+        var refused = assertThrows(ResponseStatusException.class,
+                () -> workflow.repairOrderAutomationConcreteItem(card, new ManagerDailyControl(), order, () -> "manager"));
+
+        assertEquals(HttpStatus.CONFLICT, refused.getStatusCode());
+        assertEquals("«Починить» не включает автоответчик: в настройках автоответчика (Справочники → Автоответчик) "
+                + "выключен переключатель «Напоминать о проверке шаблонов». "
+                + "Напомните клиенту проверить шаблоны отзывов и при необходимости отправьте ссылку сами. "
+                + "Это общий переключатель для всех клиентов: его включают владелец или администратор.", refused.getReason());
+        verify(restart, never()).repair(anyLong(), anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(messages, never()).ensureOrderAutomationForOrder(org.mockito.ArgumentMatchers.any());
+        verify(messages, never()).retryNow(anyLong());
+        verify(outcome, never()).resolveRepairedConcreteItem(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
+    }
+
     @Test void recoveredContactRetainsFollowUpWhenTheOpenParentIsRefreshed() {
         var cards = mock(com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository.class);
         when(cards.save(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
@@ -90,7 +128,7 @@ class ManagerControlAutomationRepairWorkflowTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"state_transaction_outcome_uncertain", "manual_delivery_handoff_pending"})
-    void checkedHistoryWithoutReceiptContinuesInternallyWithoutRetryOrManagerHandoff(String errorCode) {
+    void checkedHistoryWithoutReceiptAsksTheManagerToCheckTheChatWithoutRetry(String errorCode) {
         var stateRepository = mock(ScheduledClientMessageStateRepository.class);
         var scheduledMessages = mock(ScheduledClientMessageService.class);
         var failures = mock(ManagerAutomationFailureService.class);
@@ -128,10 +166,10 @@ class ManagerControlAutomationRepairWorkflowTest {
                 () -> workflow.repairAutomationFailureConcreteItem(item, control, () -> "admin"));
 
         assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
-        assertTrue(failure.getReason().contains("продолжит сверку автоматически"));
         assertTrue(failure.getReason().contains("Новое сообщение не отправлялось"));
-        assertTrue(failure.getReason().contains("Повторное нажатие не разрешит отправку"));
-        assertTrue(failure.getReason().contains("Передайте администратору"));
+        assertTrue(failure.getReason().contains("«Сверка отправки»"));
+        // The manager of the order decides in the card; nothing is handed to an administrator.
+        org.junit.jupiter.api.Assertions.assertFalse(failure.getReason().contains("администратор"));
         org.junit.jupiter.api.Assertions.assertFalse(failure.getReason().contains("Передать вручную"));
         verify(scheduledMessages, never()).retryNow(anyLong());
         verifyNoInteractions(repairOutcome);

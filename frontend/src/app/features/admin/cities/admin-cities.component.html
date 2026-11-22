@@ -1,10 +1,12 @@
 <app-admin-layout title="Города" active="city-stats">
-  <section class="cities-container">
-    <header class="cities-header">
-      <h1 class="cities-title">
-        <span class="material-icons-sharp">location_city</span>
-        Статистика по городам
-      </h1>
+  <section class="cities-page">
+    <header class="cities-head">
+      <span class="material-icons-sharp cities-head-tile" aria-hidden="true">location_city</span>
+      <div class="cities-head-text">
+        <span class="cities-kicker">Отзывы и аккаунты</span>
+        <h1 class="cities-title">Статистика по городам</h1>
+        <p class="cities-subtitle">Сколько отзывов ждут публикации и хватает ли аккаунтов в каждом городе</p>
+      </div>
     </header>
 
     <section class="stats-grid" aria-label="Общая статистика">
@@ -14,194 +16,227 @@
           [class.stat-card-archive]="card.tone === 'archive'"
           [class.stat-card-bots]="card.tone === 'bots'"
           [class.stat-card-balance]="card.tone === 'balance'"
+          [class.stat-card-surplus]="card.tone === 'balance' && card.value > 0"
+          [class.stat-card-deficit]="card.tone === 'balance' && card.value < 0"
         >
-          <h3>{{ card.value }}</h3>
-          <p>{{ card.label }}</p>
-          @if (card.detail) {
-            <div class="stat-difference">{{ card.detail }}</div>
-          }
+          <span class="material-icons-sharp stat-icon" aria-hidden="true">{{ card.icon }}</span>
+          <div class="stat-body">
+            <p class="stat-label">{{ card.label }}</p>
+            <strong class="stat-value">{{ card.value }}</strong>
+            @if (card.detail) {
+              <span class="stat-difference">{{ card.detail }}</span>
+            }
+          </div>
         </article>
       }
     </section>
 
-    <section class="search-section">
+    <section class="search-section" aria-label="Поиск и сортировка">
       <div class="controls-strip">
-        <form class="search-form" (ngSubmit)="searchCities()">
-          <span class="material-icons-sharp search-input-icon" aria-hidden="true">search</span>
-          <input
-            type="text"
-            class="search-input"
-            name="citySearch"
-            placeholder="Поиск по названию города..."
-            [ngModel]="search()"
-            (ngModelChange)="search.set($event)"
-          >
-          <button type="submit" class="search-button" [disabled]="loading()">
-            <span class="material-icons-sharp">search</span>
+        <form class="cities-search" role="search" (ngSubmit)="searchCities()">
+          <div class="cities-search-field">
+            <span class="material-icons-sharp cities-search-icon" aria-hidden="true">search</span>
+            <input
+              type="text"
+              class="cities-search-input"
+              name="citySearch"
+              placeholder="Поиск по названию города..."
+              aria-label="Поиск по названию города"
+              [ngModel]="search()"
+              (ngModelChange)="search.set($event)"
+            >
+          </div>
+          <button type="submit" class="cities-search-button" [disabled]="loading()">
+            <span class="material-icons-sharp" aria-hidden="true">search</span>
             Найти
           </button>
         </form>
 
-        <div class="sort-options">
-          @for (option of sortOptions; track trackSort($index, option)) {
-            <button
-              type="button"
-              class="sort-button"
-              [class.active]="sort() === option.key"
-              (click)="toggleSort(option)"
-            >
-              {{ option.label }}
-              <span class="material-icons-sharp">{{ sortIcon(option) }}</span>
-            </button>
-          }
-
-          @if (sort()) {
-            <button type="button" class="sort-button reset-sort" (click)="resetSort()">
-              <span class="material-icons-sharp">close</span>
-              Сбросить
-            </button>
-          }
-        </div>
-
         <div class="export-row">
-          <button type="button" class="action-button export" (click)="exportAll()" [disabled]="exporting()">
-            <span class="material-icons-sharp">table_view</span>
+          <button type="button" class="export-button" (click)="exportAll()" [disabled]="exporting()">
+            <span class="material-icons-sharp" aria-hidden="true">table_view</span>
             {{ exporting() ? 'Выгружаю...' : 'Выгрузить ВСЕ в Excel' }}
           </button>
 
-          <span>Всего городов: {{ currentPage().totalElements }}</span>
+          <span class="export-total">Всего городов: <strong>{{ currentPage().totalElements }}</strong></span>
 
-          <select [ngModel]="size()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
-            @for (pageSize of pageSizeOptions; track pageSize) {
-              <option [ngValue]="pageSize">{{ pageSize }}</option>
-            }
-          </select>
+          <label class="page-size">
+            <span>На странице</span>
+            <select [ngModel]="size()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
+              @for (pageSize of pageSizeOptions; track pageSize) {
+                <option [ngValue]="pageSize">{{ pageSize }}</option>
+              }
+            </select>
+          </label>
         </div>
       </div>
 
-      <div class="active-filters">
-        @if (search()) {
-          <span class="filter-pill">
-            <span class="material-icons-sharp">filter_alt</span>
-            Фильтр: "{{ search() }}"
-            <button type="button" (click)="clearSearch()" title="Убрать фильтр">
-              <span class="material-icons-sharp">close</span>
-            </button>
-          </span>
+      <div class="sort-options" role="group" aria-label="Сортировка">
+        <span class="sort-caption">Сортировка</span>
+
+        @for (option of sortOptions; track trackSort($index, option)) {
+          <button
+            type="button"
+            class="sort-button"
+            [class.active]="sort() === option.key"
+            [attr.aria-pressed]="sort() === option.key"
+            (click)="toggleSort(option)"
+          >
+            {{ option.label }}
+            <span class="material-icons-sharp" aria-hidden="true">{{ sortIcon(option) }}</span>
+          </button>
         }
 
         @if (sort()) {
-          <span class="filter-pill sort-pill">
-            <span class="material-icons-sharp">sort</span>
-            Сортировка: {{ activeSortLabel() }} ({{ direction() === 'asc' ? 'возр.' : 'убыв.' }})
-            <button type="button" (click)="resetSort()" title="Сбросить сортировку">
-              <span class="material-icons-sharp">close</span>
-            </button>
-          </span>
+          <button type="button" class="sort-button reset-sort" (click)="resetSort()">
+            <span class="material-icons-sharp" aria-hidden="true">close</span>
+            Сбросить
+          </button>
         }
       </div>
+
+      @if (search() || sort()) {
+        <div class="active-filters">
+          @if (search()) {
+            <span class="filter-pill">
+              <span class="material-icons-sharp" aria-hidden="true">filter_alt</span>
+              <span class="filter-pill-text">Фильтр: "{{ search() }}"</span>
+              <button type="button" class="filter-pill-remove" (click)="clearSearch()" title="Убрать фильтр" aria-label="Убрать фильтр">
+                <span class="material-icons-sharp" aria-hidden="true">close</span>
+              </button>
+            </span>
+          }
+
+          @if (sort()) {
+            <span class="filter-pill">
+              <span class="material-icons-sharp" aria-hidden="true">sort</span>
+              <span class="filter-pill-text">Сортировка: {{ activeSortLabel() }} ({{ direction() === 'asc' ? 'возр.' : 'убыв.' }})</span>
+              <button type="button" class="filter-pill-remove" (click)="resetSort()" title="Сбросить сортировку" aria-label="Сбросить сортировку">
+                <span class="material-icons-sharp" aria-hidden="true">close</span>
+              </button>
+            </span>
+          }
+        </div>
+      }
     </section>
 
     @if (error()) {
       <app-load-error-card title="Города не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadBoard()" />
     }
 
-    <section class="cities-table-container">
-      <table class="cities-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Город</th>
-            <th>Неопубликованных (все)</th>
-            <th>Неопубликованных (без архивных)</th>
-            <th>Доступные аккаунты</th>
-            <th>Разница</th>
-            <th>Статус</th>
-            <th>Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (city of cities(); track trackCity($index, city); let index = $index) {
-            <tr>
-              <td>{{ currentPage().pageNumber * currentPage().pageSize + index + 1 }}</td>
-              <td class="city-name-cell">
-                <div>{{ city.cityTitle }}</div>
-                <div class="city-id">ID: {{ city.cityId }}</div>
-              </td>
-              <td>
-                <span [class]="countClass(city)">{{ city.unpublishedCount }}</span>
-              </td>
-              <td>
-                <span class="count-badge count-archive">{{ city.unpublishedNotArchiveCount }}</span>
-              </td>
-              <td>
-                <span class="count-badge count-bots">{{ city.activeBotsCount }}</span>
-              </td>
-              <td>
-                <span [class]="balanceClass(city)">{{ city.botBalance }}</span>
-              </td>
-              <td>
-                <span [class]="city.botStatusCssClass">{{ city.botStatus }}</span>
-              </td>
-              <td>
-                <div class="action-buttons">
-                  <a [href]="reviewUrl(city)" class="action-button view" title="Просмотреть отзывы">
-                    <span class="material-icons-sharp">visibility</span>
-                    <span>Отзывы</span>
-                  </a>
-                  <a [href]="botsUrl(city)" class="action-button bots" title="Просмотреть ботов">
-                    <span class="material-icons-sharp">smart_toy</span>
-                    <span>Боты</span>
-                  </a>
-                  <a [href]="detailsUrl(city)" class="action-button details" title="Детали города">
-                    <span class="material-icons-sharp">info</span>
-                    <span>Детали</span>
-                  </a>
-                </div>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="8" class="empty-state">
-                <span class="material-icons-sharp empty-state-icon">location_off</span>
-                <strong>Нет городов по текущим условиям</strong>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+    <section class="cities-table-section" aria-label="Города">
+      <div class="cities-table-container">
+        <div class="cities-table-scroll">
+          <table class="cities-table">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Город</th>
+                <th scope="col">Неопубликованных (все)</th>
+                <th scope="col">Неопубликованных (без архивных)</th>
+                <th scope="col">Доступные аккаунты</th>
+                <th scope="col">Разница</th>
+                <th scope="col">Статус</th>
+                <th scope="col">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (city of cities(); track trackCity($index, city); let index = $index) {
+                <tr>
+                  <td class="cell-number">
+                    <span class="cell-label">№</span>
+                    {{ currentPage().pageNumber * currentPage().pageSize + index + 1 }}
+                  </td>
+                  <td class="city-name-cell">
+                    <div class="city-name">{{ city.cityTitle }}</div>
+                    <div class="city-id">ID: {{ city.cityId }}</div>
+                  </td>
+                  <td class="cell-stat">
+                    <span class="cell-label">Неопубликованных (все)</span>
+                    <span [class]="countClass(city)">{{ city.unpublishedCount }}</span>
+                  </td>
+                  <td class="cell-stat">
+                    <span class="cell-label">Неопубликованных (без архивных)</span>
+                    <span class="count-badge count-archive">{{ city.unpublishedNotArchiveCount }}</span>
+                  </td>
+                  <td class="cell-stat">
+                    <span class="cell-label">Доступные аккаунты</span>
+                    <span class="count-badge count-bots">{{ city.activeBotsCount }}</span>
+                  </td>
+                  <td class="cell-stat">
+                    <span class="cell-label">Разница</span>
+                    <span [class]="balanceClass(city)">{{ city.botBalance }}</span>
+                  </td>
+                  <td class="cell-status">
+                    <span class="cell-label">Статус</span>
+                    <span [class]="city.botStatusCssClass">{{ city.botStatus }}</span>
+                  </td>
+                  <td class="cell-actions">
+                    <div class="action-buttons">
+                      <a [href]="reviewUrl(city)" class="action-button view" title="Просмотреть отзывы">
+                        <span class="material-icons-sharp" aria-hidden="true">visibility</span>
+                        <span class="action-text">Отзывы</span>
+                      </a>
+                      <a [href]="botsUrl(city)" class="action-button bots" title="Просмотреть ботов">
+                        <span class="material-icons-sharp" aria-hidden="true">smart_toy</span>
+                        <span class="action-text">Боты</span>
+                      </a>
+                      <a [href]="detailsUrl(city)" class="action-button details" title="Детали города">
+                        <span class="material-icons-sharp" aria-hidden="true">info</span>
+                        <span class="action-text">Детали</span>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr class="empty-row">
+                  <td colspan="8" class="empty-state">
+                    <span class="material-icons-sharp empty-state-icon" aria-hidden="true">location_off</span>
+                    <strong>Нет городов по текущим условиям</strong>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
 
-      @if (currentPage().totalPages > 1) {
-        <nav class="pagination-container" aria-label="Пагинация городов">
-          <ul class="pagination">
-            <li class="page-item" [class.disabled]="currentPage().first">
-              <button type="button" class="page-link" (click)="goToPage(currentPage().pageNumber - 1)" [disabled]="currentPage().first">
-                <span class="material-icons-sharp">chevron_left</span>
-              </button>
-            </li>
-
-            @for (pageNumber of pageNumbers(); track trackPage($index, pageNumber)) {
-              <li class="page-item" [class.active]="pageNumber === currentPage().pageNumber">
-                <button type="button" class="page-link" (click)="goToPage(pageNumber)">
-                  {{ pageNumber + 1 }}
+        @if (currentPage().totalPages > 1) {
+          <nav class="pagination-container" aria-label="Пагинация городов">
+            <ul class="pagination">
+              <li class="page-item" [class.disabled]="currentPage().first">
+                <button type="button" class="page-link" (click)="goToPage(currentPage().pageNumber - 1)" [disabled]="currentPage().first" aria-label="Предыдущая страница">
+                  <span class="material-icons-sharp" aria-hidden="true">chevron_left</span>
                 </button>
               </li>
-            }
 
-            <li class="page-item" [class.disabled]="currentPage().last">
-              <button type="button" class="page-link" (click)="goToPage(currentPage().pageNumber + 1)" [disabled]="currentPage().last">
-                <span class="material-icons-sharp">chevron_right</span>
-              </button>
-            </li>
-          </ul>
-        </nav>
-      }
+              @for (pageNumber of pageNumbers(); track trackPage($index, pageNumber)) {
+                <li class="page-item" [class.active]="pageNumber === currentPage().pageNumber">
+                  <button
+                    type="button"
+                    class="page-link"
+                    [attr.aria-current]="pageNumber === currentPage().pageNumber ? 'page' : null"
+                    (click)="goToPage(pageNumber)"
+                  >
+                    {{ pageNumber + 1 }}
+                  </button>
+                </li>
+              }
+
+              <li class="page-item" [class.disabled]="currentPage().last">
+                <button type="button" class="page-link" (click)="goToPage(currentPage().pageNumber + 1)" [disabled]="currentPage().last" aria-label="Следующая страница">
+                  <span class="material-icons-sharp" aria-hidden="true">chevron_right</span>
+                </button>
+              </li>
+            </ul>
+          </nav>
+        }
+      </div>
     </section>
 
     <section class="info-section">
       <article class="info-card">
         <h4>
-          <span class="material-icons-sharp">info</span>
+          <span class="material-icons-sharp" aria-hidden="true">info</span>
           Информация
         </h4>
         <p>
@@ -213,7 +248,7 @@
 
       <article class="info-card">
         <h4>
-          <span class="material-icons-sharp">schedule</span>
+          <span class="material-icons-sharp" aria-hidden="true">schedule</span>
           Статистика обновления
         </h4>
         <p>

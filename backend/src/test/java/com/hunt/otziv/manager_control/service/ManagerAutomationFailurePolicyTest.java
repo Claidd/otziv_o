@@ -67,6 +67,50 @@ class ManagerAutomationFailurePolicyTest {
     }
 
     @Test
+    void scenarioSwitchedOffInTheSettingsIsNeverAFailureCard() {
+        // processState postpones such a task by a day without counting a failure: after an hour it must not turn into
+        // «задача завершилась ошибкой, нажмите Починить».
+        for (String code : new String[]{"automation_paused", "bad_review_invoice_disabled", "bad_review_auto_ban_disabled"}) {
+            ScheduledClientMessageState state = state(code, 0, now.minusHours(3));
+            state.setNextAttemptAt(now.plusHours(21));
+            assertFalse(policy.isActionable(state, now, 3, 60), code);
+            assertFalse(policy.isImmediateActiveOrderFailure(state, now), code);
+        }
+    }
+
+    @Test
+    void anUnconfirmedSendIsShownOnlyAfterTheAutomaticResendHadItsChance() {
+        ScheduledClientMessageState fresh = state("state_transaction_outcome_uncertain", 1, now.minusHours(2));
+        fresh.setDeliveryStatus("UNKNOWN");
+        fresh.setDeliveryPreparedAt(now.minusHours(2));
+        // The system re-sends it once after 24 h by itself: no card yet.
+        assertFalse(policy.isActionable(fresh, now, 3, 60));
+        assertFalse(policy.isImmediateActiveOrderFailure(fresh, now));
+
+        ScheduledClientMessageState overdue = state("state_transaction_outcome_uncertain", 1, now.minusHours(26));
+        overdue.setDeliveryStatus("UNKNOWN");
+        overdue.setDeliveryPreparedAt(now.minusHours(26));
+        assertTrue(policy.isActionable(overdue, now, 3, 60));
+
+        ScheduledClientMessageState afterResend = state("state_transaction_outcome_uncertain", 1, now.minusHours(1));
+        afterResend.setDeliveryStatus("UNKNOWN");
+        afterResend.setDeliveryPreparedAt(now.minusHours(1));
+        afterResend.setUncertainAutoResendAt(now.minusHours(1));
+        assertTrue(policy.isActionable(afterResend, now, 3, 60));
+
+        ScheduledClientMessageState archiveOffer = state("state_transaction_outcome_uncertain", 1, now.minusHours(1));
+        archiveOffer.setScenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER);
+        archiveOffer.setDeliveryStatus("UNKNOWN");
+        archiveOffer.setDeliveryPreparedAt(now.minusHours(1));
+        assertTrue(policy.isActionable(archiveOffer, now, 3, 60));
+    }
+
+    @Test
+    void anArchiveCheckThatCannotReadTheChatIsShownAtOnce() {
+        assertTrue(policy.isActionable(state("archive_check_undecided", 0, now.minusMinutes(1)), now, 3, 60));
+    }
+
+    @Test
     void ignoresRepeatedRateLimitWhileNextRetryIsScheduled() {
         ScheduledClientMessageState state = state("rate_limited", 24, now.minusHours(1));
         state.setScenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER);
