@@ -163,25 +163,25 @@
     },
     {
       "component": "mysql",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:370d1bbed24bb5f1178ebe2a332f018f8224cf8ac48bc61103bc4d470e9030b2",
-      "commit": "634a20839eab12a5dbe5f91c7a3c21971e5f90a2",
-      "run": "44853515792",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:200c94f0b78df0916d165b039f56aff795889aec1f0db1fbaf667074730e1bb8",
+      "commit": "d8a0d6471dec2465324b1869dbfcd5d8c6c02ea3",
+      "run": "45036162371",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c62-mysql.json",
-        "sha256": "4091537cd73b2feff3155fd2582e9584a4e1d62093797b65a8f61102d1cd692d"
+        "path": "infrastructure/runtime-security/reviewed-images-c63-mysql.json",
+        "sha256": "87c8f5d47370088ddde042471dea1a46fc5242d92facf3632da659b07fef45db"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c62-mysql/publication/publication.json",
-        "sha256": "9ecd7225f4b706a1b1c8dd8dd3e7730fc75851513c2dc66a1c178179f634c385"
+        "path": "infrastructure/runtime-security/proofs/c63-mysql/publication/publication.json",
+        "sha256": "8ddad9cc7f0dac1f4b0d6d599e232e5a1af3fb09ea30739709acbb21ff8c03a3"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c62-mysql/anonymous/anonymous-download.json",
-        "sha256": "3ad0322b6ca27fac8414e74b270f1fc251d983104f9a51fa16c90547ebdbf8e7"
+        "path": "infrastructure/runtime-security/proofs/c63-mysql/anonymous/anonymous-download.json",
+        "sha256": "9129fb50f7344bc89c837aeb375d2f9c4dbe28fca1858ac307b2cc97283a52a3"
       },
       "databaseTransition": {
-        "path": "infrastructure/runtime-security/proofs/c62-mysql/rehearsal.json",
-        "sha256": "705d87f041847e7faef55fe6e5a94fd6fd53123dbd133e6d05689e5e36c7747e"
+        "path": "infrastructure/runtime-security/proofs/c63-mysql/rehearsal.json",
+        "sha256": "7e912189faf603250f6b0fc4fe9434ae323f7b2f6a6e37e33d31c68e253674de"
       }
     },
     {

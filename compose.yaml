@@ -30,7 +30,7 @@ services:
 
   mysql:
     # A fresh development volume retains older engine data separately.
-    image: ghcr.io/claidd/otziv-security@sha256:370d1bbed24bb5f1178ebe2a332f018f8224cf8ac48bc61103bc4d470e9030b2
+    image: ghcr.io/claidd/otziv-security@sha256:200c94f0b78df0916d165b039f56aff795889aec1f0db1fbaf667074730e1bb8
     container_name: my-mysql
     command:
       - mysqld
