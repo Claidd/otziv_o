@@ -118,6 +118,7 @@ on:
           - c57-mysql
           - c60-mysql
           - c62-mysql
+          - c63-mysql
           - c58-postgres
           - c61-nginx
           - c61-phpmyadmin
