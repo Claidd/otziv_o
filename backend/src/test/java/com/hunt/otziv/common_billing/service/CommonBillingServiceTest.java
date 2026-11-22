@@ -4402,6 +4402,58 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void paperCorrectionDetachesANextOrderSentForTextApprovalAndDisablesTheEmptyInvoice() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order createdOrder = order(101L);
+        createdOrder.setStatus(status("На проверке"));
+        CommonInvoiceOrder item = item(invoice, createdOrder);
+        item.setReady(false);
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(createdOrder);
+        when(nextOrderRequests.lockCreatedOrigin(101L)).thenReturn(true);
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.of(item));
+        when(paymentRefRepository.existsByInvoice_IdAndStatusIn(eq(10L), any())).thenReturn(false);
+        when(invoiceOrderRepository.deleteByOrderId(101L)).thenReturn(1);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+
+        assertTrue(service.detachOrderForDeletion(101L, true));
+
+        assertEquals(CommonInvoiceStatus.DISABLED, invoice.getStatus());
+        verify(invoiceOrderRepository).deleteByOrderId(101L);
+    }
+
+    @Test
+    void ordinaryDeletionDetachStillRefusesANextOrderAlreadySentForTextApproval() {
+        Order createdOrder = order(101L);
+        createdOrder.setStatus(status("На проверке"));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(createdOrder);
+        when(nextOrderRequests.lockCreatedOrigin(101L)).thenReturn(true);
+
+        ResponseStatusException refused = assertThrows(ResponseStatusException.class,
+                () -> service.detachOrderForDeletion(101L));
+
+        assertEquals(HttpStatus.CONFLICT, refused.getStatusCode());
+        verify(invoiceOrderRepository, never()).deleteByOrderId(any());
+    }
+
+    @Test
+    void paperCorrectionNeverDetachesANextOrderInPublication() {
+        Order createdOrder = order(101L);
+        createdOrder.setStatus(status("Публикация"));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(createdOrder);
+        when(nextOrderRequests.lockCreatedOrigin(101L)).thenReturn(true);
+
+        assertThrows(ResponseStatusException.class, () -> service.detachOrderForDeletion(101L, true));
+
+        verify(invoiceOrderRepository, never()).deleteByOrderId(any());
+    }
+
+    @Test
     void managerBoardCardShowsWaitingAndReopensReadyInvoiceWhenAnyOrderIsNotReady() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);

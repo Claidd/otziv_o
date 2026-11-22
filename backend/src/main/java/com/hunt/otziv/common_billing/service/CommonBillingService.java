@@ -380,6 +380,11 @@ public class CommonBillingService {
         return invoiceMembershipWorkflow.detachOrderForDeletion(orderId);
     }
 
+    /** Paper payment correction: also an auto-created next order in unpublished work (see the membership workflow). */
+    public boolean detachOrderForDeletion(Long orderId, boolean allowUnpublishedWork) {
+        return invoiceMembershipWorkflow.detachOrderForDeletion(orderId, allowUnpublishedWork);
+    }
+
     public CommonInvoiceDetailsResponse changeInvoicePaymentMode(Long invoiceId, InvoicePaymentModeChangeRequest request, Principal principal) {
         return invoiceRouteWorkflow.changeInvoicePaymentMode(invoiceId, request, principal);
     }

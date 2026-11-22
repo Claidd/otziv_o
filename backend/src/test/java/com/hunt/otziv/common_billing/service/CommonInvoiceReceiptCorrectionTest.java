@@ -40,8 +40,13 @@ class CommonInvoiceReceiptCorrectionTest {
         CommonInvoice invoice = paidPaperInvoice("owner");
         List<CommonInvoiceOrder> positions = List.of(item(27123L, 140000L), item(27124L, 300000L));
         stub(invoice, positions);
+        LocalDateTime nextReminder = LocalDateTime.now().plusDays(2);
+        when(delivery.nextAutomaticPaymentReminderAt(any())).thenReturn(nextReminder);
 
         correction.reopenOwnerPaperPayment(283L, owner, "Отмечено по ошибке, оплаты не было");
+
+        // Reminders resume one regular interval later: the scheduler never picks an invoice without a next reminder.
+        assertThat(invoice.getNextReminderAt()).isEqualTo(nextReminder);
 
         verify(orders).reopenPaperInvoiceOrder(27123L, 140000L, owner, "Отмечено по ошибке, оплаты не было");
         verify(orders).reopenPaperInvoiceOrder(27124L, 300000L, owner, "Отмечено по ошибке, оплаты не было");
@@ -58,6 +63,18 @@ class CommonInvoiceReceiptCorrectionTest {
             assertThat(item.isUnpaid()).isFalse();
             assertThat(item.getPaymentMethod()).isNull();
         });
+    }
+
+    @Test
+    void aPaperBillNeverHandedOverIsNotRemindedAbout() {
+        CommonInvoice invoice = paidPaperInvoice("owner");
+        invoice.setPaperInvoiceIssuedAt(null);
+        stub(invoice, List.of(item(27123L, 440000L)));
+
+        correction.reopenOwnerPaperPayment(283L, owner, "Отмечено по ошибке, оплаты не было");
+
+        assertThat(invoice.getNextReminderAt()).isNull();
+        verify(delivery, never()).nextAutomaticPaymentReminderAt(any());
     }
 
     @Test

@@ -23,6 +23,8 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentReturnRecoveryState;
+import com.hunt.otziv.payments.api.BankPaperPaymentBindings;
+import com.hunt.otziv.p_products.utils.OrderReviewGraph;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
@@ -48,6 +50,11 @@ public class OrderPaymentCancellationService implements com.hunt.otziv.p_product
     private static final String STATUS_PAYMENT = "Оплачено";
     private static final String STATUS_REMINDER = "Напоминание";
     private static final String STATUS_NEW = "Новый";
+    /**
+     * A paper invoice payment confirmed by mistake: the owner may also take back a next order that a manager already
+     * sent to the client for text approval, as long as nothing was published, paid or issued by the bank for it.
+     */
+    private static final Set<String> UNPUBLISHED_WORK_STATUSES = Set.of(STATUS_NEW, "В проверку", "На проверке", "Коррекция");
     private static final Set<PaymentLinkStatus> REAL_PAYMENT_STATUSES = Set.of(
             PaymentLinkStatus.AUTHORIZED,
             PaymentLinkStatus.TEST_CONFIRMED,
@@ -74,6 +81,7 @@ public class OrderPaymentCancellationService implements com.hunt.otziv.p_product
     private final ContractorRewardLedgerService contractorRewardLedgerService;
     private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
+    private final BankPaperPaymentBindings paperDocuments;
 
     @Transactional
     public void cancelPayment(Long orderId, Principal principal) {
@@ -162,7 +170,8 @@ public class OrderPaymentCancellationService implements com.hunt.otziv.p_product
         requireCompanyRollback(order, canceledSum, canceledAmount);
 
         // A single order's payment, and a paper invoice paid by mistake, take back the next order the payment created.
-        if (manual == null || manual.deleteCreatedNextOrder()) cancelNextOrderRequest(order, principal);
+        // Only the paper correction may also take back a next order whose texts already went to the client.
+        if (manual == null || manual.deleteCreatedNextOrder()) cancelNextOrderRequest(order, principal, manual != null);
         else nextOrderRequestRepository.findBySourceOrderId(orderId).filter(request -> request.getCreatedOrder() == null).ifPresent(request -> {
             request.setStatus(NextOrderRequestStatus.CANCELED);
             request.setErrorMessage("Отменена ручная оплата исходного заказа");
@@ -224,12 +233,12 @@ public class OrderPaymentCancellationService implements com.hunt.otziv.p_product
         );
     }
 
-    private void cancelNextOrderRequest(Order sourceOrder, Principal principal) {
+    private void cancelNextOrderRequest(Order sourceOrder, Principal principal, boolean allowUnpublishedWork) {
         nextOrderRequestRepository.findBySourceOrderId(sourceOrder.getId()).ifPresent(request -> {
             Order createdOrder = request.getCreatedOrder();
             if (createdOrder != null && createdOrder.getId() != null) {
-                ensureCreatedOrderCanBeDeleted(createdOrder);
-                commonBillingService.detachOrderForDeletion(createdOrder.getId());
+                ensureCreatedOrderCanBeDeleted(createdOrder, allowUnpublishedWork);
+                commonBillingService.detachOrderForDeletion(createdOrder.getId(), allowUnpublishedWork);
                 boolean deleted = orderDeletionService.deleteOrder(createdOrder.getId(), principal);
                 if (!deleted) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Автосозданный следующий заказ не удалось удалить");
@@ -255,13 +264,29 @@ public class OrderPaymentCancellationService implements com.hunt.otziv.p_product
         }
     }
 
-    private void ensureCreatedOrderCanBeDeleted(Order createdOrder) {
-        if (!STATUS_NEW.equals(safeStatusTitle(createdOrder))
+    private void ensureCreatedOrderCanBeDeleted(Order createdOrder, boolean allowUnpublishedWork) {
+        if (!allowUnpublishedWork) {
+            if (!STATUS_NEW.equals(safeStatusTitle(createdOrder))
+                    || createdOrder.getCounter() > 0
+                    || createdOrder.isComplete()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Следующий заказ #" + createdOrder.getId() + " уже в работе. Сначала разберите его вручную."
+                );
+            }
+            return;
+        }
+        Long createdId = createdOrder.getId();
+        if (!UNPUBLISHED_WORK_STATUSES.contains(safeStatusTitle(createdOrder))
                 || createdOrder.getCounter() > 0
-                || createdOrder.isComplete()) {
+                || createdOrder.isComplete()
+                || createdOrder.getPayDay() != null
+                || OrderReviewGraph.countPublishedReviews(createdOrder) > 0
+                || paperDocuments.hasDocument(createdId)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Следующий заказ #" + createdOrder.getId() + " уже в работе. Сначала разберите его вручную."
+                    "Следующий заказ #" + createdId + " уже опубликован, оплачен или по нему выпущены документы банка. "
+                            + "Сначала разберите его вручную."
             );
         }
     }
