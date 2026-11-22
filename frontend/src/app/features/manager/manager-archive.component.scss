@@ -1378,3 +1378,47 @@ button.details-button:disabled {
     font-family: inherit;
   }
 }
+
+// Dark theme: the window of an archived order, its backdrop and the light buttons follow the site's theme
+// (the rules above give them fixed light colours, so the window stayed white with unreadable light text).
+:host-context(body.otziv-dark-theme) {
+  .archive-restore-backdrop {
+    background: rgba(10, 12, 15, 0.72);
+  }
+
+  .archive-restore-modal {
+    border-color: rgba(159, 184, 215, 0.16);
+    background: rgba(24, 26, 30, 0.97);
+    box-shadow: 0 1.35rem 3.5rem rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+
+  .archive-restore-modal > header {
+    border-bottom-color: rgba(159, 184, 215, 0.14);
+  }
+
+  .restore-link-actions {
+    border-color: rgba(159, 184, 215, 0.14);
+    background: var(--otziv-muted-surface);
+  }
+
+  .restore-link-actions button,
+  .restore-link-actions a,
+  .archive-review-recovery-button {
+    border-color: rgba(122, 167, 220, 0.3);
+    background: var(--otziv-field-background);
+    color: #9cc3f0;
+    box-shadow: none;
+  }
+
+  .archive-review-recovery-button:not(:disabled):hover {
+    background: #263040;
+  }
+
+  .archive-search-status,
+  .archive-loading-panel,
+  .restore-status-segment button {
+    background: var(--otziv-field-background);
+    box-shadow: none;
+  }
+}
