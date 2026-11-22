@@ -105,6 +105,11 @@ public class CommonInvoiceReceiptCorrection implements ManualReceiptInvoiceDebt 
         if (reminder) {
             // A failed «оплата прошла» notice belonged to the undone payment (it is skipped now: the invoice is unpaid).
             invoice.setPaymentSuccessNotificationError(null);
+            // Reminders resume one regular interval from now (the manager first corrects the wrong «оплата прошла»),
+            // the same rule as after a delivered bill; a paper bill never handed over is not reminded about.
+            invoice.setNextReminderAt(invoice.getStatus() == CommonInvoiceStatus.READY
+                    || CommonInvoiceRouteState.isOwnerPaperInvoice(invoice) && invoice.getPaperInvoiceIssuedAt() == null
+                    ? null : delivery.nextAutomaticPaymentReminderAt(java.time.LocalDateTime.now()));
         }
     }
 }

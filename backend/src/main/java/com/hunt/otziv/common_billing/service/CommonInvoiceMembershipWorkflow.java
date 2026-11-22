@@ -88,6 +88,8 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
 
     static final Set<String> DELETION_DETACH_BLOCKING_PAYMENT_REF_STATUSES = Set.of(PAYMENT_REF_CONFIRMED, PAYMENT_REF_PREPAID, PAYMENT_REF_APPLYING, PAYMENT_REF_APPLIED, PAYMENT_REF_CANCEL_PENDING, PAYMENT_REF_CANCELING, PAYMENT_REF_CANCEL_FAILED, PAYMENT_REF_CANCEL_FAILED_FINAL, PAYMENT_REF_INIT_PREPARED, PAYMENT_REF_INIT_CONFLICT, PAYMENT_REF_CURRENT);
 
+    /** Work statuses before publication from which a paper payment cancellation may take back an auto-created next order. */
+    static final Set<String> UNPUBLISHED_WORK_STATUSES_FOR_DELETION = Set.of("Новый", "В проверку", "На проверке", "Коррекция");
     static final String BAD_REVIEW_SUPPLEMENT_REQUIRED = "bad_review_supplement_required:";
 
     /** A payment that is confirmed, applied or being initialized makes a delivered successor untouchable. */
@@ -637,9 +639,22 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
      */
     @Transactional
     public boolean detachOrderForDeletion(Long orderId) {
+        return detachOrderForDeletion(orderId, false);
+    }
+
+    /**
+     * {@code allowUnpublishedWork}: a paper invoice payment cancelled by the owner also takes back an auto-created
+     * next order already sent to the client for text approval. The caller has checked that nothing of it was
+     * published, paid or issued by the bank; the payment-state checks below still apply.
+     */
+    @Transactional
+    public boolean detachOrderForDeletion(Long orderId, boolean allowUnpublishedWork) {
         Order order = orderAggregateMutationLockService.lock(orderId);
         boolean autoCreated = nextOrderRequests.lockCreatedOrigin(orderId);
-        if (!autoCreated || !"Новый".equals(statusTitle(order)) || order.getCounter() > 0 || order.isComplete()) {
+        boolean statusAllowed = allowUnpublishedWork
+                ? UNPUBLISHED_WORK_STATUSES_FOR_DELETION.contains(statusTitle(order)) && order.getPayDay() == null
+                : "Новый".equals(statusTitle(order));
+        if (!autoCreated || !statusAllowed || order.getCounter() > 0 || order.isComplete()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Автосозданный следующий заказ уже изменен и не может быть безопасно удален");
         }
         Optional<CommonInvoiceOrder> snapshot = invoiceOrderRepository.findByOrderIdWithInvoice(orderId);

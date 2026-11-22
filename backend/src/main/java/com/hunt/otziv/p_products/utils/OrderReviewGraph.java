@@ -34,6 +34,10 @@ public final class OrderReviewGraph {
                 .collect(Collectors.toList());
     }
 
+    public static long countPublishedReviews(Order order) {
+        return getAllReviews(order).stream().filter(Review::isPublish).count();
+    }
+
     public static boolean hasDetails(Order order) {
         return order != null && order.getDetails() != null && !order.getDetails().isEmpty();
     }

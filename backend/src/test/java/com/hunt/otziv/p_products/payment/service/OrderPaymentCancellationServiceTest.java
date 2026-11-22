@@ -37,12 +37,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import com.hunt.otziv.payments.api.BankPaperPaymentBindings;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.r_review.model.Review;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -72,6 +78,7 @@ class OrderPaymentCancellationServiceTest {
     @Mock private ContractorCompletionRewardService contractorCompletionRewardService;
     @Mock private ContractorPaymentRolloutStateService rolloutStateService;
     @Mock private ContractorPaymentRuntimeSwitch contractorPaymentRuntimeSwitch;
+    @Mock private BankPaperPaymentBindings paperDocuments;
 
     @InjectMocks
     private OrderPaymentCancellationService service;
@@ -90,14 +97,14 @@ class OrderPaymentCancellationServiceTest {
 
         stubFinancialRollback(source, new BigDecimal("1000.00"));
         when(nextOrderRequestRepository.findBySourceOrderId(10L)).thenReturn(Optional.of(request));
-        when(commonBillingService.detachOrderForDeletion(20L)).thenReturn(true);
+        when(commonBillingService.detachOrderForDeletion(20L, false)).thenReturn(true);
         when(orderDeletionService.deleteOrder(any(), any())).thenReturn(true);
         when(orderStatusService.getOrderStatusByTitle("Напоминание")).thenReturn(reminder);
 
         service.cancelPayment(10L, principal);
 
         var deletionOrder = inOrder(commonBillingService, orderDeletionService);
-        deletionOrder.verify(commonBillingService).detachOrderForDeletion(20L);
+        deletionOrder.verify(commonBillingService).detachOrderForDeletion(20L, false);
         deletionOrder.verify(orderDeletionService).deleteOrder(20L, principal);
         assertEquals("Напоминание", source.getStatus().getTitle());
         verify(paymentLinkService).createForOrder(10L);
@@ -117,19 +124,116 @@ class OrderPaymentCancellationServiceTest {
 
         stubFinancialRollback(source, new BigDecimal("1000.00"));
         when(nextOrderRequestRepository.findBySourceOrderId(10L)).thenReturn(Optional.of(request));
-        when(commonBillingService.detachOrderForDeletion(20L)).thenReturn(true);
+        when(commonBillingService.detachOrderForDeletion(20L, true)).thenReturn(true);
         when(orderDeletionService.deleteOrder(any(), any())).thenReturn(true);
         when(orderStatusService.getOrderStatusByTitle("Напоминание")).thenReturn(reminder);
 
         service.reopenPaperInvoiceOrder(10L, 100000L, principal, "Отмечено по ошибке, оплаты не было");
 
-        verify(commonBillingService).detachOrderForDeletion(20L);
+        verify(commonBillingService).detachOrderForDeletion(20L, true);
         verify(orderDeletionService).deleteOrder(20L, principal);
         assertEquals("Напоминание", source.getStatus().getTitle());
         // The order stays in its common invoice: no own payment link, no separate invoice, no recipient check.
         verify(paymentLinkService, never()).createForOrder(any());
         verify(paymentInvoiceRetryScheduler, never()).scheduleInitialInvoice(any());
         verify(contractorRouteAssignmentGuard, never()).requirePaymentCancellationAllowed(any());
+    }
+
+    @Test
+    void paperInvoicePaidByMistakeAlsoTakesBackANextOrderAlreadySentForTextApproval() {
+        Order source = order(10L, "Оплачено");
+        source.setAmount(3);
+        Order created = order(20L, "На проверке");
+        NextOrderRequest request = new NextOrderRequest();
+        request.setStatus(NextOrderRequestStatus.CREATED);
+        request.setSourceOrder(source);
+        request.setCreatedOrder(created);
+        OrderStatus reminder = status("Напоминание");
+        Principal principal = () -> "owner";
+
+        stubFinancialRollback(source, new BigDecimal("1000.00"));
+        when(nextOrderRequestRepository.findBySourceOrderId(10L)).thenReturn(Optional.of(request));
+        when(paperDocuments.hasDocument(20L)).thenReturn(false);
+        when(commonBillingService.detachOrderForDeletion(20L, true)).thenReturn(true);
+        when(orderDeletionService.deleteOrder(any(), any())).thenReturn(true);
+        when(orderStatusService.getOrderStatusByTitle("Напоминание")).thenReturn(reminder);
+
+        service.reopenPaperInvoiceOrder(10L, 100000L, principal, "Отмечено по ошибке, оплаты не было");
+
+        var deletionOrder = inOrder(commonBillingService, orderDeletionService);
+        deletionOrder.verify(commonBillingService).detachOrderForDeletion(20L, true);
+        deletionOrder.verify(orderDeletionService).deleteOrder(20L, principal);
+        assertEquals("Напоминание", source.getStatus().getTitle());
+    }
+
+    @Test
+    void paperInvoiceCorrectionKeepsANextOrderWithPublishedReviewsAndChangesNothing() {
+        Order source = order(10L, "Оплачено");
+        source.setAmount(3);
+        Order created = order(20L, "На проверке");
+        Review published = new Review();
+        published.setPublish(true);
+        OrderDetails detail = new OrderDetails();
+        detail.setReviews(List.of(new Review(), published));
+        created.setDetails(List.of(detail));
+        NextOrderRequest request = new NextOrderRequest();
+        request.setStatus(NextOrderRequestStatus.CREATED);
+        request.setSourceOrder(source);
+        request.setCreatedOrder(created);
+
+        stubFinancialRollback(source, new BigDecimal("1000.00"));
+        when(nextOrderRequestRepository.findBySourceOrderId(10L)).thenReturn(Optional.of(request));
+
+        ResponseStatusException refused = assertThrows(ResponseStatusException.class,
+                () -> service.reopenPaperInvoiceOrder(10L, 100000L, () -> "owner", "Отмечено по ошибке, оплаты не было"));
+
+        assertEquals(HttpStatus.CONFLICT, refused.getStatusCode());
+        assertTrue(refused.getReason().contains("#20"));
+        verify(commonBillingService, never()).detachOrderForDeletion(any(), anyBoolean());
+        verify(orderDeletionService, never()).deleteOrder(any(), any());
+        assertEquals("Оплачено", source.getStatus().getTitle());
+    }
+
+    @Test
+    void paperInvoiceCorrectionKeepsANextOrderWithBankDocuments() {
+        Order source = order(10L, "Оплачено");
+        source.setAmount(3);
+        Order created = order(20L, "Коррекция");
+        NextOrderRequest request = new NextOrderRequest();
+        request.setStatus(NextOrderRequestStatus.CREATED);
+        request.setSourceOrder(source);
+        request.setCreatedOrder(created);
+
+        stubFinancialRollback(source, new BigDecimal("1000.00"));
+        when(nextOrderRequestRepository.findBySourceOrderId(10L)).thenReturn(Optional.of(request));
+        when(paperDocuments.hasDocument(20L)).thenReturn(true);
+
+        assertThrows(ResponseStatusException.class,
+                () -> service.reopenPaperInvoiceOrder(10L, 100000L, () -> "owner", "Отмечено по ошибке, оплаты не было"));
+
+        verify(orderDeletionService, never()).deleteOrder(any(), any());
+        assertEquals("Оплачено", source.getStatus().getTitle());
+    }
+
+    @Test
+    void anOrdinaryPaymentCancellationStillKeepsANextOrderAlreadyInWork() {
+        Order source = order(10L, "Оплачено");
+        source.setAmount(3);
+        Order created = order(20L, "На проверке");
+        NextOrderRequest request = new NextOrderRequest();
+        request.setStatus(NextOrderRequestStatus.CREATED);
+        request.setSourceOrder(source);
+        request.setCreatedOrder(created);
+
+        stubFinancialRollback(source, new BigDecimal("1000.00"));
+        when(nextOrderRequestRepository.findBySourceOrderId(10L)).thenReturn(Optional.of(request));
+
+        ResponseStatusException refused = assertThrows(ResponseStatusException.class,
+                () -> service.cancelPayment(10L, () -> "admin"));
+
+        assertTrue(refused.getReason().contains("уже в работе"));
+        verify(commonBillingService, never()).detachOrderForDeletion(any(), anyBoolean());
+        verify(orderDeletionService, never()).deleteOrder(any(), any());
     }
 
     @Test
