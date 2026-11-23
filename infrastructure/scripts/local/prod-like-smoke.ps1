@@ -4643,6 +4643,13 @@ if ($WithObservability) {
     Write-Host "Local observability is disabled. Pass -WithObservability to start Loki, Tempo, Alloy, Prometheus, Grafana and Dozzle."
 }
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("config", "--quiet"))
+if (-not $WithObservability -and -not $NoUp) {
+    Write-Host "Stopping previously started local observability containers."
+    Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
+        "--profile", "observability", "stop",
+        "grafana", "alloy", "prometheus", "tempo", "loki", "dozzle"
+    ))
+}
 if ($NoDbAdmin -and -not $NoUp) {
     Write-Host "Stopping any previously started local phpMyAdmin container."
     Invoke-External -FilePath "docker" -Arguments ($dbAdminComposeArgs + @("stop", "phpmyadmin"))
