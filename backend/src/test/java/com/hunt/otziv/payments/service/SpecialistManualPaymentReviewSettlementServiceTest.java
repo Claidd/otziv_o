@@ -172,6 +172,33 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
         verifyNoInteractions(manualPayments);
     }
 
+    @Test void reviewStoppedByAnActiveTochkaOperationIsCreditedOnlyByTheReleaseRetry() {
+        var r=report(); r.setStatus(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
+        r.setLastError(ManualCardRoutePolicy.ACTIVE_TOCHKA_MANUAL_ERROR_PREFIX + " нельзя автоматически закрыть для ручного перевода.");
+        stub(r);
+        service().creditNow(101L);
+        verifyNoInteractions(manualPayments);
+        assertNull(r.getCreditedAt());
+
+        r.setRequestedAt(LocalDateTime.now().minusDays(21)); r.setDeadlineAt(r.getRequestedAt().plusHours(24));
+        activeManager(); financialCommit(r);
+        service().retryAfterTochkaRelease(101L);
+        assertNotNull(r.getCreditedAt());
+        // The recipient gets a full day from the late credit to object, not a deadline that passed weeks ago.
+        assertTrue(r.getDeadlineAt().isAfter(LocalDateTime.now().plusHours(23)));
+        service().settle(101L);
+        assertNull(r.getSettledAt());
+        verify(manualPayments,times(1)).confirmRecipientReviewPayment(eq(101L),eq(71L),eq(140000L),anyString(),eq(""),eq("manager"),any(),any(),any(),eq(27L),eq("profile:27"));
+    }
+
+    @Test void releaseRetryDoesNotTouchAReviewStoppedForAnotherReason() {
+        var r=report(); r.setStatus(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
+        r.setLastError("Требуется сверка возврата"); stub(r);
+        service().retryAfterTochkaRelease(101L);
+        verifyNoInteractions(manualPayments, users);
+        assertNull(r.getCreditedAt());
+    }
+
     private void financialCommit(SpecialistManualPaymentReview r) {
         when(manualPayments.confirmRecipientReviewPayment(any(),any(),any(),any(),any(),any(),any(),any(),any(),nullable(Long.class),any()))
                 .thenAnswer(call->{r.setCreditedAt(LocalDateTime.now());return null;});

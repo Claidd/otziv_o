@@ -25,6 +25,7 @@
     "PaymentRouteRecipientsResponse": ["ownerCard"],
     "CommonInvoiceRouteRecipientsResponse": ["ownerCard"],
     "SpecialistManualPaymentReviewResponse": ["creditedAt", "confirmationBasis"],
+    "AdminPaymentLinkSummaryResponse": ["active", "created", "manual", "failed"],
     "CommonInvoiceDetailsResponse": ["delivery", "repricingReview"],
     "CommonManualPaymentOptionsResponse": ["ownerReport"],
     "CommonInvoiceOrderResponse": ["detachBlockedReason", "ordinaryAfterPaperCancel"],

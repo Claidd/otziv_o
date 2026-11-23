@@ -177,8 +177,20 @@ public class SpecialistManualPaymentReviewSettlementService {
 
     /** Used by new submissions and narrowly eligible legacy manager reports, never by bank callbacks. */
     public void creditNow(Long reviewId) {
+        creditNow(reviewId, false);
+    }
+
+    /**
+     * Retries a review that stopped only because its Tochka operation was still active. The operation has ended
+     * unpaid since; the payment workflow checks the route again and records a new stop if it is still unsafe.
+     */
+    public void retryAfterTochkaRelease(Long reviewId) {
+        creditNow(reviewId, true);
+    }
+
+    private void creditNow(Long reviewId, boolean tochkaReleased) {
         if (reviewReconciliation.supersedeOnConfirmedBankPayment(reviewId)) return;
-        Claim claim = transactions.required(() -> claimImmediate(reviewId));
+        Claim claim = transactions.required(() -> claimImmediate(reviewId, tochkaReleased));
         if (claim == null) return;
         SecurityContext previous = SecurityContextHolder.getContext();
         SecurityContext context = SecurityContextHolder.createEmptyContext();
@@ -215,6 +227,10 @@ public class SpecialistManualPaymentReviewSettlementService {
     }
 
     private Claim claimImmediate(Long reviewId) {
+        return claimImmediate(reviewId, false);
+    }
+
+    private Claim claimImmediate(Long reviewId, boolean tochkaReleased) {
         SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
         if (review == null) return null;
         if (review.getCreditedAt() != null) {
@@ -229,6 +245,10 @@ public class SpecialistManualPaymentReviewSettlementService {
                     || review.getLastError().startsWith("Исход отправки Telegram")
                     || review.getLastError().startsWith("Исход предыдущей отправки Telegram")
                     || review.getLastError().startsWith("За 24 часа не было подтверждено уведомление"));
+        boolean releasedTochkaStop = tochkaReleased
+                && review.getStatus() == SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION
+                && review.getLastError() != null
+                && review.getLastError().startsWith(ManualCardRoutePolicy.ACTIVE_TOCHKA_MANUAL_ERROR_PREFIX);
         boolean staleClaim = review.getStatus() == SpecialistManualPaymentReviewStatus.SETTLING
                 && review.getCreditClaimedAt() != null
                 && review.getCreditClaimedAt().isBefore(LocalDateTime.now().minusMinutes(15));
@@ -238,13 +258,21 @@ public class SpecialistManualPaymentReviewSettlementService {
                 || review.getRecipientKey() == null || review.getRecipientKey().isBlank()
                 || (review.getStatus() != SpecialistManualPaymentReviewStatus.PENDING_DELIVERY
                     && review.getStatus() != SpecialistManualPaymentReviewStatus.WAITING
-                    && !notificationOnly && !staleClaim)) return null;
+                    && !notificationOnly && !staleClaim && !releasedTochkaStop)) return null;
         SpecialistPaymentReviewDirectory.Actor original = users.activeActor(review.getRequestedByUserId()).orElse(null);
         if (original == null) {
             review.setStatus(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
             review.setLastError("Исходный менеджер больше не имеет активного доступа; требуется ручная сверка");
             reviews.save(review);
             return null;
+        }
+        if (releasedTochkaStop) {
+            // The credit happens days after the manager's mark: the recipient gets a full 24 hours from now to
+            // object, instead of a deadline that passed while the Tochka operation was still active.
+            LocalDateTime renewed = LocalDateTime.now().plusHours(24);
+            if (review.getDeadlineAt() == null || review.getDeadlineAt().isBefore(renewed)) {
+                review.setDeadlineAt(renewed);
+            }
         }
         review.setStatus(SpecialistManualPaymentReviewStatus.SETTLING);
         review.setCreditClaimedAt(LocalDateTime.now());

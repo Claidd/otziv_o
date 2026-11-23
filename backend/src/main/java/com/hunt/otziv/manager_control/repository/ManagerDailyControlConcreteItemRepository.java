@@ -60,6 +60,25 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
             Pageable pageable
     );
 
+    /** Unresolved cards of the given types of control days in [{@code from}, {@code before}), in id order after {@code afterId}. */
+    @Query("""
+            SELECT item.id FROM ManagerDailyControlConcreteItem item
+            WHERE item.status <> :resolved
+              AND item.entityType IN :types
+              AND item.control.controlDate >= :from
+              AND item.control.controlDate < :before
+              AND item.id > :afterId
+            ORDER BY item.id
+            """)
+    List<Long> findUnresolvedIdsOfTypesBetweenControlDays(
+            @Param("types") Collection<String> types,
+            @Param("from") LocalDate from,
+            @Param("before") LocalDate before,
+            @Param("resolved") ManagerDailyControlItemStatus resolved,
+            @Param("afterId") long afterId,
+            Pageable pageable
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT item FROM ManagerDailyControlConcreteItem item WHERE item.id IN :ids ORDER BY item.id")
     List<ManagerDailyControlConcreteItem> findAllByIdInForUpdate(@Param("ids") Collection<Long> ids);

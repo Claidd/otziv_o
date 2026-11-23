@@ -383,6 +383,48 @@ class ManualPaymentAutoConfirmationServiceTest {
     }
 
     @Test
+    void lateTransferByAnExpiredMonthlyLimitInstructionAsksForItsActualRecipient() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(25667L);
+        PaymentLink expired = new PaymentLink();
+        expired.setId(8410L);
+        expired.setStatus(PaymentLinkStatus.EXPIRED);
+        expired.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        expired.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        expired.setContractorAllocationId(2170L);
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(25667L), any(Collection.class)))
+                .thenReturn(List.of(expired));
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order));
+        assertInstanceOf(CodedResponseStatusException.class, conflict);
+        assertEquals(ManualPaymentTaskRouteErrors.ACTUAL_RECIPIENT_REQUIRED,
+                ((CodedResponseStatusException) conflict).code());
+    }
+
+    @Test
+    void expiredMonthlyLimitInstructionBehindANewerRouteDoesNotGateIt() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(25668L);
+        PaymentLink expired = new PaymentLink();
+        expired.setId(8411L);
+        expired.setStatus(PaymentLinkStatus.EXPIRED);
+        expired.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        expired.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        expired.setContractorAllocationId(2171L);
+        PaymentLink paidLater = new PaymentLink();
+        paidLater.setId(8412L);
+        paidLater.setStatus(PaymentLinkStatus.CANCELED);
+        paidLater.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(25668L), any(Collection.class)))
+                .thenReturn(List.of(expired, paidLater));
+
+        service.ensureCanCloseOrderManually(order);
+    }
+
+    @Test
     void blocksGenericPaidStatusWhenCreatedBankRouteHasNoProviderPaymentIdYet() {
         ManualPaymentAutoConfirmationService service = service();
         Order order = new Order();

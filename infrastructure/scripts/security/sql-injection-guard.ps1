@@ -189,9 +189,12 @@ $reviewedSql004 = @{
 # The same review covers the SQL003 concatenation and the SQL005 text-block
 # joins of filterWhereClause() on the listed lines, and the two blocker-SQL
 # .formatted() calls whose arguments are this class's static blocker constants.
+# Bank tidy-up audit (24.11.2026): the summary gained four fixed COUNT columns
+# (active, created, manual, failed) and the 'failed' predicate lost the literal
+# 'EXPIRED'; all are string literals, no request text or new concatenation.
 $reviewedArchiveOrder = @{
     Path = 'backend/src/main/java/com/hunt/otziv/payments/repository/PaymentLinkArchiveRepository.java'
-    SourceSha256 = 'c4104780308f2fc9b052fef37692b9fb204e91e44df43834c4e3ade3305fb42c'
+    SourceSha256 = '680045fd8a7760f6d89e9e63d525474a71b20e8bbb9b08c537f9321989a63dc3'
     Lines = @(
         '""" + filterWhereClause() + " ORDER BY apl.created_at " + order + ", apl.id " + order + """'
     )

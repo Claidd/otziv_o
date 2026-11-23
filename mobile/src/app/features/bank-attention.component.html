@@ -1,0 +1,46 @@
+<section class="bank-attention" [class.has-items]="items().length > 0" aria-label="Требует решения">
+  <button type="button" class="attention-summary" (click)="toggle()" [attr.aria-expanded]="expanded()" [disabled]="!items().length">
+    <span class="material-icons-sharp" aria-hidden="true">{{ items().length ? 'priority_high' : 'task_alt' }}</span>
+    <span class="attention-summary-text">
+      <strong>Требует решения · {{ items().length }}</strong>
+      @if (error(); as message) {
+        <small>{{ message }}</small>
+      } @else if (loading() && !items().length) {
+        <small>Проверяем…</small>
+      } @else if (oldest(); as first) {
+        <small>Старейшее: {{ first.title }} · {{ waiting(first) }}</small>
+      } @else {
+        <small>Сейчас ничего не ждёт решения</small>
+      }
+    </span>
+    @if (items().length) {
+      <span class="material-icons-sharp" aria-hidden="true">{{ expanded() ? 'expand_less' : 'expand_more' }}</span>
+    }
+  </button>
+
+  @if (expanded() && items().length) {
+    <ul class="attention-list">
+      @for (item of items(); track trackItem(item)) {
+        <li class="attention-item" [class.attention-old]="overdue(item)">
+          <div class="attention-head">
+            <strong>{{ item.title }}</strong>
+            <span class="attention-wait">{{ waiting(item) }}</span>
+          </div>
+          <p class="attention-meta">
+            @if (item.orderId) { Заказ №{{ item.orderId }} }
+            @if (item.companyTitle) { · {{ item.companyTitle }} }
+            · {{ money(item.amountKopecks) }}
+          </p>
+          <p class="attention-detail">{{ item.detail }}</p>
+          <p class="attention-date">С {{ date(item.since) }}@if (item.orderStatus) { · «{{ item.orderStatus }}» }</p>
+          @if (item.orderId) {
+            <button type="button" class="attention-open" (click)="open(item)">Показать в журнале</button>
+          }
+        </li>
+      }
+    </ul>
+    @if (truncated()) {
+      <p class="attention-note">Показаны первые 100 записей каждого вида.</p>
+    }
+  }
+</section>

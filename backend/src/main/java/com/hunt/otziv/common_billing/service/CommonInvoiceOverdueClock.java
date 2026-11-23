@@ -23,8 +23,17 @@ class CommonInvoiceOverdueClock {
         this.jdbc = jdbc;
     }
 
+    /**
+     * The term start as described above, but never before the moment a mistakenly paid invoice was reopened
+     * to «Напоминание»: the client gets a full new term (and a new notice) from that reopening.
+     */
     Optional<LocalDateTime> start(CommonInvoice invoice) {
         if (invoice == null) return Optional.empty();
+        LocalDateTime restarted = invoice.getOverdueTermRestartedAt();
+        return baseStart(invoice).map(start -> restarted != null && restarted.isAfter(start) ? restarted : start);
+    }
+
+    private Optional<LocalDateTime> baseStart(CommonInvoice invoice) {
         if (!CommonInvoiceRouteState.isOwnerPaperInvoice(invoice)) return Optional.ofNullable(invoice.getSentAt());
         if (invoice.getId() == null) return Optional.empty();
         var sets = jdbc.queryForMap("""

@@ -45,6 +45,9 @@ public class OrderPaymentLinkWorkflow {
 
     static final Set<PaymentLinkStatus> ORDER_RECONCILIATION_CANDIDATE_STATUSES = Set.of(PaymentLinkStatus.CREATED, PaymentLinkStatus.INITIATED, PaymentLinkStatus.AUTHORIZED, PaymentLinkStatus.WAITING_MANUAL_PAYMENT, PaymentLinkStatus.MANUAL_REPORTED, PaymentLinkStatus.NEEDS_RECONCILIATION);
 
+    /** A past-due link in these states has no client or bank action and may expire on schedule. */
+    static final Set<PaymentLinkStatus> PAST_DUE_EXPIRABLE_STATUSES = Set.of(PaymentLinkStatus.CREATED, PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+
     private final PaymentLinkRepository paymentLinkRepository;
 
     private final OrderRepository orderRepository;
@@ -54,6 +57,8 @@ public class OrderPaymentLinkWorkflow {
     private final ContractorPaymentLiveRoutingService contractorPaymentLiveRoutingService;
 
     private final PaymentLinkTransactionExecutor transactionExecutor;
+
+    private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
 
     @Transactional
     public int expireStaleLinksForOrder(Long orderId) {
@@ -69,6 +74,43 @@ public class OrderPaymentLinkWorkflow {
             }
         }
         return expired;
+    }
+
+    /**
+     * Expires one past-due link nobody started paying, the same way opening its public page would,
+     * so the recipient's reserve is freed on time. A link with a client report, a bank operation, a
+     * paper document, a pending specialist check or a bad-review bank check is left as it is.
+     */
+    @Transactional
+    public boolean expirePastDueLink(Long linkId, LocalDateTime now) {
+        if (linkId == null || now == null) {
+            return false;
+        }
+        Long orderId = paymentLinkRepository.findOrderIdById(linkId).orElse(null);
+        if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            return false;
+        }
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElse(null);
+        if (link == null || link.getOrder() == null || !orderId.equals(link.getOrder().getId())
+                || !PAST_DUE_EXPIRABLE_STATUSES.contains(link.getStatus())
+                || link.getExpiresAt() == null || link.getExpiresAt().isAfter(now)
+                || !canRetireStaleLink(link)
+                || link.getManualReportedAt() != null
+                || link.getManualActualRecipientFrozenAt() != null
+                || link.getPaperInvoiceIssuedAt() != null
+                || link.getBadReviewBankCheckAt() != null
+                || (link.getBankCancelNonce() != null && !link.getBankCancelNonce().isBlank())
+                || link.getBankCancelOriginStatus() != null
+                || specialistReviewGuard.hasPendingReview(orderId)) {
+            return false;
+        }
+        String reason = "Срок действия платежной ссылки истек";
+        taskReceiptIntegrationService.release(link, reason);
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setLastError(reason);
+        paymentLinkRepository.save(link);
+        releaseClosedPaymentLink(link);
+        return true;
     }
 
     /**

@@ -18,7 +18,7 @@
   } @else if (!reviews().length) {
     <p class="review-empty">Ручных оплат на контроле нет.</p>
   } @else {
-    @for (review of reviews(); track review.id) {
+    @for (review of visible(); track review.id) {
       <article class="review-card" [class.review-disputed]="review.status === 'DISPUTED' || review.status === 'NEEDS_ATTENTION'">
         <div class="review-head">
           <div>
@@ -82,6 +82,11 @@
           }
         }
       </article>
+    }
+    @if (hiddenCount() > 0 || expanded()) {
+      <button type="button" class="reviews-more" (click)="toggleExpanded()" [attr.aria-expanded]="expanded()">
+        {{ expanded() ? 'Свернуть список' : 'Показать ещё ' + hiddenCount() }}
+      </button>
     }
   }
 </section>

@@ -1,9 +1,16 @@
 package com.hunt.otziv.p_products.application;
 
 import com.hunt.otziv.p_products.api.PaymentAttentionOrderReader;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,5 +35,24 @@ public class PaymentAttentionOrderReaderService implements PaymentAttentionOrder
                   AND recipient.active = TRUE
                 """, (row, index) -> new Contact(row.getLong(1), row.getString(2), row.getString(3)),
                 orderId).stream().findFirst();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, OrderLabel> labels(Collection<Long> orderIds) {
+        List<Long> ids = orderIds == null ? List.of() : orderIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, OrderLabel> labels = new LinkedHashMap<>();
+        new NamedParameterJdbcTemplate(jdbc).query("""
+                SELECT o.order_id, company.company_title, status.order_status_title
+                FROM orders o
+                LEFT JOIN companies company ON company.company_id = o.order_company
+                LEFT JOIN order_statuses status ON status.order_status_id = o.order_status
+                WHERE o.order_id IN (:ids)
+                """, Map.of("ids", ids), (RowCallbackHandler) row -> labels.put(row.getLong(1),
+                        new OrderLabel(row.getLong(1), row.getString(2), row.getString(3))));
+        return labels;
     }
 }

@@ -244,4 +244,50 @@ class ManagerControlReminderRestartTest {
         when(scheduled.resumeAfterCancelledManualContact(eq(reserved), any())).thenReturn(due);
         return reserved;
     }
+
+    @Test void cancelledManualCommandOlderThanTwoDaysIsReleasedAutomaticallyWithoutSending() {
+        var cancelled = pending("FAILED", "context_changed");
+        when(orders.read(77L)).thenReturn(Optional.of(source));
+        when(queue.controlHistory(77)).thenReturn(List.of(cancelled));
+        when(queue.controlHistoryForSettlement(77)).thenReturn(List.of(cancelled));
+
+        assertThat(repair.releaseCancelledManualAutomatically(77)).isEqualTo(1);
+
+        verify(queue).retireCancelledManual(cancelled, "system:cancelled-manual-release");
+        verifyNoInteractions(worker, history, outcome);
+        verify(scheduled, never()).restartStaleReminder(any(), any(), anyString());
+        verify(scheduled, never()).resumeAfterCancelledManualContact(any(), any());
+    }
+
+    @Test void aFreshCancellationAnUnknownSendOrARecentRealMessageKeepsTheReservation() {
+        when(orders.read(77L)).thenReturn(Optional.of(source));
+        var old = pending("FAILED", "context_changed");
+        var fresh = new ManagerClientMessageQueue.RecordedControl(
+                new DeliveryOperation("manual-fresh", "FAILED", 1, "context_changed"), 9, now.minusHours(6), now, old.source());
+        var unknown = pending("UNKNOWN", "whatsapp_history_checked_no_receipt");
+        var sent = new ManagerClientMessageQueue.RecordedControl(
+                new DeliveryOperation("manual-sent", "SENT", 1, null), 9, now.minusHours(3), now.minusHours(3), old.source());
+
+        when(queue.controlHistory(77)).thenReturn(List.of(fresh));
+        assertThat(repair.releaseCancelledManualAutomatically(77)).isZero();
+        when(queue.controlHistory(77)).thenReturn(List.of(old, unknown));
+        assertThat(repair.releaseCancelledManualAutomatically(77)).isZero();
+        when(queue.controlHistory(77)).thenReturn(List.of(old, sent));
+        assertThat(repair.releaseCancelledManualAutomatically(77)).isZero();
+
+        verify(queue, never()).retireCancelledManual(any(), anyString());
+    }
+
+    @Test void aChangedOrderUnderTheLockStopsTheRelease() {
+        var cancelled = pending("FAILED", "context_changed");
+        when(orders.read(77L)).thenReturn(Optional.of(source));
+        when(queue.controlHistory(77)).thenReturn(List.of(cancelled));
+        when(orders.lock(77L)).thenReturn(Optional.of(new OrderDeliveryControlContext.Snapshot(77L, 3L, "На проверке", 2,
+                source.cycleAt(), false, null)));
+
+        assertThat(repair.releaseCancelledManualAutomatically(77)).isZero();
+
+        verify(queue, never()).controlHistoryForSettlement(77);
+        verify(queue, never()).retireCancelledManual(any(), anyString());
+    }
 }

@@ -36,7 +36,8 @@ public class PaymentLinkAdminBoardWorkflow {
 
     private final PaymentLinkPresenter paymentPresenter;
 
-    static final Set<PaymentLinkStatus> FAILED_STATUSES = Set.of(PaymentLinkStatus.REJECTED, PaymentLinkStatus.FAILED, PaymentLinkStatus.NEEDS_RECONCILIATION, PaymentLinkStatus.EXPIRED);
+    /** «Ошибки»: rejected, failed or unreconciled payments. An expired link is not an error and stays under «Все». */
+    static final Set<PaymentLinkStatus> FAILED_STATUSES = Set.of(PaymentLinkStatus.REJECTED, PaymentLinkStatus.FAILED, PaymentLinkStatus.NEEDS_RECONCILIATION);
 
     static final Set<PaymentLinkStatus> REJECTED_STATUSES = Set.of(PaymentLinkStatus.REJECTED, PaymentLinkStatus.FAILED, PaymentLinkStatus.NEEDS_RECONCILIATION);
 

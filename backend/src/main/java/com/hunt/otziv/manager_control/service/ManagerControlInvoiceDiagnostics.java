@@ -215,7 +215,10 @@ public class ManagerControlInvoiceDiagnostics {
         }
         if (invoice.getInvoicePaymentMode() != InvoicePaymentMode.OWNER_PAPER_INVOICE
                 || overdueNotices == null || invoice.getId() == null) {
-            return invoice.getSentAt();
+            // A reopened invoice («Напоминание» after a mistaken payment) has a new term, as in the overdue clock.
+            LocalDateTime sent = invoice.getSentAt();
+            LocalDateTime restarted = invoice.getOverdueTermRestartedAt();
+            return sent == null ? null : restarted != null && restarted.isAfter(sent) ? restarted : sent;
         }
         return overdueNotices.termStart(invoice.getId()).orElse(null);
     }

@@ -8,6 +8,8 @@ export interface ContractorPaymentSourceConfirmationRequest {
   recipientStatementChecked: true;
   paymentReceived: true;
   confirmedTotalKopecks: number;
+  /** Receipt time from the recipient's statement, datetime-local without seconds. */
+  effectiveAt?: string;
   reason: string;
 }
 
@@ -15,6 +17,29 @@ export interface CloseManualPaymentUnpaidRequest {
   recipientStatementChecked: true;
   paymentAbsent: true;
   note: string;
+}
+
+export type BankAttentionKind = 'OWNER_APPROVAL' | 'SPECIALIST_REVIEW' | 'LINK_RECONCILIATION' | 'CLIENT_REPORTED';
+
+/** «Банк → Требует решения»: one waiting payment matter. */
+export interface BankAttentionItem {
+  kind: BankAttentionKind;
+  title: string;
+  detail: string;
+  orderId: number | null;
+  companyTitle: string | null;
+  orderStatus: string | null;
+  paymentLinkId: number | null;
+  approvalId: number | null;
+  reviewId: number | null;
+  amountKopecks: number | null;
+  since: string | null;
+}
+
+export interface BankAttention {
+  items: BankAttentionItem[];
+  truncated: boolean;
+  checkedAt: string;
 }
 
 export type SpecialistPaymentReviewStatus =
@@ -55,6 +80,10 @@ export interface SpecialistPaymentVerifyRequest {
 export class PaymentAdministrationApi {
   private readonly http = inject(HttpClient);
   private apiUrl(path: string): string { return mobileEnvironment.apiBaseUrl + path; }
+
+  getBankAttention(): Observable<BankAttention> {
+    return this.http.get<BankAttention>(this.apiUrl('/api/admin/payments/attention'));
+  }
 
   getSpecialistPaymentReviews(): Observable<SpecialistPaymentReview[]> {
     return this.http.get<SpecialistPaymentReview[]>(this.apiUrl('/api/admin/payments/specialist-reviews'));

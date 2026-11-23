@@ -12,8 +12,32 @@ public record PaymentLinkAdminSummary(
         Long refunded,
         Long rejected,
         Long receiptPending,
-        Long receiptOverdue
+        Long receiptOverdue,
+        Long active,
+        Long created,
+        Long manual,
+        Long failed
 ) {
+    /** Older call sites and the empty page: the per-filter counts are zero. */
+    public PaymentLinkAdminSummary(Long totalElements, Long totalAmountKopecks, Long paid, Long manualPending,
+            Long confirmed, Long notificationsSent, Long notificationErrors, Long refundable, Long refunded,
+            Long rejected, Long receiptPending, Long receiptOverdue) {
+        this(totalElements, totalAmountKopecks, paid, manualPending, confirmed, notificationsSent, notificationErrors,
+                refundable, refunded, rejected, receiptPending, receiptOverdue, 0L, 0L, 0L, 0L);
+    }
+
+    private static long safe(Long value) {
+        return value == null ? 0 : value;
+    }
+
+    public long safeActive() { return safe(active); }
+
+    public long safeCreated() { return safe(created); }
+
+    public long safeManual() { return safe(manual); }
+
+    public long safeFailed() { return safe(failed); }
+
     public long safeTotalElements() {
         return totalElements == null ? 0 : totalElements;
     }

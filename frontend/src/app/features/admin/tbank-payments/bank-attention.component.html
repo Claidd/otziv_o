@@ -1,0 +1,56 @@
+<section class="bank-attention" aria-label="Требует решения">
+  <header>
+    <div>
+      <p class="eyebrow">БАНК</p>
+      <h2>Требует решения <span [class.empty]="!items().length">{{ items().length }}</span></h2>
+      <p>Запросы владельцу, остановленные ручные оплаты и платежи на сверку. Сначала самые старые.</p>
+    </div>
+    <button type="button" class="refresh" (click)="load()" [disabled]="loading()">Обновить</button>
+  </header>
+
+  @if (error(); as message) {
+    <p class="attention-error" role="alert">{{ message }}</p>
+  }
+  @if (loading() && !items().length) {
+    <p class="attention-empty">Проверяем, что ждёт решения…</p>
+  } @else if (!items().length && !error()) {
+    <p class="attention-empty">Сейчас ничего не ждёт решения.</p>
+  } @else {
+    <ul class="attention-list">
+      @for (item of visible(); track trackItem(item)) {
+        <li class="attention-item" [class.attention-old]="overdue(item)">
+          <span class="material-icons-sharp attention-icon" aria-hidden="true">{{ kindIcon(item) }}</span>
+          <div class="attention-body">
+            <div class="attention-head">
+              <strong>{{ item.title }}</strong>
+              <span class="attention-wait" [title]="formatDate(item.since)">{{ waiting(item) }}</span>
+            </div>
+            <p class="attention-meta">
+              @if (item.orderId) { Заказ №{{ item.orderId }} }
+              @if (item.companyTitle) { · {{ item.companyTitle }} }
+              @if (item.orderStatus) { · «{{ item.orderStatus }}» }
+              · {{ formatMoney(item.amountKopecks) }}
+            </p>
+            <p class="attention-detail">{{ item.detail }}</p>
+            <div class="attention-actions">
+              @if (item.kind === 'SPECIALIST_REVIEW') {
+                <button type="button" (click)="showReviews.emit()">К проверке</button>
+              }
+              @if (item.orderId) {
+                <button type="button" (click)="showInJournal.emit(item.orderId)">Показать в журнале</button>
+              }
+            </div>
+          </div>
+        </li>
+      }
+    </ul>
+    @if (hidden() > 0) {
+      <button type="button" class="attention-more" (click)="toggle()" [attr.aria-expanded]="expanded()">
+        {{ expanded() ? 'Свернуть' : 'Показать все (' + items().length + ')' }}
+      </button>
+    }
+    @if (truncated()) {
+      <p class="attention-empty">Показаны первые 100 записей каждого вида; остальные — в журнале и проверках ниже.</p>
+    }
+  }
+</section>

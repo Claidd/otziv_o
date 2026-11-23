@@ -44,3 +44,4 @@ dd { margin: .12rem 0 0; font-size: .79rem; font-weight: 750; overflow-wrap: any
 :host-context(body.otziv-dark-theme) dt,
 :host-context(body.otziv-dark-theme) .review-head small,
 :host-context(body.otziv-dark-theme) .review-empty { color: #b7c5d0; }
+.reviews-more { justify-self: start; }

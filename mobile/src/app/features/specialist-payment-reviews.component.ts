@@ -1,4 +1,4 @@
-import { Component, EventEmitter, OnDestroy, Output, inject, signal } from '@angular/core';
+import { Component, EventEmitter, OnDestroy, Output, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { manualPaymentReviewPresentation } from '@otziv/client-common/billing-payments';
 import { firstValueFrom, Subscription } from 'rxjs';
@@ -9,6 +9,8 @@ import {
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 
 type ReviewAction = 'received' | 'absent';
+
+const COLLAPSED_REVIEWS = 3;
 
 @Component({
   selector: 'app-specialist-payment-reviews',
@@ -33,12 +35,33 @@ export class SpecialistPaymentReviewsComponent implements OnDestroy {
   readonly note = signal('');
   readonly statementChecked = signal(false);
   readonly formError = signal<string | null>(null);
+  /** The block stays short on the phone so the journal below remains reachable; problems come first. */
+  readonly expanded = signal(false);
+  readonly ordered = computed(() => [...this.reviews()].sort((left, right) =>
+    Number(this.needsDecision(right)) - Number(this.needsDecision(left))));
+  readonly visible = computed(() => {
+    const editingId = this.editing()?.id;
+    const all = this.ordered();
+    if (this.expanded()) return all;
+    const first = all.slice(0, COLLAPSED_REVIEWS);
+    const edited = editingId == null ? undefined : all.find(review => review.id === editingId);
+    return edited && !first.includes(edited) ? [...first, edited] : first;
+  });
+  readonly hiddenCount = computed(() => Math.max(0, this.ordered().length - this.visible().length));
 
   constructor() { this.load(); }
 
   ngOnDestroy(): void {
     this.destroyed = true;
     this.read?.unsubscribe();
+  }
+
+  toggleExpanded(): void {
+    this.expanded.update(value => !value);
+  }
+
+  needsDecision(review: SpecialistPaymentReview): boolean {
+    return review.status === 'DISPUTED' || review.status === 'NEEDS_ATTENTION';
   }
 
   load(): void {

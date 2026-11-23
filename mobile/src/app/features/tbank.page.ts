@@ -69,12 +69,14 @@ import { mobileManualCardPaymentIsCompleted } from '../shared/mobile-manual-card
 import { MobileManualPaymentTaskOperationKeyDraft } from '../shared/manual-payment-operation-key';
 import { manualPaymentTaskWorklist } from '../shared/manual-payment-task-visibility';
 import { SpecialistPaymentReviewsComponent } from './specialist-payment-reviews.component';
+import { BankAttentionComponent } from './bank-attention.component';
 import type { SpecialistPaymentReview } from '../core/payment-administration.api';
 import {
   canCloseManualPaymentAsUnpaid,
   canConfirmContractorPaymentSource,
   canMarkLegacyReceiptNotRequired,
-  confirmedTotalKopecks
+  confirmedTotalKopecks,
+  validReceiptEffectiveAt
 } from '../shared/manual-payment-audit';
 
 type TbankMode = 'payments' | 'recipients' | 'launch' | 'tasks' | 'profiles' | 'managers';
@@ -114,7 +116,7 @@ function currentMonthInput(): string {
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-tbank-page',
-  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent, SpecialistPaymentReviewsComponent],
+  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent, SpecialistPaymentReviewsComponent, BankAttentionComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Банк" />
@@ -188,7 +190,8 @@ function currentMonthInput(): string {
           }
 
           @if (mode() === 'payments') {
-            <app-specialist-payment-reviews
+            <app-bank-attention class="bank-top-block" (showInJournal)="showOrderInJournal($event)" />
+            <app-specialist-payment-reviews class="bank-top-block"
               (reviewsChanged)="specialistOpenReviews.set($event)"
               (paymentChanged)="onSpecialistPaymentChanged()"
             />
@@ -1196,13 +1199,23 @@ function currentMonthInput(): string {
                   </p>
                   @if (paymentAuditAction() === 'contractor') {
                     <label class="sheet-field">
-                      <span>Подтверждено по счёту, ₽</span>
-                      <input name="auditAmount" inputmode="decimal" type="text" [ngModel]="paymentAuditAmount()" (ngModelChange)="paymentAuditAmount.set($event || '')" autocomplete="off" required>
+                      <span>Всего поступило по этому счёту, ₽</span>
+                      <input name="auditAmount" inputmode="decimal" type="text" [ngModel]="paymentAuditAmount()" (ngModelChange)="paymentAuditAmount.set($event || '')" autocomplete="off" placeholder="как в выписке получателя" required>
+                    </label>
+                    <label class="sheet-field">
+                      <span>Дата и время поступления по выписке</span>
+                      <input name="auditEffectiveAt" type="datetime-local" [ngModel]="paymentAuditEffectiveAt()" (ngModelChange)="paymentAuditEffectiveAt.set($event || '')" required>
                     </label>
                   }
                   <label class="sheet-field">
                     <span>{{ paymentAuditAction() === 'contractor' ? 'Основание сверки' : 'Заметка для истории проверки' }}</span>
                     <textarea name="auditNote" [ngModel]="paymentAuditNote()" (ngModelChange)="paymentAuditNote.set($event || '')" required></textarea>
+                  </label>
+                  <label class="audit-statement">
+                    <input name="auditStatement" type="checkbox" [ngModel]="paymentAuditStatementChecked()" (ngModelChange)="paymentAuditStatementChecked.set($event === true)">
+                    <span>{{ paymentAuditAction() === 'contractor'
+                      ? 'Я проверил(а) выписку получателя и подтверждаю, что перевод относится именно к этому счёту.'
+                      : 'Я проверил(а) выписку получателя: перевода по этому заказу нет.' }}</span>
                   </label>
                   @if (paymentAuditError()) {
                     <p class="audit-error" role="alert">{{ paymentAuditError() }}</p>
@@ -1211,7 +1224,7 @@ function currentMonthInput(): string {
 
                 <div class="sheet-actions">
                   <button class="secondary" type="button" (click)="closePaymentAudit()" [disabled]="mutatingId() === link.id">Отмена</button>
-                  <button type="submit" [class.danger]="paymentAuditAction() === 'unpaid'" [disabled]="mutatingId() === link.id || !paymentAuditNote().trim() || (paymentAuditAction() === 'contractor' && confirmedTotalKopecks(paymentAuditAmount(), link.amountKopecks) === null)">
+                  <button type="submit" [class.danger]="paymentAuditAction() === 'unpaid'" [disabled]="mutatingId() === link.id || !paymentAuditNote().trim() || !paymentAuditStatementChecked() || (paymentAuditAction() === 'contractor' && (confirmedTotalKopecks(paymentAuditAmount(), link.amountKopecks) === null || !validReceiptEffectiveAt(paymentAuditEffectiveAt())))">
                     {{ mutatingId() === link.id ? 'Сохраняю' : (paymentAuditAction() === 'contractor' ? 'Подтвердить' : 'Закрыть инструкцию') }}
                   </button>
                 </div>
@@ -1446,6 +1459,14 @@ function currentMonthInput(): string {
       font: inherit;
       font-size: 0.76rem;
       font-weight: 900;
+    }
+
+    .bank-top-block {
+      flex: 0 1 auto;
+      min-height: 0;
+      max-height: 25vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
 
     .payment-list {
@@ -1829,6 +1850,8 @@ function currentMonthInput(): string {
 
     .audit-explanation { color: var(--otziv-info); }
     .audit-error { color: var(--otziv-danger); font-weight: 800; }
+    .audit-statement { display: flex; gap: .55rem; align-items: flex-start; font-size: .8rem; line-height: 1.35; }
+    .audit-statement input { flex: 0 0 auto; width: 1.15rem; height: 1.15rem; margin: .1rem 0 0; }
 
     .recipient-list,
     .launch-list,
@@ -2304,6 +2327,7 @@ function currentMonthInput(): string {
 })
 export class TbankPage implements OnInit, OnDestroy {
   @ViewChild(SpecialistPaymentReviewsComponent) private specialistReviews?: SpecialistPaymentReviewsComponent;
+  @ViewChild(BankAttentionComponent) private bankAttention?: BankAttentionComponent;
   private readonly orderPaymentApi = inject(OrderPaymentApi);
   private readonly paymentAdministrationApi = inject(PaymentAdministrationApi);
   private readonly paymentConfigurationApi = inject(PaymentConfigurationApi);
@@ -2350,7 +2374,10 @@ export class TbankPage implements OnInit, OnDestroy {
   readonly paymentAuditAction = signal<'contractor' | 'unpaid' | null>(null);
   readonly paymentAuditAmount = signal('');
   readonly paymentAuditNote = signal('');
+  readonly paymentAuditEffectiveAt = signal('');
+  readonly paymentAuditStatementChecked = signal(false);
   readonly paymentAuditError = signal<string | null>(null);
+  readonly validReceiptEffectiveAt = validReceiptEffectiveAt;
   readonly confirmedTotalKopecks = confirmedTotalKopecks;
   readonly mutatingTaskId = signal<number | null>(null);
   readonly savingProfiles = signal(false);
@@ -2367,6 +2394,8 @@ export class TbankPage implements OnInit, OnDestroy {
   readonly paymentTotalElements = signal(0);
   readonly paymentTotalPages = signal(0);
   readonly paymentSummary = signal<AdminPaymentLinkSummaryResponse | null>(null);
+  /** The last summary read with «Все»: its per-filter counts label the other chips. */
+  private readonly overviewSummary = signal<{ key: string; summary: AdminPaymentLinkSummaryResponse } | null>(null);
   readonly dateFrom = signal('');
   readonly dateTo = signal('');
   readonly dateSheetOpen = signal(false);
@@ -2651,6 +2680,7 @@ export class TbankPage implements OnInit, OnDestroy {
   async load(): Promise<void> {
     if (!this.pageVisible || this.destroyed) return;
     this.specialistReviews?.load();
+    this.bankAttention?.load();
     const ticket = this.pageReads.beginRead('bootstrap');
     if (!ticket) return;
     this.bootstrapLoading.set(true);
@@ -2703,6 +2733,16 @@ export class TbankPage implements OnInit, OnDestroy {
   setSearch(value: string): void {
     this.search.set(value ?? '');
     this.resetPageAndLoad();
+  }
+
+  /** «Требует решения» → the live journal filtered by the order. */
+  showOrderInJournal(orderId: number): void {
+    if (!orderId) return;
+    this.paymentSource.set('LIVE');
+    this.statusFilter.set('all');
+    this.dateFrom.set('');
+    this.dateTo.set('');
+    this.setSearch(String(orderId));
   }
 
   submitSearch(): void { this.resetPageAndLoad(); }
@@ -3218,17 +3258,14 @@ export class TbankPage implements OnInit, OnDestroy {
     }
   }
 
-  async openContractorAudit(link: AdminPaymentLinkResponse): Promise<void> {
+  /** Same form as on the site: the amount and the receipt time are typed from the statement, then checked. */
+  openContractorAudit(link: AdminPaymentLinkResponse): void {
     if (!this.canConfirmContractorSource(link) || this.mutatingId()) return;
-    const confirmed = await this.confirm.confirm({
-      title: 'Сверка поступления',
-      message: `Выписка получателя проверена и перевод относится именно к счёту №${link.id}?`,
-      confirmText: 'Да, сверено'
-    });
-    if (!confirmed) return;
     this.paymentAuditAction.set('contractor');
     this.paymentAuditLink.set(link);
-    this.paymentAuditAmount.set(String(Math.max(0, link.confirmedAmountKopecks ?? 0) / 100 || link.amount));
+    this.paymentAuditAmount.set('');
+    this.paymentAuditEffectiveAt.set('');
+    this.paymentAuditStatementChecked.set(false);
     this.paymentAuditNote.set('');
     this.paymentAuditError.set(null);
   }
@@ -3245,6 +3282,8 @@ export class TbankPage implements OnInit, OnDestroy {
     this.paymentAuditAction.set('unpaid');
     this.paymentAuditLink.set(link);
     this.paymentAuditAmount.set('');
+    this.paymentAuditEffectiveAt.set('');
+    this.paymentAuditStatementChecked.set(false);
     this.paymentAuditNote.set('');
     this.paymentAuditError.set(null);
   }
@@ -3266,8 +3305,16 @@ export class TbankPage implements OnInit, OnDestroy {
       this.paymentAuditError.set('Для истории сверки требуется заметка о проверенной выписке.');
       return;
     }
+    if (!this.paymentAuditStatementChecked()) {
+      this.paymentAuditError.set('Подтвердите, что проверили выписку получателя.');
+      return;
+    }
     if (action === 'contractor' && (total === null || !this.canConfirmContractorSource(link))) {
       this.paymentAuditError.set('Проверьте сумму: она должна быть больше нуля и не превышать сумму счёта.');
+      return;
+    }
+    if (action === 'contractor' && !validReceiptEffectiveAt(this.paymentAuditEffectiveAt())) {
+      this.paymentAuditError.set('Укажите существующие дату и время поступления как в выписке получателя.');
       return;
     }
     if (action === 'unpaid' && !this.canCloseManualAsUnpaid(link)) {
@@ -3283,6 +3330,7 @@ export class TbankPage implements OnInit, OnDestroy {
           recipientStatementChecked: true,
           paymentReceived: true,
           confirmedTotalKopecks: total!,
+          effectiveAt: this.paymentAuditEffectiveAt(),
           reason
         }))
         : await firstValueFrom(this.paymentAdministrationApi.closeAdminManualPaymentLinkAsUnpaid(link.id, {
@@ -3452,26 +3500,41 @@ export class TbankPage implements OnInit, OnDestroy {
     return this.links().filter((link) => this.matchesStatusFilter(link, filter)).length;
   }
 
-  statusTotal(filter: PaymentStatusFilter): number {
-    const summary = this.paymentSummary();
-    if (summary && this.statusFilter() === 'all') {
-      switch (filter) {
-        case 'all':
-          return summary.totalElements;
-        case 'paid':
-          return summary.paid;
-        case 'manual':
-          return summary.manualPending;
-        case 'refunded':
-          return summary.refunded;
-        case 'failed':
-          return summary.rejected;
-      }
-    }
-    if (filter === this.statusFilter() && this.paymentTotalElements()) {
+  /**
+   * A chip shows only a count that matches its list: the selected filter's own total, or the overview
+   * counts read with «Все» for the same search, dates and source. Otherwise «·» instead of a guess.
+   */
+  statusTotal(filter: PaymentStatusFilter): number | string {
+    if (filter === this.statusFilter()) {
       return this.paymentTotalElements();
     }
-    return this.statusCount(filter);
+    const overview = this.overviewSummary();
+    if (!overview || overview.key !== this.journalOverviewKey()) {
+      return '·';
+    }
+    const summary = overview.summary;
+    switch (filter) {
+      case 'all':
+        return summary.totalElements;
+      case 'paid':
+        return summary.paid;
+      case 'refunded':
+        return summary.refunded;
+      case 'active':
+        return summary.active ?? '·';
+      case 'created':
+        return summary.created ?? '·';
+      case 'manual':
+        return summary.manual ?? '·';
+      case 'failed':
+        return summary.failed ?? '·';
+      default:
+        return '·';
+    }
+  }
+
+  private journalOverviewKey(): string {
+    return [this.search().trim(), this.paymentSource(), this.dateFrom(), this.dateTo()].join('|');
   }
 
   paymentTitle(link: AdminPaymentLinkResponse): string {
@@ -3769,6 +3832,9 @@ export class TbankPage implements OnInit, OnDestroy {
     this.paymentTotalElements.set(page.totalElements ?? 0);
     this.paymentTotalPages.set(page.totalPages ?? 0);
     this.paymentSummary.set(page.summary ?? null);
+    if (page.summary && this.statusFilter() === 'all') {
+      this.overviewSummary.set({ key: this.journalOverviewKey(), summary: page.summary });
+    }
     this.keepPageInRange();
   }
 
@@ -3814,8 +3880,7 @@ export class TbankPage implements OnInit, OnDestroy {
       case 'failed':
         return link.status === 'REJECTED'
           || link.status === 'FAILED'
-          || link.status === 'NEEDS_RECONCILIATION'
-          || link.status === 'EXPIRED';
+          || link.status === 'NEEDS_RECONCILIATION';
       case 'created':
         return link.status === 'CREATED';
       case 'manual':

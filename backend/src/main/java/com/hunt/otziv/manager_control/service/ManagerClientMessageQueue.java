@@ -209,6 +209,49 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
         if (changed != 1) throw new IllegalStateException("Manual reminder restart lost ownership");
     }
 
+    /**
+     * Orders whose periodic reminders are held by a manual command cancelled before any provider call more than
+     * two days ago. Candidates only: the release re-checks the order's current cycle under its lock.
+     */
+    List<Long> ordersHeldByCancelledManual(int limit) {
+        return jdbc.queryForList("""
+                SELECT DISTINCT c.entity_id
+                FROM manager_client_message_queue q
+                JOIN manager_daily_control_concrete_items c ON c.control_entity_id=q.card_id
+                  AND c.entity_type IN ('ORDER','WORKER_ORDER_NEW')
+                JOIN scheduled_client_message_state s ON s.order_id=c.entity_id
+                  AND s.state_status='ACTIVE' AND s.last_error_code='manual_contact_reserved'
+                WHERE q.command_kind='CONTROL' AND q.state='FAILED' AND q.error_code='context_changed'
+                  AND q.created_at<=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 2 DAY)
+                  AND (q.lease_until IS NULL OR q.lease_until<CURRENT_TIMESTAMP(6))
+                ORDER BY c.entity_id LIMIT ?
+                """, Long.class, Math.max(1, Math.min(50, limit)));
+    }
+
+    /** Audits and retires one cancelled-before-dispatch command; it never reached the client and is never resent. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void retireCancelledManual(RecordedControl row, String actor) {
+        String operation = row.delivery().operationId();
+        int audited = jdbc.update("""
+                INSERT INTO client_reminder_restart_audit
+                  (request_key,subject_type,subject_id,old_operation_id,actor,reason,previous_snapshot,next_attempt_at)
+                SELECT ?, 'MANUAL', card_id, operation_id, ?, 'cancelled_manual_released_automatically',
+                  JSON_OBJECT('state',state,'error',error_code,'attempts',attempts,'createdAt',created_at,
+                    'updatedAt',updated_at,'envelopeCiphertext',envelope_ciphertext), CURRENT_TIMESTAMP(6)
+                FROM manager_client_message_queue WHERE operation_id=?
+                  AND state='FAILED' AND error_code='context_changed'
+                  AND created_at<=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 2 DAY)
+                  AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP(6))
+                """, "manual-auto-release:" + operation, actor, operation);
+        if (audited != 1) throw new IllegalStateException("Cancelled manual command changed during release");
+        int changed = jdbc.update("""
+                UPDATE manager_client_message_queue SET state='SUPERSEDED',error_code='cancelled_manual_released',
+                  claim_token=NULL,lease_until=NULL WHERE operation_id=?
+                    AND state='FAILED' AND error_code='context_changed'
+                """, operation);
+        if (changed != 1) throw new IllegalStateException("Cancelled manual command release lost ownership");
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean owns(Claim claim) {
         return jdbc.query("SELECT claim_token FROM manager_client_message_queue WHERE operation_id=? FOR UPDATE",
