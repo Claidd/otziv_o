@@ -30204,7 +30204,7 @@
     "sha256" : "2df85404d4ed11d696f31578e63c233185f81391eaec3e21b4d40c570f510435"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "1e88c18481543cea2e5fe57fab0b54a6c28e58db7908747c5a6d6ad8e09ccd13"
+    "sha256" : "5714e6607740f9f18b94bdffda74fd225e9ad038e62369f884f221854513643c"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {
