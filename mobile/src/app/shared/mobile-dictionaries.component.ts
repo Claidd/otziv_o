@@ -452,7 +452,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                     <span class="material-icons-sharp">article</span>
                     <div>
                       <strong>{{ managerText.managerTitle }}</strong>
-                      <small>оплата, начало, оффер, напоминание, старт</small>
+                      <small>текст оплаты</small>
                     </div>
                     <button type="button" (click)="openEdit('managerTexts', managerText)">
                       <span class="material-icons-sharp">edit</span>
