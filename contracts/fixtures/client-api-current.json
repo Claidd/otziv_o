@@ -67,7 +67,11 @@
       "refunded" : 2,
       "rejected" : 2,
       "receiptPending" : 2,
-      "receiptOverdue" : 2
+      "receiptOverdue" : 2,
+      "active" : 2,
+      "created" : 2,
+      "manual" : 2,
+      "failed" : 2
     },
     "AdminPaymentLinksPageResponseOutput" : {
       "items" : [ {
@@ -141,7 +145,11 @@
         "refunded" : 2,
         "rejected" : 2,
         "receiptPending" : 2,
-        "receiptOverdue" : 2
+        "receiptOverdue" : 2,
+        "active" : 2,
+        "created" : 2,
+        "manual" : 2,
+        "failed" : 2
       }
     },
     "ApiExceptionHandlerApiErrorResponseOutput" : {
@@ -302,6 +310,36 @@
       "botPasswordPresent" : false,
       "taskText" : "contract-example",
       "comment" : "contract-example"
+    },
+    "BankAttentionItemResponseOutput" : {
+      "kind" : "contract-example",
+      "title" : "contract-example",
+      "detail" : "contract-example",
+      "orderId" : 2,
+      "companyTitle" : "contract-example",
+      "orderStatus" : "contract-example",
+      "paymentLinkId" : 2,
+      "approvalId" : 2,
+      "reviewId" : 2,
+      "amountKopecks" : 2,
+      "since" : "2026-09-07T08:00:00"
+    },
+    "BankAttentionResponseOutput" : {
+      "items" : [ {
+        "kind" : "contract-example",
+        "title" : "contract-example",
+        "detail" : "contract-example",
+        "orderId" : 2,
+        "companyTitle" : "contract-example",
+        "orderStatus" : "contract-example",
+        "paymentLinkId" : 2,
+        "approvalId" : 2,
+        "reviewId" : 2,
+        "amountKopecks" : 2,
+        "since" : "2026-09-07T08:00:00"
+      } ],
+      "truncated" : false,
+      "checkedAt" : "2026-09-07T08:00:00"
     },
     "ClientChatReconciliationResultOutput" : {
       "requestedChats" : 2,
