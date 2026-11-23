@@ -237,7 +237,9 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                       <span class="material-icons-sharp">add</span>
                       подкатегория
                     </button>
-                    <button type="button" class="danger-link" (click)="removeCategory(category)" [disabled]="destructiveAction() !== null || saving()">удалить</button>
+                    @if (adminMode) {
+                      <button type="button" class="danger-link" (click)="removeCategory(category)" [disabled]="destructiveAction() !== null || saving()">удалить</button>
+                    }
                   </footer>
                 </article>
               } @empty {
@@ -1663,6 +1665,10 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   }
 
   async removeCategory(category: AdminCategory): Promise<void> {
+    // Managers add and rename categories; only the owner and administrators delete them (the server refuses others).
+    if (!this.adminMode) {
+      return;
+    }
     await this.deleteEntry('categories', category.id, category.title);
   }
 
