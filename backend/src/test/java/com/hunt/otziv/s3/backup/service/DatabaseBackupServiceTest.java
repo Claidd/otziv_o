@@ -797,6 +797,40 @@ class DatabaseBackupServiceTest {
     }
 
     @Test
+    void latestBackupStatusReadsTheLatestVerifiedBackupAndItsEmailCopy() throws Exception {
+        DatabaseBackupService service = service(validPropertiesWithKeycloak());
+        Path mysqlEvidence = temporaryDirectory.resolve("backup-evidence.jsonl");
+        Instant earlier = Instant.parse("2026-11-21T23:02:10Z");
+        Instant latest = Instant.parse("2026-11-22T23:02:10Z");
+        var cleanup = new DatabaseBackupService.BackupCleanupResult(true, true, true, true, true);
+
+        assertThat(service.latestBackupStatus(DatabaseBackupService.DATABASE_MYSQL).verifiedAt()).isNull();
+        assertThat(service.latestBackupStatus(DatabaseBackupService.DATABASE_KEYCLOAK).verifiedAt()).isNull();
+
+        service.writeEvidence(mysqlEvidence, verifiedBackup(earlier, "backup/otziv/a.enc", "version-a"), cleanup,
+                null, null, DatabaseBackupService.BackupMailDeliveryResult.succeeded(1));
+        // One run writes the verified upload first (the e-mail is still pending), then the completed receipt.
+        service.writeEvidence(mysqlEvidence, verifiedBackup(latest, "backup/otziv/b.enc", "version-b"), cleanup,
+                null, null, DatabaseBackupService.BackupMailDeliveryResult.pending(true));
+        service.writeEvidence(mysqlEvidence, verifiedBackup(latest, "backup/otziv/b.enc", "version-b"), cleanup,
+                null, null, DatabaseBackupService.BackupMailDeliveryResult.succeeded(1));
+        Files.writeString(mysqlEvidence, "{\"truncated\n", StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.APPEND);
+
+        var mysql = service.latestBackupStatus(DatabaseBackupService.DATABASE_MYSQL);
+        assertThat(mysql.verifiedAt()).isEqualTo(latest);
+        assertThat(mysql.email()).isEqualTo(DatabaseBackupService.EmailDelivery.SENT);
+
+        service.writeEvidence(mysqlEvidence, verifiedBackup(latest.plusSeconds(86400), "backup/otziv/c.enc", "version-c"),
+                cleanup, null, null, DatabaseBackupService.BackupMailDeliveryResult.failed(1));
+        assertThat(service.latestBackupStatus(DatabaseBackupService.DATABASE_MYSQL).email())
+                .isEqualTo(DatabaseBackupService.EmailDelivery.NOT_SENT);
+        service.writeEvidence(mysqlEvidence, verifiedBackup(latest.plusSeconds(2 * 86400), "backup/otziv/d.enc", "version-d"),
+                cleanup, null, null, DatabaseBackupService.BackupMailDeliveryResult.disabled());
+        assertThat(service.latestBackupStatus(DatabaseBackupService.DATABASE_MYSQL).email())
+                .isEqualTo(DatabaseBackupService.EmailDelivery.DISABLED);
+    }
+
+    @Test
     void removesStaleKeycloakTemporaryFilesAndKeepsBothJournals() throws Exception {
         String runId = "2026-11-05_07-00-00-123_0123456789abcdef0123456789abcdef";
         List<Path> owned = List.of(

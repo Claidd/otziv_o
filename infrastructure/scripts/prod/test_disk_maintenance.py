@@ -1,6 +1,7 @@
 import argparse
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -213,6 +214,91 @@ class DiskMaintenanceTests(unittest.TestCase):
                 state.write_text(invalid)
                 with self.assertRaises(RuntimeError):
                     maintenance.read_state(state)
+
+    def test_defaults_clean_before_the_application_disk_alert(self):
+        with tempfile.TemporaryDirectory() as folder:
+            args = maintenance.parse_args(['--root', folder])
+        self.assertEqual((args.trigger_percent, args.target_percent), (75, 70))
+
+    def test_report_is_read_only_and_post_deploy_requires_apply(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for flags in (['--report', '--apply'], ['--report', '--post-deploy'], ['--post-deploy'],
+                          ['--status-file', 'relative.json'], ['--status-interval-seconds', '60']):
+                with self.subTest(flags=flags), self.assertRaises(SystemExit):
+                    maintenance.parse_args(['--root', folder, *flags])
+
+    def test_status_collects_host_facts_and_marks_failed_probes_unavailable(self):
+        docker_df = '\n'.join(json.dumps(row) for row in (
+            {'Type': 'Images', 'TotalCount': '29', 'Active': '13', 'Size': '11.96GB', 'Reclaimable': '1.4GB (11%)'},
+            {'Type': 'Build Cache', 'TotalCount': '16', 'Active': '0', 'Size': '245MB', 'Reclaimable': '0B'}))
+        containers = json.dumps([
+            {'Name': '/my-mysql', 'Config': {'Labels': {}}, 'State': {'Running': True, 'Health': {'Status': 'healthy'}}},
+            {'Name': '/otziv-prod-app-1', 'Config': {'Labels': {}}, 'State': {'Running': True, 'Health': {'Status': 'unhealthy'}}},
+            {'Name': '/grafana', 'Config': {'Labels': {}}, 'State': {'Running': False}},
+            {'Name': '/otziv-prod-app-run-1', 'Config': {'Labels': {'com.docker.compose.oneoff': 'True'}},
+             'State': {'Running': False}}])
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'data' / 'bots').mkdir(parents=True)
+            (root / 'data' / 'bots' / 'file').write_bytes(b'x' * 10)
+            state_dir = root / 'state'
+            state_dir.mkdir()
+            (state_dir / 'state.json').write_text(json.dumps({
+                'lastAttemptAt': 1795368009, 'lastUsedPercent': 82, 'before': {'usedPercent': 82},
+                'after': {'usedPercent': 80}, 'freedBytes': 1073672192, 'failedActions': []}))
+            args = argparse.Namespace(root=root, state_dir=state_dir, trigger_percent=75, target_percent=70,
+                                      mysql_container='my-mysql')
+            with patch.object(maintenance, 'command', side_effect=[docker_df, 'a b c d', containers]), \
+                    patch.object(maintenance, 'mysql', side_effect=RuntimeError('mysql offline')), \
+                    patch.object(maintenance, 'usage', return_value={'usedPercent': 73}):
+                status = maintenance.collect_status(args, 1795400000)
+        self.assertEqual(status['schema'], 'otziv-ops-disk-status-v1')
+        self.assertEqual(status['usage'], {'usedPercent': 73})
+        self.assertEqual(status['docker']['images']['size'], '11.96GB')
+        self.assertEqual(status['docker']['buildCache']['reclaimable'], '0B')
+        self.assertEqual(status['containers'], {'total': 3, 'running': 2, 'stopped': ['grafana'],
+                                                'unhealthy': ['otziv-prod-app-1']})
+        self.assertIsNone(status['binlog'])
+        self.assertEqual(status['unavailable'], ['binlog'])
+        self.assertEqual(status['lastCleanup']['beforePercent'], 82)
+        self.assertEqual(status['lastCleanup']['afterPercent'], 80)
+        self.assertIsNone(status['lastPostDeployCleanup'])
+        self.assertIn('bots', status['sizes']['data'])
+        self.assertNotIn('password', json.dumps(status).lower())
+
+    def test_binlog_usage_sums_closed_and_open_logs(self):
+        with patch.object(maintenance, 'mysql', side_effect=['259200', 'binlog.000101\t1073741824\tNo\nbinlog.000102\t5000\tNo']):
+            self.assertEqual(maintenance.binlog_usage('my-mysql'),
+                             {'retentionSeconds': 259200, 'files': 2, 'bytes': 1073746824})
+        with patch.object(maintenance, 'mysql', side_effect=['unknown']):
+            with self.assertRaises(ValueError):
+                maintenance.binlog_usage('my-mysql')
+
+    def test_status_file_is_rewritten_atomically_only_when_due(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ops-status' / 'disk.json'
+            self.assertTrue(maintenance.status_due(path, 1000, 1800))
+            maintenance.write_status(path, {'schema': 'otziv-ops-disk-status-v1', 'usage': {'usedPercent': 73}})
+            self.assertEqual(json.loads(path.read_text())['usage']['usedPercent'], 73)
+            self.assertFalse((path.parent / 'disk.json.tmp').exists())
+            written = path.stat().st_mtime
+            self.assertFalse(maintenance.status_due(path, written + 60, 1800))
+            self.assertTrue(maintenance.status_due(path, written + 1800, 1800))
+            if os.name != 'nt':
+                self.assertEqual(path.stat().st_mode & 0o777, 0o644)
+                self.assertEqual(path.parent.stat().st_mode & 0o777, 0o755)
+
+    def test_post_deploy_cleans_release_images_without_a_threshold_and_keeps_going(self):
+        args = argparse.Namespace(root=Path('/docker'))
+        with patch.object(maintenance, 'prune_build_cache', side_effect=RuntimeError('busy')) as cache, \
+                patch.object(maintenance, 'remove_unreferenced_images') as images, \
+                patch.object(maintenance, 'usage', side_effect=[{'usedPercent': 60, 'freeBytes': 1},
+                                                                {'usedPercent': 58, 'freeBytes': 2}]):
+            before, after, errors = maintenance.post_deploy_clean(args)
+        cache.assert_called_once()
+        images.assert_called_once_with(Path('/docker'))
+        self.assertEqual((before['usedPercent'], after['usedPercent']), (60, 58))
+        self.assertEqual(errors, ['old Docker build cache'])
 
     def test_invalid_thresholds_and_too_short_retention_are_rejected(self):
         with tempfile.TemporaryDirectory() as folder:

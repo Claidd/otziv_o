@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [string]$EnvFile = '.env.prod.example',
-    [ValidateRange(1, 3650)][int]$MaximumRestoreDrillAgeDays = 90
+    [ValidateRange(1, 3650)][int]$MaximumRestoreDrillAgeDays = 90,
+    # A production deploy passes it: disabled daily backups are then an error, not a warning.
+    [switch]$RequireEnabled
 )
 
 $ErrorActionPreference = 'Stop'
@@ -124,6 +126,9 @@ if (-not [string]::IsNullOrWhiteSpace($persistedRunOnce) -and $persistedRunOnce 
 }
 
 if (-not (Test-True (Get-Setting 'BACKUP_ENABLED'))) {
+    if ($RequireEnabled) {
+        throw 'BACKUP_ENABLED=false: a production deploy requires the daily encrypted backup. Pass -AllowDisabledBackup to deploy.ps1 only for a deliberate, temporary exception.'
+    }
     Write-Warning 'Production backup automation is disabled. No email delivery or unverified object-storage upload will occur by default.'
     Write-Output 'Backup readiness contract passed (disabled by explicit safe default).'
     return

@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import time
 import uuid
@@ -24,6 +25,10 @@ RELEASE_REPOSITORY = re.compile(r'127\.0\.0\.1:[1-9][0-9]{0,4}/otziv-prepared/ci
                                 r'|ghcr\.io/claidd/otziv-security')
 DIGEST = re.compile(r'sha256:[a-f0-9]{64}')
 REFERENCE_FILE_LIMIT = 1024 * 1024
+STATUS_SCHEMA = 'otziv-ops-disk-status-v1'
+DOCKER_DF_TYPES = {'Images': 'images', 'Containers': 'containers', 'Local Volumes': 'volumes',
+                   'Build Cache': 'buildCache'}
+PROBE_ERRORS = (RuntimeError, OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired)
 
 
 def log(message):
@@ -222,6 +227,161 @@ def prune_build_cache():
     command(['docker', 'builder', 'prune', '--force', '--filter', 'until=168h', reserve, '1GB'])
 
 
+def iso(seconds):
+    return dt.datetime.fromtimestamp(seconds, dt.timezone.utc).isoformat(timespec='seconds')
+
+
+def docker_usage():
+    """`docker system df` per kind, as Docker prints it (sizes are display strings)."""
+    result = {}
+    for line in command(['docker', 'system', 'df', '--format', '{{json .}}'], timeout=300).splitlines():
+        item = json.loads(line)
+        kind = DOCKER_DF_TYPES.get(item.get('Type'))
+        if kind:
+            result[kind] = {'total': item.get('TotalCount'), 'active': item.get('Active'),
+                            'size': item.get('Size'), 'reclaimable': item.get('Reclaimable')}
+    return result
+
+
+def container_health():
+    """Running, stopped and unhealthy service containers; one-off `compose run` containers are ignored."""
+    ids = command(['docker', 'container', 'ls', '-a', '-q']).split()
+    items = json.loads(command(['docker', 'container', 'inspect', *ids])) if ids else []
+    stopped, unhealthy, total = [], [], 0
+    for item in items:
+        labels = (item.get('Config') or {}).get('Labels') or {}
+        if labels.get('com.docker.compose.oneoff') == 'True':
+            continue
+        total += 1
+        name = (item.get('Name') or '').lstrip('/')
+        state = item.get('State') or {}
+        if not state.get('Running'):
+            stopped.append(name)
+        elif (state.get('Health') or {}).get('Status') == 'unhealthy':
+            unhealthy.append(name)
+    return {'total': total, 'running': total - len(stopped), 'stopped': sorted(stopped), 'unhealthy': sorted(unhealthy)}
+
+
+def binlog_usage(container):
+    retention = mysql(container, 'SELECT @@global.binlog_expire_logs_seconds;')
+    if not retention.isdigit():
+        raise ValueError('Unexpected MySQL retention setting')
+    sizes = []
+    for row in mysql(container, 'SHOW BINARY LOGS;').splitlines():
+        columns = row.split('\t')
+        if len(columns) < 2 or not columns[1].isdigit():
+            raise ValueError('Unexpected binary log listing')
+        sizes.append(int(columns[1]))
+    return {'retentionSeconds': int(retention), 'files': len(sizes), 'bytes': sum(sizes)}
+
+
+def directory_bytes(path):
+    """Allocated bytes of regular files below path, without following symlinks; None when absent or unreadable."""
+    try:
+        if path.is_symlink() or not path.is_dir():
+            return None
+    except OSError:
+        return None
+    total = 0
+    for directory, _, names in os.walk(path):
+        for name in names:
+            try:
+                info = (Path(directory) / name).lstat()
+            except OSError:
+                continue
+            if stat.S_ISREG(info.st_mode):
+                # Allocated blocks on the Linux host; the apparent size where blocks are unknown.
+                blocks = getattr(info, 'st_blocks', None)
+                total += blocks * 512 if blocks is not None else info.st_size
+    return total
+
+
+def storage_sizes(root):
+    sizes = {'deployBackups': directory_bytes(root / '.deploy-backups'),
+             'containerLogs': directory_bytes(Path('/var/lib/docker/containers')),
+             'systemJournal': directory_bytes(Path('/var/log/journal'))}
+    data = root / 'data'
+    if data.is_dir() and not data.is_symlink():
+        sizes['data'] = {child.name: directory_bytes(child) for child in sorted(data.iterdir())
+                         if child.is_dir() and not child.is_symlink()}
+    return sizes
+
+
+def cleanup_summary(path):
+    """The last cleanup recorded in a state file, without its raw byte counters."""
+    try:
+        value = json.loads(path.read_text()) if path.is_file() and not path.is_symlink() else None
+    except (OSError, ValueError):
+        return None
+    if not isinstance(value, dict) or type(value.get('lastAttemptAt')) not in (int, float):
+        return None
+    return {'at': iso(value['lastAttemptAt']),
+            'beforePercent': (value.get('before') or {}).get('usedPercent'),
+            'afterPercent': (value.get('after') or {}).get('usedPercent'),
+            'freedBytes': value.get('freedBytes'),
+            'failedActions': value.get('failedActions')}
+
+
+def collect_status(args, now):
+    """Host facts for the daily operations report: no secrets, bucket names or backup paths."""
+    status = {'schema': STATUS_SCHEMA, 'generatedAt': iso(now), 'usage': usage(args.root),
+              'triggerPercent': args.trigger_percent, 'targetPercent': args.target_percent,
+              'lastCleanup': cleanup_summary(args.state_dir / 'state.json'),
+              'lastPostDeployCleanup': cleanup_summary(args.state_dir / 'post-deploy.json')}
+    unavailable = []
+    for key, probe in (('docker', docker_usage), ('containers', container_health),
+                       ('binlog', lambda: binlog_usage(args.mysql_container)),
+                       ('sizes', lambda: storage_sizes(args.root))):
+        try:
+            status[key] = probe()
+        except PROBE_ERRORS:
+            status[key] = None
+            unavailable.append(key)
+    status['unavailable'] = unavailable
+    return status
+
+
+def status_due(path, now, interval):
+    try:
+        return now - path.stat().st_mtime >= interval or path.stat().st_mtime > now
+    except FileNotFoundError:
+        return True
+
+
+def write_status(path, status):
+    """Atomic, world-readable (the application reads it through a read-only mount)."""
+    folder = path.parent
+    if folder.is_symlink() or path.is_symlink():
+        raise RuntimeError('Status file must not be a symlink')
+    folder.mkdir(mode=0o755, parents=True, exist_ok=True)
+    os.chmod(folder, 0o755)
+    temporary = folder / (path.name + '.tmp')
+    if temporary.is_symlink():
+        raise RuntimeError('Status file must not be a symlink')
+    temporary.write_text(json.dumps(status, sort_keys=True) + '\n')
+    os.chmod(temporary, 0o644)
+    temporary.replace(path)
+
+
+def post_deploy_clean(args):
+    """After a release: superseded release images and old build cache, without a fill threshold.
+
+    Running, live and retained rollback images stay protected; apt, journald and MySQL logs are untouched.
+    """
+    before = usage(args.root)
+    errors = []
+    for name, action in (('old Docker build cache', prune_build_cache),
+                         ('unreferenced Docker images', lambda: remove_unreferenced_images(args.root))):
+        try:
+            action()
+            log(f'Completed: {name}')
+        except (RuntimeError, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
+            errors.append(name)
+            log(f'Failed: {name} ({type(error).__name__}); continuing other safe cleanup')
+    after = usage(args.root)
+    return before, after, errors
+
+
 def clean(args, before):
     actions = [
         ('package download cache', lambda: command(['apt-get', 'clean'])),
@@ -250,18 +410,34 @@ def parse_args(argv=None):
     parser.add_argument('--apply', action='store_true', help='Enable cleanup; default only reports usage and policy')
     parser.add_argument('--root', type=Path, default=Path('/docker'))
     parser.add_argument('--state-dir', type=Path, default=Path('/var/lib/otziv-disk-maintenance'))
-    parser.add_argument('--trigger-percent', type=int, default=80)
-    parser.add_argument('--target-percent', type=int, default=75)
+    # Below the application's 80 % disk alert, so housekeeping runs before the alert fires.
+    parser.add_argument('--trigger-percent', type=int, default=75)
+    parser.add_argument('--target-percent', type=int, default=70)
     parser.add_argument('--cooldown-seconds', type=int, default=3600)
     parser.add_argument('--ignore-cooldown', action='store_true', help='Manual retry; still requires disk pressure')
     parser.add_argument('--mysql-container', default='my-mysql')
     parser.add_argument('--mysql-pressure-hours', type=int, default=0,
                         help='0 preserves MySQL retention; >=24 explicitly permits shorter retention under pressure')
+    parser.add_argument('--report', action='store_true',
+                        help='Read-only: print the host status JSON of the daily operations report and exit')
+    parser.add_argument('--status-file', type=Path,
+                        help='With --apply: refresh this host status JSON (for the operations report)')
+    parser.add_argument('--status-interval-seconds', type=int, default=1800)
+    parser.add_argument('--post-deploy', action='store_true',
+                        help='With --apply: drop superseded release images and old build cache without a threshold')
     args = parser.parse_args(argv)
     if not 1 <= args.target_percent < args.trigger_percent <= 99:
         parser.error('Require 1 <= target < trigger <= 99')
     if args.cooldown_seconds < 300 or (args.mysql_pressure_hours != 0 and args.mysql_pressure_hours < 24):
         parser.error('Cooldown must be >=300s; pressure retention must be 0 or >=24h')
+    if args.status_interval_seconds < 300:
+        parser.error('Status interval must be >=300s')
+    if args.report and (args.apply or args.post_deploy):
+        parser.error('--report is read-only and cannot be combined with --apply or --post-deploy')
+    if args.post_deploy and not args.apply:
+        parser.error('--post-deploy requires --apply')
+    if args.status_file is not None and not args.status_file.is_absolute():
+        parser.error('Status file must be an absolute path')
     if not args.root.is_absolute() or args.root.is_symlink() or not args.root.is_dir() or args.root.resolve() == Path(args.root.anchor):
         parser.error('Root must be an existing specific absolute deployment directory, not a symlink')
     args.root = args.root.resolve()
@@ -270,6 +446,9 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    if args.report:
+        log(json.dumps(collect_status(args, time.time()), sort_keys=True))
+        return 0
     before = usage(args.root)
     if not args.apply:
         log(json.dumps({'mode': 'dry-run', 'usage': before, 'triggerPercent': args.trigger_percent,
@@ -307,6 +486,25 @@ def main(argv=None):
             return 0
         state_path = args.state_dir / 'state.json'
         now = time.time()
+        if args.post_deploy:
+            with deploy_lock(args.root) as acquired:
+                if not acquired:
+                    log('Deployment/maintenance in progress; post-deploy cleanup skipped')
+                    return 0
+                before_clean, after, errors = post_deploy_clean(args)
+                write_state(args.state_dir / 'post-deploy.json', {
+                    'lastAttemptAt': now, 'lastUsedPercent': before_clean['usedPercent'], 'before': before_clean,
+                    'after': after, 'failedActions': errors,
+                    'freedBytes': max(0, after['freeBytes'] - before_clean['freeBytes'])})
+                log(json.dumps({'mode': 'post-deploy', 'before': before_clean['usedPercent'],
+                                'after': after['usedPercent'], 'failedActions': errors}))
+                return 1 if errors else 0
+        if args.status_file is not None and status_due(args.status_file, now, args.status_interval_seconds):
+            # The report reads a stale or missing file as «no data»; a failed refresh never blocks cleanup.
+            try:
+                write_status(args.status_file, collect_status(args, now))
+            except (RuntimeError, OSError, ValueError) as error:
+                log(f'Status file not refreshed ({type(error).__name__})')
         state_before = read_state(state_path)
         if before['usedPercent'] < args.trigger_percent or (not args.ignore_cooldown and not due(
                 before, state_before, now, args.trigger_percent, args.cooldown_seconds)):
