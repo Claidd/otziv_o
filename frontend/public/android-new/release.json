@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 93,
-  "versionName": "1.0.93",
+  "versionCode": 94,
+  "versionName": "1.0.94",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Новый раздел администратора: недоступные чаты компаний на стопе. Проверка без отправки сообщений.",
-  "fileSize": 4430872,
-  "sha256": "45B59FCF90B0D69FEA45523A85CA380069B27444C9A71546BDC49139D44D99A1",
-  "publishedAt": "2026-11-19T01:18:48Z",
-  "downloadUrl": "/android-new/otziv-v1.0.93.apk"
+  "notes": "Архив: при восстановлении заказа можно выбрать действующего специалиста.",
+  "fileSize": 4432264,
+  "sha256": "C72B2DD6F7DBE2F5A7AAFAC14760C18BEE587A112FEC2C3A94CA84D28384918D",
+  "publishedAt": "2026-11-23T00:48:34Z",
+  "downloadUrl": "/android-new/otziv-v1.0.94.apk"
 }
