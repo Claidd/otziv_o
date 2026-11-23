@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 94,
-  "versionName": "1.0.94",
+  "versionCode": 95,
+  "versionName": "1.0.95",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Архив: при восстановлении заказа можно выбрать действующего специалиста.",
-  "fileSize": 4432264,
-  "sha256": "C72B2DD6F7DBE2F5A7AAFAC14760C18BEE587A112FEC2C3A94CA84D28384918D",
-  "publishedAt": "2026-11-23T00:48:34Z",
-  "downloadUrl": "/android-new/otziv-v1.0.94.apk"
+  "notes": "Банк: список «Требует решения», сверка поступления с датой по выписке, журнал всегда виден.",
+  "fileSize": 4435376,
+  "sha256": "FE138696365D9EE625DC60517A6EDC4C6A31FD745F31BAADAD2718F9CD6C10E4",
+  "publishedAt": "2026-11-23T12:50:39Z",
+  "downloadUrl": "/android-new/otziv-v1.0.95.apk"
 }
