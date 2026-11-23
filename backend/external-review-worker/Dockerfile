@@ -11,6 +11,10 @@ RUN printf 'Acquire::Retries "1"; Acquire::http::Timeout "20"; Acquire::https::T
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge '3.0.4' && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg7.0)" ge '3.0.4' && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge '1:1.3.dfsg+really1.3.1-1+deb13u1' && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libkrb5-3)" ge '1.21.3-5+deb13u2' && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libgssapi-krb5-2)" ge '1.21.3-5+deb13u2' && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libk5crypto3)" ge '1.21.3-5+deb13u2' && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libkrb5support0)" ge '1.21.3-5+deb13u2' && \
     curl --fail --location --retry 3 --connect-timeout 20 --max-time 300 'https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_153.0.8010.36-1_amd64.deb' --output /tmp/chrome.deb && \
     printf '%s  /tmp/chrome.deb\n' '9bb44e33031c2f2857cf36b4343051a12f93058e4b781e3c76313df87f6c8d32' | sha256sum --check --strict && \
     apt-get install -y --no-install-recommends /tmp/chrome.deb && \
