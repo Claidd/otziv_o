@@ -1989,7 +1989,11 @@ export interface PhoneOperatorOption {
 export interface DeviceToken {
   token: string;
   createdAt?: string | null;
+  /** Switched on and not expired. */
   active: boolean;
+  expiresAt?: string | null;
+  /** ACTIVE, EXPIRED, DISABLED or LEGACY_NO_EXPIRY. */
+  status?: string | null;
 }
 
 export interface OperatorPhone {
@@ -2025,6 +2029,8 @@ export interface OperatorPhoneRequest {
   number: string;
   fio?: string | null;
   birthday?: string | null;
+  /** An empty birthday of an edited phone erases the stored one; without it an empty birthday keeps it. */
+  clearBirthday?: boolean;
   amountAllowed: number;
   amountSent: number;
   blockTime: number;

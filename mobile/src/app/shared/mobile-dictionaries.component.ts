@@ -23,6 +23,7 @@ import {
   AdminPromoText,
   AdminSubCategory,
   ApiService,
+  DeviceToken,
   DictionaryOption,
   OperatorPhone,
   OperatorPhoneRequest,
@@ -308,7 +309,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                     <div class="chip-list compact">
                       @for (token of phone.deviceTokens; track token.token) {
                         <button type="button" (click)="removeDeviceToken(phone, token.token)" [disabled]="destructiveAction() !== null || saving()">
-                          {{ token.active ? 'активное' : 'старое' }} устройство
+                          {{ deviceTokenLabel(token) }}
                         </button>
                       }
                     </div>
@@ -455,7 +456,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                       <span class="material-icons-sharp">edit</span>
                     </button>
                   </header>
-                  <p>{{ preview(managerText.offerText || managerText.startText || managerText.payText) }}</p>
+                  <p>{{ preview(managerText.payText) }}</p>
                 </article>
               } @empty {
                 <div class="empty-state">Тексты менеджеров не найдены.</div>
@@ -1079,10 +1080,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                 }
                 @case ('managerTexts') {
                   <label class="wide"><span>Оплата</span><textarea name="payText" rows="4" [ngModel]="draftValue('payText')" (ngModelChange)="patchDraft('payText', $event)"></textarea></label>
-                  <label class="wide"><span>Начало</span><textarea name="beginText" rows="4" [ngModel]="draftValue('beginText')" (ngModelChange)="patchDraft('beginText', $event)"></textarea></label>
-                  <label class="wide"><span>Оффер</span><textarea name="offerText" rows="4" [ngModel]="draftValue('offerText')" (ngModelChange)="patchDraft('offerText', $event)"></textarea></label>
-                  <label class="wide"><span>Напоминание</span><textarea name="reminderText" rows="4" [ngModel]="draftValue('reminderText')" (ngModelChange)="patchDraft('reminderText', $event)"></textarea></label>
-                  <label class="wide"><span>Старт</span><textarea name="startText" rows="4" [ngModel]="draftValue('startText')" (ngModelChange)="patchDraft('startText', $event)"></textarea></label>
+                  <!-- «Начало», «Оффер», «Напоминание» и «Старт» нигде не используются (решение 22.11.2026, как на сайте): поля скрыты, сохранённые значения не меняются. -->
                 }
               }
 
@@ -2182,7 +2180,9 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
   canDeleteEditor(): boolean {
     const kind = this.editorKind();
-    return this.selectedId() != null && ['categories', 'subcategory', 'cities', 'products', 'phones', 'accounts'].includes(kind);
+    // Managers add and rename categories; only the owner and administrators delete them.
+    return this.adminMode && this.selectedId() != null
+      && ['categories', 'subcategory', 'cities', 'products', 'phones', 'accounts'].includes(kind);
   }
 
   editorEyebrow(): string {
@@ -2778,11 +2778,25 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** «истёк 03.09» for a token past its expiry: the server no longer accepts it. */
+  deviceTokenLabel(token: DeviceToken): string {
+    if (token.status === 'EXPIRED') {
+      const expiry = token.expiresAt ? new Date(token.expiresAt) : null;
+      const day = expiry && !Number.isNaN(expiry.getTime())
+        ? ` ${String(expiry.getDate()).padStart(2, '0')}.${String(expiry.getMonth() + 1).padStart(2, '0')}`
+        : '';
+      return `устройство: истёк${day}`;
+    }
+    return token.active ? 'активное устройство' : 'старое устройство';
+  }
+
   private phoneRequest(draft: Draft): OperatorPhoneRequest {
+    const birthday = this.textOrNull(draft['birthday']);
     return {
       number: this.text(draft['number']),
       fio: this.textOrNull(draft['fio']),
-      birthday: this.textOrNull(draft['birthday']),
+      birthday,
+      clearBirthday: this.selectedId() != null && birthday == null,
       amountAllowed: this.number(draft['amountAllowed']),
       amountSent: this.number(draft['amountSent']),
       blockTime: this.number(draft['blockTime']),

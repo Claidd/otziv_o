@@ -22,6 +22,11 @@ import {
   Page
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import {
+  archiveRestoreSpecialistRequired,
+  type ArchiveRestoreSpecialistRequired,
+  type ArchiveRestoreWorkerOption
+} from '../core/archive-restore-specialist';
 import { MOBILE_ACTIONS, MOBILE_SECTIONS, canUseAction } from '../core/mobile-permissions';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
@@ -319,7 +324,28 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
                     }
                   </div>
 
-                  <button type="button" class="restore-confirm" (click)="confirmRestore()" [disabled]="restoring()">
+                  @if (restoreWorkerOptions().length) {
+                    <div class="restore-specialist">
+                      <p class="restore-specialist-note">
+                        <span class="material-icons-sharp">person_search</span>
+                        {{ restoreWorkerNotice() }}
+                      </p>
+                      <label>
+                        <span>Специалист</span>
+                        <select (change)="selectRestoreWorker($any($event.target).value)" [disabled]="restoring()">
+                          <option value="" [selected]="restoreWorkerId() === null">Выберите специалиста</option>
+                          @for (worker of restoreWorkerOptions(); track worker.id) {
+                            <option [value]="worker.id" [selected]="restoreWorkerId() === worker.id">
+                              {{ worker.label }}{{ worker.companyWorker ? ' · уже в компании' : '' }}
+                            </option>
+                          }
+                        </select>
+                      </label>
+                      <p>Заказу, неопубликованным отзывам и ожидающим задачам назначится выбранный специалист.</p>
+                    </div>
+                  }
+
+                  <button type="button" class="restore-confirm" (click)="confirmRestore()" [disabled]="restoring() || restoreWorkerMissing()">
                     <span class="material-icons-sharp">settings_backup_restore</span>
                     {{ restoring() ? 'Восстанавливаю' : 'Восстановить' }}
                   </button>
@@ -860,6 +886,50 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
       background: var(--otziv-light);
     }
 
+    .restore-specialist {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .restore-specialist-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.4rem;
+      border: 1px solid var(--otziv-tone-wait-border);
+      border-radius: 0.6rem;
+      padding: 0.55rem 0.6rem;
+      background: var(--otziv-tone-wait-surface);
+    }
+
+    .archive-restore-box .restore-specialist-note {
+      color: var(--otziv-dark);
+    }
+
+    .restore-specialist-note .material-icons-sharp {
+      flex: 0 0 auto;
+      font-size: 1.1rem;
+    }
+
+    .restore-specialist label {
+      display: grid;
+      gap: 0.3rem;
+      color: var(--otziv-info);
+      font-size: 0.72rem;
+      font-weight: 900;
+    }
+
+    .restore-specialist select {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid rgba(108, 155, 207, 0.3);
+      border-radius: 0.6rem;
+      padding: 0 0.6rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-field-background, var(--otziv-white));
+      font: inherit;
+      font-size: 0.86rem;
+    }
+
     .restore-confirm {
       display: inline-flex;
       align-items: center;
@@ -1011,6 +1081,11 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
   readonly restoreTargetStatus = signal<RestoreTargetStatus>('Новый');
   readonly restoreResult = signal<ArchiveRestoreResult | null>(null);
   readonly restoring = signal(false);
+  /** Filled by a 409 SPECIALIST_REQUIRED: the archived specialist no longer works and one of these takes the order. */
+  readonly restoreWorkerOptions = signal<ArchiveRestoreWorkerOption[]>([]);
+  readonly restoreWorkerId = signal<number | null>(null);
+  readonly restoreWorkerNotice = signal<string | null>(null);
+  readonly restoreWorkerMissing = computed(() => this.restoreWorkerOptions().length > 0 && this.restoreWorkerId() === null);
   readonly liveStatusMutationKey = signal<string | null>(null);
 
   readonly orders = computed(() => this.page().content ?? []);
@@ -1164,6 +1239,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.detailsError.set(null);
     this.restoreResult.set(null);
     this.restoreTargetStatus.set(this.restoreStatusOptions(order)[0]);
+    this.resetRestoreWorker();
     this.detailsLoading.set(true);
     this.loadingDetailsOrderId = order.id;
 
@@ -1196,6 +1272,28 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.detailsError.set(null);
     this.detailsLoading.set(false);
     this.restoreResult.set(null);
+    this.resetRestoreWorker();
+  }
+
+  selectRestoreWorker(value: string): void {
+    const id = Number(value);
+    this.restoreWorkerId.set(value && Number.isSafeInteger(id) && this.restoreWorkerOptions().some((worker) => worker.id === id) ? id : null);
+  }
+
+  private resetRestoreWorker(): void {
+    this.restoreWorkerOptions.set([]);
+    this.restoreWorkerId.set(null);
+    this.restoreWorkerNotice.set(null);
+  }
+
+  /** The person's choice stays while still offered; otherwise the server's suggestion, which the person confirms or changes. */
+  private askRestoreSpecialist(choice: ArchiveRestoreSpecialistRequired): void {
+    const current = this.restoreWorkerId();
+    this.restoreWorkerOptions.set(choice.workers);
+    this.restoreWorkerNotice.set(choice.message);
+    this.restoreWorkerId.set(
+      current !== null && choice.workers.some((worker) => worker.id === current) ? current : choice.suggestedWorkerId
+    );
   }
 
   restoreStatusOptions(order: ArchiveOrderListItem | null | undefined): readonly RestoreTargetStatus[] {
@@ -1218,7 +1316,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
 
   async confirmRestore(): Promise<void> {
     const order = this.detailsOrder();
-    if (!order || this.restoring() || !this.canRestore(order)) {
+    if (!order || this.restoring() || !this.canRestore(order) || this.restoreWorkerMissing()) {
       return;
     }
 
@@ -1226,11 +1324,20 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.detailsError.set(null);
 
     try {
-      const result = await firstValueFrom(this.managerArchiveApi.restoreManagerArchiveOrder(order.id, this.restoreTargetStatus()));
+      const targetWorkerId = this.restoreWorkerOptions().length ? this.restoreWorkerId() : null;
+      const result = await firstValueFrom(
+        this.managerArchiveApi.restoreManagerArchiveOrder(order.id, this.restoreTargetStatus(), targetWorkerId)
+      );
       this.restoreResult.set(result);
+      this.resetRestoreWorker();
       await this.load();
     } catch (error) {
-      this.detailsError.set(this.apiErrorMessage(error, 'Не удалось восстановить архивный заказ.'));
+      const choice = archiveRestoreSpecialistRequired(error);
+      if (choice && choice.workers.length) {
+        this.askRestoreSpecialist(choice);
+      } else {
+        this.detailsError.set(choice?.message ?? this.apiErrorMessage(error, 'Не удалось восстановить архивный заказ.'));
+      }
     } finally {
       this.restoring.set(false);
     }

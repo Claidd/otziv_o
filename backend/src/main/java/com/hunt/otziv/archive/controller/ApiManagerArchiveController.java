@@ -64,9 +64,9 @@ public class ApiManagerArchiveController {
             Authentication authentication
     ) {
         try {
-            // specialistChoice: the client can show the specialist list (the site does; the released Android app does
-            // not yet). Without it the automatic rule picks the specialist (OrderArchiveRestoreService.suggest), so the
-            // app is not blocked and the order does not land on a deactivated specialist when the pick is unambiguous.
+            // specialistChoice: the client can show the specialist list (the site and Android 1.0.94 do). Without it
+            // (Android 1.0.93 and earlier) an order whose archived specialist no longer works is refused with 409 and a
+            // request to update the app; every other restore of such a client works as before.
             return managerArchiveService.restoreOrder(orderId, targetStatus, targetWorkerId,
                     specialistChoice || targetWorkerId != null, confirm, principal, authentication);
         } catch (ArchiveRestoreSpecialistRequiredException exception) {
