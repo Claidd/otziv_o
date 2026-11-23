@@ -770,6 +770,17 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
       font-family: var(--otziv-card-title-font);
     }
 
+    /* Dark theme: the sheet had a fixed light background, so its light title was unreadable (as on the site). */
+    :host-context(body.otziv-dark-theme) .archive-detail-sheet {
+      background: rgba(24, 26, 30, 0.98);
+      box-shadow: 0 -1rem 2.7rem rgba(0, 0, 0, 0.55);
+      color-scheme: dark;
+    }
+
+    :host-context(body.otziv-dark-theme) .archive-detail-backdrop {
+      background: rgba(10, 12, 15, 0.62);
+    }
+
     .archive-detail-sheet > header,
     .archive-restore-box header,
     .archive-detail-section > header,
