@@ -1091,6 +1091,9 @@ $deployBundlePaths = @(
     "infrastructure\grafana",
     "infrastructure\systemd\otziv-prod-up.timer",
     "infrastructure\systemd\otziv-prod-up.service.in",
+    "infrastructure\systemd\otziv-disk-maintenance.timer",
+    "infrastructure\systemd\otziv-disk-maintenance.service.in",
+    "infrastructure\scripts\prod\disk_maintenance.py",
     "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh",
     "infrastructure\scripts\prod\validate-flyway-migrations.sh",
     "infrastructure\scripts\prod\rollout-docker-observer.sh",
@@ -1910,6 +1913,7 @@ release_payload_complete="0"
 mobile_storage_owner_needs_restore="0"
 active_env_temp=""
 active_systemd_unit_stage=""
+disk_maintenance_unit_stage=""
 database_guard_temp=""
 capacity_check_dir=""
 database_image_override=""
@@ -2028,6 +2032,9 @@ deploy_cleanup() {
   if [ -n "`$active_systemd_unit_stage" ]; then
     rm -rf -- "`$active_systemd_unit_stage" || true
   fi
+  if [ -n "`$disk_maintenance_unit_stage" ]; then
+    rm -rf -- "`$disk_maintenance_unit_stage" || true
+  fi
   if [ "`$mobile_storage_owner_needs_restore" = "1" ]; then
     if ! restore_backend_mobile_storage_owner; then
       echo "CRITICAL: failed to restore backend ownership of mobile release storage." >&2
@@ -2058,6 +2065,13 @@ deploy_cleanup() {
         echo "WARNING: could not prune old deploy rollback directories." >&2
       fi
       printf 'OTZIV_DEPLOY_COMPLETE=%s\n' "`$deploy_lock_token"
+      # Superseded release images go right after the release instead of waiting for the
+      # disk trigger. Best effort: a failure is a warning, never a failed release.
+      if [ -x /usr/local/sbin/otziv-disk-maintenance.py ] \
+          && ! sudo -n timeout 600 /usr/bin/python3 /usr/local/sbin/otziv-disk-maintenance.py \
+            --apply --post-deploy --root "`$remote_path"; then
+        echo "WARNING: post-deploy disk cleanup did not finish; the maintenance timer retries under disk pressure." >&2
+      fi
     fi
     if [ "`$status" -ne 0 ]; then
       sudo -n systemctl disable "`$self_heal_timer" || true
@@ -3176,6 +3190,61 @@ sudo -n systemctl daemon-reload
 rm -rf -- "`$active_systemd_unit_stage"
 active_systemd_unit_stage=""
 unset systemd_unit_target
+# Host disk maintenance follows the release: the reviewed script and both units are
+# verified and installed like the self-heal units. The operator file
+# /etc/otziv-disk-maintenance.conf is kept; only the former default thresholds
+# (exactly 80/75) move to the accepted 75/70. A timer an operator disabled stays disabled.
+find infrastructure/systemd -type f -name 'otziv-disk-maintenance.*' -exec sed -i 's/\r$//' {} +
+sed -i 's/\r$//' infrastructure/scripts/prod/disk_maintenance.py
+if [ "`$(grep -o '@@OTZIV_DEPLOY_PATH@@' infrastructure/systemd/otziv-disk-maintenance.service.in | wc -l | tr -d ' ')" -ne 2 ]; then
+  echo "Disk maintenance service template has an unexpected deploy-path placeholder count." >&2
+  exit 1
+fi
+disk_maintenance_unit_stage="`$(mktemp -d "`$remote_path/.disk-maintenance-units.XXXXXXXX")"
+chmod 700 "`$disk_maintenance_unit_stage"
+sed "s|@@OTZIV_DEPLOY_PATH@@|`$remote_path|g" \
+  infrastructure/systemd/otziv-disk-maintenance.service.in > "`$disk_maintenance_unit_stage/otziv-disk-maintenance.service"
+cp infrastructure/systemd/otziv-disk-maintenance.timer "`$disk_maintenance_unit_stage/otziv-disk-maintenance.timer"
+chmod 644 "`$disk_maintenance_unit_stage/otziv-disk-maintenance.service" "`$disk_maintenance_unit_stage/otziv-disk-maintenance.timer"
+if grep -R -Fq '@@OTZIV_DEPLOY_PATH@@' "`$disk_maintenance_unit_stage"; then
+  echo "Disk maintenance systemd unit rendering left an unresolved placeholder." >&2
+  exit 1
+fi
+systemd-analyze verify \
+  "`$disk_maintenance_unit_stage/otziv-disk-maintenance.service" \
+  "`$disk_maintenance_unit_stage/otziv-disk-maintenance.timer"
+for disk_maintenance_target in /usr/local/sbin/otziv-disk-maintenance.py /etc/systemd/system/otziv-disk-maintenance.timer /etc/systemd/system/otziv-disk-maintenance.service /etc/otziv-disk-maintenance.conf; do
+  if [ -L "`$disk_maintenance_target" ]; then
+    echo "Refusing to replace symlinked disk maintenance file: `$disk_maintenance_target" >&2
+    exit 1
+  fi
+done
+disk_maintenance_timer_enable="1"
+if [ -e /etc/systemd/system/otziv-disk-maintenance.timer ] && ! systemctl is-enabled --quiet otziv-disk-maintenance.timer; then
+  disk_maintenance_timer_enable="0"
+fi
+sudo -n install -o root -g root -m 0755 \
+  infrastructure/scripts/prod/disk_maintenance.py /usr/local/sbin/otziv-disk-maintenance.py
+sudo -n install -o root -g root -m 0644 \
+  "`$disk_maintenance_unit_stage/otziv-disk-maintenance.timer" /etc/systemd/system/otziv-disk-maintenance.timer
+sudo -n install -o root -g root -m 0644 \
+  "`$disk_maintenance_unit_stage/otziv-disk-maintenance.service" /etc/systemd/system/otziv-disk-maintenance.service
+if sudo -n test -f /etc/otziv-disk-maintenance.conf \
+    && sudo -n grep -qx 'TRIGGER_PERCENT=80' /etc/otziv-disk-maintenance.conf \
+    && sudo -n grep -qx 'TARGET_PERCENT=75' /etc/otziv-disk-maintenance.conf; then
+  sudo -n sed -i -e 's/^TRIGGER_PERCENT=80$/TRIGGER_PERCENT=75/' -e 's/^TARGET_PERCENT=75$/TARGET_PERCENT=70/' \
+    /etc/otziv-disk-maintenance.conf
+  echo "Disk maintenance thresholds moved from the former defaults 80/75 to 75/70."
+fi
+sudo -n systemctl daemon-reload
+if [ "`$disk_maintenance_timer_enable" = "1" ]; then
+  sudo -n systemctl enable --now otziv-disk-maintenance.timer
+else
+  echo "Disk maintenance timer stays disabled as the operator left it."
+fi
+rm -rf -- "`$disk_maintenance_unit_stage"
+disk_maintenance_unit_stage=""
+unset disk_maintenance_target disk_maintenance_timer_enable
 chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true

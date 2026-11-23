@@ -138,6 +138,27 @@ public class DiskSpaceAlertService {
         log.warn("Disk space state: level={}, usedPercent={}, freeBytes={}", level, usage.usedPercent(), usage.usableBytes());
     }
 
+    /**
+     * Telegram text to every active owner and administrator with a linked chat, without a personal reminder
+     * (the daily operations report). Returns the number of chats that accepted the message.
+     */
+    public int sendTelegramToOwnersAndAdmins(String text) {
+        int delivered = 0;
+        for (User user : recipients().values()) {
+            if (user.getTelegramChatId() == null) {
+                continue;
+            }
+            try {
+                if (telegramService.sendMessage(user.getTelegramChatId(), text)) {
+                    delivered++;
+                }
+            } catch (RuntimeException e) {
+                log.warn("Не удалось отправить сводку о сервере в Telegram для userId={}", user.getId(), e);
+            }
+        }
+        return delivered;
+    }
+
     private String gibibytes(long bytes) {
         return String.format(java.util.Locale.ROOT, "%.1f", bytes / 1024.0d / 1024.0d / 1024.0d);
     }

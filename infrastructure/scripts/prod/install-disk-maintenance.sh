@@ -20,4 +20,4 @@ install -o root -g root -m 0644 "$stage/otziv-disk-maintenance.service" /etc/sys
 install -o root -g root -m 0644 "$stage/otziv-disk-maintenance.timer" /etc/systemd/system/otziv-disk-maintenance.timer
 systemctl daemon-reload
 systemctl enable --now otziv-disk-maintenance.timer
-echo "Disk maintenance installed: checks every 5 minutes, cleanup at 80%, MySQL retention unchanged unless configured."
+echo "Disk maintenance installed: checks every 5 minutes, cleanup from 75% down to 70%, host status for the daily report, MySQL retention unchanged unless configured."

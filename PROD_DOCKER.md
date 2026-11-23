@@ -131,13 +131,32 @@ CERTBOT_DRY_RUN=false
 ### Автоочистка диска VPS
 
 На хосте устанавливается независимый systemd-таймер. Он проверяет диск каждые
-5 минут, запускает очистку при заполнении от 80% и прекращает её при достижении
-75% либо исчерпании безопасных действий. Повторная очистка — не чаще раза в час;
-переход к 90% или 95% разрешает внеочередной запуск. Во время deploy очистка
-пропускается через общий `.deploy.lock.d`. Backend не получает доступ к Docker socket.
+5 минут, запускает очистку при заполнении от 75% и прекращает её при достижении
+70% либо исчерпании безопасных действий — раньше предупреждения backend на 80%.
+Повторная очистка — не чаще раза в час; переход к 90% или 95% разрешает внеочередной
+запуск. Во время deploy очистка пропускается через общий `.deploy.lock.d`. Backend не
+получает доступ к Docker socket.
+
+Каждый деплой сам устанавливает версию скрипта и обоих юнитов из выпуска
+(`systemd-analyze verify`, `sudo -n install`, `daemon-reload`, таймер включается).
+`/etc/otziv-disk-maintenance.conf` деплой не перезаписывает; единственное исключение —
+прежние значения по умолчанию `TRIGGER_PERCENT=80` и `TARGET_PERCENT=75` (обе строки
+именно такие) заменяются на 75/70. После снятия блокировки деплой по возможности
+вызывает `--apply --post-deploy`: вытесненные образы выпусков и старый кэш сборки
+удаляются сразу, без порога заполнения, по тем же правилам защиты; apt, журналы systemd
+и binlog в этом режиме не трогаются. Ошибка этой очистки — только предупреждение.
+
+Раз в 30 минут таймер обновляет `/docker/data/ops-status/disk.json` (права 0644, без
+секретов, имён бакетов и путей к копиям): заполнение, `docker system df`, контейнеры
+(остановленные и unhealthy), размер и срок binlog, размеры `.deploy-backups`, журналов
+контейнеров, journald и каталогов `data/*`, последние обычная и послевыпускная очистки.
+Backend читает этот файл через `./data/ops-status:/app/ops-status:ro` для ежедневного
+отчёта в Telegram (23:00 по Иркутску, `OTZIV_MONITORING_OPS_REPORT_ENABLED`); файл
+старше двух часов отчёт показывает как «нет данных».
 
 ```sh
 python3 infrastructure/scripts/prod/disk_maintenance.py --root /docker
+python3 infrastructure/scripts/prod/disk_maintenance.py --root /docker --report
 sudo bash infrastructure/scripts/prod/install-disk-maintenance.sh /docker
 sudo systemctl start otziv-disk-maintenance.service
 systemctl list-timers otziv-disk-maintenance.timer
@@ -162,8 +181,8 @@ digest не указан ни в живых `docker-compose.yaml`/`.env`, ни �
 ```sh
 sudo install -m 0600 /dev/null /etc/otziv-disk-maintenance.conf
 sudo tee /etc/otziv-disk-maintenance.conf >/dev/null <<'EOF'
-TRIGGER_PERCENT=80
-TARGET_PERCENT=75
+TRIGGER_PERCENT=75
+TARGET_PERCENT=70
 MYSQL_PRESSURE_HOURS=24
 EOF
 ```
@@ -175,11 +194,18 @@ EOF
 binlog никогда не удаляется, поэтому заданный порог не является жёстким лимитом объёма.
 Служба не меняет глобальные настройки MySQL. См. [документацию MySQL PURGE BINARY LOGS](https://dev.mysql.com/doc/refman/9.7/en/purge-binary-logs.html).
 
-Состояние и результат последнего запуска: `/var/lib/otziv-disk-maintenance/state.json`.
+Срок хранения binlog на production — 3 дня: `binlog_expire_logs_seconds=259200`
+сохранён в самой MySQL (`SET PERSIST`, источник `PERSISTED`) и имеет приоритет над
+аргументом `--binlog-expire-logs-seconds=604800` из `docker-compose.yaml`. Этого больше
+26-часового окна догоняющего бэкапа; аргумент compose не меняется, чтобы не пересоздавать
+контейнер MySQL ради уже действующего значения.
+
+Состояние и результат последнего запуска: `/var/lib/otziv-disk-maintenance/state.json`,
+послевыпускной очистки — `post-deploy.json` там же.
 Если безопасного мусора недостаточно, предупреждения о заполнении остаются включены.
-Отключение: `sudo systemctl disable --now otziv-disk-maintenance.timer`.
-Установленные файлы лежат в `/usr/local/sbin` и `/etc/systemd/system`, поэтому обычный
-деплой приложения не сбрасывает таймер; обновление выполняется повторным запуском installer.
+Отключение: `sudo systemctl disable --now otziv-disk-maintenance.timer`; отключённый так
+таймер деплой обновляет, но не включает. Установленные файлы лежат в `/usr/local/sbin` и
+`/etc/systemd/system`; installer нужен только для установки без деплоя.
 
 ### Запуск контейнеров
 

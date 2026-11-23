@@ -99,6 +99,15 @@ try {
     Write-TestEnv -Base $base -Overrides ([ordered]@{})
     $validOutput = (& $readiness -EnvFile $envPath *>&1 | Out-String)
     Assert-True -Condition $validOutput.Contains('Backup readiness contract passed') -Message 'Valid backup readiness settings did not pass.'
+    $requiredOutput = (& $readiness -EnvFile $envPath -RequireEnabled *>&1 | Out-String)
+    Assert-True -Condition $requiredOutput.Contains('Backup readiness contract passed') -Message 'An enabled backup did not pass the deploy requirement.'
+
+    Write-TestEnv -Base $base -Overrides ([ordered]@{ BACKUP_ENABLED = 'false' })
+    $disabledOutput = (& $readiness -EnvFile $envPath *>&1 | Out-String)
+    Assert-True -Condition $disabledOutput.Contains('disabled by explicit safe default') -Message 'A disabled backup outside a deploy must stay a warning.'
+    $deployRefused = $false
+    try { & $readiness -EnvFile $envPath -RequireEnabled *>$null } catch { $deployRefused = $true }
+    Assert-True -Condition $deployRefused -Message 'A production deploy was accepted with disabled daily backups.'
 
     Assert-ReadinessFails -Base $base -Overrides ([ordered]@{
         BACKUP_KEYCLOAK_ENABLED = 'false'

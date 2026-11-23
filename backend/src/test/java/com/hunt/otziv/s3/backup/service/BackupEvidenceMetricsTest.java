@@ -64,6 +64,36 @@ class BackupEvidenceMetricsTest {
         assertThat(gauge(registry, "mysql")).isEqualTo(verified.getEpochSecond());
     }
 
+    @Test
+    void exposesTheEmailCopyOfTheLatestVerifiedBackupForTheDailyReport() throws Exception {
+        when(backupService.evidenceDatabases()).thenReturn(List.of("mysql", "keycloak"));
+        Instant verified = Instant.parse("2026-11-04T23:10:00Z");
+        when(backupService.latestBackupStatus("mysql")).thenReturn(new DatabaseBackupService.DatabaseBackupStatus(
+                "mysql", verified, DatabaseBackupService.EmailDelivery.SENT));
+        when(backupService.latestBackupStatus("keycloak")).thenThrow(new IOException("unreadable"));
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        new BackupEvidenceMetrics(backupService, clock).bindTo(registry);
+
+        assertThat(email(registry, "mysql")).isEqualTo(1.0);
+        assertThat(email(registry, "keycloak")).isNaN();
+
+        org.mockito.Mockito.reset(backupService);
+        when(backupService.latestBackupStatus("mysql")).thenReturn(new DatabaseBackupService.DatabaseBackupStatus(
+                "mysql", verified, DatabaseBackupService.EmailDelivery.NOT_SENT));
+        assertThat(email(registry, "mysql")).isEqualTo(1.0); // cached for five minutes
+        now.set(now.get().plus(BackupEvidenceMetrics.CACHE_TTL));
+        assertThat(email(registry, "mysql")).isZero();
+
+        when(backupService.latestBackupStatus("mysql")).thenReturn(new DatabaseBackupService.DatabaseBackupStatus(
+                "mysql", null, DatabaseBackupService.EmailDelivery.UNKNOWN));
+        now.set(now.get().plus(BackupEvidenceMetrics.CACHE_TTL));
+        assertThat(email(registry, "mysql")).isNaN();
+    }
+
+    private static double email(SimpleMeterRegistry registry, String database) {
+        return registry.get(BackupEvidenceMetrics.EMAIL_METRIC).tag("database", database).gauge().value();
+    }
+
     private static double gauge(SimpleMeterRegistry registry, String database) {
         return registry.get(BackupEvidenceMetrics.METRIC).tag("database", database).gauge().value();
     }

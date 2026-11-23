@@ -5,9 +5,9 @@ After=docker.service
 
 [Service]
 Type=oneshot
-Environment=TRIGGER_PERCENT=80 TARGET_PERCENT=75 MYSQL_PRESSURE_HOURS=0
+Environment=TRIGGER_PERCENT=75 TARGET_PERCENT=70 MYSQL_PRESSURE_HOURS=0
 EnvironmentFile=-/etc/otziv-disk-maintenance.conf
-ExecStart=/usr/bin/python3 /usr/local/sbin/otziv-disk-maintenance.py --apply --root @@OTZIV_DEPLOY_PATH@@ --trigger-percent ${TRIGGER_PERCENT} --target-percent ${TARGET_PERCENT} --mysql-pressure-hours ${MYSQL_PRESSURE_HOURS}
+ExecStart=/usr/bin/python3 /usr/local/sbin/otziv-disk-maintenance.py --apply --root @@OTZIV_DEPLOY_PATH@@ --trigger-percent ${TRIGGER_PERCENT} --target-percent ${TARGET_PERCENT} --mysql-pressure-hours ${MYSQL_PRESSURE_HOURS} --status-file @@OTZIV_DEPLOY_PATH@@/data/ops-status/disk.json
 TimeoutStartSec=10min
 Nice=10
 IOSchedulingClass=idle

@@ -1098,6 +1098,91 @@ public class DatabaseBackupService {
         return BackupEvidenceSummary.combine(summaries);
     }
 
+    /** E-mail copy of a verified backup, as recorded in its evidence. */
+    enum EmailDelivery { SENT, NOT_SENT, DISABLED, UNKNOWN }
+
+    /** The latest verified backup of a database (null when none) and the e-mail copy of that backup. */
+    record DatabaseBackupStatus(String database, Instant verifiedAt, EmailDelivery email) {
+    }
+
+    /** The latest verified record and its e-mail copy; on equal times the later line (the completed phase) wins. */
+    DatabaseBackupStatus latestBackupStatus(String database) throws IOException {
+        Optional<Path> evidenceFile = evidenceFile(database);
+        if (evidenceFile.isEmpty()) {
+            return new DatabaseBackupStatus(database, null, EmailDelivery.UNKNOWN);
+        }
+        Instant latestVerifiedAt = null;
+        EmailDelivery email = EmailDelivery.UNKNOWN;
+        try (BufferedReader reader = Files.newBufferedReader(evidenceFile.get(), StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                try {
+                    JsonNode record = objectMapper.readTree(line);
+                    if (!isVerifiedEvidence(record, database)) {
+                        continue;
+                    }
+                    Instant verifiedAt = Instant.parse(record.path("timestampUtc").asText());
+                    if (latestVerifiedAt == null || !verifiedAt.isBefore(latestVerifiedAt)) {
+                        latestVerifiedAt = verifiedAt;
+                        email = emailDelivery(record.path("emailDelivery"));
+                    }
+                } catch (RuntimeException | IOException invalidRecord) {
+                    // A truncated final append is skipped, exactly like the backup decision does.
+                }
+            }
+        }
+        return new DatabaseBackupStatus(database, latestVerifiedAt, email);
+    }
+
+    private static EmailDelivery emailDelivery(JsonNode mail) {
+        if (mail == null || mail.isMissingNode() || !mail.isObject()) {
+            return EmailDelivery.UNKNOWN;
+        }
+        if (!mail.path("enabled").asBoolean(false)) {
+            return EmailDelivery.DISABLED;
+        }
+        return mail.path("succeeded").asBoolean(false) ? EmailDelivery.SENT : EmailDelivery.NOT_SENT;
+    }
+
+    /** The evidence file of a database inside backup.work-dir; empty when the folder or file does not exist yet. */
+    private Optional<Path> evidenceFile(String database) throws IOException {
+        String configuredWorkDir = requireNonBlank(backupProps.getWorkDir(), "backup.work-dir");
+        String propertyName = DATABASE_KEYCLOAK.equals(database)
+                ? "backup.keycloak.evidence-file-name"
+                : "backup.evidence-file-name";
+        String evidenceFileName = requireNonBlank(
+                DATABASE_KEYCLOAK.equals(database)
+                        ? backupProps.getKeycloak().getEvidenceFileName()
+                        : backupProps.getEvidenceFileName(),
+                propertyName
+        );
+        if (!SAFE_EVIDENCE_FILE.matcher(evidenceFileName).matches()) {
+            throw new IllegalStateException(propertyName + " must be a simple file name");
+        }
+        Path workDir = Paths.get(configuredWorkDir).toAbsolutePath().normalize();
+        if (!Files.exists(workDir)) {
+            return Optional.empty();
+        }
+        Path realWorkDir = workDir.toRealPath();
+        if (!Files.isDirectory(realWorkDir)) {
+            throw new IllegalStateException("backup.work-dir must be a directory");
+        }
+        Path evidenceFile = realWorkDir.resolve(evidenceFileName).normalize();
+        if (!evidenceFile.getParent().equals(realWorkDir)) {
+            throw new IllegalStateException(propertyName + " must remain inside backup.work-dir");
+        }
+        if (!Files.exists(evidenceFile)) {
+            return Optional.empty();
+        }
+        if (Files.isSymbolicLink(evidenceFile) || !Files.isRegularFile(evidenceFile)) {
+            throw new IllegalStateException("backup evidence path must be a regular, non-symbolic file");
+        }
+        return Optional.of(evidenceFile);
+    }
+
     BackupEvidenceSummary readTargetEvidenceSummary(String database) throws IOException {
         String configuredWorkDir = requireNonBlank(backupProps.getWorkDir(), "backup.work-dir");
         String propertyName = DATABASE_KEYCLOAK.equals(database)

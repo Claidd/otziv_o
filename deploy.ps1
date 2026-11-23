@@ -19,6 +19,7 @@ param(
     [switch]$CheckOnly,
     [switch]$PreflightOnly,
     [string]$ReleaseSessionToken = '',
+    [switch]$AllowDisabledBackup,
     [switch]$Help
 )
 
@@ -38,6 +39,7 @@ if ($Help) {
     Write-Host '-CoordinatedPostgresRefresh replaces the accepted PostgreSQL 17.11 with the reviewed 17.12 image on the same volume, keeping active C48 Keycloak, after protected backups.'
     Write-Host 'Production configuration and the existing mobile APK are retained unless an APK path is supplied.'
     Write-Host '-StandaloneMobileApkPath stages a separately signed APK before rollout, then verifies its public /android-new URL after deployment.'
+    Write-Host 'BACKUP_ENABLED=false stops a release; -AllowDisabledBackup is a deliberate, temporary exception.'
     return
 }
 if ($PSVersionTable.PSVersion.Major -lt 7) {
@@ -167,7 +169,7 @@ try {
     Set-OtzivReleaseStage -Path $timing -Stage 'committed-source-preparation'
     [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot -ExpectedRevision $ci.revision -CanonicalWorkspace $canonicalWorkspace)
     $preparedSource = New-OtzivPreparedDeployArchive -Repository $repoRoot -Revision $ci.revision -Directory $directory -CoordinatedMysqlRefresh:$CoordinatedMysqlRefresh -CoordinatedSslRefresh:$CoordinatedSslRefresh -CoordinatedPostgresRefresh:$CoordinatedPostgresRefresh
-    & (Join-Path $repoRoot 'infrastructure/scripts/security/check-backup-readiness.ps1') -EnvFile $EnvFile
+    & (Join-Path $repoRoot 'infrastructure/scripts/security/check-backup-readiness.ps1') -EnvFile $EnvFile -RequireEnabled:(-not $AllowDisabledBackup)
     if ($LASTEXITCODE -ne 0) { throw 'Local backup readiness failed before image transport.' }
     Set-OtzivReleaseStage -Path $timing -Stage 'manifest-and-server-preflight'
     & python -B $artifactHelper fetch --repo $repoRoot --input (Join-Path $directory 'ci.json') --output $manifest

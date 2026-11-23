@@ -24,11 +24,14 @@ import org.springframework.stereotype.Component;
 public class BackupEvidenceMetrics implements MeterBinder {
 
     static final String METRIC = "otziv.backup.last.verified.epoch";
+    /** E-mail copy of the latest verified backup: 1 sent, 0 not sent, -1 disabled, NaN unknown (daily server report). */
+    static final String EMAIL_METRIC = "otziv.backup.last.email.status";
     static final Duration CACHE_TTL = Duration.ofMinutes(5);
 
     private final DatabaseBackupService backupService;
     private final Clock clock;
     private final Map<String, Reading> readings = new ConcurrentHashMap<>();
+    private final Map<String, Reading> emailReadings = new ConcurrentHashMap<>();
 
     @Autowired
     public BackupEvidenceMetrics(DatabaseBackupService backupService) {
@@ -47,6 +50,10 @@ public class BackupEvidenceMetrics implements MeterBinder {
                     .tag("database", database)
                     .description("Epoch seconds of the latest verified backup receipt; 0 when none is readable")
                     .register(registry);
+            Gauge.builder(EMAIL_METRIC, this, metrics -> metrics.latestEmailStatus(database))
+                    .tag("database", database)
+                    .description("E-mail copy of the latest verified backup: 1 sent, 0 not sent, -1 disabled, NaN unknown")
+                    .register(registry);
         }
     }
 
@@ -56,6 +63,30 @@ public class BackupEvidenceMetrics implements MeterBinder {
         Reading reading = readings.compute(database, (key, cached) ->
                 cached != null && cached.readAt().plus(CACHE_TTL).isAfter(now) ? cached : read(key, now));
         return reading.epochSeconds();
+    }
+
+    double latestEmailStatus(String database) {
+        Instant now = clock.instant();
+        Reading reading = emailReadings.compute(database, (key, cached) ->
+                cached != null && cached.readAt().plus(CACHE_TTL).isAfter(now) ? cached : readEmail(key, now));
+        return reading.epochSeconds();
+    }
+
+    private Reading readEmail(String database, Instant now) {
+        try {
+            DatabaseBackupService.DatabaseBackupStatus status = backupService.latestBackupStatus(database);
+            double value = status.verifiedAt() == null ? Double.NaN : switch (status.email()) {
+                case SENT -> 1.0;
+                case NOT_SENT -> 0.0;
+                case DISABLED -> -1.0;
+                case UNKNOWN -> Double.NaN;
+            };
+            return new Reading(now, value);
+        } catch (Exception exception) {
+            log.warn("Backup evidence is unreadable for the e-mail metric: database={}, error={}",
+                    database, exception.getClass().getSimpleName());
+            return new Reading(now, Double.NaN);
+        }
     }
 
     private Reading read(String database, Instant now) {

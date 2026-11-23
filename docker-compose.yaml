@@ -275,6 +275,8 @@ services:
       OTZIV_MONITORING_DISK_CRITICAL_PERCENT: ${OTZIV_MONITORING_DISK_CRITICAL_PERCENT:-90}
       OTZIV_MONITORING_DISK_EMERGENCY_PERCENT: ${OTZIV_MONITORING_DISK_EMERGENCY_PERCENT:-95}
       OTZIV_MONITORING_DISK_REPEAT_HOURS: ${OTZIV_MONITORING_DISK_REPEAT_HOURS:-6}
+      OTZIV_MONITORING_OPS_REPORT_ENABLED: ${OTZIV_MONITORING_OPS_REPORT_ENABLED:-true}
+      OTZIV_MONITORING_OPS_REPORT_CRON: ${OTZIV_MONITORING_OPS_REPORT_CRON:-0 0 23 * * *}
       EXTERNAL_REVIEW_CHECK_ENABLED: ${EXTERNAL_REVIEW_CHECK_ENABLED:-false}
       EXTERNAL_REVIEW_CHECK_WORKER_BASE_URL: ${EXTERNAL_REVIEW_CHECK_WORKER_BASE_URL:-http://external-review-worker:3097}
       EXTERNAL_REVIEW_CHECK_WORKER_SHARED_SECRET: ${EXTERNAL_REVIEW_WORKER_SHARED_SECRET:-}
@@ -652,6 +654,8 @@ services:
       - ./data/app-backup:/app/backup
       - ./data/paper-invoices:/app/paper-invoices:ro
       - ./data/mobile-releases:/app/mobile-releases
+      # Host facts for the daily server report, written by the disk maintenance timer.
+      - ./data/ops-status:/app/ops-status:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 30s
