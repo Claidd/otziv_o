@@ -31,7 +31,8 @@ class ApiManagerArchiveControllerTest {
 
     @Test
     void aClientThatCannotChooseASpecialistRestoresAsBefore() {
-        // The released Android app sends neither specialistChoice nor targetWorkerId.
+        // Android 1.0.93 and earlier send neither specialistChoice nor targetWorkerId; the service refuses only the
+        // orders whose archived specialist no longer works (OrderArchiveRestoreService.needsSpecialistChoice).
         controller.restoreOrder(10L, "Новый", true, null, false, admin, admin);
 
         verify(service).restoreOrder(10L, "Новый", null, false, true, admin, admin);

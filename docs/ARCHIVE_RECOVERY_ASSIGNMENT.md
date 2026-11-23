@@ -51,3 +51,35 @@
 `ArchiveRecoveryWorkersMySqlIntegrationTest`, `ReviewRecoveryTaskServiceImplTest`,
 `WorkerRemainingCommandsTest`, `ManagerControlArchiveRecoveryTest`, а также
 `manager-archive.component.spec.ts` и `worker-review-edit-modal.component.spec.ts`.
+
+## Восстановление архивного заказа: выбор специалиста
+
+Если специалист архивного заказа отключён (или не указан), а заказ возвращается в работу
+(«Новый», «В проверку», «На проверке», «Коррекция»), специалист выбирается заново.
+
+- Правило подсказки одно для сайта, приложения и автоматических восстановлений
+  (`OrderArchiveRestoreService.suggest`): преемник по журналу переносов работы
+  (`specialist_transfer_audit`, применённые `workload_transfer_executions`) → единственный
+  действующий специалист компании → единственный специалист команды менеджера. Иначе подсказки нет.
+- Сайт и приложение с 1.0.94 отправляют `POST /api/manager/archive/orders/{orderId}/restore`
+  с `specialistChoice=true`. Без `targetWorkerId` сервер отвечает 409 с телом
+  `{message, code: "SPECIALIST_REQUIRED", workers: [{id, label, companyWorker}], suggestedWorkerId}`;
+  окно показывает список с выбранной подсказкой, повторный запрос передаёт `targetWorkerId`.
+  Выбранному специалисту переходят заказ, неопубликованные отзывы, задачи по плохим отзывам (NEW),
+  запланированные восстановления (PLANNED) и привязка к компании.
+- Автоматические восстановления (ссылка проверки отзывов, общий счёт) применяют подсказку сами и пишут
+  `business_audit_events` (`archive_restore_worker_rerouted` или `archive_restore_worker_kept_inactive`).
+  Живой заказ, уходящий из статуса «Архив» в работу, переводится тем же правилом
+  (`archive_live_worker_rerouted`).
+- Если по заказу выпущены банковские документы или получатель платежа уже зафиксирован, заказ остаётся
+  у архивного специалиста: сменить получателя автоматически нельзя.
+- Приложение 1.0.93 и раньше выбирать специалиста не умеет. Для такого заказа оно получает 409
+  «Специалист заказа отключён. Обновите приложение до 1.0.94 или восстановите заказ на сайте»
+  (`OrderArchiveRestoreService.needsSpecialistChoice`); остальные восстановления работают как раньше.
+- Заказы, оставшиеся у отключённых специалистов, показывает «Контроль менеджера»: проблема
+  «Заказы у отключённых специалистов».
+
+Проверки: `OrderArchiveRestoreServiceTest`, `ApiManagerArchiveControllerTest`,
+`OrderArchiveRestoreWorkerMySqlIntegrationTest`, `OrderStatusTransitionServiceTest`,
+`ManagerControlInactiveWorkerOrdersTest`, `manager-archive.component.spec.ts` (сайт) и
+`archive-restore-specialist.spec.ts` (приложение).

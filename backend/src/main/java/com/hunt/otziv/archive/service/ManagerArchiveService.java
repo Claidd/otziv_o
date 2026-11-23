@@ -5,6 +5,7 @@ import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.archive.dto.ArchiveRestoreResult;
 import com.hunt.otziv.archive.dto.ArchiveRecoveryWorkerOption;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderDetailsResponse;
+import com.hunt.otziv.archive.exception.ArchiveRestoreConflictException;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
 import com.hunt.otziv.archive.repository.ManagerArchiveRepository;
 import com.hunt.otziv.manager.dto.api.PageResponse;
@@ -130,8 +131,9 @@ public class ManagerArchiveService {
     }
 
     /**
-     * @param specialistChoice the client can show the specialist list; without it (an older mobile app) an order whose
-     *                         archived specialist was deactivated goes to the specialist the automatic rule picks
+     * @param specialistChoice the client can show the specialist list (the site, Android 1.0.94 and later); without it
+     *                         (Android 1.0.93 and earlier) an order whose archived specialist no longer works is refused
+     *                         with a request to update the app, instead of the specialist being decided silently
      */
     @Transactional
     public ArchiveRestoreResult restoreOrder(
@@ -166,6 +168,9 @@ public class ManagerArchiveService {
 
         String restoredBy = principal == null ? null : principal.getName();
         if (!specialistChoice) {
+            if (restoreService.needsSpecialistChoice(orderId, targetStatus)) {
+                throw new ArchiveRestoreConflictException(OrderArchiveRestoreService.UPDATE_APP_FOR_SPECIALIST_CHOICE);
+            }
             return restoreService.restoreIndividualOrder(orderId, targetStatus, restoredBy, confirm);
         }
         return restoreService.restoreIndividualOrderWithActiveSpecialist(

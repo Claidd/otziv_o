@@ -113,6 +113,30 @@ public class OrderArchiveRestoreService {
         return result;
     }
 
+    /** Asked of an Android app of 1.0.93 or earlier, which cannot show the specialist list (see {@link #needsSpecialistChoice}). */
+    public static final String UPDATE_APP_FOR_SPECIALIST_CHOICE =
+            "Специалист заказа отключён. Обновите приложение до 1.0.94 или восстановите заказ на сайте";
+
+    /**
+     * True when restoring into {@code targetStatus} would ask for a specialist: the order goes back to work and its
+     * archived specialist no longer works (or is missing), while the payment recipient is not fixed (then the order
+     * keeps its archived specialist anyway). A client without the specialist list is refused instead of having the
+     * specialist decided behind the manager's back.
+     */
+    @Transactional(readOnly = true)
+    public boolean needsSpecialistChoice(Long orderId, String targetStatus) {
+        if (orderId == null || !SPECIALIST_WORK_TARGETS.contains(normalizeStatus(targetStatus))) {
+            return false;
+        }
+        OrderArchiveRestoreRepository.ArchiveOrderWorker current = repository.findArchiveOrderWorker(orderId);
+        Long currentWorkerId = current == null ? null : current.workerId();
+        if (current != null && current.active() && currentWorkerId != null) {
+            return false;
+        }
+        return currentWorkerId == null
+                || !(paperDocuments.hasDocument(orderId) || repository.hasFrozenLivePaymentRoute(orderId));
+    }
+
     /** Automatic restore of one order of an archived common invoice chain; the specialist rule of {@link #restoreIndividualOrder}. */
     @Transactional
     public ArchiveRestoreResult restoreOrder(

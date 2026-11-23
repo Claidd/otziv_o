@@ -415,6 +415,37 @@ class OrderArchiveRestoreServiceTest {
         assertThat(OrderArchiveRestoreService.suggest(List.of(), 73L)).isNull();
     }
 
+    @Test
+    void anOldAppMustChooseOnlyWhenTheOrderReturnsToWorkWithoutAWorkingSpecialist() {
+        OrderArchiveRestoreRepository repository = mock(OrderArchiveRestoreRepository.class);
+        when(repository.findArchiveOrderWorker(601L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        when(repository.findArchiveOrderWorker(602L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(3L, true));
+        when(repository.findArchiveOrderWorker(603L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(null, false));
+        OrderArchiveRestoreService service = service(repository);
+
+        assertThat(service.needsSpecialistChoice(601L, "Новый")).isTrue();
+        assertThat(service.needsSpecialistChoice(601L, "Коррекция")).isTrue();
+        assertThat(service.needsSpecialistChoice(603L, "На проверке")).isTrue();
+        assertThat(service.needsSpecialistChoice(602L, "Новый")).isFalse();
+        // A paid or closed order keeps its specialist; nothing to choose.
+        assertThat(service.needsSpecialistChoice(601L, "Оплачено")).isFalse();
+        assertThat(service.needsSpecialistChoice(null, "Новый")).isFalse();
+    }
+
+    @Test
+    void anOldAppIsNotAskedWhenTheFixedPaymentRecipientKeepsTheSpecialist() {
+        OrderArchiveRestoreRepository repository = mock(OrderArchiveRestoreRepository.class);
+        when(repository.findArchiveOrderWorker(604L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        when(repository.findArchiveOrderWorker(605L)).thenReturn(new OrderArchiveRestoreRepository.ArchiveOrderWorker(2L, false));
+        when(paperDocuments.hasDocument(604L)).thenReturn(true);
+        when(repository.hasFrozenLivePaymentRoute(605L)).thenReturn(true);
+        OrderArchiveRestoreService service = service(repository);
+
+        assertThat(service.needsSpecialistChoice(604L, "Новый")).isFalse();
+        assertThat(service.needsSpecialistChoice(605L, "Новый")).isFalse();
+        assertThat(OrderArchiveRestoreService.UPDATE_APP_FOR_SPECIALIST_CHOICE).contains("1.0.94");
+    }
+
     private OrderArchiveRestoreService service(OrderArchiveRestoreRepository repository) {
         return new OrderArchiveRestoreService(repository, membership, paperDocuments);
     }

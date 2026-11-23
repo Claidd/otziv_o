@@ -25,10 +25,22 @@ export class ManagerArchiveApi {
     return this.http.get<ArchiveOrderDetailsPayload>(this.apiUrl(`/api/manager/archive/orders/${orderId}`));
   }
 
-  restoreManagerArchiveOrder(orderId: number, targetStatus = 'Архив'): Observable<ArchiveRestoreResult> {
-    const params = new HttpParams()
+  /**
+   * `specialistChoice`: when the archived specialist no longer works the server answers 409 SPECIALIST_REQUIRED with
+   * the accepted specialists instead of returning the order to that specialist; repeat with `targetWorkerId`.
+   */
+  restoreManagerArchiveOrder(
+    orderId: number,
+    targetStatus = 'Архив',
+    targetWorkerId: number | null = null
+  ): Observable<ArchiveRestoreResult> {
+    let params = new HttpParams()
       .set('targetStatus', targetStatus)
-      .set('confirm', 'true');
+      .set('confirm', 'true')
+      .set('specialistChoice', 'true');
+    if (targetWorkerId != null) {
+      params = params.set('targetWorkerId', String(targetWorkerId));
+    }
 
     return this.http.post<ArchiveRestoreResult>(
       this.apiUrl(`/api/manager/archive/orders/${orderId}/restore`),
