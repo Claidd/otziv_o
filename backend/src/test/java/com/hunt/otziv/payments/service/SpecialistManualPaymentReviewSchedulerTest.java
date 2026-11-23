@@ -31,4 +31,21 @@ class SpecialistManualPaymentReviewSchedulerTest {
         verifyNoMoreInteractions(reconciliation);
         verifyNoInteractions(settlement);
     }
+    @Test void reviewStoppedByAnEndedTochkaOperationIsRetriedThroughTheGuardedCreditPath() {
+        var reviews = mock(SpecialistManualPaymentReviewRepository.class);
+        var reconciliation = mock(SpecialistManualPaymentReviewService.class);
+        var settlement = mock(SpecialistManualPaymentReviewSettlementService.class);
+        when(reviews.findTochkaReleasedIds(any(java.time.LocalDateTime.class), any())).thenReturn(List.of(119L, 120L));
+        doThrow(new IllegalStateException("still unsafe")).when(settlement).retryAfterTochkaRelease(119L);
+
+        new SpecialistManualPaymentReviewScheduler(reviews, reconciliation, settlement).run();
+
+        var cutoff = org.mockito.ArgumentCaptor.forClass(java.time.LocalDateTime.class);
+        verify(reviews).findTochkaReleasedIds(cutoff.capture(), any());
+        org.assertj.core.api.Assertions.assertThat(cutoff.getValue())
+                .isBefore(java.time.LocalDateTime.now().minusHours(5));
+        verify(settlement).retryAfterTochkaRelease(119L);
+        verify(settlement).retryAfterTochkaRelease(120L);
+        verify(settlement, never()).creditNow(anyLong());
+    }
 }

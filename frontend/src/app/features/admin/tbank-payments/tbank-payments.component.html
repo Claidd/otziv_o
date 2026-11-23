@@ -101,6 +101,11 @@
     </div>
   </section>
 
+  <app-bank-attention
+    (showInJournal)="showOrderInJournal($event)"
+    (showReviews)="showSpecialistReviews()"
+  />
+
   <section class="analytics-section compact-section" aria-label="Сводка банковских платежей">
     <div class="metric-grid">
       @for (metric of metrics(); track trackMetric($index, metric)) {
@@ -235,7 +240,7 @@
     <app-load-error-card title="Банковские платежи не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="load()" />
   }
 
-  <section class="analytics-section payments-panel">
+  <section #paymentJournal class="analytics-section payments-panel">
     <div class="section-title">
       <span class="material-icons-sharp">receipt_long</span>
       <div>

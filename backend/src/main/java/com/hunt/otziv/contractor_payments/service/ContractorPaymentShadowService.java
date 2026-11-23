@@ -74,6 +74,12 @@ public class ContractorPaymentShadowService {
             ContractorAllocationStatus.PARTIALLY_CONFIRMED,
             ContractorAllocationStatus.OWNER_FALLBACK
     );
+    private static final String ORDER_STATUS_ARCHIVE = "Архив";
+    /** An archived order frees only a reserve nobody reported paying. */
+    private static final Set<ContractorAllocationStatus> ARCHIVE_RELEASABLE_STATUSES = EnumSet.of(
+            ContractorAllocationStatus.RESERVED,
+            ContractorAllocationStatus.OWNER_FALLBACK
+    );
     private static final Set<ContractorAllocationStatus> RECONCILABLE_STATUSES = EnumSet.of(
             ContractorAllocationStatus.RESERVED,
             ContractorAllocationStatus.CLIENT_REPORTED,
@@ -2243,7 +2249,8 @@ public class ContractorPaymentShadowService {
                 ? ""
                 : normalize(order.getStatus().getTitle());
         return "Не оплачено".equalsIgnoreCase(statusTitle)
-                || "Бан".equalsIgnoreCase(statusTitle);
+                || "Бан".equalsIgnoreCase(statusTitle)
+                || ORDER_STATUS_ARCHIVE.equalsIgnoreCase(statusTitle);
     }
 
     private boolean releaseIfOrderFinanciallyClosed(
@@ -2255,15 +2262,18 @@ public class ContractorPaymentShadowService {
                 || !UNPAID_RELEASABLE_STATUSES.contains(allocation.getStatus())) {
             return false;
         }
+        String statusTitle = statusTitle(order);
+        boolean banned = "Бан".equalsIgnoreCase(statusTitle);
+        boolean archived = ORDER_STATUS_ARCHIVE.equalsIgnoreCase(statusTitle);
         accountingService.recordRelease(
                 allocation,
                 ContractorAllocationStatus.RELEASED_UNPAID,
                 observedAt,
-                "Бан".equalsIgnoreCase(statusTitle(order))
-                        ? "Заказ находится в статусе «Бан»"
+                banned ? "Заказ находится в статусе «Бан»"
+                        : archived ? "Заказ находится в статусе «Архив»"
                         : "Заказ находится в статусе «Не оплачено»",
-                "Бан".equalsIgnoreCase(statusTitle(order))
-                        ? "LINK:ORDER_BANNED"
+                banned ? "LINK:ORDER_BANNED"
+                        : archived ? "LINK:ORDER_ARCHIVED"
                         : "LINK:ORDER_UNPAID"
         );
         return true;
@@ -2274,11 +2284,19 @@ public class ContractorPaymentShadowService {
      * entered that status, not every future attempt for the same order. A final
      * bad-review invoice is legitimately created after that transition and must
      * remain reserved. «Бан» is terminal and releases every active attempt.
+     * «Архив» releases an untouched reserve of the order's own payment link: no
+     * client report and no partial payment. A common invoice keeps its reserve,
+     * because archiving one of its orders does not close the invoice.
      */
     private boolean orderReleasesAllocation(Order order, ContractorPaymentAllocation allocation) {
         String statusTitle = statusTitle(order);
         if ("Бан".equalsIgnoreCase(statusTitle)) {
             return true;
+        }
+        if (ORDER_STATUS_ARCHIVE.equalsIgnoreCase(statusTitle)) {
+            return allocation != null
+                    && allocation.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK
+                    && ARCHIVE_RELEASABLE_STATUSES.contains(allocation.getStatus());
         }
         if (!"Не оплачено".equalsIgnoreCase(statusTitle) || allocation == null) {
             return false;

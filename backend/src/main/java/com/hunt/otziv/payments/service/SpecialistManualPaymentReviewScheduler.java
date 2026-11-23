@@ -33,6 +33,10 @@ public class SpecialistManualPaymentReviewScheduler {
             try { notifications.supersedeOnConfirmedBankPayment(id); }
             catch (RuntimeException failure) { log.warn("Bank payment review reconciliation failed: reviewId={}", id, failure); }
         }
+        for (Long id : reviews.findTochkaReleasedIds(LocalDateTime.now().minusHours(6), PageRequest.of(0, BATCH_SIZE))) {
+            try { settlement.retryAfterTochkaRelease(id); }
+            catch (RuntimeException failure) { log.warn("Payment review retry after Tochka release failed: reviewId={}", id, failure); }
+        }
         for (Long id : reviews.findCommittedClaimIds(LocalDateTime.now().minusMinutes(1), PageRequest.of(0,BATCH_SIZE))) {
             try { settlement.creditNow(id); }
             catch (RuntimeException failure) { log.warn("Committed payment review recovery failed: reviewId={}",id,failure); }

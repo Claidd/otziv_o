@@ -77,6 +77,7 @@ import {
 import { manualPaymentTaskWorklist } from '../../../shared/manual-payment-task-visibility';
 import { ManualReceiptCorrectionComponent } from './manual-receipt-correction.component';
 import { SpecialistPaymentReviewsComponent } from './specialist-payment-reviews.component';
+import { BankAttentionComponent } from './bank-attention.component';
 
 type PaymentMetric = {
   label: string;
@@ -143,7 +144,7 @@ export function validContractorAuditEffectiveAt(input: string): boolean {
 
 @Component({
   selector: 'app-tbank-payments',
-  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, ManagerManualCardPaymentModalComponent, MobileBottomPagerComponent, RouterLink, SpecialistPaymentReviewsComponent, ManualReceiptCorrectionComponent],
+  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, ManagerManualCardPaymentModalComponent, MobileBottomPagerComponent, RouterLink, SpecialistPaymentReviewsComponent, ManualReceiptCorrectionComponent, BankAttentionComponent],
   templateUrl: './tbank-payments.component.html',
   styleUrl: './tbank-payments.component.scss'
 })
@@ -158,6 +159,9 @@ export class TbankPaymentsComponent implements OnDestroy {
   private readonly domDocument = inject(DOCUMENT);
   private contractorAuditTrigger: HTMLElement | null = null;
   @ViewChild(SpecialistPaymentReviewsComponent) private specialistReviews?: SpecialistPaymentReviewsComponent;
+  @ViewChild(BankAttentionComponent) private bankAttention?: BankAttentionComponent;
+  @ViewChild(SpecialistPaymentReviewsComponent, { read: ElementRef }) private specialistReviewsElement?: ElementRef<HTMLElement>;
+  @ViewChild('paymentJournal') private paymentJournal?: ElementRef<HTMLElement>;
   @ViewChild('contractorAuditDialog') private contractorAuditDialog?: ElementRef<HTMLElement>;
   @ViewChild('ownerApprovalDialog') private ownerApprovalDialog?: ElementRef<HTMLElement>;
   @ViewChild('contractorAuditAmountInput')
@@ -282,6 +286,8 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly paymentTotalElements = signal(0);
   readonly paymentTotalPages = signal(0);
   readonly paymentSummary = signal<AdminPaymentLinkSummaryResponse | null>(null);
+  /** The last summary read with «Все»: its per-filter counts label the other chips. */
+  private readonly overviewSummary = signal<{ key: string; summary: AdminPaymentLinkSummaryResponse } | null>(null);
   readonly archiving = signal(false);
   readonly loadingRecipientSummary = signal(false);
   private recipientSummaryLoadEpoch = 0;
@@ -545,6 +551,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   load(): void {
     if (this.destroyed) return;
     this.specialistReviews?.load();
+    this.bankAttention?.load();
     const epoch = ++this.bootstrapEpoch;
     this.bootstrapRead?.unsubscribe();
     this.bootstrapLoading.set(true);
@@ -604,6 +611,18 @@ export class TbankPaymentsComponent implements OnDestroy {
         return;
       }
     }
+    if (mode === 'TEST') {
+      const bankLinks = isBankPaymentRouteType(current.paymentInstructionSource);
+      const confirmed = window.confirm(
+        'Включить тестовый контур T‑Bank? '
+        + (bankLinks ? 'Клиентские счета вернутся на «Альфа / текст» вместо банковских ссылок. ' : '')
+        + (current.applyConfirmedPayments ? 'Автооплата заказов по подтверждению банка выключится. ' : '')
+        + 'Уже выданные ссылки не меняются.'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
 
     const patch: UpdateTbankRuntimeSettingsRequest = { runtimeMode: mode };
     if (mode === 'TEST') {
@@ -633,6 +652,13 @@ export class TbankPaymentsComponent implements OnDestroy {
       if (!confirmed) {
         return;
       }
+    } else if (isBankPaymentRouteType(current.paymentInstructionSource)) {
+      const confirmed = window.confirm(
+        'Вернуть клиентские счета на «Альфа / текст»? Новые счета пойдут без банковских ссылок; уже выданные ссылки не меняются.'
+      );
+      if (!confirmed) {
+        return;
+      }
     }
     this.saveRuntimeSettings(
       { paymentInstructionSource: source },
@@ -653,11 +679,15 @@ export class TbankPaymentsComponent implements OnDestroy {
         return;
       }
       const confirmed = window.confirm(
-        'Включить реальное применение оплат? После webhook CONFIRMED заказ будет переходить в оплату автоматически.'
+        'Включить реальное применение оплат? После подтверждения банка заказ будет переходить в оплату автоматически.'
       );
       if (!confirmed) {
         return;
       }
+    } else if (!window.confirm(
+      'Выключить автооплату заказов? Оплаты по банковским ссылкам придётся отмечать вручную, пока она выключена.'
+    )) {
+      return;
     }
     this.saveRuntimeSettings(
       { applyConfirmedPayments: enabled },
@@ -689,6 +719,16 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (!current || this.savingRuntimeSettings() || current[field] === enabled) {
       return;
     }
+    if (!enabled) {
+      const consequence: Record<typeof field, string> = {
+        tbankEnabled: 'Выключить API T‑Bank? Новые банковские ссылки и проверки статусов в банке остановятся.',
+        paymentLinksEnabled: 'Выключить создание банковских ссылок? Новые счета пойдут без ссылки банка.',
+        managerUiEnabled: 'Скрыть банковские ссылки в интерфейсе менеджера? Менеджеры перестанут их видеть и отправлять.'
+      };
+      if (!window.confirm(consequence[field])) {
+        return;
+      }
+    }
     const patch: UpdateTbankRuntimeSettingsRequest = {};
     patch[field] = enabled;
     this.saveRuntimeSettings(
@@ -710,6 +750,21 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.saveRuntimeSettings(patch, 'Способы оплаты на /pay сохранены');
   }
 
+  /** «Требует решения» → the live journal filtered by the order, scrolled into view. */
+  showOrderInJournal(orderId: number): void {
+    if (!orderId) return;
+    if (this.paymentSource() !== 'LIVE') this.setPaymentSource('LIVE');
+    this.statusFilter.set('all');
+    this.dateFrom.set('');
+    this.dateTo.set('');
+    this.setSearch(String(orderId));
+    queueMicrotask(() => this.paymentJournal?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  showSpecialistReviews(): void {
+    this.specialistReviewsElement?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   setSearch(value: string): void {
     this.search.set(value ?? '');
     this.paymentPage.set(0);
@@ -729,26 +784,41 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.loadPaymentLinks();
   }
 
-  statusTotal(filter: PaymentStatusFilter): number {
-    const summary = this.paymentSummary();
-    if (summary && this.statusFilter() === 'all') {
-      switch (filter) {
-        case 'all':
-          return summary.totalElements;
-        case 'paid':
-          return summary.paid;
-        case 'manual':
-          return summary.manualPending;
-        case 'refunded':
-          return summary.refunded;
-        case 'failed':
-          return summary.rejected;
-      }
-    }
-    if (filter === this.statusFilter() && this.paymentTotalElements()) {
+  /**
+   * A chip shows only a count that matches its list: the selected filter's own total, or the overview
+   * counts read with «Все» for the same search, dates and source. Otherwise «·» instead of a guess.
+   */
+  statusTotal(filter: PaymentStatusFilter): number | string {
+    if (filter === this.statusFilter()) {
       return this.paymentTotalElements();
     }
-    return this.links().filter((link) => this.matchesStatusFilter(link, filter)).length;
+    const overview = this.overviewSummary();
+    if (!overview || overview.key !== this.journalOverviewKey()) {
+      return '·';
+    }
+    const summary = overview.summary;
+    switch (filter) {
+      case 'all':
+        return summary.totalElements;
+      case 'paid':
+        return summary.paid;
+      case 'refunded':
+        return summary.refunded;
+      case 'active':
+        return summary.active ?? '·';
+      case 'created':
+        return summary.created ?? '·';
+      case 'manual':
+        return summary.manual ?? '·';
+      case 'failed':
+        return summary.failed ?? '·';
+      default:
+        return '·';
+    }
+  }
+
+  private journalOverviewKey(): string {
+    return [this.search().trim(), this.paymentSource(), this.dateFrom(), this.dateTo()].join('|');
   }
 
   setDateFrom(value: string): void {
@@ -2244,32 +2314,6 @@ export class TbankPaymentsComponent implements OnDestroy {
     return value === 'EXTERNAL_LINK' ? 'EXTERNAL_LINK' : 'MOBILE_BANK';
   }
 
-  private matchesStatusFilter(link: AdminPaymentLinkResponse, filter: PaymentStatusFilter): boolean {
-    switch (filter) {
-      case 'active':
-        return link.status === 'CREATED'
-          || link.status === 'INITIATED'
-          || link.status === 'AUTHORIZED'
-          || link.status === 'WAITING_MANUAL_PAYMENT'
-          || link.status === 'MANUAL_REPORTED';
-      case 'paid':
-        return this.isPaid(link.status);
-      case 'refunded':
-        return this.isRefunded(link.status) || link.status === 'CANCELED';
-      case 'failed':
-        return link.status === 'REJECTED'
-          || link.status === 'FAILED'
-          || link.status === 'NEEDS_RECONCILIATION'
-          || link.status === 'EXPIRED';
-      case 'created':
-        return link.status === 'CREATED';
-      case 'manual':
-        return this.isManualPayment(link);
-      default:
-        return true;
-    }
-  }
-
   private applyProfilesState(
     profiles: PaymentProfileResponse[],
     managers: ManagerPaymentProfileResponse[]
@@ -2394,6 +2438,9 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.paymentTotalElements.set(page.totalElements ?? 0);
     this.paymentTotalPages.set(page.totalPages ?? 0);
     this.paymentSummary.set(page.summary ?? null);
+    if (page.summary && this.statusFilter() === 'all') {
+      this.overviewSummary.set({ key: this.journalOverviewKey(), summary: page.summary });
+    }
   }
 
   private replaceLink(updated: AdminPaymentLinkResponse): void {

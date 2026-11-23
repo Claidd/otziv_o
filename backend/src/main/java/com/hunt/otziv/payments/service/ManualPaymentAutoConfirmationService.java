@@ -87,7 +87,8 @@ public class ManualPaymentAutoConfirmationService {
 
         boolean hasFrozenLiveContractorSource = links.stream().anyMatch(link ->
                 requiresActualRecipientReview(link)
-                        || (link != null && link.getManualSource() == ManualPaymentSource.MANUAL_TASK));
+                        || (link != null && link.getManualSource() == ManualPaymentSource.MANUAL_TASK))
+                || newestRouteIsClosedMonthlyLimitCard(links);
 
         if (hasFrozenLiveContractorSource) {
             throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
@@ -276,6 +277,25 @@ public class ManualPaymentAutoConfirmationService {
                 && (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT
                     || link.getStatus() == PaymentLinkStatus.MANUAL_REPORTED
                     || link.getStatus() == PaymentLinkStatus.CONFIRMED);
+    }
+
+    /**
+     * The order's newest route is a monthly-limit card instruction whose term ran out unpaid, so its reserve was
+     * released. A late transfer by that instruction still reached a real person: «оплатили» asks who received it
+     * (the payment window accepts such an expired instruction) instead of closing the order without a recipient.
+     * An older closed instruction behind a newer route does not gate that newer route.
+     */
+    private boolean newestRouteIsClosedMonthlyLimitCard(List<PaymentLink> links) {
+        return links.stream()
+                .filter(link -> link != null && link.getId() != null)
+                .max(java.util.Comparator.comparing(PaymentLink::getId))
+                .filter(link -> link.getContractorAllocationId() != null
+                        && link.getManualSource() == ManualPaymentSource.PROFILE_MONTHLY_LIMIT
+                        && MANUAL_PAYMENT_METHODS.contains(link.getPaymentMethod())
+                        && link.getStatus() == PaymentLinkStatus.EXPIRED
+                        && link.getPaidAt() == null
+                        && link.getManualConfirmedAt() == null)
+                .isPresent();
     }
 
     private void reconcileContractorRouteAfterCommit(Long paymentLinkId) {

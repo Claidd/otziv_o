@@ -265,7 +265,11 @@ public class PaymentLinkArchiveService {
                 safe.safeRefunded(),
                 safe.safeRejected(),
                 safe.safeReceiptPending(),
-                safe.safeReceiptOverdue()
+                safe.safeReceiptOverdue(),
+                safe.safeActive(),
+                safe.safeCreated(),
+                safe.safeManual(),
+                safe.safeFailed()
         );
     }
 

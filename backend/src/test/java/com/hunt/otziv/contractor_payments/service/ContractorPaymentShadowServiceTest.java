@@ -783,6 +783,58 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
+    void archivedOrderReleasesOnlyAnUntouchedReserveOfItsOwnLink() {
+        ContractorPaymentAllocation untouched = archiveAllocation(893L, 883L, ContractorAllocationSourceType.PAYMENT_LINK,
+                ContractorAllocationStatus.RESERVED);
+        ContractorPaymentAllocation reported = archiveAllocation(894L, 884L, ContractorAllocationSourceType.PAYMENT_LINK,
+                ContractorAllocationStatus.CLIENT_REPORTED);
+        ContractorPaymentAllocation common = archiveAllocation(895L, 77L, ContractorAllocationSourceType.COMMON_INVOICE,
+                ContractorAllocationStatus.RESERVED);
+        Order currentOrder = order(903L, null, null);
+        OrderStatus archived = new OrderStatus();
+        archived.setTitle("Архив");
+        currentOrder.setStatus(archived);
+        when(orderRepository.findByIdForCounterUpdate(903L)).thenReturn(Optional.of(currentOrder));
+        when(allocationRepository.findActiveByOrderId(
+                903L,
+                ContractorAllocationMode.SHADOW,
+                java.util.EnumSet.of(
+                        ContractorAllocationStatus.RESERVED,
+                        ContractorAllocationStatus.CLIENT_REPORTED,
+                        ContractorAllocationStatus.PARTIALLY_CONFIRMED,
+                        ContractorAllocationStatus.OWNER_FALLBACK
+                )
+        )).thenReturn(List.of(untouched, reported, common));
+        when(paymentLinkRepository.findByIdForUpdate(anyLong())).thenReturn(Optional.of(new PaymentLink()));
+        for (ContractorPaymentAllocation allocation : List.of(untouched, reported, common)) {
+            when(allocationRepository.findByIdForUpdate(allocation.getId())).thenReturn(Optional.of(allocation));
+            when(allocationRepository.findLatestIdForUpdate("SHADOW", allocation.getSourceType().name(), allocation.getSourceId()))
+                    .thenReturn(Optional.of(allocation.getId()));
+        }
+
+        int released = service.releaseForFinanciallyClosedOrder(903L, "Архив");
+
+        assertEquals(1, released);
+        assertEquals(ContractorAllocationStatus.RELEASED_UNPAID, untouched.getStatus());
+        assertEquals(ContractorAllocationStatus.CLIENT_REPORTED, reported.getStatus());
+        assertEquals(ContractorAllocationStatus.RESERVED, common.getStatus());
+    }
+
+    private ContractorPaymentAllocation archiveAllocation(long id, long sourceId,
+            ContractorAllocationSourceType sourceType, ContractorAllocationStatus status) {
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(id);
+        allocation.setMode(ContractorAllocationMode.SHADOW);
+        allocation.setSourceType(sourceType);
+        allocation.setSourceId(sourceId);
+        allocation.setOrderId(903L);
+        allocation.setAmountKopecks(100_000L);
+        allocation.setConfirmedKopecks(0L);
+        allocation.setStatus(status);
+        return allocation;
+    }
+
+    @Test
     void delayedUnpaidOrderCallbackDoesNothingAfterStatusWasRestored() {
         Order restored = order(901L, null, null);
         OrderStatus inWork = new OrderStatus();

@@ -72,7 +72,7 @@ public class PaymentLinkPresenter {
 
     AdminPaymentLinkSummaryResponse toSummaryResponse(PaymentLinkAdminSummary summary) {
         PaymentLinkAdminSummary safe = summary == null ? new PaymentLinkAdminSummary(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L) : summary;
-        return new AdminPaymentLinkSummaryResponse(safe.safeTotalElements(), amountRubles(safe.safeTotalAmountKopecks()), safe.safeTotalAmountKopecks(), safe.safePaid(), safe.safeManualPending(), safe.safeConfirmed(), safe.safeNotificationsSent(), safe.safeNotificationErrors(), safe.safeRefundable(), safe.safeRefunded(), safe.safeRejected(), safe.safeReceiptPending(), safe.safeReceiptOverdue());
+        return new AdminPaymentLinkSummaryResponse(safe.safeTotalElements(), amountRubles(safe.safeTotalAmountKopecks()), safe.safeTotalAmountKopecks(), safe.safePaid(), safe.safeManualPending(), safe.safeConfirmed(), safe.safeNotificationsSent(), safe.safeNotificationErrors(), safe.safeRefundable(), safe.safeRefunded(), safe.safeRejected(), safe.safeReceiptPending(), safe.safeReceiptOverdue(), safe.safeActive(), safe.safeCreated(), safe.safeManual(), safe.safeFailed());
     }
 
     boolean hasBankCancelReservation(PaymentLink link) {

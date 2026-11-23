@@ -105,6 +105,29 @@ export interface CloseManualPaymentUnpaidRequest {
   note: string;
 }
 
+export type BankAttentionKind = 'OWNER_APPROVAL' | 'SPECIALIST_REVIEW' | 'LINK_RECONCILIATION' | 'CLIENT_REPORTED';
+
+/** «Банк → Требует решения»: one waiting payment matter. */
+export interface BankAttentionItem {
+  kind: BankAttentionKind;
+  title: string;
+  detail: string;
+  orderId: number | null;
+  companyTitle: string | null;
+  orderStatus: string | null;
+  paymentLinkId: number | null;
+  approvalId: number | null;
+  reviewId: number | null;
+  amountKopecks: number | null;
+  since: string | null;
+}
+
+export interface BankAttention {
+  items: BankAttentionItem[];
+  truncated: boolean;
+  checkedAt: string;
+}
+
 export interface OwnerManualCardApproval {
   approvalId: number;
   orderId: number;
@@ -189,6 +212,11 @@ export interface AdminPaymentLinkSummaryResponse {
   rejected: number;
   receiptPending: number;
   receiptOverdue: number;
+  /** Journal filter counts by the same rules as the lists; absent on servers before 2026-11-24. */
+  active?: number;
+  created?: number;
+  manual?: number;
+  failed?: number;
 }
 
 export interface AdminPaymentLinksPageResponse {
@@ -484,6 +512,10 @@ export class PaymentsApi {
 
   correctManualReceipt(id: number, request: ManualReceiptCorrection) {
     return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/admin/payments/manual-receipts/${id}/correction`, request);
+  }
+
+  getBankAttention(): Observable<BankAttention> {
+    return this.http.get<BankAttention>(`${appEnvironment.apiBaseUrl}/api/admin/payments/attention`);
   }
 
   getSpecialistPaymentReviews(): Observable<SpecialistPaymentReview[]> {

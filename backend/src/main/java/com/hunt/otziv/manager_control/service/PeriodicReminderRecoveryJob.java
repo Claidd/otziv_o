@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 public class PeriodicReminderRecoveryJob {
     private final PeriodicReminderRestart scheduled;
     private final ManagerControlReminderRestart repair;
+    private final ManagerClientMessageQueue queue;
     private final SchedulerLeaseService leases;
     private long afterStateId;
 
@@ -25,6 +26,7 @@ public class PeriodicReminderRecoveryJob {
         if (acquired.isEmpty()) return;
         var lease = acquired.get();
         try {
+            releaseCancelledManualCommands();
             var candidates = scheduled.deferredReminderRecoveryCandidates(afterStateId, 20);
             if (candidates.isEmpty()) { afterStateId = 0; return; }
             long deadline = System.nanoTime() + Duration.ofSeconds(45).toNanos();
@@ -41,5 +43,21 @@ public class PeriodicReminderRecoveryJob {
         } catch (RuntimeException unavailable) {
             log.warn("Periodic reminder recovery scan unavailable: error={}", unavailable.toString(), unavailable);
         } finally { leases.release(lease); }
+    }
+
+    /** Orders whose reminders wait only for a manual message cancelled before sending, over two days ago. */
+    private void releaseCancelledManualCommands() {
+        try {
+            for (Long orderId : queue.ordersHeldByCancelledManual(10)) {
+                try {
+                    int released = repair.releaseCancelledManualAutomatically(orderId);
+                    if (released > 0) log.info("Cancelled manual commands released: orderId={}, count={}", orderId, released);
+                } catch (RuntimeException held) {
+                    log.warn("Cancelled manual command kept: orderId={}, error={}", orderId, held.toString());
+                }
+            }
+        } catch (RuntimeException unavailable) {
+            log.warn("Cancelled manual command scan unavailable: error={}", unavailable.toString());
+        }
     }
 }

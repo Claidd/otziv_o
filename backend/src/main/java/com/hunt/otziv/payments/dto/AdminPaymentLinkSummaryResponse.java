@@ -15,6 +15,11 @@ public record AdminPaymentLinkSummaryResponse(
         long refunded,
         long rejected,
         long receiptPending,
-        long receiptOverdue
+        long receiptOverdue,
+        /** Counts of the journal filters «Активные», «Созданы», «Ручные», «Ошибки» (same rules as the lists). */
+        long active,
+        long created,
+        long manual,
+        long failed
 ) {
 }

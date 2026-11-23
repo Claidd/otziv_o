@@ -153,6 +153,39 @@ public class ManagerControlReminderRestart {
         }));
     }
 
+    /**
+     * A manual message cancelled before any provider call (its order or permissions changed) keeps the order's
+     * reminder cycle reserved until someone presses «Починить». After two days it no longer counts as the
+     * manager's contact: it is audited and retired, nothing is sent, and the autoresponder then follows its own
+     * schedule, windows, limits and switches. A cycle with a real recent manual message or any other pending
+     * delivery is left as it is.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public int releaseCancelledManualAutomatically(long orderId) {
+        var source = orders.read(orderId).orElse(null);
+        if (source == null || !onlyOldCancelledManual(queue.controlHistory(orderId), source)) return 0;
+        return transactions.contactReservation(() -> {
+            var current = orders.lock(orderId).orElse(null);
+            if (current == null || !Objects.equals(source, current)) return 0;
+            var rows = queue.controlHistoryForSettlement(orderId).stream()
+                    .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, current)).toList();
+            if (!onlyOldCancelledManual(rows, current)) return 0;
+            var pending = rows.stream().filter(row -> ManagerControlOrderDeliveryState.blocks(row.delivery())).toList();
+            for (var row : pending) queue.retireCancelledManual(row, "system:cancelled-manual-release");
+            return pending.size();
+        });
+    }
+
+    private boolean onlyOldCancelledManual(java.util.List<ManagerClientMessageQueue.RecordedControl> history,
+            OrderDeliveryControlContext.Snapshot source) {
+        var cycle = history.stream().filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, source)).toList();
+        var pending = cycle.stream().filter(row -> ManagerControlOrderDeliveryState.blocks(row.delivery())).toList();
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(2);
+        return !pending.isEmpty()
+                && pending.stream().allMatch(row -> cancelledBeforeDispatch(row) && !row.createdAt().isAfter(cutoff))
+                && cycle.stream().noneMatch(ManagerControlOrderDeliveryState::recent);
+    }
+
     private boolean hasPendingContact(OrderDeliveryControlContext.Snapshot source) {
         return queue.controlHistory(source.orderId()).stream()
                 .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, source))

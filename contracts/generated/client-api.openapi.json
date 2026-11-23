@@ -1831,6 +1831,56 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/admin/payments/attention" : {
+      "get" : {
+        "operationId" : "BankAttentionAdminController_attention",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.BankAttentionAdminController#attention",
+        "parameters" : [ ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BankAttentionResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/admin/payments/bank-profiles" : {
       "get" : {
         "operationId" : "AdminPaymentController_bankProfiles",
@@ -14259,7 +14309,19 @@
         "x-java-type" : "com.hunt.otziv.payments.dto.AdminPaymentLinkSummaryResponse",
         "type" : "object",
         "properties" : {
+          "active" : {
+            "type" : "integer"
+          },
           "confirmed" : {
+            "type" : "integer"
+          },
+          "created" : {
+            "type" : "integer"
+          },
+          "failed" : {
+            "type" : "integer"
+          },
+          "manual" : {
             "type" : "integer"
           },
           "manualPending" : {
@@ -14304,7 +14366,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "confirmed", "manualPending", "notificationErrors", "notificationsSent", "paid", "receiptOverdue", "receiptPending", "refundable", "refunded", "rejected", "totalAmount", "totalAmountKopecks", "totalElements" ],
+        "required" : [ "active", "confirmed", "created", "failed", "manual", "manualPending", "notificationErrors", "notificationsSent", "paid", "receiptOverdue", "receiptPending", "refundable", "refunded", "rejected", "totalAmount", "totalAmountKopecks", "totalElements" ],
         "additionalProperties" : true
       },
       "AdminPaymentLinksPageResponseOutput" : {
@@ -15319,6 +15381,122 @@
           }
         },
         "required" : [ ],
+        "additionalProperties" : true
+      },
+      "BankAttentionItemResponseOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.BankAttentionItemResponse",
+        "type" : "object",
+        "properties" : {
+          "amountKopecks" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ],
+            "x-money-unit" : "kopecks"
+          },
+          "approvalId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "companyTitle" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "detail" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "kind" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderStatus" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "paymentLinkId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "reviewId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "since" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "title" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "amountKopecks", "approvalId", "companyTitle", "detail", "kind", "orderId", "orderStatus", "paymentLinkId", "reviewId", "since", "title" ],
+        "additionalProperties" : true
+      },
+      "BankAttentionResponseOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.BankAttentionResponse",
+        "type" : "object",
+        "properties" : {
+          "checkedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "items" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/BankAttentionItemResponseOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "truncated" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "checkedAt", "items", "truncated" ],
         "additionalProperties" : true
       },
       "ClientChatReconciliationResultOutput" : {
@@ -29764,6 +29942,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/AdminPaymentController.java",
     "sha256" : "80f5b40ba52a4722d1682a447fc8cb87923318ddbfaf09f6dacf2a1de10acba5"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/BankAttentionAdminController.java",
+    "sha256" : "49233ef55f5da5b6997badfae81b646f716f7c24952f0030f28625514cf81cf5"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/ManagerManualPaymentReviewController.java",
     "sha256" : "fadbd555a5dd40273ad8ee02957b3161204834558dff96da67b6f4444f852189"
   }, {
@@ -29789,10 +29970,16 @@
     "sha256" : "f99660dfd09964b54128bd9749990daf4d56208402545b5c293653225bd0f7d7"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/AdminPaymentLinkSummaryResponse.java",
-    "sha256" : "cdfa0bcee98632e77bae6db40835b18564c43b10a0adf01bcfab9ae70383ac05"
+    "sha256" : "10dd37d2aa9b1ff25cdb305341e6ac4f67185662a1cf50f648d80a3122c9590a"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/AdminPaymentLinksPageResponse.java",
     "sha256" : "67d7ffca36b1326c8b28f195bdfb5125c0963d9f129dcb6357fe1436673a8a8f"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/BankAttentionItemResponse.java",
+    "sha256" : "ae5004f00ac34d20838262ddd86eb11e086e46643f05ae016ffe26ac192930b6"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/BankAttentionResponse.java",
+    "sha256" : "d8fa8c02adad256cb56d8c4bd7af4504d7af40c2006416342bd724122ea3744a"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/CloseManualPaymentUnpaidRequest.java",
     "sha256" : "db74521c969161a1ba7a6b8a6978702133b0698175be84dc6f16973f92601516"
@@ -29951,7 +30138,7 @@
     "sha256" : "77b3c3d5d5f5093848a0477080bfa3648a0a75e1293571842f1ba5a54f51eccd"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/service/OwnerManualCardPaymentApprovalReconciliationService.java",
-    "sha256" : "271b9c0a943eefa6b2b0fbed7e51c3f9d7b4e6795f479e52c974d505452394aa"
+    "sha256" : "6889ff070e65c09810472f28bcd0eaae49ef98f8d3cfc1400e67e9ccba566d16"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/service/OwnerManualCardPaymentApprovalRevocationService.java",
     "sha256" : "22135aa5043a23d61655dd0f603ee9891dc703876a75cf7a38be941f01b0109a"
@@ -30042,6 +30229,8 @@
     "BadReviewSummaryResponseOutput" : "com.hunt.otziv.manager.dto.api.BadReviewSummaryResponse",
     "BadReviewTaskDetailsResponseOutput" : "com.hunt.otziv.manager.dto.api.BadReviewTaskDetailsResponse",
     "BadReviewTaskUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.BadReviewTaskUpdateRequest",
+    "BankAttentionItemResponseOutput" : "com.hunt.otziv.payments.dto.BankAttentionItemResponse",
+    "BankAttentionResponseOutput" : "com.hunt.otziv.payments.dto.BankAttentionResponse",
     "ClientChatReconciliationResultOutput" : "com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult",
     "ClientMessageOrderStatusResponseOutput" : "com.hunt.otziv.client_messages.dto.ClientMessageOrderStatusResponse",
     "CloseManualPaymentUnpaidRequestInput" : "com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest",

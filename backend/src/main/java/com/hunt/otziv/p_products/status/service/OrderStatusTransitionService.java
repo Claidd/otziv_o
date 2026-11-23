@@ -712,6 +712,11 @@ public class OrderStatusTransitionService {
         orderBotLifecycleService.detachBots(order);
 
         orderRepository.save(order);
+        // An untouched card reserve of an archived order no longer holds the recipient's limit.
+        scheduleContractorReservationRelease(
+                order.getId(),
+                "Заказ переведен в статус \"Архив\""
+        );
 
         log.info("=== ЗАКАЗ ID {} УСПЕШНО АРХИВИРОВАН ===", order.getId());
         return true;

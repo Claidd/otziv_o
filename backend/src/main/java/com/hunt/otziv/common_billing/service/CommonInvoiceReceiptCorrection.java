@@ -103,6 +103,10 @@ public class CommonInvoiceReceiptCorrection implements ManualReceiptInvoiceDebt 
         invoice.setClientReportedAt(null);
         invoice.setLastError(null);
         if (reminder) {
+            // The client gets a full new payment term from the reopening: the automatic move to «Не оплачено»
+            // counts from now and needs a new notice (the old one belonged to the term before the mistaken payment).
+            invoice.setOverdueTermRestartedAt(java.time.LocalDateTime.now());
+            invoice.setOverdueNoticeAt(null);
             // A failed «оплата прошла» notice belonged to the undone payment (it is skipped now: the invoice is unpaid).
             invoice.setPaymentSuccessNotificationError(null);
             // Reminders resume one regular interval from now (the manager first corrects the wrong «оплата прошла»),

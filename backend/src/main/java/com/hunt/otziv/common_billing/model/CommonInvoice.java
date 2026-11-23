@@ -158,6 +158,10 @@ public class CommonInvoice {
     @Column(name = "overdue_notice_at")
     private LocalDateTime overdueNoticeAt;
 
+    /** A reopened invoice ("Напоминание" after a mistaken payment) gets a new payment term from this time. */
+    @Column(name = "overdue_term_restarted_at")
+    private LocalDateTime overdueTermRestartedAt;
+
     /** Extra days granted by a manager before the automatic move to "Не оплачено" (0 = none). */
     @Column(name = "overdue_extension_days", nullable = false)
     private int overdueExtensionDays;

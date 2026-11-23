@@ -39,6 +39,11 @@ public interface SpecialistManualPaymentReviewRepository
 
     boolean existsByOrderIdAndStatusIn(Long orderId, Collection<SpecialistManualPaymentReviewStatus> statuses);
 
+    /** Stopped or disputed reviews, oldest first («Требует решения»). */
+    List<SpecialistManualPaymentReview> findByStatusInAndResolvedAtIsNullOrderByRequestedAtAscIdAsc(
+            Collection<SpecialistManualPaymentReviewStatus> statuses,
+            org.springframework.data.domain.Pageable page);
+
     @Query("select r.id from SpecialistManualPaymentReview r, PaymentLink l left join l.order.status orderStatus "
             + "where l.id = r.paymentLinkId and l.order.id = r.orderId and l.amountKopecks = r.amountKopecks "
             + "and r.creditedAt is null and r.resolvedAt is null and r.status in :statuses "
@@ -85,6 +90,23 @@ public interface SpecialistManualPaymentReviewRepository
             + "or r.lastError like 'За 24 часа не было подтверждено уведомление%') order by r.id")
     List<Long> findUncreditedIds(@Param("statuses") Collection<SpecialistManualPaymentReviewStatus> statuses,
             @Param("cutoff") LocalDateTime cutoff, @Param("now") LocalDateTime now,
+            org.springframework.data.domain.Pageable page);
+
+    /**
+     * Reviews stopped only because their own Tochka operation was still active, whose operation has since ended
+     * unpaid. Each is retried once per change of that link, at most once per {@code cutoff} period.
+     */
+    @Query("select r.id from SpecialistManualPaymentReview r, PaymentLink l where l.id = r.paymentLinkId "
+            + "and r.status = com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION "
+            + "and r.creditedAt is null and r.disputedAt is null and r.resolvedAt is null "
+            + "and r.lastError like 'Активный или неоднозначный платеж Точки%' "
+            + "and l.status in (com.hunt.otziv.payments.model.PaymentLinkStatus.EXPIRED, "
+            + "com.hunt.otziv.payments.model.PaymentLinkStatus.CANCELED, "
+            + "com.hunt.otziv.payments.model.PaymentLinkStatus.REJECTED) "
+            + "and l.paidAt is null and l.manualConfirmedAt is null "
+            + "and (r.creditClaimedAt is null or ((l.updatedAt is null or r.creditClaimedAt <= l.updatedAt) "
+            + "and r.creditClaimedAt <= :cutoff)) order by r.id")
+    List<Long> findTochkaReleasedIds(@Param("cutoff") LocalDateTime cutoff,
             org.springframework.data.domain.Pageable page);
 
     @Query("select r.id from SpecialistManualPaymentReview r where r.creditedAt is not null "

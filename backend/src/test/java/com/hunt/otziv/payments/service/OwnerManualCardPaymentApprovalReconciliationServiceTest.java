@@ -118,6 +118,50 @@ class OwnerManualCardPaymentApprovalReconciliationServiceTest {
         verifyNoInteractions(notifications);
     }
 
+    @Test
+    void requestAboutALinkTheBankItselfConfirmedClosesAutomatically() {
+        original.setStatus(PaymentLinkStatus.CONFIRMED);
+        original.setPaymentMethod(PaymentMethod.SBP_QR);
+        original.setPaidAt(java.time.LocalDateTime.of(2026, 9, 12, 10, 0));
+        original.setTbankPaymentId("bank-operation");
+        original.setConfirmedAmountKopecks(60000L);
+
+        var result = service.closeSupersededAutomatically(2L);
+
+        assertThat(result).isPresent();
+        assertThat(approval.getStatus()).isEqualTo(OwnerManualCardPaymentApprovalStatus.SUPERSEDED);
+        assertThat(approval.getApprovedAt()).isNull();
+        assertThat(approval.getLastError()).contains("7410", "подтверждена банком", "Закрыт автоматически");
+        verify(notifications).closeOwnerApprovalReminders(2L);
+        verifyNoInteractions(access);
+        verify(links, never()).save(any());
+    }
+
+    @Test
+    void manuallyConfirmedOriginalIsNotTreatedAsABankPayment() {
+        original.setStatus(PaymentLinkStatus.CONFIRMED);
+        original.setPaymentMethod(PaymentMethod.SBP_QR);
+        original.setPaidAt(java.time.LocalDateTime.of(2026, 9, 12, 10, 0));
+        original.setTbankPaymentId("bank-operation");
+        original.setManualConfirmedAt(java.time.LocalDateTime.of(2026, 9, 12, 11, 0));
+
+        assertThat(service.closeSupersededAutomatically(2L)).isEmpty();
+
+        assertThat(approval.getStatus()).isEqualTo(OwnerManualCardPaymentApprovalStatus.PENDING);
+        verify(approvals, never()).save(any());
+    }
+
+    @Test
+    void requestOfAnUnpaidOrderStaysForTheOwner() {
+        order.setStatus(OrderStatus.builder().title("Напоминание").build());
+
+        assertThat(service.closeSupersededAutomatically(2L)).isEmpty();
+
+        assertThat(approval.getStatus()).isEqualTo(OwnerManualCardPaymentApprovalStatus.PENDING);
+        verify(approvals, never()).save(any());
+        verifyNoInteractions(notifications);
+    }
+
     private PaymentLink link(long id, PaymentLinkStatus status, long amount) {
         PaymentLink link = new PaymentLink();
         link.setId(id);

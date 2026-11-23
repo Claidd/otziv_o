@@ -7,7 +7,8 @@ const {
   canCloseManualPaymentAsUnpaid,
   canConfirmContractorPaymentSource,
   canMarkLegacyReceiptNotRequired,
-  confirmedTotalKopecks
+  confirmedTotalKopecks,
+  validReceiptEffectiveAt
 } = loadTsModule('src/app/shared/manual-payment-audit.ts');
 
 const base = {
@@ -61,4 +62,25 @@ test('mobile bank posts the audited evidence to the same dedicated endpoints as 
   assert.match(mobileApi, /\/manual-links\/\$\{linkId\}\/receipt\/legacy-not-required/);
   assert.match(mobilePage, /recipientStatementChecked: true,[\s\S]*?paymentReceived: true/);
   assert.match(mobilePage, /recipientStatementChecked: true,[\s\S]*?paymentAbsent: true/);
+});
+
+test('receipt time is an existing minute typed from the statement, as on the site', () => {
+  assert.equal(validReceiptEffectiveAt('2026-11-23T14:05'), true);
+  assert.equal(validReceiptEffectiveAt('2028-02-29T00:00'), true);
+  assert.equal(validReceiptEffectiveAt('2026-02-29T10:00'), false);
+  assert.equal(validReceiptEffectiveAt('2026-11-31T10:00'), false);
+  assert.equal(validReceiptEffectiveAt('2026-11-23T24:00'), false);
+  assert.equal(validReceiptEffectiveAt('2026-11-23'), false);
+  assert.equal(validReceiptEffectiveAt(''), false);
+});
+
+test('the receipt check opens with an empty amount, a receipt time and a statement checkbox', () => {
+  const page = readFileSync(new URL('../src/app/features/tbank.page.ts', import.meta.url), 'utf8');
+  const open = page.slice(page.indexOf('openContractorAudit(link: AdminPaymentLinkResponse)'));
+  const body = open.slice(0, open.indexOf('openUnpaidAudit('));
+  assert.match(body, /paymentAuditAmount\.set\(''\)/);
+  assert.doesNotMatch(body, /confirm\.confirm/);
+  assert.match(page, /name="auditEffectiveAt" type="datetime-local"/);
+  assert.match(page, /name="auditStatement" type="checkbox"/);
+  assert.match(page, /effectiveAt: this\.paymentAuditEffectiveAt\(\)/);
 });

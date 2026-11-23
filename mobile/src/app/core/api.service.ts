@@ -112,6 +112,11 @@ export interface AdminPaymentLinkSummaryResponse {
   refundable: number;
   refunded: number;
   rejected: number;
+  /** Journal filter counts by the same rules as the lists; absent on servers before 2026-11-24. */
+  active?: number;
+  created?: number;
+  manual?: number;
+  failed?: number;
 }
 
 export interface AdminPaymentLinksPageResponse {

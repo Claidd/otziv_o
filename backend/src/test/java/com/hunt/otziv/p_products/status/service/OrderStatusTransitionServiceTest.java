@@ -657,6 +657,10 @@ class OrderStatusTransitionServiceTest {
         );
         verify(orderBotLifecycleService).detachBots(order);
         verify(orderRepository).save(order);
+        verify(contractorPaymentShadowService).releaseForFinanciallyClosedOrder(
+                4L,
+                "Заказ переведен в статус \"Архив\""
+        );
     }
 
     @Test

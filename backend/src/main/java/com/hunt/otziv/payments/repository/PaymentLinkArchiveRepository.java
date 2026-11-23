@@ -481,7 +481,11 @@ public class PaymentLinkArchiveRepository {
                   COALESCE(SUM(CASE WHEN apl.status IN ('REVERSED', 'PARTIAL_REVERSED', 'REFUNDED', 'PARTIAL_REFUNDED', 'CANCELED') THEN 1 ELSE 0 END), 0) AS refunded,
                   COALESCE(SUM(CASE WHEN apl.status IN ('REJECTED', 'FAILED', 'NEEDS_RECONCILIATION') THEN 1 ELSE 0 END), 0) AS rejected,
                   COALESCE(SUM(CASE WHEN apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK') AND apl.status = 'CONFIRMED' AND apl.receipt_status = 'PENDING' THEN 1 ELSE 0 END), 0) AS receipt_pending,
-                  COALESCE(SUM(CASE WHEN apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK') AND apl.status = 'CONFIRMED' AND apl.receipt_status = 'PENDING' AND apl.paid_at <= CURRENT_TIMESTAMP(6) - INTERVAL 24 HOUR THEN 1 ELSE 0 END), 0) AS receipt_overdue
+                  COALESCE(SUM(CASE WHEN apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK') AND apl.status = 'CONFIRMED' AND apl.receipt_status = 'PENDING' AND apl.paid_at <= CURRENT_TIMESTAMP(6) - INTERVAL 24 HOUR THEN 1 ELSE 0 END), 0) AS receipt_overdue,
+                  COALESCE(SUM(CASE WHEN apl.status IN ('CREATED', 'INITIATED', 'AUTHORIZED', 'WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED') THEN 1 ELSE 0 END), 0) AS active_count,
+                  COALESCE(SUM(CASE WHEN apl.status = 'CREATED' THEN 1 ELSE 0 END), 0) AS created_count,
+                  COALESCE(SUM(CASE WHEN apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK') THEN 1 ELSE 0 END), 0) AS manual_count,
+                  COALESCE(SUM(CASE WHEN apl.status IN ('REJECTED', 'FAILED', 'NEEDS_RECONCILIATION') THEN 1 ELSE 0 END), 0) AS failed_count
                 FROM archive_payment_links apl
                 """ + filterWhereClause(), params, (rs, rowNum) -> new PaymentLinkAdminSummary(
                 rs.getLong("total_elements"),
@@ -495,7 +499,11 @@ public class PaymentLinkArchiveRepository {
                 rs.getLong("refunded"),
                 rs.getLong("rejected"),
                 rs.getLong("receipt_pending"),
-                rs.getLong("receipt_overdue")
+                rs.getLong("receipt_overdue"),
+                rs.getLong("active_count"),
+                rs.getLong("created_count"),
+                rs.getLong("manual_count"),
+                rs.getLong("failed_count")
         ));
     }
 
@@ -846,7 +854,7 @@ public class PaymentLinkArchiveRepository {
                     OR (:statusFilter = 'active' AND apl.status IN ('CREATED', 'INITIATED', 'AUTHORIZED', 'WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED'))
                     OR (:statusFilter = 'paid' AND apl.status IN ('AUTHORIZED', 'TEST_CONFIRMED', 'CONFIRMED', 'AMOUNT_MISMATCH'))
                     OR (:statusFilter = 'refunded' AND apl.status IN ('REVERSED', 'PARTIAL_REVERSED', 'REFUNDED', 'PARTIAL_REFUNDED', 'CANCELED'))
-                    OR (:statusFilter = 'failed' AND apl.status IN ('REJECTED', 'FAILED', 'NEEDS_RECONCILIATION', 'EXPIRED'))
+                    OR (:statusFilter = 'failed' AND apl.status IN ('REJECTED', 'FAILED', 'NEEDS_RECONCILIATION'))
                     OR (:statusFilter = 'created' AND apl.status = 'CREATED')
                     OR (:statusFilter = 'manual' AND apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK'))
                   )

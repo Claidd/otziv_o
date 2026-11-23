@@ -66,6 +66,21 @@ class CommonInvoiceReceiptCorrectionTest {
     }
 
     @Test
+    void reopeningToReminderStartsANewPaymentTermThatNeedsANewNotice() {
+        CommonInvoice invoice = paidPaperInvoice("owner");
+        invoice.setOverdueNoticeAt(LocalDateTime.now().minusDays(10));
+        stub(invoice, List.of(item(27123L, 140000L), item(27124L, 300000L)));
+        when(delivery.nextAutomaticPaymentReminderAt(any())).thenReturn(LocalDateTime.now().plusDays(2));
+        LocalDateTime before = LocalDateTime.now();
+
+        correction.reopenOwnerPaperPayment(283L, owner, "Отмечено по ошибке, оплаты не было");
+
+        // The 23.11 case: the invoice moved to «Не оплачено» the next day because the term ran from 20.10.
+        assertThat(invoice.getOverdueTermRestartedAt()).isNotNull().isAfterOrEqualTo(before);
+        assertThat(invoice.getOverdueNoticeAt()).isNull();
+    }
+
+    @Test
     void aPaperBillNeverHandedOverIsNotRemindedAbout() {
         CommonInvoice invoice = paidPaperInvoice("owner");
         invoice.setPaperInvoiceIssuedAt(null);

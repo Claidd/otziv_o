@@ -10428,7 +10428,8 @@ class PaymentLinkServiceTest {
         var orderPaymentLinks = new com.hunt.otziv.payments.service.OrderPaymentLinkWorkflow(
                 amounts, lifecycle, preparation, observationApplication, presenter, routes, observations,
                 paymentLinkRepository, orderRepository, taskReceiptIntegrationService,
-                contractorPaymentLiveRoutingService, transactionExecutor);
+                contractorPaymentLiveRoutingService, transactionExecutor,
+                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
         var publicPaymentPages = new com.hunt.otziv.payments.service.PublicPaymentPageWorkflow(
                 lifecycle, manualConfirmation, initializationState, publicResolution, observationApplication,
                 cancellation, presenter, routes, observations, paymentLinkRepository, orderRepository,

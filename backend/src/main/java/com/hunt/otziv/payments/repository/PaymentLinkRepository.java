@@ -267,7 +267,11 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
                   AND link.receiptStatus = :receiptPendingStatus
                   AND link.paidAt IS NOT NULL
                   AND link.paidAt <= :receiptOverdueBefore
-                THEN 1 ELSE 0 END), 0)
+                THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN link.status IN :activeStatuses THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CREATED THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN link.paymentMethod IN :manualMethods THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN link.status IN :failedStatuses THEN 1 ELSE 0 END), 0)
         )
         FROM PaymentLink link
         LEFT JOIN link.order o
@@ -723,6 +727,49 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             @Param("paymentMethods") Collection<PaymentMethod> paymentMethods,
             @Param("statuses") Collection<PaymentLinkStatus> statuses,
             @Param("now") LocalDateTime now
+    );
+
+    /** Links in a state that needs a person (bank reconciliation, wrong amount), oldest first. */
+    @Query("""
+        SELECT link FROM PaymentLink link LEFT JOIN FETCH link.order
+        WHERE link.status IN :statuses
+        ORDER BY link.id
+    """)
+    List<PaymentLink> findAttentionLinks(
+            @Param("statuses") Collection<PaymentLinkStatus> statuses,
+            Pageable page
+    );
+
+    /** Client-reported manual payments nobody has checked since {@code reportedBefore}, oldest first. */
+    @Query("""
+        SELECT link FROM PaymentLink link LEFT JOIN FETCH link.order
+        WHERE link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.MANUAL_REPORTED
+          AND link.manualReportedAt IS NOT NULL
+          AND link.manualReportedAt <= :reportedBefore
+        ORDER BY link.manualReportedAt, link.id
+    """)
+    List<PaymentLink> findClientReportedBefore(
+            @Param("reportedBefore") LocalDateTime reportedBefore,
+            Pageable page
+    );
+
+    /** Past-due links nobody started paying: candidates only, the expiry re-checks each one under its locks. */
+    @Query("""
+        SELECT link.id FROM PaymentLink link
+        WHERE link.id > :afterId
+          AND link.status IN :statuses
+          AND link.expiresAt <= :now
+          AND link.paperBankDocumentId IS NULL
+          AND link.paperInvoiceIssuedAt IS NULL
+          AND link.manualReportedAt IS NULL
+          AND (link.bankInitNonce IS NULL OR link.bankInitNonce = '')
+        ORDER BY link.id
+    """)
+    List<Long> findPastDueUnstartedLinkIds(
+            @Param("afterId") long afterId,
+            @Param("statuses") Collection<PaymentLinkStatus> statuses,
+            @Param("now") LocalDateTime now,
+            Pageable page
     );
 
     @Query("""
