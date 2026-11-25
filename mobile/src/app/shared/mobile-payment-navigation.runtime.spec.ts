@@ -10,6 +10,7 @@ describe('native payment navigation after asynchronous diagnostics', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.each([
+    'https://pay.linksecurepayment.com/fixture?order=212#payment',
     'https://pay.tbank-online.com/fixture?order=213#confirm',
     'https://merch.securepaytb.ru/order/?uuid=tochka-test-operation'
   ])('passes the original provider URL to the native browser: %s', async (url) => {

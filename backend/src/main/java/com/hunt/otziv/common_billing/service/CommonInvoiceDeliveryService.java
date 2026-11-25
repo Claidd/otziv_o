@@ -694,11 +694,13 @@ public class CommonInvoiceDeliveryService {
             invoice.setPaymentMessageConfirmed(true);
             invoice.setPaymentMessageChannel(result.channel());
             if (prepared.reminder()) {
-                invoice.setStatus(invoice.getPaidKopecks() > 0 ? CommonInvoiceStatus.PARTIALLY_PAID : CommonInvoiceStatus.REMINDER);
+                invoice.setStatus(invoice.isBadReviewPayable() ? CommonInvoiceStatus.UNPAID
+                        : invoice.getPaidKopecks() > 0 ? CommonInvoiceStatus.PARTIALLY_PAID : CommonInvoiceStatus.REMINDER);
                 invoice.setLastReminderAt(LocalDateTime.now());
                 markInvoiceOrdersReminder(invoice);
             } else {
-                invoice.setStatus(invoice.getPaidKopecks() > 0 ? CommonInvoiceStatus.PARTIALLY_PAID : CommonInvoiceStatus.INVOICED);
+                invoice.setStatus(invoice.isBadReviewPayable() ? CommonInvoiceStatus.UNPAID
+                        : invoice.getPaidKopecks() > 0 ? CommonInvoiceStatus.PARTIALLY_PAID : CommonInvoiceStatus.INVOICED);
                 invoice.setSentAt(LocalDateTime.now());
                 markInvoiceOrdersToPay(invoice);
             }
@@ -1081,14 +1083,14 @@ public class CommonInvoiceDeliveryService {
     }
 
     void markInvoiceOrdersToPay(CommonInvoice invoice) {
-        if (invoice == null || invoice.getId() == null || isBadReviewSuccessor(invoice)) {
+        if (invoice == null || invoice.getId() == null || invoice.isBadReviewPayable() || isBadReviewSuccessor(invoice)) {
             return;
         }
         markInvoiceOrdersToStatus(invoice.getId(), STATUS_TO_PAY);
     }
 
     void markInvoiceOrdersReminder(CommonInvoice invoice) {
-        if (invoice == null || invoice.getId() == null || isBadReviewSuccessor(invoice)) {
+        if (invoice == null || invoice.getId() == null || invoice.isBadReviewPayable() || isBadReviewSuccessor(invoice)) {
             return;
         }
         markInvoiceOrdersToStatus(invoice.getId(), STATUS_REMINDER);

@@ -251,6 +251,22 @@ class OrderStatusTransitionServiceTest {
         verify(orderRepository, never()).save(order);
     }
 
+    @Test
+    void paymentOfAnOrderInABannedCommonInvoiceCannotBypassInvoiceAccounting() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(26194L, "Бан");
+        when(orderRepository.findByIdForMutation(26194L)).thenReturn(Optional.of(order));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.isOrderInUnpaidBannedCommonInvoice(26194L)).thenReturn(true);
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.changeStatusForOrder(26194L, "Оплачено"));
+
+        assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
+        assertTrue(failure.getReason().contains("сверки оплаты общего счёта"));
+        verify(orderTransactionService, never()).handlePaymentStatus(any());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"В проверку", "На проверке", "Коррекция", "Публикация", "Опубликовано", "Архив", "Новый"})
     void financialOrderInsideActiveCommonInvoiceCannotReturnToWorkingStatus(String targetStatus) {

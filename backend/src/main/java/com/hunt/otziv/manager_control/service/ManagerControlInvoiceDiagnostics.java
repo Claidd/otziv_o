@@ -682,6 +682,13 @@ public class ManagerControlInvoiceDiagnostics {
             return unpaidAttention(invoice, LocalDateTime.now()).orElse(UNPAID_REASON);
         }
         if (status == CommonInvoiceStatus.BAN) {
+            if (items.stream().anyMatch(item -> !item.isPaid() && item.getOrder() != null
+                    && item.getOrder().getStatus() != null
+                    && "Оплачено".equals(item.getOrder().getStatus().getTitle()))) {
+                return "Внутри закрытого общего счёта есть заказы с отметкой оплаты, которая ещё не связана со счётом. "
+                        + "Передайте администратору дату перевода и фактического получателя для сверки существующих поступлений. "
+                        + "Повторно отмечать оплату заказов не требуется.";
+            }
             if ("UNPAID".equals(invoice.getPreviousStatus()) && "BAN".equals(invoice.getCloseReason())
                     && invoice.getClosedAt() != null && invoice.getPaidKopecks() == 0) {
                 return "Счёт закрыт из «Не оплачено» в «Бан» "

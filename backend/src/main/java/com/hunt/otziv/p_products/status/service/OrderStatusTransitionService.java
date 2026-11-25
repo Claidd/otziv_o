@@ -421,6 +421,12 @@ public class OrderStatusTransitionService {
         }
 
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        if (commonBillingService != null && STATUS_PAYMENT.equals(title)
+                && commonBillingService.isOrderInUnpaidBannedCommonInvoice(order.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Заказ включён в закрытый общий счёт. Передайте администратору получателя и дату поступления "
+                            + "для сверки оплаты общего счёта.");
+        }
         if (commonBillingService == null || !commonBillingService.isOrderInActiveCommonInvoice(order.getId())) {
             return;
         }

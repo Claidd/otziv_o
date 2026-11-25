@@ -262,6 +262,24 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         }
     }
 
+    @Override
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void requireSingleRecordedManualPayment(Long orderId, long amountKopecks, LocalDate paidOn) {
+        List<PaymentCheck> checks = paymentCheckRepository.findByOrderIdAndActiveTrue(orderId);
+        if (checks.size() != 1) throw recordedPaymentConflict();
+        PaymentCheck check = paymentCheckRepository.findByIdForUpdate(checks.getFirst().getId())
+                .orElseThrow(PaymentCheckServiceImpl::recordedPaymentConflict);
+        if (!check.isActive() || !java.util.Objects.equals(check.getOrderId(), orderId)
+                || check.getPaymentLinkId() != null || check.getSum() == null
+                || check.getSum().compareTo(BigDecimal.valueOf(amountKopecks, 2)) != 0
+                || !java.util.Objects.equals(check.getCreated(), paidOn)) throw recordedPaymentConflict();
+    }
+
+    private static org.springframework.web.server.ResponseStatusException recordedPaymentConflict() {
+        return new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                "Для сверки требуется единственная учтённая ручная оплата заказа с точной суммой и датой поступления");
+    }
+
     private Long requiredManagerUserId(Order order) {
         if (order == null
                 || order.getManager() == null
