@@ -108,6 +108,25 @@ class ContractorActualPaymentAttributionServiceTest {
     @InjectMocks
     private ContractorActualPaymentAttributionService service;
 
+    @Test
+    void fullyConfirmedReceiptIsExplainedBeforeOfferingAnotherPayment() {
+        Order order = new Order();
+        order.setId(26486L);
+        PaymentLink link = new PaymentLink();
+        link.setId(9130L);
+        link.setOrder(order);
+        link.setAmountKopecks(275000L);
+        link.setConfirmedAmountKopecks(275000L);
+        link.setStatus(com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED);
+        link.setPaidAt(java.time.LocalDateTime.of(2026, 11, 17, 18, 12));
+
+        assertThatThrownBy(() -> service.manualCardPaymentContext(order, link))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Оплата 2750 ₽ уже учтена")
+                .hasMessageContaining("задачи восстановления");
+        org.mockito.Mockito.verifyNoInteractions(allocationRepository, attributionRepository);
+    }
+
     private final Map<Long, ContractorPaymentProfile> profiles = new LinkedHashMap<>();
     private final Map<Long, ContractorPaymentAllocation> allocations = new LinkedHashMap<>();
     private final Map<String, ContractorActualPaymentAttribution> attributions = new LinkedHashMap<>();

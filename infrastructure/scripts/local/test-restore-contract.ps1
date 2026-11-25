@@ -108,6 +108,18 @@ function Assert-SelectorReject([string]$name,[scriptblock]$change,[string]$reaso
  $script:passed++;Write-Output "PASS $name"
 }
 Assert-Pass 'both_labels_absent_exact_tested_version_allowed' {Set-ProjectOnlyExtra;$null=Assert-LocalRestoreContract -ComposeArguments @('compose') -RepoRoot $root -ComposePath $compose -VolumeName $volume}
+Assert-Pass 'project_only_containers_allowed_with_verified_compose_571' {
+    Set-ProjectOnlyExtra
+    $script:composeVersion = '5.7.1'
+    $null = Assert-LocalRestoreContract -ComposeArguments @('compose') -RepoRoot $root -ComposePath $compose -VolumeName $volume
+}
+foreach ($hookValue in @('pre_start', '')) {
+    Assert-SelectorReject "project_only_hook_${hookValue}_rejected" {
+        Set-ProjectOnlyExtra
+        $script:composeVersion = '5.7.1'
+        $script:containerMetadata.Config.Labels['com.docker.compose.hook'] = $hookValue
+    } 'selected by Compose start'
+}
 Assert-Pass 'no_extras_does_not_pin_otherwise_observed_compose_version' {$script:attached=$true;$script:composeVersion='6.0.0';$null=Assert-LocalRestoreContract -ComposeArguments @('compose') -RepoRoot $root -ComposePath $compose -VolumeName $volume}
 foreach($value in @('False','True','')){
  Assert-SelectorReject "missing_hash_with_oneoff_${value}_rejects" {Set-ProjectOnlyExtra;$script:containerMetadata.Config.Labels['com.docker.compose.oneoff']=$value} 'selected by Compose start'

@@ -1,5 +1,7 @@
 package com.hunt.otziv.common_billing.service;
 
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
+
 import static com.hunt.otziv.common_billing.service.CommonInvoicePositionPaymentWorkflow.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceDeletionWorkflow.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceCheckoutWorkflow.*;
@@ -207,6 +209,14 @@ public class CommonBillingService {
 
     public boolean isOrderInActiveCommonInvoice(Long orderId) {
         return settlementService.isOrderInActiveCommonInvoice(orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isOrderInUnpaidBannedCommonInvoice(Long orderId) {
+        return orderId != null && invoiceOrderRepository.findByOrderIdWithInvoice(orderId)
+                .filter(CommonInvoiceOrder::isActiveMembership)
+                .filter(item -> !item.isPaid() && item.getInvoice().getStatus() == CommonInvoiceStatus.BAN)
+                .isPresent();
     }
 
     public boolean allowsStandalonePaymentAfterPaperCancellation(Long orderId) {

@@ -231,11 +231,13 @@ function Assert-LocalRestoreContract {
             throw 'Local Compose container identity changed during ownership inspection.'
         }
         if ($containerId -notin $managedContainers) {
-            # Compose 5.5.0 create/down/restart select project + config-hash,
-            # but its start phase also selects project + oneoff=False. Only
-            # containers without BOTH labels are outside all reviewed paths.
-            # Never ignore a malformed/empty label or a foreign managed replica.
-            if ($labels.ContainsKey('com.docker.compose.config-hash') -or $labels.ContainsKey('com.docker.compose.oneoff')) {
+            # Reviewed Compose 5.5.0 and 5.7.1 lifecycle selectors were checked
+            # with isolated project-only containers. In 5.5.0 start also selects
+            # oneoff=False; 5.7.1 down separately removes pre_start hook runners.
+            # Treat even empty selector labels as managed, never as exemptions.
+            if ($labels.ContainsKey('com.docker.compose.config-hash') -or
+                $labels.ContainsKey('com.docker.compose.oneoff') -or
+                $labels.ContainsKey('com.docker.compose.hook')) {
                 throw 'An unverified local project container can be selected by Compose start or reconciliation.'
             }
             $unmanagedProjectContainers = $true
@@ -249,8 +251,8 @@ function Assert-LocalRestoreContract {
     }
     if ($unmanagedProjectContainers) {
         $composeVersion = @(& docker compose version --short 2>$null)
-        if ($LASTEXITCODE -ne 0 -or ($composeVersion -join "`n") -cne '5.5.0') {
-            throw 'Project-only containers require the independently verified Docker Compose 5.5.0 selectors.'
+        if ($LASTEXITCODE -ne 0 -or ($composeVersion -join "`n") -cnotin @('5.5.0', '5.7.1')) {
+            throw 'Project-only containers require the independently verified Docker Compose 5.5.0 or 5.7.1 selectors.'
         }
     }
     $existing = @(& docker volume ls -q --filter "name=^${VolumeName}$" 2>$null)

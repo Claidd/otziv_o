@@ -454,6 +454,14 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
     @Transactional(propagation = Propagation.MANDATORY)
     public ManualCardPaymentContextResponse manualCardPaymentContext(Order order, PaymentLink link) {
         requireOrdinarySource(order, link);
+        if (link.getStatus() == com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
+                && link.getAmountKopecks() > 0
+                && Objects.equals(link.getConfirmedAmountKopecks(), link.getAmountKopecks())
+                && link.getPaidAt() != null && link.getReturnRecoveryProcessedAt() == null) {
+            throw conflict("Оплата " + java.math.BigDecimal.valueOf(link.getAmountKopecks(), 2)
+                    .stripTrailingZeros().toPlainString() + " ₽ уже учтена. Повторное зачисление не требуется. "
+                    + "Если заказ ещё не закрыт, проверьте незавершённые задачи восстановления и состояние заказа.");
+        }
         ContractorAllocationMode currentMode = accountingPhaseService.lockCurrent();
         ContractorAllocationMode issuedTaskMode = issuedTaskAccountingMode(link);
         ContractorAllocationMode frozenMode = link.getManualActualRecipientFrozenAt() == null

@@ -30,13 +30,21 @@ docker compose -f compose.yaml down
 
 ## Prod-like проверка перед VPS
 
-Перед деплоем можно поднять локально почти тот же стек, что и на VPS: Spring profile `prod`, собранный backend image, production Angular build в Nginx, MySQL, Keycloak, Grafana/Loki/Prometheus/Alloy.
+Перед деплоем можно поднять локально почти тот же стек, что и на VPS: Spring profile `prod`, собранный backend image, production Angular build в Nginx, MySQL и Keycloak.
 
 ```powershell
 .\infrastructure\scripts\local\prod-like-smoke.ps1
 ```
 
 Скрипт использует внешний `prod-local.env`, обновит локальную prod-like БД из VPS, применит локальные safety-настройки для мессенджеров, выполнит `docker compose -f compose.prod-local.yaml --env-file .env.prod-local up -d --build`, дождется `/actuator/health`, Keycloak realm и frontend на `http://localhost:8088`. Если Docker Desktop временно не видит Docker Hub, скрипт сам переключится на offline backend rebuild из локально собранного jar.
+
+Мониторинг включается по необходимости флагом `-WithObservability`:
+
+```powershell
+.\infrastructure\scripts\local\prod-like-smoke.ps1 -WithObservability
+```
+
+Обычный запуск останавливает ранее поднятые Grafana, Loki, Tempo, Alloy, Prometheus и Dozzle и отключает трассировку приложения. Флаг `-NoUp` сохраняет текущее состояние мониторинга во время проверки. Адреса Grafana и Dozzle ниже доступны при включённом мониторинге.
 
 Состав пользователей локального Keycloak уже зафиксирован в псевдонимизированном allowlist, который хранится в Git: в нём есть только HMAC-SHA-256 канонических имён, но нет открытых логинов, внутренних ID production-БД, ФИО, почты, телефонов или паролей. HMAC вычислен с отдельным 32-байтовым ключом из защищённого внешнего `prod-local.env`, поэтому перебрать короткие логины по файлу из Git нельзя. На этом компьютере постоянный локальный пароль также уже создан. Поэтому обычная рабочая команда остаётся прежней:
 

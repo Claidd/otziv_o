@@ -81,6 +81,7 @@ describe('payment navigation policy', () => {
 
   it.each([
     'https://pay.tbank.ru/fixture',
+    'https://pay.linksecurepayment.com/fixture?order=212#payment',
     'https://pay.tbank-online.com/fixture?order=213#confirm',
     'https://pay.tbank-online.com:443/fixture'
   ])('opens the original T-Bank payment URL %s', (target) => {
@@ -104,6 +105,10 @@ describe('payment navigation policy', () => {
     'https://securepay.tinkoff.ru.evil.test/pay',
     'http://pay.tbank-online.com/fixture',
     'https://pay.tbank-online.com:8443/fixture',
+    'https://pay.linksecurepayment.com.evil.test/fixture',
+    'https://pay.linksecurepayment.com@evil.test/fixture',
+    'https://pay.linksecurepayment.com:8443/fixture',
+    'http://pay.linksecurepayment.com/fixture',
     'https://pay.tbank-online.com.evil.test/fixture',
     'https://evil-pay.tbank-online.com/fixture',
     'https://pay.tbank-online.com@evil.test/fixture',

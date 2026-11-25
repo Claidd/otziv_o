@@ -34,6 +34,34 @@ class PaymentCheckServiceImplTest {
     @InjectMocks private PaymentCheckServiceImpl service;
 
     @Test
+    void recordedManualReceiptIsValidatedWithoutCreatingAccountingAgain() {
+        var paidOn = java.time.LocalDate.of(2026, 11, 24);
+        var check = PaymentCheck.builder().id(23823L).orderId(26194L)
+                .sum(new BigDecimal("1200.00")).created(paidOn).active(true).build();
+        when(paymentCheckRepository.findByOrderIdAndActiveTrue(26194L)).thenReturn(List.of(check));
+        when(paymentCheckRepository.findByIdForUpdate(23823L)).thenReturn(java.util.Optional.of(check));
+
+        service.requireSingleRecordedManualPayment(26194L, 120000L, paidOn);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.requireSingleRecordedManualPayment(26194L, 240000L, paidOn));
+        check.setPaymentLinkId(9130L);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.requireSingleRecordedManualPayment(26194L, 120000L, paidOn));
+
+        verify(paymentCheckRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(companyService);
+    }
+
+    @Test
+    void multipleExistingChecksNeedIndividualReconciliation() {
+        when(paymentCheckRepository.findByOrderIdAndActiveTrue(26194L))
+                .thenReturn(List.of(new PaymentCheck(), new PaymentCheck()));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.requireSingleRecordedManualPayment(26194L, 120000L, java.time.LocalDate.now()));
+        verify(paymentCheckRepository, never()).findByIdForUpdate(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void activeCheckCarriesPaidStatusGuardAndActualWorker() {
         Order order = paidOrder();
         when(paymentCheckRepository.findByOrderIdAndActiveTrue(41L)).thenReturn(List.of());
